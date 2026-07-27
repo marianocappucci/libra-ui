@@ -242,7 +242,11 @@ export function createLayout<TUser = { role?: string; name?: string }>({
           ) : (
             <SidebarTrigger className="fixed top-2 left-2 z-20 md:hidden" />
           )}
-          <main className={topbar ? 'flex-1 space-y-4 p-4 md:p-6' : 'flex-1 space-y-4 p-4 pt-12 md:p-6 md:pt-6'}>{children}</main>
+          {/* min-w-0 es necesario para que los contenedores de scroll
+              horizontal de las tablas (overflow-x-auto) puedan encogerse
+              dentro del flex en vez de desbordarlo -- sin esto, una tabla
+              ancha empuja el layout entero en vez de scrollear. */}
+          <main className={topbar ? 'min-w-0 flex-1 space-y-4 p-4 md:p-6' : 'min-w-0 flex-1 space-y-4 p-4 pt-12 md:p-6 md:pt-6'}>{children}</main>
         </SidebarInset>
       </SidebarProvider>
     )
