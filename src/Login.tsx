@@ -18,7 +18,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 // TUser explicito). Contalibra/Restolibra pasan su propio `TUser` +
 // `useAuth` juntos, consistentes entre si.
 export function createLogin<TUser = User>({
-  productName, productInitial, redirectTo, onLoginSuccess, useAuth: useAuthOverride,
+  productName, productInitial, redirectTo, onLoginSuccess, useAuth: useAuthOverride, formatError,
 }: {
   productName: string
   productInitial: string
@@ -31,6 +31,11 @@ export function createLogin<TUser = User>({
   // de este mismo modulo (Gestiolibra/MedLibra/VentaLibra). Productos con
   // su propia `createAuthContext` (Contalibra/Restolibra) pasan el suyo.
   useAuth?: () => { login: (username: string, password: string) => Promise<TUser> }
+  // Mensaje de error a mostrar ante un ApiError -- por defecto un mensaje
+  // generico ("Usuario o contraseña incorrectos."), igual que siempre.
+  // Contalibra/Restolibra muestran el detalle real del backend
+  // (`err.detail`, que puede incluir cosas como "Cuenta suspendida").
+  formatError?: (err: ApiError) => string
 }) {
   return function Login() {
     // Cast puntual: TS no puede unificar el tipo generico TUser (para
@@ -53,7 +58,7 @@ export function createLogin<TUser = User>({
         const user = await login(username, password)
         navigate(onLoginSuccess ? onLoginSuccess(user) : redirectTo, { replace: true })
       } catch (err) {
-        setError(err instanceof ApiError ? 'Usuario o contraseña incorrectos.' : 'Error de conexión.')
+        setError(err instanceof ApiError ? (formatError ? formatError(err) : 'Usuario o contraseña incorrectos.') : 'Error de conexión.')
       } finally {
         setSubmitting(false)
       }
