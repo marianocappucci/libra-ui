@@ -46,11 +46,27 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return data as T
 }
 
+async function requestForm<T>(method: string, path: string, form: FormData): Promise<T> {
+  const response = await fetch(path, { method, credentials: 'include', body: form })
+  const isJson = response.headers.get('content-type')?.includes('application/json')
+  const data = isJson ? await response.json() : undefined
+  if (!response.ok) {
+    const detail = (data && typeof data === 'object' && 'detail' in data)
+      ? String((data as { detail: unknown }).detail)
+      : response.statusText
+    throw new ApiError(response.status, detail)
+  }
+  return data as T
+}
+
 export const api = {
   get: <T>(path: string) => request<T>('GET', path),
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body ?? {}),
   put: <T>(path: string, body: unknown) => request<T>('PUT', path, body),
   del: <T>(path: string) => request<T>('DELETE', path),
+  // Uploads (logo, certificados, restore de DB) -- multipart, sin
+  // Content-Type explicito para que el browser agregue el boundary.
+  postForm: <T>(path: string, form: FormData) => requestForm<T>('POST', path, form),
 }
 
 // Contrato id/username/name/role/active devuelto por

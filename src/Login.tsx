@@ -5,21 +5,40 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from './AuthContext'
-import { ApiError } from './api-client'
+import { ApiError, type User } from './api-client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
-export function createLogin({
-  productName, productInitial, redirectTo,
+// Default = User (el tipo concreto de la instancia pre-configurada de
+// AuthContext.tsx) -- coincide con lo que devuelve el `useAuth` por
+// defecto de mas abajo cuando no se pasa `useAuth` propio, evitando un
+// mismatch de tipos para Gestiolibra/MedLibra/VentaLibra (que no pasan
+// TUser explicito). Contalibra/Restolibra pasan su propio `TUser` +
+// `useAuth` juntos, consistentes entre si.
+export function createLogin<TUser = User>({
+  productName, productInitial, redirectTo, onLoginSuccess, useAuth: useAuthOverride,
 }: {
   productName: string
   productInitial: string
   redirectTo: string
+  // Decide el destino segun el usuario logueado (ej. redirigir un rol
+  // especifico a una pantalla propia) -- si no se pasa, siempre navega a
+  // `redirectTo`, comportamiento identico al de antes de v0.3.0.
+  onLoginSuccess?: (user: TUser) => string
+  // Hook `useAuth` a usar -- por defecto el de la instancia pre-configurada
+  // de este mismo modulo (Gestiolibra/MedLibra/VentaLibra). Productos con
+  // su propia `createAuthContext` (Contalibra/Restolibra) pasan el suyo.
+  useAuth?: () => { login: (username: string, password: string) => Promise<TUser> }
 }) {
   return function Login() {
-    const { login } = useAuth()
+    // Cast puntual: TS no puede unificar el tipo generico TUser (para
+    // quien pasa `useAuthOverride`) con el tipo concreto `User` de la
+    // instancia por defecto dentro del cuerpo de una funcion generica --
+    // limitacion conocida de TS con defaults de tipo. Ambas ramas
+    // devuelven la misma forma en runtime, el cast es seguro.
+    const { login } = (useAuthOverride ?? useAuth)() as { login: (username: string, password: string) => Promise<TUser> }
     const navigate = useNavigate()
     const [username, setUsername] = useState('')
     const [password, setPassword] = useState('')
@@ -31,8 +50,8 @@ export function createLogin({
       setError(null)
       setSubmitting(true)
       try {
-        await login(username, password)
-        navigate(redirectTo, { replace: true })
+        const user = await login(username, password)
+        navigate(onLoginSuccess ? onLoginSuccess(user) : redirectTo, { replace: true })
       } catch (err) {
         setError(err instanceof ApiError ? 'Usuario o contraseña incorrectos.' : 'Error de conexión.')
       } finally {
