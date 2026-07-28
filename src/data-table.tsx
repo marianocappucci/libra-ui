@@ -58,6 +58,37 @@ declare module '@tanstack/react-table' {
   }
 }
 
+// Piezas del layout de una celda de acciones. Son los valores reales de las
+// clases de Tailwind que usan todas las tablas de la familia, no numeros
+// elegidos a ojo: `size="icon"` es `size-9`, los botones van en un flex con
+// `gap-1`, y `TableCell` de shadcn trae `p-2` (8px por lado).
+const ANCHO_BOTON_ICONO = 36
+const GAP_ENTRE_BOTONES = 4
+const PADDING_CELDA = 16
+
+/**
+ * Ancho para la columna de acciones de una tabla, a partir de la cantidad
+ * MAXIMA de botones de icono que puede llegar a mostrar una fila.
+ *
+ * Existe porque la cuenta hecha a mano se venia haciendo mal: es facil sumar
+ * botones y gaps y olvidarse del `p-2` de la celda. En la tabla de
+ * comprobantes de Contalibra eso dejaba la columna en 116px cuando tres
+ * botones necesitan 132 — como el contenido va alineado a la derecha
+ * (`justify-end`) y la celda tiene `overflow: hidden`, el recorte se comia
+ * 16px del PRIMER boton, no del ultimo (bug real reportado 2026-07-28).
+ *
+ * Si una fila puede mostrar un boton condicional, pasar el maximo: la
+ * columna tiene un unico ancho para toda la tabla.
+ */
+export function anchoColumnaAcciones(cantidadBotones: number): number {
+  if (cantidadBotones <= 0) return PADDING_CELDA
+  return (
+    cantidadBotones * ANCHO_BOTON_ICONO +
+    (cantidadBotones - 1) * GAP_ENTRE_BOTONES +
+    PADDING_CELDA
+  )
+}
+
 export function sortableHeader(label: string) {
   return ({ column }: { column: { toggleSorting: (desc?: boolean) => void; getIsSorted: () => false | 'asc' | 'desc' } }) => (
     <Button
