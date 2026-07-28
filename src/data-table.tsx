@@ -22,7 +22,10 @@ import {
   useReactTable,
   type SortingState,
 } from '@tanstack/react-table'
-import { useState, type MouseEvent, type ReactNode } from 'react'
+import {
+  useCallback, useEffect, useLayoutEffect, useRef, useState,
+  type MouseEvent, type ReactNode,
+} from 'react'
 import { ArrowUpDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
@@ -55,38 +58,39 @@ declare module '@tanstack/react-table' {
     // `table-cell` (lo convierte en celda anonima y descoloca todo el
     // colgroup) -- va `table-column`, ej. 'hidden min-[1400px]:table-column'.
     colClassName?: string
+    // Marca la columna de acciones cuando su `id` no es 'actions'. El
+    // componente la mide y le da exactamente el ancho que ocupan sus
+    // botones, sin que la pagina tenga que calcularlo (ver medirAcciones).
+    acciones?: boolean
   }
 }
 
-// Piezas del layout de una celda de acciones. Son los valores reales de las
-// clases de Tailwind que usan todas las tablas de la familia, no numeros
-// elegidos a ojo: `size="icon"` es `size-9`, los botones van en un flex con
-// `gap-1`, y `TableCell` de shadcn trae `p-2` (8px por lado).
-const ANCHO_BOTON_ICONO = 36
-const GAP_ENTRE_BOTONES = 4
+// `p-2` de TableCell/TableHead de shadcn: 8px por lado. Es lo unico que la
+// medicion no puede leer del contenido, porque mide el hijo de la celda.
 const PADDING_CELDA = 16
 
+// Una columna es "de acciones" por convencion de id (todas las tablas de la
+// familia la declaran como `id: 'actions'`) o marcandola explicitamente con
+// `meta.acciones`.
+function esColumnaDeAcciones(id: string, meta?: { acciones?: boolean }): boolean {
+  return id === 'actions' || meta?.acciones === true
+}
+
 /**
- * Ancho para la columna de acciones de una tabla, a partir de la cantidad
- * MAXIMA de botones de icono que puede llegar a mostrar una fila.
+ * Ancho estimado de una columna de acciones con `n` botones de icono.
  *
- * Existe porque la cuenta hecha a mano se venia haciendo mal: es facil sumar
- * botones y gaps y olvidarse del `p-2` de la celda. En la tabla de
- * comprobantes de Contalibra eso dejaba la columna en 116px cuando tres
- * botones necesitan 132 — como el contenido va alineado a la derecha
- * (`justify-end`) y la celda tiene `overflow: hidden`, el recorte se comia
- * 16px del PRIMER boton, no del ultimo (bug real reportado 2026-07-28).
+ * **No hace falta usarlo**: desde v0.4.0 `DataTable` mide la columna de
+ * acciones y le da el ancho exacto que ocupan sus botones, sin que la pagina
+ * declare nada. Se mantiene como `size` inicial opcional para que el primer
+ * frame (antes de que corra la medicion) ya salga con un ancho sensato en vez
+ * del default de 150px de TanStack.
  *
- * Si una fila puede mostrar un boton condicional, pasar el maximo: la
- * columna tiene un unico ancho para toda la tabla.
+ * Los valores son los de las clases reales: `size-9` (36px) por boton,
+ * `gap-1` (4px) entre botones y el `p-2` (16px) de la celda.
  */
 export function anchoColumnaAcciones(cantidadBotones: number): number {
   if (cantidadBotones <= 0) return PADDING_CELDA
-  return (
-    cantidadBotones * ANCHO_BOTON_ICONO +
-    (cantidadBotones - 1) * GAP_ENTRE_BOTONES +
-    PADDING_CELDA
-  )
+  return cantidadBotones * 36 + (cantidadBotones - 1) * 4 + PADDING_CELDA
 }
 
 export function sortableHeader(label: string) {
@@ -138,11 +142,96 @@ export function DataTable<TData, TValue>({
     state: { sorting, columnSizing },
   })
 
+  const headers = table.getFlatHeaders()
+
+  // --- ancho automatico de la columna de acciones ---------------------
+  //
+  // La columna de acciones no declara un ancho util: depende de cuantos
+  // botones renderice cada fila, y eso cambia por producto, por permisos y
+  // por estado de la fila. Calcularlo a mano en cada pagina salia mal (en
+  // Contalibra la columna de comprobantes quedaba en 116px cuando tres
+  // botones necesitan 132, y como van alineados a la derecha con overflow
+  // hidden el recorte se comia el PRIMER boton). Asi que se mide: se toma
+  // el contenido real de la celda mas ancha y se le suma el padding.
+  //
+  // Si el usuario redimensiona la columna a mano, manda su eleccion.
+  const cuerpoRef = useRef<HTMLTableSectionElement>(null)
+  const cabeceraRef = useRef<HTMLTableSectionElement>(null)
+  const [anchoAcciones, setAnchoAcciones] = useState<number | null>(null)
+
+  const indiceAcciones = headers.findIndex((h) =>
+    esColumnaDeAcciones(h.column.id, h.column.columnDef.meta),
+  )
+  const accionesRedimensionada =
+    indiceAcciones >= 0 && columnSizing[headers[indiceAcciones].column.id] !== undefined
+
+  const medirAcciones = useCallback(() => {
+    if (indiceAcciones < 0 || accionesRedimensionada) return
+    let maximo = 0
+
+    const filas = cuerpoRef.current?.rows
+    for (let i = 0; filas && i < filas.length; i++) {
+      const contenido = filas[i].cells[indiceAcciones]?.firstElementChild
+      if (!contenido) continue
+      // OJO: no sirve el scrollWidth del contenedor. Los botones van con
+      // `justify-end`, asi que cuando no entran desbordan hacia la IZQUIERDA
+      // y scrollWidth no mide ese lado -- reporta el ancho recortado y la
+      // medicion se quedaria clavada en el ancho que ya tiene. Hay que sumar
+      // los hijos, que no se encogen (size-9 fija su ancho).
+      const hijos = Array.from(contenido.children)
+      if (!hijos.length) continue
+      const gap = parseFloat(getComputedStyle(contenido).columnGap) || 0
+      const ancho =
+        hijos.reduce((total, hijo) => total + hijo.getBoundingClientRect().width, 0) +
+        gap * (hijos.length - 1)
+      maximo = Math.max(maximo, ancho)
+    }
+
+    // La cabecera ("Acciones") tambien tiene que entrar: con una sola accion
+    // el titulo es mas ancho que el boton. Se mide con un Range porque el
+    // texto va alineado a la derecha y sufre el mismo problema de arriba.
+    const th = cabeceraRef.current?.rows[0]?.cells[indiceAcciones]?.firstElementChild
+    if (th && typeof document.createRange === 'function') {
+      const rango = document.createRange()
+      rango.selectNodeContents(th)
+      maximo = Math.max(maximo, rango.getBoundingClientRect().width)
+    }
+
+    if (maximo > 0) {
+      const nuevo = Math.ceil(maximo) + PADDING_CELDA
+      setAnchoAcciones((previo) => (previo === nuevo ? previo : nuevo))
+    }
+  }, [indiceAcciones, accionesRedimensionada])
+
+  useLayoutEffect(() => { medirAcciones() })
+
+  // Los iconos llegan con las fuentes/SVG ya resueltos casi siempre, pero un
+  // re-layout posterior (fuente que carga tarde, zoom del navegador) puede
+  // cambiar el ancho: se remide sin re-renderizar de mas.
+  useEffect(() => {
+    if (typeof ResizeObserver === 'undefined' || !cuerpoRef.current) return
+    const obs = new ResizeObserver(() => medirAcciones())
+    obs.observe(cuerpoRef.current)
+    return () => obs.disconnect()
+  }, [medirAcciones])
+
+  // Ancho efectivo: el medido para la columna de acciones, el declarado para
+  // el resto.
+  const anchoDeColumna = (header: (typeof headers)[number]): number => {
+    if (
+      esColumnaDeAcciones(header.column.id, header.column.columnDef.meta) &&
+      anchoAcciones !== null &&
+      !accionesRedimensionada
+    ) {
+      return anchoAcciones
+    }
+    return header.getSize()
+  }
+
   // Una columna elastica (meta.stretch) se emite sin ancho en el <colgroup>:
   // con table-layout:fixed el navegador le da todo el sobrante, asi la tabla
   // llena el ancho disponible. Si el usuario la redimensiona a mano deja de
   // ser elastica y pasa a respetar el ancho elegido.
-  const headers = table.getFlatHeaders()
   const esElastica = (header: (typeof headers)[number]) =>
     Boolean(header.column.columnDef.meta?.stretch) && columnSizing[header.column.id] === undefined
 
@@ -150,7 +239,7 @@ export function DataTable<TData, TValue>({
   // para el ancho minimo: si contaran, la tabla pediria scroll por una columna
   // que no se esta viendo.
   const anchoMinimo = headers.reduce(
-    (total, header) => (header.column.columnDef.meta?.opcional ? total : total + header.getSize()),
+    (total, header) => (header.column.columnDef.meta?.opcional ? total : total + anchoDeColumna(header)),
     0,
   )
 
@@ -171,12 +260,12 @@ export function DataTable<TData, TValue>({
               // Clase propia del <col> (ver meta.colClassName): sin esto el col
               // seguiria reservando su ancho aunque las celdas esten ocultas.
               className={header.column.columnDef.meta?.colClassName}
-              style={esElastica(header) ? undefined : { width: header.getSize() }}
+              style={esElastica(header) ? undefined : { width: anchoDeColumna(header) }}
             />
           ))}
         </colgroup>
       )}
-      <TableHeader>
+      <TableHeader ref={cabeceraRef}>
         {table.getHeaderGroups().map((headerGroup) => (
           <TableRow key={headerGroup.id}>
             {headerGroup.headers.map((header) => (
@@ -201,7 +290,7 @@ export function DataTable<TData, TValue>({
           </TableRow>
         ))}
       </TableHeader>
-      <TableBody>
+      <TableBody ref={cuerpoRef}>
         {table.getRowModel().rows.length ? (
           table.getRowModel().rows.map((row) => (
             <TableRow
