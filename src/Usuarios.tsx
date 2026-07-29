@@ -21,7 +21,11 @@ function describeError(err: unknown): string {
 
 const EMPTY = { username: '', name: '', password: '', role: 'staff' }
 
-export function Usuarios() {
+// `basePath` es la ruta del router de usuarios en el backend -- default
+// '/users' preserva el comportamiento anterior a esta prop
+// (Gestiolibra/MedLibra/VentaLibra montan `users.router` en `/users`).
+// LibraDesk monta el suyo en `/api/usuarios` y pasa esa ruta explicita.
+export function Usuarios({ basePath = '/users' }: { basePath?: string } = {}) {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -36,7 +40,7 @@ export function Usuarios() {
   async function load() {
     setLoading(true)
     try {
-      setUsers(await api.get<User[]>('/users'))
+      setUsers(await api.get<User[]>(basePath))
     } catch (err) {
       setError(describeError(err))
     } finally {
@@ -68,12 +72,12 @@ export function Usuarios() {
     setError(null)
     try {
       if (editingId === 'new') {
-        await api.post('/users', {
+        await api.post(basePath, {
           username: form.username.trim(), name: form.name.trim(),
           password: form.password, role: form.role,
         })
       } else if (editingId) {
-        await api.put(`/users/${editingId}`, { name: form.name.trim(), role: form.role, active: true })
+        await api.put(`${basePath}/${editingId}`, { name: form.name.trim(), role: form.role, active: true })
       }
       cancelEdit()
       await load()
@@ -87,7 +91,7 @@ export function Usuarios() {
   async function handleDeactivate(user: User) {
     setError(null)
     try {
-      await api.put(`/users/${user.id}`, { name: user.name, role: user.role, active: !user.active })
+      await api.put(`${basePath}/${user.id}`, { name: user.name, role: user.role, active: !user.active })
       await load()
     } catch (err) {
       setError(describeError(err))
