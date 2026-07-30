@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { PasswordInput } from './PasswordInput'
 
 // Default = User (el tipo concreto de la instancia pre-configurada de
 // AuthContext.tsx) -- coincide con lo que devuelve el `useAuth` por
@@ -88,9 +89,8 @@ export function createLogin<TUser = User>({
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="password">Contraseña</Label>
-                <Input
+                <PasswordInput
                   id="password"
-                  type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required

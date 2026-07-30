@@ -13,6 +13,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { DataTable, sortableHeader } from './data-table'
+import { PasswordInput } from './PasswordInput'
 
 function describeError(err: unknown): string {
   if (err instanceof ApiError) return err.detail
@@ -154,7 +155,7 @@ export function Usuarios({ basePath = '/users' }: { basePath?: string } = {}) {
             {editingId === 'new' && (
               <div className="grid gap-1.5">
                 <Label>Contraseña</Label>
-                <Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="w-40" />
+                <PasswordInput value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="w-40" />
               </div>
             )}
             <div className="grid gap-1.5">
