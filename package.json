@@ -37,6 +37,7 @@
     "clsx": "^2.1.1",
     "jsdom": "^25.0.1",
     "lucide-react": "^1.28.0",
+    "oxlint": "^1.71.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.2",
@@ -45,7 +46,10 @@
     "vitest": "^3.2.7"
   },
   "scripts": {
+    "lint": "oxlint src",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.check.json --noEmit"
   }
 }

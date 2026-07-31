@@ -28,8 +28,11 @@ jobs:
       - name: Instalar dependencias
         run: npm ci
 
-      - name: Correr los tests
-        run: npm test
+      - name: Lint
+        run: npm run lint
+
+      - name: Correr los tests con cobertura
+        run: npm run test:coverage
 
       # Los consumidores compilan estos archivos con `tsc -b` en su propio
       # build: un error de tipos aca no se veria hasta que uno de los seis
@@ -41,4 +44,4 @@ jobs:
       # descuido que hubo el mismo dia en farmacia: verificar en local con
       # un comando y escribir otro en el workflow.
       - name: Chequeo de tipos
-        run: npx tsc -p tsconfig.check.json --noEmit
+        run: npm run typecheck

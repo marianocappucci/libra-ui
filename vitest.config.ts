@@ -26,7 +26,13 @@ export default defineConfig({
     include: ['test/**/*.test.{ts,tsx}'],
     coverage: {
       include: ['src/**'],
-      reporter: ['text-summary'],
+      reporter: ['text-summary', 'json-summary'],
+      // Aca la suite SI es a fondo, no de humo. `lines` queda bajo porque
+      // `include` abarca todo src/ y hay modulos sin tests todavia
+      // (data-table, Layout, Usuarios); functions y branches, en cambio,
+      // miden lo que si esta cubierto y hoy dan 100% y 97.34% -- que bajen
+      // es una senal real, no ruido. Medido el 2026-07-31.
+      thresholds: { lines: 43, functions: 95, branches: 90 },
     },
   },
 })
