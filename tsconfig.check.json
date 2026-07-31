@@ -1,0 +1,21 @@
+// Config SOLO para chequear tipos en CI. No se toca `tsconfig.json`, que
+// es el que describe cómo compilan este código los consumidores.
+//
+// La diferencia es el mapeo de `@/*`: en un consumidor eso resuelve a SUS
+// componentes de shadcn, y acá no existe. Sin el mapeo, `tsc` no puede
+// resolver ninguno de esos imports, todo cae a `any` y aparecen errores
+// falsos (`TS2307` en cascada y `TS7006` en cada `onChange`) que tapan los
+// de verdad. Apuntándolo a los stubs de los tests, el chequeo trabaja
+// contra una API con la misma forma que la real.
+{
+  // Sin `baseUrl`: está deprecado desde TS 6 y con
+  // `moduleResolution: bundler` los `paths` ya se resuelven relativos a
+  // este archivo.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./test/stubs/*"]
+    }
+  },
+  "include": ["src", "test"]
+}
