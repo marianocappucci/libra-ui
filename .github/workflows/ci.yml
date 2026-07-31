@@ -34,5 +34,11 @@ jobs:
       # Los consumidores compilan estos archivos con `tsc -b` en su propio
       # build: un error de tipos aca no se veria hasta que uno de los seis
       # intente construir su imagen.
+      #
+      # Con `tsconfig.check.json` y NO con el tsconfig.json a secas: ese
+      # ultimo no mapea `@/*`, asi que `tsc` no resuelve ningun import de
+      # shadcn y devuelve 24 errores falsos. Es exactamente el mismo
+      # descuido que hubo el mismo dia en farmacia: verificar en local con
+      # un comando y escribir otro en el workflow.
       - name: Chequeo de tipos
-        run: npx tsc --noEmit
+        run: npx tsc -p tsconfig.check.json --noEmit
