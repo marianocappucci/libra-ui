@@ -35,6 +35,7 @@ import {
 } from 'react'
 import { ArrowUpDown, Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { coincideBusqueda } from './utils'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
@@ -101,22 +102,6 @@ export function anchoColumnaAcciones(cantidadBotones: number): number {
   return cantidadBotones * 36 + (cantidadBotones - 1) * 4 + PADDING_CELDA
 }
 
-/**
- * Normaliza para comparar: sin mayusculas y sin acentos.
- *
- * Sin lo segundo, "Admision" no encuentra "Admisión" -- y en un sistema en
- * castellano con datos cargados a mano eso es la mitad de las busquedas
- * fallidas. Se sacan las marcas diacriticas despues de descomponer (NFD);
- * la enie sobrevive porque `ñ` descompone en `n` + tilde y las dos formas
- * pasan por la misma normalizacion, asi que "nino" encuentra "niño".
- */
-function normalizar(texto: string): string {
-  // `\p{M}` (marcas combinantes) y no un rango escrito a mano: ese rango
-  // se escribe con caracteres invisibles en el editor y cualquier
-  // reformateo se los come sin que se note -- la busqueda seguiria
-  // andando salvo, justamente, con acentos.
-  return texto.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
-}
 
 export type DataTableSearch<TData> = {
   /**
@@ -183,14 +168,13 @@ export function DataTable<TData, TValue>({
   // sector sean columnas distintas. Con un solo `includes` de la frase
   // entera esa busqueda -- la natural -- no daria nada.
   const filtrarFila: FilterFn<TData> = useCallback((row, _columnId, valor: string) => {
-    const terminos = normalizar(valor).split(/\s+/).filter(Boolean)
-    if (!terminos.length) return true
-    const texto = normalizar(
-      (search?.campos(row.original) ?? [])
-        .filter((v) => v !== null && v !== undefined && v !== '')
-        .join(' '),
-    )
-    return terminos.every((t) => texto.includes(t))
+    //  vive en utils y lo comparte con SelectBuscable: los
+    // dos buscadores del paquete filtran con el mismo criterio, asi que quien
+    // aprende a buscar en una tabla busca igual en un select.
+    const texto = (search?.campos(row.original) ?? [])
+      .filter((v) => v !== null && v !== undefined && v !== '')
+      .join(' ')
+    return coincideBusqueda(texto, valor)
   }, [search])
 
   const table = useReactTable({

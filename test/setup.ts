@@ -25,3 +25,11 @@ if (!window.matchMedia) {
     }),
   })
 }
+
+// jsdom no implementa scrollIntoView. Lo usa SelectBuscable para mantener a
+// la vista la opcion resaltada al navegar con las flechas -- comportamiento
+// real de navegador, no logica del paquete, asi que se stubea igual que
+// matchMedia en vez de ensuciar el componente con un guard defensivo.
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = vi.fn()
+}

@@ -42,7 +42,9 @@ export default defineConfig({
       // 81.31%, rompiendo estos mismos pisos. No habia ninguna regresion:
       // era el resto de data-table apareciendo. Se cubrio tambien ese resto
       // (sorting, onRowClick, colgroup, meta) y quedo en 98% y 92.27%.
-      thresholds: { lines: 63, functions: 95, branches: 90 },
+      //
+      // Subio de 63 a 67 el 2026-08-01 con SelectBuscable (68.52% medido).
+      thresholds: { lines: 67, functions: 95, branches: 90 },
     },
   },
 })
