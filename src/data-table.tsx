@@ -13,11 +13,18 @@
 // columna SI declara `size`, se activa el modo completo (table-fixed +
 // colgroup + resize + columnas elasticas), igual que el comportamiento
 // que ya tenia Contalibra.
+//
+// v0.8.0 (2026-07-31): busqueda opcional (prop `search`). Tambien con
+// gating -- sin la prop el componente devuelve exactamente el mismo
+// <Table> de antes, sin envoltorio ni row model de filtrado, asi que los
+// consumidores que no la usan renderizan igual que en v0.7.0.
 import {
   type ColumnDef,
   type ColumnSizingState,
+  type FilterFn,
   flexRender,
   getCoreRowModel,
+  getFilteredRowModel,
   getSortedRowModel,
   useReactTable,
   type SortingState,
@@ -26,12 +33,14 @@ import {
   useCallback, useEffect, useLayoutEffect, useRef, useState,
   type MouseEvent, type ReactNode,
 } from 'react'
-import { ArrowUpDown } from 'lucide-react'
+import { ArrowUpDown, Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { coincideBusqueda } from './utils'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 
 declare module '@tanstack/react-table' {
   interface ColumnMeta<TData, TValue> {
@@ -93,6 +102,25 @@ export function anchoColumnaAcciones(cantidadBotones: number): number {
   return cantidadBotones * 36 + (cantidadBotones - 1) * 4 + PADDING_CELDA
 }
 
+
+export type DataTableSearch<TData> = {
+  /**
+   * Valores sobre los que busca cada fila.
+   *
+   * Lo declara la pagina y no el componente porque **el dato crudo no es lo
+   * que se ve**: la columna Cliente de una tabla de equipos guarda
+   * `cliente_id: 3` y renderiza "Compulibra", y quien busca escribe lo
+   * segundo. Un filtro generico sobre los valores de las celdas encontraria
+   * el 3.
+   *
+   * Los `null`/`undefined`/vacios se descartan solos.
+   */
+  campos: (row: TData) => (string | number | null | undefined)[]
+  placeholder?: string
+  /** Etiqueta accesible del input. Default: el placeholder. */
+  ariaLabel?: string
+}
+
 export function sortableHeader(label: string) {
   return ({ column }: { column: { toggleSorting: (desc?: boolean) => void; getIsSorted: () => false | 'asc' | 'desc' } }) => (
     <Button
@@ -118,28 +146,55 @@ type DataTableProps<TData, TValue> = {
   // Navegacion al hacer click en cualquier parte de la fila que no sea un
   // control interactivo propio (boton/link dentro de una celda de acciones).
   onRowClick?: (row: TData) => void
+  // Buscador sobre la tabla. Sin esta prop no se renderiza input alguno y el
+  // row model de filtrado ni se arma (ver DataTableSearch).
+  search?: DataTableSearch<TData>
 }
 
 export function DataTable<TData, TValue>({
   columns, data, emptyMessage = 'Sin resultados.', getRowClassName, onRowClick,
+  search,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({})
+  const [consulta, setConsulta] = useState('')
 
   // Si ninguna columna declara `size`, se desactiva el resize por completo y
   // se preserva el layout automatico de siempre (ver comentario de arriba).
   const anySized = columns.some((c) => c.size !== undefined)
+
+  // Todos los terminos tienen que aparecer, en cualquier orden y en cualquier
+  // campo: "hp admision" encuentra la impresora HP de Admision aunque marca y
+  // sector sean columnas distintas. Con un solo `includes` de la frase
+  // entera esa busqueda -- la natural -- no daria nada.
+  const filtrarFila: FilterFn<TData> = useCallback((row, _columnId, valor: string) => {
+    //  vive en utils y lo comparte con SelectBuscable: los
+    // dos buscadores del paquete filtran con el mismo criterio, asi que quien
+    // aprende a buscar en una tabla busca igual en un select.
+    const texto = (search?.campos(row.original) ?? [])
+      .filter((v) => v !== null && v !== undefined && v !== '')
+      .join(' ')
+    return coincideBusqueda(texto, valor)
+  }, [search])
 
   const table = useReactTable({
     data,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    // Se filtra por fila y no por celda, asi que da igual que columna evalua
+    // TanStack: `getColumnCanGlobalFilter` en true evita que el default
+    // (mirar el tipo del valor de la celda) deje afuera una tabla entera
+    // cuando ninguna columna expone un accessor de texto.
+    ...(search ? { getFilteredRowModel: getFilteredRowModel() } : {}),
+    globalFilterFn: filtrarFila,
+    getColumnCanGlobalFilter: () => true,
+    onGlobalFilterChange: setConsulta,
     onSortingChange: setSorting,
     enableColumnResizing: anySized,
     columnResizeMode: 'onChange',
     onColumnSizingChange: setColumnSizing,
-    state: { sorting, columnSizing },
+    state: { sorting, columnSizing, globalFilter: search ? consulta : '' },
   })
 
   const headers = table.getFlatHeaders()
@@ -243,7 +298,15 @@ export function DataTable<TData, TValue>({
     0,
   )
 
-  return (
+  // Buscar y no encontrar nada no es lo mismo que no tener datos: sin esto
+  // una tabla con 53 equipos y un filtro sin resultados dice "Sin equipos
+  // todavia", que hace pensar que se perdieron.
+  const buscando = Boolean(search) && consulta.trim() !== ''
+  const mensajeVacio = buscando
+    ? <>Sin resultados para «{consulta.trim()}».</>
+    : emptyMessage
+
+  const tabla = (
     <Table
       className={anySized ? 'table-fixed' : undefined}
       // minWidth = suma de las columnas visibles siempre: si no entran, el
@@ -311,11 +374,46 @@ export function DataTable<TData, TValue>({
         ) : (
           <TableRow>
             <TableCell colSpan={columns.length} className="h-24 text-center text-sm text-muted-foreground">
-              {emptyMessage}
+              {mensajeVacio}
             </TableCell>
           </TableRow>
         )}
       </TableBody>
     </Table>
+  )
+
+  // Sin buscador se devuelve la tabla pelada, sin ningun elemento nuevo
+  // alrededor: los consumidores que no pasan `search` renderizan igual que
+  // antes de esta version.
+  if (!search) return tabla
+
+  return (
+    <div className="grid gap-3">
+      <div className="relative w-full max-w-sm">
+        <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          type="search"
+          value={consulta}
+          onChange={(e) => setConsulta(e.target.value)}
+          placeholder={search.placeholder ?? 'Buscar…'}
+          aria-label={search.ariaLabel ?? search.placeholder ?? 'Buscar'}
+          className="pl-8"
+        />
+        {consulta !== '' && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="absolute top-1/2 right-1 size-7 -translate-y-1/2"
+            title="Limpiar búsqueda"
+            aria-label="Limpiar búsqueda"
+            onClick={() => setConsulta('')}
+          >
+            <X />
+          </Button>
+        )}
+      </div>
+      {tabla}
+    </div>
   )
 }

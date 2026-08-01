@@ -1,0 +1,47 @@
+name: CI
+
+# Este paquete no tenia ni tests ni CI, siendo el codigo compartido que
+# consumen los 6 productos: su Login, su recuperacion de contrasena y su
+# cliente HTTP corren en todos. Un error aca se multiplica por seis.
+#
+# Es codigo fuente puro (los `exports` del package.json apuntan a .ts/.tsx
+# y cada consumidor lo compila con su propio Vite), asi que no hay build
+# que verificar -- solo los tests y el chequeo de tipos.
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Correr los tests con cobertura
+        run: npm run test:coverage
+
+      # Los consumidores compilan estos archivos con `tsc -b` en su propio
+      # build: un error de tipos aca no se veria hasta que uno de los seis
+      # intente construir su imagen.
+      #
+      # Con `tsconfig.check.json` y NO con el tsconfig.json a secas: ese
+      # ultimo no mapea `@/*`, asi que `tsc` no resuelve ningun import de
+      # shadcn y devuelve 24 errores falsos. Es exactamente el mismo
+      # descuido que hubo el mismo dia en farmacia: verificar en local con
+      # un comando y escribir otro en el workflow.
+      - name: Chequeo de tipos
+        run: npm run typecheck

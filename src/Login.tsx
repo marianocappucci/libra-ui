@@ -3,13 +3,14 @@
 // wiki/analyses/auditoria-duplicacion-familia-libra.md. `createLogin()`
 // recibe esa parte propia de cada producto como config.
 import { useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from './AuthContext'
 import { ApiError, type User } from './api-client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { PasswordInput } from './PasswordInput'
 
 // Default = User (el tipo concreto de la instancia pre-configurada de
 // AuthContext.tsx) -- coincide con lo que devuelve el `useAuth` por
@@ -19,6 +20,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 // `useAuth` juntos, consistentes entre si.
 export function createLogin<TUser = User>({
   productName, productInitial, redirectTo, onLoginSuccess, useAuth: useAuthOverride, formatError,
+  forgotPasswordPath,
 }: {
   productName: string
   productInitial: string
@@ -36,6 +38,12 @@ export function createLogin<TUser = User>({
   // Contalibra/Restolibra muestran el detalle real del backend
   // (`err.detail`, que puede incluir cosas como "Cuenta suspendida").
   formatError?: (err: ApiError) => string
+  // Ruta de la pantalla de "olvidé mi contraseña" (ej. '/forgot-password').
+  // **Opt-in**: sin esto no se muestra el enlace, porque la recuperación es
+  // opt-in también en el backend (libraauth v0.5.0) — mostrarlo en un
+  // producto que no la tenga prendida sería un link a una pantalla que
+  // termina en 404.
+  forgotPasswordPath?: string
 }) {
   return function Login() {
     // Cast puntual: TS no puede unificar el tipo generico TUser (para
@@ -88,9 +96,8 @@ export function createLogin<TUser = User>({
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="password">Contraseña</Label>
-                <Input
+                <PasswordInput
                   id="password"
-                  type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -100,6 +107,14 @@ export function createLogin<TUser = User>({
               <Button type="submit" disabled={submitting} className="w-full">
                 {submitting ? 'Ingresando…' : 'Ingresar'}
               </Button>
+              {forgotPasswordPath && (
+                <Link
+                  to={forgotPasswordPath}
+                  className="text-center text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                >
+                  ¿Olvidaste tu contraseña?
+                </Link>
+              )}
             </form>
           </CardContent>
         </Card>

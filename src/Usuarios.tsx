@@ -13,6 +13,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { DataTable, sortableHeader } from './data-table'
+import { PasswordInput } from './PasswordInput'
 
 function describeError(err: unknown): string {
   if (err instanceof ApiError) return err.detail
@@ -154,7 +155,7 @@ export function Usuarios({ basePath = '/users' }: { basePath?: string } = {}) {
             {editingId === 'new' && (
               <div className="grid gap-1.5">
                 <Label>Contraseña</Label>
-                <Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="w-40" />
+                <PasswordInput value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="w-40" />
               </div>
             )}
             <div className="grid gap-1.5">
@@ -178,7 +179,17 @@ export function Usuarios({ basePath = '/users' }: { basePath?: string } = {}) {
           {loading ? (
             <p className="py-6 text-center text-sm text-muted-foreground">Cargando…</p>
           ) : (
-            <DataTable columns={columns} data={users} emptyMessage="Sin usuarios todavía." />
+            <DataTable
+              columns={columns}
+              data={users}
+              emptyMessage="Sin usuarios todavía."
+              search={{
+                // El rol se busca por como se ve en la tabla ('admin' /
+                // 'staff'), que es tambien como se guarda.
+                campos: (u) => [u.username, u.name, u.role],
+                placeholder: 'Buscar por usuario, nombre o rol',
+              }}
+            />
           )}
         </CardContent>
       </Card>
