@@ -72,7 +72,7 @@ para que el motor de Tailwind v4 escanee las clases usadas dentro de
 |---|---|---|
 | `libra-ui/api-client` | `ApiError`, `api` (get/post/put/del), `type User` | Cliente HTTP base + tipo de usuario. Cada consumidor re-exporta esto desde su propio `src/api.ts` junto a sus tipos/endpoints propios. |
 | `libra-ui/AuthContext` | `AuthProvider`, `useAuth` | Contexto de sesión, 100% genérico. |
-| `libra-ui/data-table` | `DataTable`, `sortableHeader` | Wrapper de TanStack Table + shadcn. |
+| `libra-ui/data-table` | `DataTable`, `sortableHeader`, `anchoColumnaAcciones`, `type DataTableSearch` | Wrapper de TanStack Table + shadcn. Buscador opcional desde `v0.8.0`: pasando `search={{ campos }}` aparece un input que filtra la tabla; sin esa prop el render queda idéntico. `campos` lo declara la página porque el dato crudo no siempre es lo que se ve (`cliente_id: 3` se muestra como "Compulibra", y quien busca escribe lo segundo). |
 | `libra-ui/Usuarios` | `Usuarios({ basePath? })` | Página de gestión de usuarios, 100% genérica. `basePath` (default `/users`) es la ruta del router de usuarios en el backend del consumidor -- LibraDesk pasa `/api/usuarios`. |
 | `libra-ui/Layout` | `createLayout({ productName, productInitial, navItems })` | Factory: recibe la parte propia de cada producto (branding + items de navegación) y devuelve el componente `Layout`. |
 | `libra-ui/Login` | `createLogin({ productName, productInitial, redirectTo })` | Factory: recibe branding + ruta de redirect post-login. |

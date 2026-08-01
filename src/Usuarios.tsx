@@ -179,7 +179,17 @@ export function Usuarios({ basePath = '/users' }: { basePath?: string } = {}) {
           {loading ? (
             <p className="py-6 text-center text-sm text-muted-foreground">Cargando…</p>
           ) : (
-            <DataTable columns={columns} data={users} emptyMessage="Sin usuarios todavía." />
+            <DataTable
+              columns={columns}
+              data={users}
+              emptyMessage="Sin usuarios todavía."
+              search={{
+                // El rol se busca por como se ve en la tabla ('admin' /
+                // 'staff'), que es tambien como se guarda.
+                campos: (u) => [u.username, u.name, u.role],
+                placeholder: 'Buscar por usuario, nombre o rol',
+              }}
+            />
           )}
         </CardContent>
       </Card>
