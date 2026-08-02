@@ -101,6 +101,64 @@ describe('editar sin tocar la contraseña', () => {
     expect('password' in cuerpoDelPut()).toBe(false)
   })
 
+  it('todos los campos editables llegan al PUT', async () => {
+    // Cubre los seis campos de una: un `onChange` mal cableado —el clásico
+    // copiar y pegar el bloque sin cambiar el nombre del campo— haría que dos
+    // inputs escriban sobre el mismo valor y esto se pondría rojo.
+    await montar(SIN_NADA)
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Servidor'), 'smtp.test')
+    await user.clear(screen.getByLabelText('Puerto'))
+    await user.type(screen.getByLabelText('Puerto'), '2525')
+    await user.type(screen.getByLabelText('Usuario'), 'cuenta')
+    await user.type(screen.getByLabelText('Contraseña'), 'secreta')
+    await user.type(screen.getByLabelText('Remitente'), 'no-responder@test')
+    await user.type(screen.getByLabelText('Nombre del remitente'), 'Soporte')
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+
+    await waitFor(() => expect(cuerpoDelPut()).toEqual({
+      host: 'smtp.test', port: 2525, user: 'cuenta', password: 'secreta',
+      from_email: 'no-responder@test', from_name: 'Soporte',
+    }))
+  })
+
+  it('tildar "quitar" vacía y deshabilita el campo, y manda la orden de borrar', async () => {
+    await montar(GUARDADA)
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Contraseña'), 'algo')
+    await user.click(screen.getByLabelText('Quitar la contraseña guardada'))
+
+    const campo = screen.getByLabelText('Contraseña')
+    expect(campo).toHaveValue('')
+    expect(campo).toBeDisabled()
+
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+    await waitFor(() => expect(cuerpoDelPut().password).toBe(''))
+  })
+
+  it('destildar "quitar" vuelve a habilitar el campo', async () => {
+    await montar(GUARDADA)
+    const user = userEvent.setup()
+    const checkbox = screen.getByLabelText('Quitar la contraseña guardada')
+    await user.click(checkbox)
+    await user.click(checkbox)
+    expect(screen.getByLabelText('Contraseña')).toBeEnabled()
+  })
+
+  it('después de guardar, el campo de contraseña vuelve a quedar vacío', async () => {
+    // Si quedara con lo tipeado, el próximo "Guardar" la re-mandaría sin que
+    // nadie lo pidiera.
+    await montar(SIN_NADA)
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Servidor'), 'smtp.test')
+    await user.type(screen.getByLabelText('Contraseña'), 'secreta')
+    responde(GUARDADA)
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+
+    await waitFor(() => expect(screen.getByText('Configuración guardada.')).toBeInTheDocument())
+    expect(screen.getByLabelText('Contraseña')).toHaveValue('')
+  })
+
   it('el campo avisa que hay una guardada en vez de aparentar estar vacío', async () => {
     await montar(GUARDADA)
     expect(screen.getByLabelText('Contraseña')).toHaveAttribute(
