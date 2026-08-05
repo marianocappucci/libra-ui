@@ -437,6 +437,70 @@ describe('comprobantes relacionados', () => {
     expect(screen.getByText(/0005-00000004/)).toBeInTheDocument()
   })
 
+  it('una factura A con IVA discriminado lo muestra, y los datos del cliente completos', async () => {
+    // Los tres bloques que sólo aparecen fuera del caso monotributista, que es
+    // el que usan el resto de los tests: IVA discriminado, domicilio y
+    // condición frente al IVA.
+    montar({
+      ...CON_CAE,
+      factura: {
+        ...CON_CAE.factura, tipo: 1, iva_amount: 210, total: 1210,
+        cliente_domicilio: 'Suipacha 123', condicion_venta: 'Cuenta corriente',
+      },
+      tipo_label: 'FACTURA A',
+      iva_label: 'Responsable Inscripto',
+    })
+    expect(await screen.findByText('Suipacha 123')).toBeInTheDocument()
+    expect(screen.getByText('Responsable Inscripto')).toBeInTheDocument()
+    expect(screen.getByText('Cuenta corriente')).toBeInTheDocument()
+  })
+
+  it('varias notas y varios cobros se dicen en plural, con su estado', async () => {
+    montar({
+      ...CON_CAE,
+      notas_credito: [
+        { ...CON_CAE.factura, id: 5, numero: 3, tipo: 13 },
+        { ...CON_CAE.factura, id: 7, numero: 5, tipo: 13, cae: '', cae_vto: '' },
+      ],
+      notas_debito: [
+        { ...CON_CAE.factura, id: 6, numero: 4, tipo: 12 },
+        { ...CON_CAE.factura, id: 8, numero: 6, tipo: 12 },
+      ],
+      cobros: [
+        { id: 1, fecha: '2026-08-04', medio_pago: 'efectivo', monto: 600, referencia: 'caja 1' },
+        { id: 2, fecha: '2026-08-05', medio_pago: 'transferencia', monto: 400, referencia: '' },
+      ],
+      total_cobrado: 1000, pendiente: 0,
+    })
+    expect(await screen.findByText('Notas de crédito asociadas')).toBeInTheDocument()
+    expect(screen.getByText('Notas de débito asociadas')).toBeInTheDocument()
+    // Una autorizada y otra sin CAE.
+    expect(screen.getAllByText('Autorizada').length).toBeGreaterThan(0)
+    expect(screen.getByText('Pendiente')).toBeInTheDocument()
+    expect(screen.getByText(/2 pagos/)).toBeInTheDocument()
+    expect(screen.getByText(/caja 1/)).toBeInTheDocument()
+  })
+
+  it('un medio de pago que no está en el diccionario se muestra igual', async () => {
+    // Con su clave, no en blanco: el cobro existió y tiene que poder leerse
+    // aunque el catálogo de medios haya cambiado después.
+    montar({
+      ...CON_CAE,
+      cobros: [{ id: 1, fecha: '2026-08-04', medio_pago: 'medio_raro', monto: 1000, referencia: '' }],
+      total_cobrado: 1000, pendiente: 0,
+    })
+    expect(await screen.findByText(/medio_raro/)).toBeInTheDocument()
+  })
+
+  it('una factura de servicios sin fechas cargadas no muestra período', async () => {
+    montar({
+      ...CON_CAE,
+      factura: { ...CON_CAE.factura, concepto: 2, fch_serv_desde: '', fch_serv_hasta: '' },
+    })
+    expect(await screen.findAllByText('0005-00000001')).not.toHaveLength(0)
+    expect(screen.queryByText(/Per\. facturado/)).not.toBeInTheDocument()
+  })
+
   it('las observaciones se muestran si las hay', async () => {
     montar({
       ...CON_CAE,
