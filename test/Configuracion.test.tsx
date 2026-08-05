@@ -173,11 +173,53 @@ describe('Empresa', () => {
     })
   })
 
+  it('lo que se tipea llega al PUT', async () => {
+    montar(<EmpresaCard />)
+    const usuario = userEvent.setup()
+
+    const cuit = await screen.findByLabelText(/^CUIT$/)
+    await usuario.clear(cuit)
+    await usuario.type(cuit, '27999999994')
+    await usuario.click(screen.getByRole('button', { name: /Guardar/ }))
+
+    const put = await waitFor(() => {
+      const p = pedidos.find((p) => p.url.includes('/api/config/empresa') && p.metodo === 'PUT')
+      expect(p).toBeTruthy()
+      return p!
+    })
+    expect(JSON.parse(String(put.body)).empresa_cuit).toBe('27999999994')
+  })
+
   it('la condición de IVA es una lista y no texto libre', async () => {
     montar(<EmpresaCard />)
     // Es el campo que decide el tipo de comprobante: un valor tipeado a mano
     // que ARCA no conozca se descubre recién al facturar.
     expect(await screen.findByText('Responsable Inscripto')).toBeInTheDocument()
+  })
+
+  it('elegir otra condición de IVA la manda', async () => {
+    montar(<EmpresaCard />)
+    const usuario = userEvent.setup()
+
+    await screen.findByLabelText(/Nombre o razón social/)
+    await usuario.selectOptions(screen.getByRole('combobox'), 'Monotributista')
+    await usuario.click(screen.getByRole('button', { name: /Guardar/ }))
+
+    const put = await waitFor(() => {
+      const p = pedidos.find((p) => p.url.includes('/api/config/empresa') && p.metodo === 'PUT')
+      expect(p).toBeTruthy()
+      return p!
+    })
+    expect(JSON.parse(String(put.body)).empresa_iva_condition).toBe('Monotributista')
+  })
+
+  it('un error de red se muestra, no se traga', async () => {
+    // `describirError` cae al mensaje genérico cuando no es un ApiError: sin
+    // esta rama, un backend caído deja la pantalla en blanco sin explicación.
+    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new TypeError('Failed to fetch'))))
+    montar(<EmpresaCard />)
+
+    expect(await screen.findByText(/Error de conexión/)).toBeInTheDocument()
   })
 })
 
@@ -206,6 +248,26 @@ describe('Logo', () => {
     expect(await screen.findByText(/Todavía no hay logo cargado/)).toBeInTheDocument()
     expect(document.querySelector('img[alt="Logo de la empresa"]')).toBeNull()
   })
+
+  it('se puede quitar, sin entrar al volumen del contenedor', async () => {
+    montar(<LogoCard />)
+    const usuario = userEvent.setup()
+
+    await usuario.click(await screen.findByRole('button', { name: /Quitar/ }))
+
+    await waitFor(() => {
+      expect(pedidos.some((p) => p.url.includes('/logo') && p.metodo === 'DELETE')).toBe(true)
+    })
+  })
+
+  it('sin logo no ofrece quitarlo', async () => {
+    hayLogo = false
+    montar(<LogoCard />)
+
+    await screen.findByText(/Todavía no hay logo cargado/)
+    expect(screen.queryByRole('button', { name: /Quitar/ })).toBeNull()
+    expect(screen.getByRole('button', { name: /Subir logo/ })).toBeInTheDocument()
+  })
 })
 
 
@@ -216,6 +278,21 @@ describe('Datos / Backup', () => {
     expect(await screen.findByText('backup_manual_20260805_120000.zip')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /Descargar copia/ }))
       .toHaveAttribute('href', '/api/config/backup-ahora')
+  })
+
+  it('guardar una copia en el servidor la crea y recarga el listado', async () => {
+    montar(<DatosBackupCard />)
+    const usuario = userEvent.setup()
+
+    await usuario.click(
+      await screen.findByRole('button', { name: /Guardar copia en el servidor/ }),
+    )
+
+    await waitFor(() => {
+      expect(pedidos.filter((p) => p.url.includes('/api/config/backups') && p.metodo === 'POST'))
+        .toHaveLength(1)
+    })
+    expect(await screen.findByText(/Copia guardada en el servidor/)).toBeInTheDocument()
   })
 
   it('🔴 elegir el archivo NO dispara el restore', async () => {
@@ -279,5 +356,41 @@ describe('ARCA', () => {
     // El backend declara `punto_venta: int`. Mandarlo como string da un 422
     // que sólo aparece al guardar.
     expect(JSON.parse(String(put.body)).punto_venta).toBe(3)
+  })
+
+  it('los cinco campos editados llegan al PUT', async () => {
+    montar(<ArcaCard />)
+    const usuario = userEvent.setup()
+
+    const cuit = await screen.findByLabelText(/CUIT/)
+    await usuario.clear(cuit)
+    await usuario.type(cuit, '30777777779')
+    const pv = screen.getByLabelText(/Punto de venta/)
+    await usuario.clear(pv)
+    await usuario.type(pv, '7')
+    const cert = screen.getByLabelText(/Path del certificado/)
+    await usuario.clear(cert)
+    await usuario.type(cert, '/certs/nuevo.crt')
+    const clave = screen.getByLabelText(/Path de la clave privada/)
+    await usuario.clear(clave)
+    await usuario.type(clave, '/certs/nuevo.key')
+    await usuario.selectOptions(screen.getByRole('combobox'), 'produccion')
+
+    await usuario.click(screen.getByRole('button', { name: /Guardar/ }))
+
+    const put = await waitFor(() => {
+      const p = pedidos.find((p) => p.url.includes('/config/arca') && p.metodo === 'PUT')
+      expect(p).toBeTruthy()
+      return p!
+    })
+    expect(JSON.parse(String(put.body))).toEqual({
+      cuit: '30777777779',
+      punto_venta: 7,
+      certificado_path: '/certs/nuevo.crt',
+      clave_path: '/certs/nuevo.key',
+      // 🔴 El ambiente es el campo que decide si las facturas son de verdad.
+      // Que se pueda cambiar y que viaje tiene que estar cubierto.
+      ambiente: 'produccion',
+    })
   })
 })
