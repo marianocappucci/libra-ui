@@ -2,10 +2,10 @@
 // archivo era idéntico salvo branding/redirectTo -- ver
 // wiki/analyses/auditoria-duplicacion-familia-libra.md. `createLogin()`
 // recibe esa parte propia de cada producto como config.
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from './AuthContext'
-import { ApiError, type User } from './api-client'
+import { api, ApiError, type User } from './api-client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -20,7 +20,7 @@ import { PasswordInput } from './PasswordInput'
 // `useAuth` juntos, consistentes entre si.
 export function createLogin<TUser = User>({
   productName, productInitial, redirectTo, onLoginSuccess, useAuth: useAuthOverride, formatError,
-  forgotPasswordPath,
+  forgotPasswordPath, demoPath,
 }: {
   productName: string
   productInitial: string
@@ -44,6 +44,21 @@ export function createLogin<TUser = User>({
   // producto que no la tenga prendida sería un link a una pantalla que
   // termina en 404.
   forgotPasswordPath?: string
+  // Ruta del auto-login de la demo pública (ej. '/auth/demo', o '/api/demo'
+  // en Contalibra/Restolibra). **Opt-in en la config, y además condicionado
+  // en runtime**: aunque el producto la pase, el botón sólo aparece si la
+  // instancia contesta la sonda con JSON.
+  //
+  // 🔴 **Por qué no alcanza con que el producto lo declare, ni con un 200.**
+  // La imagen de la demo y la del cliente salen del mismo código, así que
+  // esto no se puede decidir en tiempo de build. Y la sonda no se puede
+  // evaluar por código de estado: estos productos sirven la SPA con un
+  // catch-all, así que un GET a una ruta inexistente devuelve **200 con el
+  // index.html** — medido el 2026-08-06. Un botón condicionado a "me
+  // contestó 200" aparecería en la instancia de todos los clientes.
+  // `api.get` devuelve `undefined` cuando la respuesta no es JSON, y de ahí
+  // sale el chequeo de forma de abajo.
+  demoPath?: string
 }) {
   return function Login() {
     // Cast puntual: TS no puede unificar el tipo generico TUser (para
@@ -57,6 +72,49 @@ export function createLogin<TUser = User>({
     const [password, setPassword] = useState('')
     const [error, setError] = useState<string | null>(null)
     const [submitting, setSubmitting] = useState(false)
+    const [demo, setDemo] = useState<{ username: string } | null>(null)
+    const [entrandoALaDemo, setEntrandoALaDemo] = useState(false)
+
+    useEffect(() => {
+      if (!demoPath) return
+      let vivo = true
+      api.get<{ enabled?: boolean; username?: string } | undefined>(demoPath)
+        .then((info) => {
+          // Se exige la FORMA, no el resultado de la request. Ver el
+          // comentario de `demoPath`: acá llega `undefined` tanto por un 200
+          // con HTML como por un 204, y ninguno de los dos es una demo.
+          if (vivo && info?.enabled === true && typeof info.username === 'string') {
+            setDemo({ username: info.username })
+          }
+        })
+        // Una instancia normal contesta 404/405 y `api.get` tira: no es un
+        // error que mostrar, es la respuesta esperada en 5 de cada 6 casos.
+        .catch(() => {})
+      return () => { vivo = false }
+    }, [])
+
+    async function entrarALaDemo() {
+      setError(null)
+      setEntrandoALaDemo(true)
+      try {
+        await api.post(demoPath as string)
+        // Recarga entera en vez de `navigate`: el POST deja la cookie de
+        // sesión puesta, pero el `AuthProvider` ya montó con `user = null` y
+        // no tiene forma de enterarse — navegar sin recargar rebota contra
+        // el guard de rutas y devuelve al login, que es exactamente el
+        // síntoma que se está arreglando. Recargando, el provider vuelve a
+        // pedir `/me` y entra con la sesión que acaba de crearse.
+        window.location.assign(redirectTo)
+      } catch (err) {
+        setError(err instanceof ApiError
+          // El 503 del motor es informativo ("demo user not provisioned"):
+          // pasa cuando la instancia todavía no se sembró, y decir
+          // "credenciales incorrectas" mandaría a mirar el lugar equivocado.
+          ? `No se pudo entrar a la demo: ${err.detail}`
+          : 'Error de conexión.')
+        setEntrandoALaDemo(false)
+      }
+    }
 
     async function handleSubmit(event: FormEvent) {
       event.preventDefault()
@@ -116,6 +174,26 @@ export function createLogin<TUser = User>({
                 </Link>
               )}
             </form>
+            {demo && (
+              // Fuera del `<form>`: acá dentro un botón de más es un botón
+              // que el Enter del campo de contraseña puede terminar
+              // disparando.
+              <div className="mt-4 grid gap-2 border-t pt-4">
+                <p className="text-center text-sm text-muted-foreground">
+                  Ésta es la demo pública de {productName}: entrás como «{demo.username}»,
+                  con datos de prueba que se reponen todos los días.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  disabled={entrandoALaDemo}
+                  onClick={entrarALaDemo}
+                >
+                  {entrandoALaDemo ? 'Entrando…' : 'Entrar a la demo'}
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

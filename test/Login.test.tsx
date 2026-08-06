@@ -1,10 +1,10 @@
 // La pantalla de login de los 6 productos. Lo que importa acá es lo que
 // ve el usuario cuando algo falla, y el enlace de recuperación, que es
 // **opt-in** a propósito.
-import { act, render, screen } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createLogin } from '../src/Login'
 import { ApiError } from '../src/api-client'
 
@@ -22,6 +22,7 @@ function montar({
 }: {
   login?: ReturnType<typeof vi.fn>
   forgotPasswordPath?: string
+  demoPath?: string
   onLoginSuccess?: (u: UsuarioDePrueba) => string
   formatError?: (e: ApiError) => string
 } = {}) {
@@ -151,3 +152,126 @@ describe('errores', () => {
     expect(screen.queryByText('Usuario o contraseña incorrectos.')).not.toBeInTheDocument()
   })
 })
+
+// ── El botón "Entrar a la demo" (2026-08-06) ───────────────────────────────
+//
+// Las seis demos públicas estaban en el aire con el auto-login del backend
+// funcionando, y **desde el navegador no se podía entrar**: la pantalla que
+// cargaba era ésta, sin credenciales que tipear.
+//
+// Lo que fijan estos tests, en orden de lo que se rompe sin que se note:
+//
+// 1. 🔴 **Que un `200` que no es JSON NO muestre el botón.** Estos productos
+//    sirven la SPA con un catch-all: en la instancia de un cliente, un GET a
+//    la ruta de la sonda devuelve 200 con el `index.html`. Un botón
+//    condicionado al código de estado aparecería en todas las instancias.
+// 2. Que sin `demoPath` la pantalla ni pregunte.
+// 3. Que entrar recargue en vez de navegar (si no, rebota contra el guard).
+
+function sondaResponde(cuerpo: unknown, { json = true, status = 200 } = {}) {
+  vi.stubGlobal('fetch', vi.fn((_url: string, init?: RequestInit) => {
+    if (init?.method === 'POST') {
+      return Promise.resolve(new Response(JSON.stringify({ username: 'demo' }), {
+        status: 200, headers: { 'content-type': 'application/json' },
+      }))
+    }
+    return Promise.resolve(new Response(
+      typeof cuerpo === 'string' ? cuerpo : JSON.stringify(cuerpo),
+      { status, headers: { 'content-type': json ? 'application/json' : 'text/html' } },
+    ))
+  }))
+}
+
+const BOTON_DEMO = { name: 'Entrar a la demo' }
+
+describe('el botón de la demo', () => {
+  let irA: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    irA = vi.fn()
+    // `window.location.assign` no está implementado en jsdom y además nos
+    // interesa afirmar A DÓNDE manda, no sólo que no explote.
+    Object.defineProperty(window, 'location', {
+      configurable: true, value: { assign: irA, href: 'https://demo.test/login' },
+    })
+  })
+
+  it('aparece si la instancia contesta la sonda con JSON', async () => {
+    sondaResponde({ enabled: true, username: 'demo' })
+    montar({ demoPath: '/auth/demo' })
+
+    expect(await screen.findByRole('button', BOTON_DEMO)).toBeInTheDocument()
+    expect(screen.getByText(/entrás como «demo»/)).toBeInTheDocument()
+  })
+
+  it('🔴 NO aparece si la respuesta es un 200 que no es JSON', async () => {
+    // El caso real: la instancia de un cliente, donde el catch-all de la SPA
+    // devuelve el index.html con 200 para cualquier ruta que no exista. Es la
+    // razón por la que la sonda valida la forma y no el código de estado.
+    sondaResponde('<!doctype html><html><body><div id="root"></div></body></html>',
+      { json: false })
+    montar({ demoPath: '/auth/demo' })
+
+    await waitFor(() => expect(fetch).toHaveBeenCalled())
+    expect(screen.queryByRole('button', BOTON_DEMO)).not.toBeInTheDocument()
+  })
+
+  it('NO aparece si la sonda contesta JSON pero sin la forma esperada', async () => {
+    // Un JSON cualquiera tampoco alcanza: la clave `enabled` en `true` es lo
+    // que distingue a esta respuesta de cualquier otro endpoint que devuelva
+    // 200 en esa ruta.
+    sondaResponde({ detail: 'Not Found' })
+    montar({ demoPath: '/auth/demo' })
+
+    await waitFor(() => expect(fetch).toHaveBeenCalled())
+    expect(screen.queryByRole('button', BOTON_DEMO)).not.toBeInTheDocument()
+  })
+
+  it('NO aparece si la instancia contesta 404, que es lo normal', async () => {
+    sondaResponde({ detail: 'Not Found' }, { status: 404 })
+    montar({ demoPath: '/auth/demo' })
+
+    await waitFor(() => expect(fetch).toHaveBeenCalled())
+    expect(screen.queryByRole('button', BOTON_DEMO)).not.toBeInTheDocument()
+  })
+
+  it('sin demoPath ni pregunta', async () => {
+    sondaResponde({ enabled: true, username: 'demo' })
+    montar()
+
+    expect(fetch).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', BOTON_DEMO)).not.toBeInTheDocument()
+  })
+
+  it('al tocarlo entra y RECARGA, no navega', async () => {
+    // 🔴 Recargar no es un detalle: el POST deja la cookie puesta, pero el
+    // AuthProvider ya montó con user=null. Un `navigate` rebota contra el
+    // guard de rutas y devuelve al login — el mismo síntoma que esto arregla.
+    sondaResponde({ enabled: true, username: 'demo' })
+    montar({ demoPath: '/auth/demo' })
+    await userEvent.setup().click(await screen.findByRole('button', BOTON_DEMO))
+
+    await waitFor(() => expect(irA).toHaveBeenCalledWith('/dashboard'))
+    expect(navegar).not.toHaveBeenCalled()
+  })
+
+  it('si el auto-login falla lo dice con el motivo del backend', async () => {
+    // El 503 del motor ("demo user not provisioned") pasa cuando la instancia
+    // todavía no se sembró. "Usuario o contraseña incorrectos" mandaría a
+    // mirar el lugar equivocado.
+    vi.stubGlobal('fetch', vi.fn((_url: string, init?: RequestInit) =>
+      Promise.resolve(init?.method === 'POST'
+        ? new Response(JSON.stringify({ detail: 'demo user not provisioned' }),
+          { status: 503, headers: { 'content-type': 'application/json' } })
+        : new Response(JSON.stringify({ enabled: true, username: 'demo' }),
+          { status: 200, headers: { 'content-type': 'application/json' } }))))
+    montar({ demoPath: '/auth/demo' })
+    await userEvent.setup().click(await screen.findByRole('button', BOTON_DEMO))
+
+    expect(await screen.findByText(/demo user not provisioned/)).toBeInTheDocument()
+    expect(irA).not.toHaveBeenCalled()
+    // Y se puede reintentar: quedar deshabilitado dejaría la pantalla muerta.
+    expect(screen.getByRole('button', BOTON_DEMO)).toBeEnabled()
+  })
+})
+
