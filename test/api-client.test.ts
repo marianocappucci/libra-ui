@@ -3,7 +3,7 @@
 // de la API vs statusText) son los que definen que ve el usuario cuando
 // algo sale mal.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { api, ApiError } from '../src/api-client'
+import { _reiniciarAvisoDeSesion, api, ApiError, configurarSesionVencida } from '../src/api-client'
 
 function respuesta(
   body: unknown,
@@ -168,5 +168,102 @@ describe('postForm (uploads)', () => {
     expect(error).toBeInstanceOf(ApiError)
     expect(error.status).toBe(413)
     expect(error.detail).toBe('El archivo es demasiado grande')
+  })
+})
+
+// ── Sesión vencida (2026-08-06) ────────────────────────────────────────────
+//
+// Reportado con captura: la demo pública mostrando el menú entero y
+// `not authenticated` en rojo donde iban los datos. La sesión se había muerto
+// —el reset de las 04:30 recrea los usuarios— con la pestaña ya abierta, y la
+// SPA se quedó montada tirando 401 sin volver nunca al login.
+//
+// Lo que fijan estos tests, en orden de lo que se rompe sin que se note:
+//
+// 1. 🔴 **Que el 401 del LOGIN no dispare nada.** Es el que rompe todo si se
+//    olvida: con la contraseña mal el backend contesta 401, y redirigir ahí
+//    borraría el mensaje de error y dejaría la pantalla peleando consigo misma.
+// 2. Que un 401 de datos sí vuelva al login.
+// 3. Que varias llamadas fallando juntas avisen una sola vez.
+
+describe('sesión vencida', () => {
+  let volviAlLogin: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    volviAlLogin = vi.fn()
+    configurarSesionVencida(volviAlLogin)
+    _reiniciarAvisoDeSesion()
+    // jsdom arranca en "/", que no es el login: es el escenario real.
+    window.history.pushState({}, '', '/dashboard')
+  })
+
+  it('un 401 en una llamada de datos vuelve al login', async () => {
+    responde({ detail: 'not authenticated' }, { status: 401 })
+    await api.get('/api/dashboard/operativo?dias=30').catch(() => {})
+    expect(volviAlLogin).toHaveBeenCalledTimes(1)
+  })
+
+  it('🔴 un 401 del LOGIN no vuelve al login: es la contraseña equivocada', async () => {
+    responde({ detail: 'invalid credentials' }, { status: 401 })
+    const error = await api.post('/auth/login', { username: 'ana', password: 'mal' }).catch((e) => e) as ApiError
+    // Y el error tiene que seguir llegando al formulario, que es quien muestra
+    // "usuario o contraseña incorrectos".
+    expect(error).toBeInstanceOf(ApiError)
+    expect(error.detail).toBe('invalid credentials')
+    expect(volviAlLogin).not.toHaveBeenCalled()
+  })
+
+  it('el 401 de /auth/me tampoco: lo traduce el AuthProvider a "no hay usuario"', async () => {
+    responde({ detail: 'not authenticated' }, { status: 401 })
+    await api.get('/auth/me').catch(() => {})
+    expect(volviAlLogin).not.toHaveBeenCalled()
+  })
+
+  it('el 401 del auto-login de la demo tampoco', async () => {
+    // `POST /auth/demo` puede contestar 401/503 en una instancia a medio
+    // sembrar, y el botón muestra el motivo en pantalla.
+    responde({ detail: 'no', status: 401 }, { status: 401 })
+    await api.post('/auth/demo').catch(() => {})
+    expect(volviAlLogin).not.toHaveBeenCalled()
+  })
+
+  it('varias llamadas fallando juntas avisan una sola vez', async () => {
+    // El dashboard dispara dos, y la pantalla de Clientes tres. Una
+    // redirección por cada una es una pantalla que parpadea.
+    responde({ detail: 'not authenticated' }, { status: 401 })
+    await Promise.all([
+      api.get('/api/dashboard').catch(() => {}),
+      api.get('/api/dashboard/operativo').catch(() => {}),
+      api.get('/api/clientes').catch(() => {}),
+    ])
+    expect(volviAlLogin).toHaveBeenCalledTimes(1)
+  })
+
+  it('estando ya en el login no redirige', async () => {
+    window.history.pushState({}, '', '/login')
+    responde({ detail: 'not authenticated' }, { status: 401 })
+    await api.get('/api/algo').catch(() => {})
+    expect(volviAlLogin).not.toHaveBeenCalled()
+  })
+
+  it('un 403 no es sesión vencida: es un permiso que falta', async () => {
+    // El visitante de la demo es staff y hay pantallas de admin. Mandarlo al
+    // login le haría creer que se cayó la sesión.
+    responde({ detail: 'forbidden' }, { status: 403 })
+    await api.get('/api/usuarios').catch(() => {})
+    expect(volviAlLogin).not.toHaveBeenCalled()
+  })
+
+  it('un upload que cae en 401 también vuelve al login', async () => {
+    responde({ detail: 'not authenticated' }, { status: 401 })
+    await api.postForm('/api/config/empresa/logo', new FormData()).catch(() => {})
+    expect(volviAlLogin).toHaveBeenCalledTimes(1)
+  })
+
+  it('el ApiError se sigue propagando: la pantalla decide si muestra algo', async () => {
+    responde({ detail: 'not authenticated' }, { status: 401 })
+    const error = await api.get('/api/clientes').catch((e) => e) as ApiError
+    expect(error).toBeInstanceOf(ApiError)
+    expect(error.status).toBe(401)
   })
 })
