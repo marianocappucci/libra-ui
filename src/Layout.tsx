@@ -109,7 +109,15 @@ export function createLayout<TUser = { role?: string; name?: string }>({
   function AppSidebar() {
     const { user, logout } = useAuth()
     const location = useLocation()
-    const isAdmin = (user as { role?: string } | null)?.role === 'admin'
+    // El visitante de una demo pública ve **todos** los menús, incluidos los
+    // de administración. No es un rol más alto: el backend le abre sólo la
+    // lectura (libraauth v0.18.0, `json_api_require_role`) y los botones de
+    // guardar de cada pantalla se siguen gateando por `role`, que sigue siendo
+    // el suyo. Sin esto, la demo de MedLibra mostraba una sola entrada de menú
+    // y las otras cinco escondían Configuración, Usuarios y Logs.
+    const datos = user as { role?: string; demo_readonly?: boolean } | null
+    const isAdmin = datos?.role === 'admin'
+    const veLosMenusDeAdmin = isAdmin || datos?.demo_readonly === true
 
     function moduleVisible(module?: string): boolean {
       if (!module) return true
@@ -152,7 +160,7 @@ export function createLayout<TUser = { role?: string; name?: string }>({
             if (user && section.hideFor?.(user)) return null
             const items = section.items
               .filter((item) => !(user && item.hideFor?.(user)))
-              .filter((item) => (!item.adminOnly || isAdmin) && moduleVisible(item.module))
+              .filter((item) => (!item.adminOnly || veLosMenusDeAdmin) && moduleVisible(item.module))
             if (items.length === 0) return null
             return (
               <SidebarGroup key={section.label ?? si}>
