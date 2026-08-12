@@ -88,9 +88,10 @@ describe('Logs — actividad', () => {
     const tablaActividad = screen.getAllByRole('table')[0]
     expect(within(tablaActividad).getByText('Editado')).toBeInTheDocument()
     expect(within(tablaActividad).getByText('tecnico1')).toBeInTheDocument()
-    // `2026-08-05 14:32:10` se muestra como `05/08 14:32`, con la fecha
-    // completa en el title.
-    expect(screen.getByTitle('2026-08-05 14:32:10')).toHaveTextContent('05/08 14:32')
+    // `2026-08-05 14:32:10` se muestra como `05-08 14:32`, con la fecha
+    // completa en el title. El separador es el guion desde el 2026-08-12: el
+    // formato visible del ecosistema es dd-mm-aaaa.
+    expect(screen.getByTitle('2026-08-05 14:32:10')).toHaveTextContent('05-08 14:32')
   })
 
   it('el antes y el después se ven al desplegar la fila', async () => {
