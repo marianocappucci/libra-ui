@@ -9,10 +9,21 @@ name: CI
 # que verificar -- solo los tests y el chequeo de tipos.
 
 on:
-  push:
-    branches: [develop, main]
+  # Sin `push` a ramas: `develop` y `main` estan protegidas (2026-08-11,
+  # `enforce_admins: true`), asi que todo entra por PR y el run del PR verifica
+  # el MERGE -- que es exactamente lo que queda en la rama. El push repetia esa
+  # misma verificacion sobre un arbol identico: medido, tres commits distintos
+  # con el mismo tree hash y hasta cuatro corridas por cambio.
   pull_request:
     branches: [develop, main]
+
+# Una sola corrida viva por rama. Si entra un push nuevo mientras esta
+# corriendo, se cancela la anterior en vez de pagar las dos: su resultado ya
+# no le sirve a nadie, porque reporta sobre un codigo que no es el que quedo
+# en la rama.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
