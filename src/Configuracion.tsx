@@ -297,6 +297,85 @@ export type BackupGuardado = {
   mtime: string
 }
 
+/** Estado de la copia del backup en la nube del cliente (add-on).
+ *
+ *  `contratado: false` es "no tenés el add-on", **no** una falla: la pantalla no
+ *  puede mostrarle una alarma a quien no lo contrató. Y `al_dia: false` con
+ *  `contratado: true` sí lo es — el backend distingue en `motivo` si la última
+ *  subida falló o si anduvo pero es de hace días, que desde afuera se ven igual.
+ */
+export type ResguardoExterno = {
+  contratado: boolean
+  al_dia: boolean | null
+  motivo: string | null
+  detalle: {
+    cuando: string | null
+    archivo: string | null
+    destino: string | null
+    bytes: number | null
+    en_destino: number | null
+    error: string | null
+  } | null
+}
+
+/** La tarjeta del resguardo externo, con sus tres estados.
+ *
+ *  Vive acá y no en cada producto porque `libra-ui` es lo que comparten las
+ *  pantallas de Configuración de Gestiolibra, MedLibra y VentaLibra: escrita una
+ *  vez, la tienen los tres.
+ */
+export function ResguardoExternoCard() {
+  const [estado, setEstado] = useState<ResguardoExterno | null>(null)
+
+  useEffect(() => {
+    // No bloquea la pantalla: si el endpoint no está —una instancia con un
+    // LibraCore anterior a v1.32.0— la tarjeta simplemente no aparece.
+    api.get<ResguardoExterno>('/api/config/resguardo-externo')
+      .then(setEstado)
+      .catch(() => setEstado(null))
+  }, [])
+
+  if (!estado) return null
+
+  if (!estado.contratado) {
+    return (
+      <Card className="border-dashed">
+        <CardHeader>
+          <CardTitle className="text-base text-muted-foreground">Copia externa</CardTitle>
+          <CardDescription>
+            Tus copias viven en este servidor. Con el resguardo externo se guardan
+            todas las noches en tu propia cuenta de Google Drive o Dropbox, así
+            siguen estando aunque el servidor no esté. Consultanos para activarlo.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    )
+  }
+
+  return (
+    <Card className={estado.al_dia ? 'border-emerald-500/40' : 'border-amber-500/60'}>
+      <CardHeader>
+        <CardTitle className={`text-base ${estado.al_dia ? '' : 'text-amber-600 dark:text-amber-400'}`}>
+          Copia externa {estado.al_dia ? 'al día' : 'con problemas'}
+        </CardTitle>
+        <CardDescription>
+          {estado.al_dia
+            ? <>También se guarda fuera de este servidor, en <span className="font-mono">{estado.detalle?.destino}</span>.</>
+            : estado.motivo}
+        </CardDescription>
+      </CardHeader>
+      {estado.al_dia && estado.detalle && (
+        <CardContent>
+          <p className="text-xs text-muted-foreground">
+            Última copia: {estado.detalle.cuando}
+            {estado.detalle.en_destino != null && <> · {estado.detalle.en_destino} guardadas afuera</>}
+          </p>
+        </CardContent>
+      )}
+    </Card>
+  )
+}
+
 /** Bajar una copia de los datos, y volver a una anterior.
  *
  *  El archivo es un **ZIP con las bases y los archivos de la instancia**, no un
@@ -359,6 +438,9 @@ export function DatosBackupCard() {
 
   return (
     <div className="grid gap-4">
+      {/* Va arriba de todo: si la copia externa está fallando, es lo primero
+          que el cliente tiene que ver al entrar a esta pantalla. */}
+      <ResguardoExternoCard />
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Copia de tus datos</CardTitle>
