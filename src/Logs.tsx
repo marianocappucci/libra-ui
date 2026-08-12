@@ -59,13 +59,17 @@ const EVENTO_META: Record<string, { label: string; icon: typeof LogIn; className
   login_fallido: { label: 'Intento fallido', icon: ShieldAlert, className: 'text-destructive' },
 }
 
-/** `2026-08-05 14:32:10` → `05/08 14:32`. La fecha completa queda en el title:
- *  la tabla se lee de arriba hacia abajo y el año repetido 100 veces es ruido. */
+/** `2026-08-05 14:32:10` → `05-08 14:32`. La fecha completa queda en el title:
+ *  la tabla se lee de arriba hacia abajo y el año repetido 100 veces es ruido.
+ *
+ *  El separador es el GUION desde el 2026-08-12: el formato visible del
+ *  ecosistema es `dd-mm-aaaa`, y este componente lo consumen los seis
+ *  productos. */
 function cuando(ts: string): string {
   const [fecha, hora] = ts.split(' ')
   if (!fecha || !hora) return ts
   const [, mes, dia] = fecha.split('-')
-  return `${dia}/${mes} ${hora.slice(0, 5)}`
+  return `${dia}-${mes} ${hora.slice(0, 5)}`
 }
 
 function valor(v: unknown): string {
