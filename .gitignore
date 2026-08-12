@@ -10,12 +10,15 @@ coverage.xml
 htmlcov/
 coverage/
 frontend/coverage/
-\.env
-\.env.*
+# Secretos y configuración local
+.env
+.env.*
 !.env.example
 config.local.*
 credentials.*
 secrets.*
+
+# Bases de datos y respaldos
 *.db
 *.sqlite
 *.sqlite3
@@ -25,12 +28,16 @@ secrets.*
 *.dump
 *.bak
 *.backup
+
+# Claves privadas y certificados
 *.pem
 *.key
 *.p12
 *.pfx
 id_rsa*
 id_ed25519*
+
+# Datos de aplicación y logs
 data/
 logs/
 *.log
