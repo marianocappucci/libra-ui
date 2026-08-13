@@ -79,9 +79,36 @@ para que el motor de Tailwind v4 escanee las clases usadas dentro de
 | `libra-ui/SelectBuscable` | `SelectBuscable`, `type OpcionSelect` | Select con **búsqueda por teclado** (`v0.9.0`). El `Select` de shadcn/Radix obliga a encontrar la opción a ojo en una lista ordenada; con los cientos de clientes que puede tener una empresa real, eso deja de ser viable. Filtra sin acentos y exige todos los términos, igual que el buscador de `data-table` — comparten `coincideBusqueda`. **No necesita `cmdk` ni el primitivo `popover`**: se construye con `input`, `button` y `cn`, que ya están en los 5 consumidores. |
 | `libra-ui/use-mobile` | `useIsMobile` | Hook de breakpoint, 100% genérico. |
 | `libra-ui/utils` | `cn`, `normalizar`, `coincideBusqueda` | Helper `clsx` + `tailwind-merge` de shadcn, más los dos helpers de búsqueda que comparten `data-table` y `SelectBuscable` (sin acentos, todos los términos en cualquier orden). |
+| `libra-ui/iconos-accion` | ~60 componentes de icono (`Eye`, `Pencil`, `Trash2`, `FilePlus`…) | El **vocabulario de iconos de acción y estado** de la familia (`v0.18.0`). Vive acá y no copiado por producto porque la misma acción tiene que dibujarse igual en todos. **Requiere configuración en el consumidor — ver abajo.** |
 
 ## Peer dependencies
 
 `react`, `react-dom`, `react-router-dom`, `@tanstack/react-table`,
 `lucide-react`, `clsx`, `tailwind-merge` — cada consumidor ya los tiene
 (mismo stack normalizado).
+
+## Lo que `iconos-accion` exige del consumidor
+
+Este módulo importa `~icons/…`, que es un módulo **virtual**: lo resuelve
+`unplugin-icons` en compilación, dentro del pipeline del consumidor. Un
+producto que lo use necesita, en su `frontend`:
+
+1. Dependencias **de desarrollo**: `unplugin-icons`, `@iconify-json/fluent`,
+   `@iconify-json/fluent-color`, `@svgr/core`, `@svgr/plugin-jsx`.
+2. En `vite.config.ts`: `Icons({ compiler: 'jsx', jsx: 'react' })` entre los
+   plugins.
+3. En `tsconfig.app.json`: `"unplugin-icons/types/react"` dentro de `types`.
+
+**No se puede declarar como `peerDependency`**: npm no sabe mirar un
+`vite.config.ts`. Pero lo que falta no se degrada en silencio — el build corta
+con `failed to resolve import "~icons/…"`, que nombra el problema.
+
+Y no es un requisito que agregue este módulo: el producto ya necesita las tres
+cosas para sus iconos de **identidad**, los del menú, que se le pasan a
+`createLayout` desde el producto y no salen de acá.
+
+> Verificado el 2026-08-13 antes de mover el módulo: un `~icons/` dentro de
+> `node_modules/libra-ui/src/` resuelve bien —el SVG termina en el bundle del
+> consumidor— porque este paquete viaja como TSX crudo y pasa por el pipeline
+> del consumidor, no por el pre-bundle de dependencias. Con el plugin sacado
+> del `vite.config.ts`, el build falla.
