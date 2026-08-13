@@ -10,7 +10,9 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "skipLibCheck": true,
-    "strict": true
+    "strict": true,
+
+    "types": ["unplugin-icons/types/react"]
   },
   "include": ["src"]
 }
