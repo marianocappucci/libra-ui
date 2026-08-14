@@ -3,10 +3,14 @@
 // Lo que se prueba aca NO es "que se vea lindo": es que el modulo cumpla las
 // dos propiedades de las que depende el resto del diseño.
 //
-//  1. El recuadro no elige color. Pinta con `bg-current`, o sea con el
-//     `currentColor` que hereda del boton, y el glifo va en blanco encima. Es
-//     lo que hace que el tacho se ponga rojo sin que este modulo sepa nada de
-//     tachos, y es justo lo que el set `fluent-color` no podia hacer.
+//  1. El icono no elige color: lo hereda. El glifo pinta con
+//     `fill="currentColor"` y no hay ningun bloque de fondo atras. Es lo que
+//     hace que el tacho se ponga rojo sin que este modulo sepa nada de tachos,
+//     y es justo lo que el set `fluent-color` no podia hacer.
+//     Hasta el 2026-08-13 la misma propiedad se conseguia al reves: un recuadro
+//     `bg-current` con el glifo en `text-white`. Se invirtio por pedido del
+//     humano, y el test de abajo es lo que impide que el bloque vuelva de
+//     prepo — por eso mira TODOS los exports y no uno de muestra.
 //  2. Dos conceptos distintos no comparten dibujo. Suena obvio, y sin embargo
 //     `PackagePlus` y `Package` dibujaban los dos el mismo `box` hasta el
 //     2026-08-13: no era una preferencia discutible, era un defecto que nadie
@@ -32,15 +36,32 @@ describe('iconos-accion', () => {
     expect(vacios.map(([nombre]) => nombre)).toEqual([])
   })
 
-  it('el recuadro se pinta con el color heredado y el glifo va en blanco', () => {
+  it('el glifo hereda el color y no trae bloque atras', () => {
     const { container } = render(<iconos.Trash2 />)
-    const caja = container.firstElementChild!
+    const svg = container.firstElementChild!
 
-    // `bg-current` es el mecanismo entero: si alguien lo cambia por un color
-    // fijo, el tacho deja de ponerse rojo en el boton destructivo.
-    expect(caja.tagName).toBe('SPAN')
-    expect(caja.className).toContain('bg-current')
-    expect(caja.querySelector('svg')!.getAttribute('class')).toContain('text-white')
+    // La parte POSITIVA: el dibujo se pinta con `currentColor`, que es el
+    // mecanismo entero. Sin esto, el tacho deja de ponerse rojo en el boton
+    // destructivo y el modulo tendria que saber de tachos.
+    expect(svg.tagName).toBe('svg')
+    expect(container.innerHTML).toContain('currentColor')
+
+    // Y la negativa: nada de recuadro. `className` de un SVGElement es un
+    // SVGAnimatedString, no un string — de ahi el getAttribute.
+    expect(svg.getAttribute('class')).not.toContain('bg-current')
+    expect(svg.getAttribute('class')).not.toContain('text-white')
+  })
+
+  it('ningun export vuelve a envolver el glifo en un recuadro', () => {
+    // La version fuerte del test de arriba, sobre los ~60 exports: el defecto
+    // que se quiere evitar es que alguien reintroduzca el bloque en UNO solo.
+    const conBloque = TODOS.filter(([, Icono]) => {
+      const { container } = render(<Icono />)
+      return container.firstElementChild!.tagName !== 'svg'
+        || container.innerHTML.includes('bg-current')
+        || container.innerHTML.includes('text-white')
+    })
+    expect(conBloque.map(([nombre]) => nombre)).toEqual([])
   })
 
   it('los tres "mas" son tres dibujos distintos, no uno', () => {
@@ -56,23 +77,15 @@ describe('iconos-accion', () => {
     expect(dibujo(iconos.PackagePlus)).not.toBe(dibujo(iconos.Package))
   })
 
-  it('los que van sobre un boton primario no traen recuadro', () => {
-    // En un boton primario `currentColor` ya es blanco: con recuadro,
-    // `bg-current` lo pinta blanco y el glifo blanco desaparece. Paso con el
-    // "+" de "Nuevo cliente".
-    for (const Icono of [iconos.FilePlus, iconos.PlusCircle, iconos.Plus,
-                         iconos.SearchPlano, iconos.DownloadPlano]) {
-      const { container } = render(<Icono />)
-      expect(container.firstElementChild!.tagName).toBe('svg')
-      expect(container.innerHTML).not.toContain('bg-current')
-    }
-  })
+  it('la clase que le pasa la pantalla llega al svg y pisa el tamaño', () => {
+    // Importa que PISE: el modulo pone `size-4` siempre, asi que si `cn()` no
+    // resolviera el conflicto, una pantalla no podria agrandar ni achicar nada.
+    const grande = render(<iconos.Eye className="size-8" />)
+    const clase = grande.container.firstElementChild!.getAttribute('class')!
+    expect(clase).toContain('size-8')
+    expect(clase).not.toContain('size-4')
 
-  it('la clase que le pasa la pantalla llega al elemento', () => {
-    const conRecuadro = render(<iconos.Eye className="size-8" />)
-    expect(conRecuadro.container.firstElementChild!.className).toContain('size-8')
-
-    const plano = render(<iconos.Plus className="size-3" />)
-    expect(plano.container.querySelector('svg')!.getAttribute('class')).toContain('size-3')
+    const chico = render(<iconos.Plus className="size-3" />)
+    expect(chico.container.querySelector('svg')!.getAttribute('class')).toContain('size-3')
   })
 })
