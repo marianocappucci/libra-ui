@@ -227,3 +227,54 @@ describe('la cabecera del menú', () => {
     expect(screen.getByText('Ana Perez')).toBeInTheDocument()
   })
 })
+
+// ── La barra superior, que ya no está (v0.19.0) ───────────────────────────────
+//
+// Se fue para los seis productos a la vez. Se prueba acá y no en cada producto
+// porque el `<header>` lo dibujaba este archivo: si vuelve, vuelve para todos.
+
+describe('la barra superior no existe más', () => {
+  function montarLayout() {
+    const Layout = createLayout<Usuario>({
+      productName: 'MedLibra', productInitial: 'M',
+      navItems: [{ to: '/a', label: 'Agenda', icon: Icono }],
+      useAuth: () => ({ user: { role: 'admin', name: 'Ana Perez' }, logout: vi.fn() }),
+    })
+    return render(<MemoryRouter><Layout><p>contenido</p></Layout></MemoryRouter>)
+  }
+
+  it('🔴 no queda ningún `<header>` arriba del contenido', () => {
+    // El `<header>` era exclusivo de la barra: ninguna pieza del sidebar
+    // (`SidebarHeader` incluido) renderiza uno.
+    const { container } = montarLayout()
+    expect(container.querySelector('header')).toBeNull()
+  })
+
+  it('🔴 el nombre del producto se dice una sola vez, en el sidebar', () => {
+    // La mitad que caza el defecto de verdad: con la barra puesta, el nombre
+    // aparecía dos veces —una en el sidebar y otra en la barra—, así que este
+    // test falla con un `2` si alguien la reintroduce.
+    montarLayout()
+    expect(screen.getAllByText('MedLibra')).toHaveLength(1)
+  })
+
+  it('el trigger sobrevive, flotante y sólo en mobile', () => {
+    // No se puede sacar del todo: en mobile la sidebar arranca cerrada. En
+    // desktop sobra, y quedaría flotando encima del contenido.
+    montarLayout()
+    const trigger = screen.getByLabelText('Alternar barra lateral')
+    expect(trigger.className).toContain('fixed')
+    expect(trigger.className).toContain('md:hidden')
+  })
+
+  it('el contenido deja el hueco del trigger sólo en mobile', () => {
+    // `pt-12` en mobile para no quedar debajo del botón flotante, y `md:pt-6`
+    // para que en desktop el contenido arranque arriba de todo — que es el
+    // punto de haber sacado la barra.
+    montarLayout()
+    const main = screen.getByText('contenido').parentElement as HTMLElement
+    expect(main.tagName).toBe('MAIN')
+    expect(main.className).toContain('pt-12')
+    expect(main.className).toContain('md:pt-6')
+  })
+})
