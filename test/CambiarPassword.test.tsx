@@ -7,6 +7,7 @@
 // la request y no el cartel.
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { CambiarPassword } from '../src/CambiarPassword'
 
@@ -101,5 +102,51 @@ describe('cambiar la propia contraseña', () => {
     // Mandar el formulario vacío sólo consigue un 400 que ya se podía evitar.
     montar()
     expect(screen.getByRole('button', { name: 'Cambiar' })).toBeDisabled()
+  })
+})
+
+// Cerrar el diálogo. Es su propio caso porque **es donde se borra lo tipeado**:
+// sin eso, la contraseña de alguien queda en el DOM hasta que se recargue la
+// página, y vuelve a aparecer escrita si el diálogo se abre de nuevo.
+
+describe('cerrar el diálogo', () => {
+  function Contenedor() {
+    // Controlado desde afuera, como lo monta el Layout: hace falta poder
+    // cerrarlo y volver a abrirlo para ver qué quedó adentro.
+    const [open, setOpen] = useState(true)
+    return (
+      <>
+        <button onClick={() => setOpen(true)}>abrir de nuevo</button>
+        <CambiarPassword open={open} onOpenChange={setOpen} />
+      </>
+    )
+  }
+
+  it('🔴 borra lo tipeado: la contraseña no sobrevive al cierre', async () => {
+    const user = userEvent.setup()
+    render(<Contenedor />)
+    await user.type(screen.getByLabelText('Contraseña actual'), 'mi-secreto')
+    expect(screen.getByLabelText('Contraseña actual')).toHaveValue('mi-secreto')
+
+    await user.click(screen.getByRole('button', { name: 'Cerrar' }))
+    await user.click(screen.getByRole('button', { name: 'abrir de nuevo' }))
+
+    // Se mira al REABRIR y no después de cerrar: cerrado no hay nada que
+    // mirar, así que la única forma de ver si quedó guardado es volver a entrar.
+    expect(screen.getByLabelText('Contraseña actual')).toHaveValue('')
+  })
+
+  it('tampoco deja el error de la vez anterior', async () => {
+    const user = userEvent.setup()
+    render(<Contenedor />)
+    await user.type(screen.getByLabelText('Contraseña actual'), 'x')
+    await user.type(screen.getByLabelText('Contraseña nueva'), 'una')
+    await user.type(screen.getByLabelText('Repetir la nueva'), 'otra')
+    await user.click(screen.getByRole('button', { name: 'Cambiar' }))
+    expect(await screen.findByText(/no coinciden/i)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Cerrar' }))
+    await user.click(screen.getByRole('button', { name: 'abrir de nuevo' }))
+    expect(screen.queryByText(/no coinciden/i)).not.toBeInTheDocument()
   })
 })

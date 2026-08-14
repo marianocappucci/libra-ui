@@ -257,15 +257,19 @@ export function createLayout<TUser = { role?: string; name?: string }>({
 
               {userMenu && (
                 <>
-                  {/* `onSelect` frenado: adentro hay controles con su propio
-                      estado (el selector de sucursal), y el default de Radix es
-                      cerrar el menu al primer click — o sea que elegir una
-                      opcion cerraria el menu antes de poder elegirla. */}
-                  <div
-                    className="px-2 py-1.5"
-                    onClick={(e) => e.stopPropagation()}
-                    onKeyDown={(e) => e.stopPropagation()}
-                  >
+                  {/* Un `<div>` y no un `DropdownMenuItem`: lo que entra son
+                      controles con su propio estado (el selector de sucursal de
+                      LibraDesk), y un item se "elige" y cierra el menu.
+
+                      ⚠️ **Falta verificarlo en el navegador con un `<Select>` de
+                      Radix adentro.** Radix cierra el menu ante un click de
+                      afuera, y el contenido de un `Select` va en un portal —o
+                      sea, tecnicamente afuera—, asi que abrir el desplegable
+                      podria cerrar el menu que lo contiene. No se puede medir
+                      con los stubs de este paquete: hace falta Radix de verdad.
+                      Si pasa, la salida conocida es `modal={false}` en el
+                      `DropdownMenu`. */}
+                  <div className="px-2 py-1.5">
                     {userMenu}
                   </div>
                   <DropdownMenuSeparator />
