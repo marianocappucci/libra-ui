@@ -7,6 +7,15 @@
 // que Gestiolibra/MedLibra/VentaLibra (que llaman
 // `createLayout({ productName, productInitial, navItems })` tal cual) no
 // cambian de renderizado. Ver wiki/entities/libra-ui.md.
+//
+// v0.19.0 (2026-08-14): se fue la barra superior. Repetia el nombre del
+// producto que la sidebar ya dice arriba a la izquierda, y le comia 3,5rem de
+// alto al contenido en todas las pantallas. El trigger de colapsar que vivia
+// ahi queda flotante y solo en mobile (en desktop el atajo es Ctrl/Cmd+B, que
+// SidebarProvider ya trae). Contalibra y Restolibra ya corrian asi via
+// `topbar: false`; la opcion se elimina en vez de invertir su default para no
+// dejar una variante que nadie usa -- si la barra vuelve alguna vez, vuelve
+// para los seis productos a la vez.
 import { type ReactNode, type ComponentType } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { LogOut } from 'lucide-react'
@@ -30,7 +39,6 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from '@/components/ui/sidebar'
-import { Separator } from '@/components/ui/separator'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 
@@ -70,7 +78,7 @@ function initials(name: string): string {
 
 export function createLayout<TUser = { role?: string; name?: string }>({
   productName, productInitial, navItems, navSections,
-  icon: HeaderIcon, homeTo, accountTo, topbar = true,
+  icon: HeaderIcon, homeTo, accountTo,
   hasModule, getUserName, getUserSubtitle,
   useAuth = useAuthDefault as unknown as () => { user: TUser | null; logout: () => Promise<void> },
 }: {
@@ -89,10 +97,6 @@ export function createLayout<TUser = { role?: string; name?: string }>({
   // siempre).
   homeTo?: string
   accountTo?: string
-  // Barra superior con el nombre del producto -- default `true`
-  // (comportamiento de siempre). Contalibra/Restolibra la sacan
-  // (`topbar: false`) y usan un trigger flotante solo en mobile.
-  topbar?: boolean
   hasModule?: (user: TUser, module: string) => boolean
   getUserName?: (user: TUser) => string
   getUserSubtitle?: (user: TUser) => string | undefined
@@ -241,20 +245,16 @@ export function createLayout<TUser = { role?: string; name?: string }>({
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset>
-          {topbar ? (
-            <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
-              <SidebarTrigger />
-              <Separator orientation="vertical" className="mr-2 h-4" />
-              <span className="text-sm text-muted-foreground">{productName}</span>
-            </header>
-          ) : (
-            <SidebarTrigger className="fixed top-2 left-2 z-20 md:hidden" />
-          )}
+          {/* Unico resto de la barra vieja: en mobile la sidebar arranca
+              cerrada y sin esto no hay como abrirla. En desktop no hace falta
+              -- la sidebar esta a la vista y Ctrl/Cmd+B la colapsa. */}
+          <SidebarTrigger className="fixed top-2 left-2 z-20 md:hidden" />
           {/* min-w-0 es necesario para que los contenedores de scroll
               horizontal de las tablas (overflow-x-auto) puedan encogerse
               dentro del flex en vez de desbordarlo -- sin esto, una tabla
-              ancha empuja el layout entero en vez de scrollear. */}
-          <main className={topbar ? 'min-w-0 flex-1 space-y-4 p-4 md:p-6' : 'min-w-0 flex-1 space-y-4 p-4 pt-12 md:p-6 md:pt-6'}>{children}</main>
+              ancha empuja el layout entero en vez de scrollear.
+              El pt-12 de mobile es el hueco del trigger flotante. */}
+          <main className="min-w-0 flex-1 space-y-4 p-4 pt-12 md:p-6 md:pt-6">{children}</main>
         </SidebarInset>
       </SidebarProvider>
     )
