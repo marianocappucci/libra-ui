@@ -33,3 +33,32 @@ if (!window.matchMedia) {
 if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = vi.fn()
 }
+
+// jsdom trae `document.createRange()` pero su `Range` NO implementa
+// `getBoundingClientRect`. `DataTable` lo usa para medir el ancho del titulo
+// "Acciones" --el texto va alineado a la derecha y `scrollWidth` no mide ese
+// lado--, asi que cualquier tabla CON columna de acciones revienta con
+// `rango.getBoundingClientRect is not a function`.
+//
+// No aparecio antes porque `data-table.test.tsx` no declara columna `actions`:
+// con `indiceAcciones = -1` esa rama nunca corre. Se descubrio al escribir el
+// primer test de `Usuarios`, que si la tiene. Ojo con el guard del componente:
+// pregunta por `document.createRange`, que en jsdom SI existe -- o sea que no
+// protege de esto.
+//
+// Va aca y no como guard nuevo en el componente, por lo mismo que
+// `scrollIntoView`: en un navegador de verdad el metodo existe. Devuelve ceros
+// (no hay layout que medir en jsdom) y el componente ya trata el 0 como "no
+// medi nada".
+if (typeof Range !== 'undefined' && !Range.prototype.getBoundingClientRect) {
+  const vacio = {
+    x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0,
+    toJSON: () => ({}),
+  } as DOMRect
+  Range.prototype.getBoundingClientRect = () => vacio
+  Range.prototype.getClientRects = () => ({
+    length: 0,
+    item: () => null,
+    [Symbol.iterator]: function* () {},
+  }) as unknown as DOMRectList
+}
