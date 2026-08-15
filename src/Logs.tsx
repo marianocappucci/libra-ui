@@ -171,7 +171,7 @@ export function Logs({ basePath = '/logs' }: { basePath?: string } = {}) {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             {/* `htmlFor` + `id` en el trigger: sin eso el `Label` queda suelto
                 y un lector de pantalla anuncia el select sin nombre. */}
-            <div className="grid gap-1.5">
+            <div className="grid gap-2">
               <Label htmlFor="filtro-entidad">Entidad</Label>
               <Select value={entidad} onValueChange={filtrar(setEntidad)}>
                 <SelectTrigger id="filtro-entidad"><SelectValue /></SelectTrigger>
@@ -183,7 +183,7 @@ export function Logs({ basePath = '/logs' }: { basePath?: string } = {}) {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid gap-1.5">
+            <div className="grid gap-2">
               <Label htmlFor="filtro-accion">Acción</Label>
               <Select value={accion} onValueChange={filtrar(setAccion)}>
                 <SelectTrigger id="filtro-accion"><SelectValue /></SelectTrigger>
@@ -195,7 +195,7 @@ export function Logs({ basePath = '/logs' }: { basePath?: string } = {}) {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid gap-1.5">
+            <div className="grid gap-2">
               <Label htmlFor="filtro-usuario">Usuario</Label>
               <Select value={usuario} onValueChange={filtrar(setUsuario)}>
                 <SelectTrigger id="filtro-usuario"><SelectValue /></SelectTrigger>
@@ -207,12 +207,12 @@ export function Logs({ basePath = '/logs' }: { basePath?: string } = {}) {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid gap-1.5">
+            <div className="grid gap-2">
               <Label htmlFor="desde">Desde</Label>
               <Input id="desde" type="date" value={desde}
                 onChange={(e) => filtrar(setDesde)(e.target.value)} />
             </div>
-            <div className="grid gap-1.5">
+            <div className="grid gap-2">
               <Label htmlFor="hasta">Hasta</Label>
               <Input id="hasta" type="date" value={hasta}
                 onChange={(e) => filtrar(setHasta)(e.target.value)} />
