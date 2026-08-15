@@ -7,7 +7,6 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createForgotPassword, createResetPassword } from '../src/PasswordReset'
-import { ApiError } from '../src/api-client'
 
 const navegar = vi.fn()
 vi.mock('react-router-dom', async () => {

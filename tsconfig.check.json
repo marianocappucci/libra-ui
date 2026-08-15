@@ -15,7 +15,19 @@
   "compilerOptions": {
     "paths": {
       "@/*": ["./test/stubs/*"]
-    }
+    },
+    // 🔴 Los seis consumidores compilan con `noUnusedLocals` y
+    // `noUnusedParameters` (están en el `tsconfig.app.json` de cada uno). Sin
+    // ellos acá, este paquete podía **publicar un tag que no compila en
+    // ninguno de los seis** — y pasó: v0.20.0 salió con el import de `Button`
+    // huérfano, después de sacar el botón de salir del pie del sidebar. El CI
+    // de este repo lo dejó pasar y lo agarró el `tsc` de LibraDesk al subir el
+    // pin, o sea recién en el consumidor.
+    //
+    // El chequeo del paquete tiene que ser **al menos tan estricto** como el
+    // del consumidor más estricto; si no, no está chequeando lo que importa.
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
   },
   "include": ["src", "test"]
 }
