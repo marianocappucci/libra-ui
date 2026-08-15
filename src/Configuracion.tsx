@@ -645,18 +645,18 @@ export function ArcaCard() {
         </CardDescription>
       </CardHeader>
       <CardContent className="grid max-w-lg gap-3">
-        <div className="grid gap-1.5">
+        <div className="grid gap-2">
           <Label htmlFor="arca-cuit">CUIT</Label>
           <Input id="arca-cuit" value={cuit} onChange={(e) => setCuit(e.target.value)} />
         </div>
-        <div className="grid gap-1.5">
+        <div className="grid gap-2">
           <Label htmlFor="arca-pv">Punto de venta</Label>
           <Input
             id="arca-pv" className="w-32" value={puntoVenta}
             onChange={(e) => setPuntoVenta(e.target.value)}
           />
         </div>
-        <div className="grid gap-1.5">
+        <div className="grid gap-2">
           <Label>Ambiente</Label>
           <Select value={ambiente} onValueChange={setAmbiente}>
             <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
@@ -666,14 +666,14 @@ export function ArcaCard() {
             </SelectContent>
           </Select>
         </div>
-        <div className="grid gap-1.5">
+        <div className="grid gap-2">
           <Label htmlFor="arca-cert">Path del certificado</Label>
           <Input
             id="arca-cert" value={certificadoPath}
             onChange={(e) => setCertificadoPath(e.target.value)}
           />
         </div>
-        <div className="grid gap-1.5">
+        <div className="grid gap-2">
           <Label htmlFor="arca-clave">Path de la clave privada</Label>
           <Input
             id="arca-clave" value={clavePath}

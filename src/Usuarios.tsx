@@ -143,22 +143,22 @@ export function Usuarios({ basePath = '/users' }: { basePath?: string } = {}) {
           </CardHeader>
           <CardContent className="flex flex-wrap items-end gap-2">
             {editingId === 'new' && (
-              <div className="grid gap-1.5">
+              <div className="grid gap-2">
                 <Label>Usuario</Label>
                 <Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} className="w-40" />
               </div>
             )}
-            <div className="grid gap-1.5">
+            <div className="grid gap-2">
               <Label>Nombre</Label>
               <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-48" />
             </div>
             {editingId === 'new' && (
-              <div className="grid gap-1.5">
+              <div className="grid gap-2">
                 <Label>Contraseña</Label>
                 <PasswordInput value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="w-40" />
               </div>
             )}
-            <div className="grid gap-1.5">
+            <div className="grid gap-2">
               <Label>Rol</Label>
               <Select value={form.role} onValueChange={(role) => setForm({ ...form, role })}>
                 <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>

@@ -274,7 +274,7 @@ export function FacturaDetalle({ esAdmin = false }: { esAdmin?: boolean } = {}) 
                 <DialogHeader>
                   <DialogTitle className="flex items-center gap-2"><Mail className="size-4" />Enviar comprobante por email</DialogTitle>
                 </DialogHeader>
-                <div className="grid gap-1.5">
+                <div className="grid gap-2">
                   <Label>Destinatario</Label>
                   <Input type="email" value={emailTo} onChange={(e) => setEmailTo(e.target.value)} placeholder="email@ejemplo.com" />
                   <p className="text-xs text-muted-foreground">Se adjunta el PDF del comprobante.</p>
@@ -397,7 +397,7 @@ export function FacturaDetalle({ esAdmin = false }: { esAdmin?: boolean } = {}) 
           <div className="grid gap-4 md:grid-cols-2">
             <Card>
               <CardHeader><CardTitle className="text-base">Datos del receptor</CardTitle></CardHeader>
-              <CardContent className="grid gap-1.5 text-sm">
+              <CardContent className="grid gap-2 text-sm">
                 <p><span className="text-muted-foreground">Razón social:</span> {detalle.factura.cliente_razon}</p>
                 {detalle.factura.cliente_cuit && <p><span className="text-muted-foreground">CUIT:</span> <span className="font-mono">{detalle.factura.cliente_cuit}</span></p>}
                 {detalle.factura.cliente_domicilio && <p><span className="text-muted-foreground">Domicilio:</span> {detalle.factura.cliente_domicilio}</p>}
@@ -406,7 +406,7 @@ export function FacturaDetalle({ esAdmin = false }: { esAdmin?: boolean } = {}) 
             </Card>
             <Card>
               <CardHeader><CardTitle className="text-base">Datos del comprobante</CardTitle></CardHeader>
-              <CardContent className="grid gap-1.5 text-sm">
+              <CardContent className="grid gap-2 text-sm">
                 <p><span className="text-muted-foreground">Tipo:</span> {detalle.tipo_label}</p>
                 <p><span className="text-muted-foreground">Número:</span> <span className="font-mono">{String(detalle.factura.punto_venta).padStart(4, '0')}-{String(detalle.factura.numero).padStart(8, '0')}</span></p>
                 <p><span className="text-muted-foreground">Fecha:</span> {detalle.factura.fecha}</p>
@@ -484,7 +484,7 @@ export function FacturaDetalle({ esAdmin = false }: { esAdmin?: boolean } = {}) 
               </DialogHeader>
               <div className="grid gap-2">
                 {cajas.length > 1 && (
-                  <div className="grid gap-1.5">
+                  <div className="grid gap-2">
                     <Label>Caja</Label>
                     <Select value={cajaId} onValueChange={setCajaId}>
                       <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
