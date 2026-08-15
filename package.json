@@ -5,6 +5,7 @@
   "type": "module",
   "description": "Paquete de frontend compartido para los verticales de la familia Libra sin backoffice server-rendered propio (Gestiolibra, MedLibra, VentaLibra).",
   "exports": {
+    "./acciones": "./src/acciones.tsx",
     "./api-client": "./src/api-client.ts",
     "./AuthContext": "./src/AuthContext.tsx",
     "./CambiarPassword": "./src/CambiarPassword.tsx",
