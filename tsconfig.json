@@ -12,7 +12,10 @@
     "skipLibCheck": true,
     "strict": true,
 
-    "types": ["unplugin-icons/types/react"]
+    // `node` lo pide el guard de espaciado, que lee los fuentes con `fs`. Se
+    // leen como DATOS y no como módulos a propósito: importarlos —aunque sea
+    // `?raw`— los mete en el grafo y ensucia el informe de cobertura.
+    "types": ["unplugin-icons/types/react", "node"]
   },
   "include": ["src"]
 }

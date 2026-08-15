@@ -87,17 +87,17 @@ export function CambiarPassword({ open, onOpenChange }: {
         )}
 
         <div className="grid gap-3">
-          <div className="grid gap-1.5">
+          <div className="grid gap-2">
             <Label htmlFor="pass-actual">Contraseña actual</Label>
             <PasswordInput id="pass-actual" value={actual}
                            onChange={(e) => setActual(e.target.value)} />
           </div>
-          <div className="grid gap-1.5">
+          <div className="grid gap-2">
             <Label htmlFor="pass-nueva">Contraseña nueva</Label>
             <PasswordInput id="pass-nueva" value={nueva}
                            onChange={(e) => setNueva(e.target.value)} />
           </div>
-          <div className="grid gap-1.5">
+          <div className="grid gap-2">
             <Label htmlFor="pass-repetida">Repetir la nueva</Label>
             <PasswordInput id="pass-repetida" value={repetida}
                            onChange={(e) => setRepetida(e.target.value)} />
