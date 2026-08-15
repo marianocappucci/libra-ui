@@ -5,6 +5,7 @@
 // Agregado el 2026-08-06 con el visitante de la demo: pedido del humano de que
 // vea todos los menús "como si fuera admin aunque no deje modificar".
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { createLayout } from '../src/Layout'
@@ -276,5 +277,89 @@ describe('la barra superior no existe más', () => {
     expect(main.tagName).toBe('MAIN')
     expect(main.className).toContain('pt-12')
     expect(main.className).toContain('md:pt-6')
+  })
+})
+
+// ── El menú del usuario (v0.20.0) ────────────────────────────────────────────
+//
+// El pie del sidebar era el nombre del usuario —a veces un link— y un botón de
+// salir al lado. Pedido del humano (2026-08-14) al querer meter ahí el selector
+// de sucursal de LibraDesk: el pie es donde uno busca "lo mío", y lo único que
+// ofrecía era irse.
+//
+// Lo que estos tests sostienen es que el menú **esconde de verdad**: el stub de
+// `DropdownMenu` sólo renderiza el contenido con el menú abierto, igual que
+// Radix. Con un stub que renderizara siempre, "hay un ítem Salir" pasaría sin
+// haber abierto nada — y el trigger podría no existir.
+
+describe('el menú del usuario', () => {
+  function montarMenu(extra: Record<string, unknown> = {}) {
+    const logout = vi.fn()
+    const Layout = createLayout<Usuario>({
+      productName: 'MedLibra', productInitial: 'M',
+      navItems: [{ to: '/a', label: 'Agenda', icon: Icono }],
+      getUserName: (u) => u.name ?? '',
+      useAuth: () => ({ user: { role: 'admin', name: 'Ana Perez' }, logout }),
+      ...extra,
+    })
+    const utils = render(<MemoryRouter><Layout><p>contenido</p></Layout></MemoryRouter>)
+    return { ...utils, logout }
+  }
+
+  const abrir = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(screen.getByRole('button', { name: /Ana Perez/ }))
+  }
+
+  it('🔴 cerrado no muestra nada del menú; el nombre del usuario lo abre', async () => {
+    const user = userEvent.setup()
+    montarMenu()
+    // La primera mitad es la que hace útil a la segunda.
+    expect(screen.queryByText('Salir')).not.toBeInTheDocument()
+    expect(screen.queryByText('Cambiar contraseña')).not.toBeInTheDocument()
+
+    await abrir(user)
+    expect(screen.getByText('Salir')).toBeInTheDocument()
+    expect(screen.getByText('Cambiar contraseña')).toBeInTheDocument()
+  })
+
+  it('«Salir» cierra la sesión', async () => {
+    const user = userEvent.setup()
+    const { logout } = montarMenu()
+    await abrir(user)
+    await user.click(screen.getByText('Salir'))
+    expect(logout).toHaveBeenCalled()
+  })
+
+  it('`userMenu` se dibuja adentro del menú, no suelto en la pantalla', async () => {
+    // Es el slot del selector de sucursal. Si se dibujara afuera, volvería a ser
+    // la barra que el pedido vino a sacar.
+    const user = userEvent.setup()
+    montarMenu({ userMenu: <span>selector de sucursal</span> })
+    expect(screen.queryByText('selector de sucursal')).not.toBeInTheDocument()
+
+    await abrir(user)
+    expect(screen.getByText('selector de sucursal')).toBeInTheDocument()
+  })
+
+  it('«Cambiar contraseña» abre el diálogo', async () => {
+    const user = userEvent.setup()
+    montarMenu()
+    await abrir(user)
+    await user.click(screen.getByText('Cambiar contraseña'))
+    // Se busca un campo del formulario y no el título: que el diálogo exista
+    // sin sus campos no le sirve a nadie.
+    expect(await screen.findByLabelText('Contraseña actual')).toBeInTheDocument()
+  })
+
+  it('«Mi cuenta» aparece sólo si el producto pasa `accountTo`', async () => {
+    const user = userEvent.setup()
+    const { unmount } = montarMenu()
+    await abrir(user)
+    expect(screen.queryByText('Mi cuenta')).not.toBeInTheDocument()
+    unmount()
+
+    montarMenu({ accountTo: '/mi-cuenta' })
+    await abrir(user)
+    expect(screen.getByRole('link', { name: /Mi cuenta/ })).toHaveAttribute('href', '/mi-cuenta')
   })
 })

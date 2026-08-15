@@ -16,9 +16,9 @@
 // `topbar: false`; la opcion se elimina en vez de invertir su default para no
 // dejar una variante que nadie usa -- si la barra vuelve alguna vez, vuelve
 // para los seis productos a la vez.
-import { type ReactNode, type ComponentType } from 'react'
+import { useState, type ReactNode, type ComponentType } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { LogOut } from 'lucide-react'
+import { KeyRound, LogOut, UserRound } from 'lucide-react'
 import { useAuth as useAuthDefault } from './AuthContext'
 import {
   Sidebar,
@@ -41,6 +41,11 @@ import {
 } from '@/components/ui/sidebar'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { CambiarPassword } from './CambiarPassword'
 
 export type NavChild<TUser> = {
   to: string
@@ -79,7 +84,7 @@ function initials(name: string): string {
 export function createLayout<TUser = { role?: string; name?: string }>({
   productName, productInitial, navItems, navSections,
   icon: HeaderIcon, homeTo, accountTo,
-  hasModule, getUserName, getUserSubtitle,
+  hasModule, getUserName, getUserSubtitle, userMenu,
   useAuth = useAuthDefault as unknown as () => { user: TUser | null; logout: () => Promise<void> },
 }: {
   productName: string
@@ -100,6 +105,12 @@ export function createLayout<TUser = { role?: string; name?: string }>({
   hasModule?: (user: TUser, module: string) => boolean
   getUserName?: (user: TUser) => string
   getUserSubtitle?: (user: TUser) => string | undefined
+  // Lo que el PRODUCTO quiera meter en el menu del usuario, arriba de
+  // "Cambiar contrasena" y "Salir". Es un slot y no una lista de items
+  // tipada porque lo que entra son controles, no links: el primero es el
+  // selector de sucursal de LibraDesk, que es un `<Select>` con su propio
+  // estado. Una API de `{label, to, icon}` no lo habria podido expresar.
+  userMenu?: ReactNode
   // Hook `useAuth` a usar -- por defecto el de la instancia pre-configurada
   // de este modulo. Productos con su propia `createAuthContext`
   // (Contalibra/Restolibra) pasan el suyo.
@@ -113,6 +124,7 @@ export function createLayout<TUser = { role?: string; name?: string }>({
   function AppSidebar() {
     const { user, logout } = useAuth()
     const location = useLocation()
+    const [cambiandoPassword, setCambiandoPassword] = useState(false)
     // El visitante de una demo pública ve **todos** los menús, incluidos los
     // de administración. No es un rol más alto: el backend le abre sólo la
     // lectura (libraauth v0.18.0, `json_api_require_role`) y los botones de
@@ -212,29 +224,79 @@ export function createLayout<TUser = { role?: string; name?: string }>({
           })}
         </SidebarContent>
         <SidebarFooter>
-          <div className="flex items-center gap-2 px-2 py-1.5 group-data-[collapsible=icon]:justify-center">
-            <Avatar className="h-8 w-8">
-              <AvatarFallback>{user && getUserName ? initials(getUserName(user)) : (user as { name?: string } | null)?.name ? initials((user as { name: string }).name) : '?'}</AvatarFallback>
-            </Avatar>
-            {accountTo ? (
-              <NavLink to={accountTo} className="flex flex-1 flex-col overflow-hidden group-data-[collapsible=icon]:hidden hover:underline">
-                {FooterContent}
-              </NavLink>
-            ) : (
-              <div className="flex flex-1 flex-col overflow-hidden group-data-[collapsible=icon]:hidden">
-                {FooterContent}
-              </div>
-            )}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="group-data-[collapsible=icon]:hidden"
-              onClick={() => logout()}
-              title="Salir"
-            >
-              <LogOut />
-            </Button>
-          </div>
+          {/* El nombre del usuario abre un menu, en vez de ser un link (o nada)
+              con un boton de salir al lado. Pedido del humano el 2026-08-14 al
+              querer meter ahi el selector de sucursal de LibraDesk: el pie del
+              sidebar es donde uno busca "lo mio", y hasta ahora lo unico que
+              ofrecia era irse.
+
+              El boton de salir suelto se va: quedaba un icono sin rotulo, y era
+              la accion mas destructiva de las tres. Adentro del menu tiene
+              nombre y hay que abrir para llegar. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-sidebar-accent group-data-[collapsible=icon]:justify-center"
+              >
+                <Avatar className="h-8 w-8">
+                  <AvatarFallback>{user && getUserName ? initials(getUserName(user)) : (user as { name?: string } | null)?.name ? initials((user as { name: string }).name) : '?'}</AvatarFallback>
+                </Avatar>
+                <span className="flex min-w-0 flex-1 flex-col overflow-hidden group-data-[collapsible=icon]:hidden">
+                  {FooterContent}
+                </span>
+              </button>
+            </DropdownMenuTrigger>
+            {/* `side="top"`: el pie del sidebar esta abajo de todo, y un menu
+                que se abriera hacia abajo quedaria fuera de la pantalla. */}
+            <DropdownMenuContent side="top" align="start" className="w-60">
+              <DropdownMenuLabel className="font-normal text-muted-foreground">
+                {user && getUserName ? getUserName(user) : (user as { name?: string } | null)?.name}
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+
+              {userMenu && (
+                <>
+                  {/* Un `<div>` y no un `DropdownMenuItem`: lo que entra son
+                      controles con su propio estado (el selector de sucursal de
+                      LibraDesk), y un item se "elige" y cierra el menu.
+
+                      ⚠️ **Falta verificarlo en el navegador con un `<Select>` de
+                      Radix adentro.** Radix cierra el menu ante un click de
+                      afuera, y el contenido de un `Select` va en un portal —o
+                      sea, tecnicamente afuera—, asi que abrir el desplegable
+                      podria cerrar el menu que lo contiene. No se puede medir
+                      con los stubs de este paquete: hace falta Radix de verdad.
+                      Si pasa, la salida conocida es `modal={false}` en el
+                      `DropdownMenu`. */}
+                  <div className="px-2 py-1.5">
+                    {userMenu}
+                  </div>
+                  <DropdownMenuSeparator />
+                </>
+              )}
+
+              {accountTo && (
+                <DropdownMenuItem asChild>
+                  <NavLink to={accountTo}><UserRound />Mi cuenta</NavLink>
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem onSelect={() => setCambiandoPassword(true)}>
+                <KeyRound />Cambiar contraseña
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => logout()}>
+                <LogOut />Salir
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Fuera del menu: si viviera adentro, cerrarlo desmontaria el dialogo
+              en el mismo gesto que lo abre. */}
+          <CambiarPassword
+            open={cambiandoPassword}
+            onOpenChange={setCambiandoPassword}
+          />
         </SidebarFooter>
       </Sidebar>
     )

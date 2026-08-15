@@ -45,6 +45,9 @@ export function DialogHeader(props: ComponentProps<'div'>) {
 export function DialogTitle(props: ComponentProps<'h2'>) {
   return <h2 {...props} />
 }
+export function DialogDescription(props: ComponentProps<'p'>) {
+  return <p {...props} />
+}
 export function DialogFooter(props: ComponentProps<'div'>) {
   return <div {...props} />
 }
