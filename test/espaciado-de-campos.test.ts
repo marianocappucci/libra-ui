@@ -33,6 +33,20 @@ import { describe, expect, it } from 'vitest'
 // correr, que se lee como "1 failed suite" y no como "el guard no midió nada".
 const SRC = join(process.cwd(), 'src')
 
+// 🔴 **El patrón NO es el literal `grid gap-1.5`**, que es lo que este guard
+// usaba hasta el 2026-08-15. Una comparación de texto contiguo tiene un punto
+// ciego: no ve `grid flex-1 gap-1.5`, que es exactamente el mismo defecto con
+// una clase en el medio. Se descubrió al aplicar la normalización en LibraDesk:
+// de 118 contenedores, **2 estaban escritos así** (`Clientes.tsx` y
+// `Configuracion.tsx` de ese producto) y el literal no los encontraba. Acá
+// todavía no había ninguno, pero el agujero era el mismo — y un guard cuyo
+// patrón no cubre todas las formas del defecto es un verde que no probó nada.
+//
+// Por eso se pregunta por `grid` y `gap-1.5` **en la misma línea**, no por una
+// cadena contigua. Los `\b` son los que impiden que `gap-15` o `gap-1` se
+// cuelen por un borde de palabra flojo.
+const CAMPO_APRETADO = /className="[^"]*\bgrid\b[^"]*\bgap-1\.5\b/
+
 function fuentes(dir: string): string[] {
   return readdirSync(dir).flatMap((n) => {
     const p = join(dir, n)
@@ -53,7 +67,7 @@ describe('el espaciado de los campos no vuelve a divergir', () => {
     const culpables: string[] = []
     for (const p of ARCHIVOS) {
       readFileSync(p, 'utf8').split('\n').forEach((linea, i) => {
-        if (linea.includes('grid gap-1.5')) {
+        if (CAMPO_APRETADO.test(linea)) {
           culpables.push(`${p.slice(SRC.length + 1)}:${i + 1}`)
         }
       })
@@ -62,6 +76,22 @@ describe('el espaciado de los campos no vuelve a divergir', () => {
     // rojo, lo que se lee es esta línea, no el archivo.
     expect(culpables, 'los campos van con `grid gap-2` (8 px, el del login): '
       + '`gap-1.5` deja el label pegado al input').toEqual([])
+  })
+
+  it('y el patrón que los detecta realmente matchea las dos formas viejas', () => {
+    // El control del caso de arriba. Sin esto, un regex que no matchea nada
+    // daría la lista vacía y el test pasaría con el defecto entero presente —
+    // que es el modo favorito de fallar de un test que busca ausencias.
+    expect(CAMPO_APRETADO.test('<div className="grid gap-1.5">')).toBe(true)
+    // La forma que el literal no veía, y por la que se cambió el patrón.
+    expect(CAMPO_APRETADO.test('<div className="grid flex-1 gap-1.5">')).toBe(true)
+    // Y que no se lleve puesto el aire entre un icono y su texto, que es `flex`
+    // y sigue legítimamente en 6 px — el caso vivo es `Logs.tsx`.
+    expect(CAMPO_APRETADO.test('<span className="flex items-center gap-1.5">')).toBe(false)
+    expect(CAMPO_APRETADO.test('<div className="mt-1 flex flex-wrap gap-1.5">')).toBe(false)
+    // Y que `gap-15` o `gap-1` no se cuelen por un borde de palabra flojo.
+    expect(CAMPO_APRETADO.test('<div className="grid gap-1">')).toBe(false)
+    expect(CAMPO_APRETADO.test('<div className="grid gap-15">')).toBe(false)
   })
 
   it('el login sigue en 8 px, que es la referencia', () => {

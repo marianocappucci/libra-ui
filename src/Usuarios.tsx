@@ -3,12 +3,16 @@
 // wiki/analyses/auditoria-duplicacion-familia-libra.md.
 import { useEffect, useMemo, useState } from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
+import { Pencil, UserCheck, UserX } from 'lucide-react'
 import { api, ApiError, type User } from './api-client'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
@@ -115,14 +119,31 @@ export function Usuarios({ basePath = '/users' }: { basePath?: string } = {}) {
     {
       id: 'actions',
       header: () => <div className="text-right">Acciones</div>,
-      cell: ({ row }) => (
-        <div className="flex justify-end gap-2">
-          <Button size="sm" variant="outline" onClick={() => startEdit(row.original)}>Editar</Button>
-          <Button size="sm" variant="outline" onClick={() => handleDeactivate(row.original)}>
-            {row.original.active ? 'Desactivar' : 'Activar'}
-          </Button>
-        </div>
-      ),
+      // Iconos y no palabras (pedido del humano, 2026-08-15): era la última
+      // grilla de la familia que rotulaba sus acciones con texto, y con dos
+      // botones por fila el listado se leía como una columna de párrafos.
+      //
+      // El nombre accesible NO se pierde con el icono: va en `aria-label`, y
+      // además nombra al usuario de la fila. Un `title="Editar"` repetido en
+      // veinte filas no distingue una de otra para quien navega por teclado.
+      cell: ({ row }) => {
+        const u = row.original
+        const alterna = u.active ? 'Desactivar' : 'Activar'
+        return (
+          <div className="flex justify-end gap-2">
+            <Button size="icon" variant="outline" className="size-8"
+                    title="Editar" aria-label={`Editar ${u.name}`}
+                    onClick={() => startEdit(u)}>
+              <Pencil />
+            </Button>
+            <Button size="icon" variant="outline" className="size-8"
+                    title={alterna} aria-label={`${alterna} ${u.name}`}
+                    onClick={() => handleDeactivate(u)}>
+              {u.active ? <UserX /> : <UserCheck />}
+            </Button>
+          </div>
+        )
+      },
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [])
@@ -131,48 +152,63 @@ export function Usuarios({ basePath = '/users' }: { basePath?: string } = {}) {
     <div className="grid gap-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Usuarios</h2>
-        {editingId === null && <Button onClick={startCreate}>+ Nuevo usuario</Button>}
+        <Button onClick={startCreate}>+ Nuevo usuario</Button>
       </div>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {/* El error de una acción de la grilla —activar, desactivar— se lee acá.
+          El del guardado va adentro del modal, que es donde está la vista. */}
+      {error && editingId === null && <p className="text-sm text-destructive">{error}</p>}
 
-      {editingId !== null && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{editingId === 'new' ? 'Nuevo usuario' : 'Editar usuario'}</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-wrap items-end gap-2">
+      {/* Alta y edición en modal (pedido del humano, 2026-08-15). Era una
+          tarjeta que se insertaba entre el encabezado y la grilla: empujaba la
+          tabla hacia abajo, y en la edición dejaba al usuario que se estaba
+          tocando fuera de la vista. Las dos comparten diálogo porque son el
+          mismo formulario con dos campos de más en el alta. */}
+      <Dialog open={editingId !== null} onOpenChange={(o) => { if (!o) cancelEdit() }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingId === 'new' ? 'Nuevo usuario' : 'Editar usuario'}</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3">
+            {error && <p className="text-sm text-destructive">{error}</p>}
             {editingId === 'new' && (
               <div className="grid gap-2">
-                <Label>Usuario</Label>
-                <Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} className="w-40" />
+                <Label htmlFor="usr-username">Usuario</Label>
+                <Input id="usr-username" value={form.username} autoFocus
+                       onChange={(e) => setForm({ ...form, username: e.target.value })} />
               </div>
             )}
             <div className="grid gap-2">
-              <Label>Nombre</Label>
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-48" />
+              <Label htmlFor="usr-name">Nombre</Label>
+              <Input id="usr-name" value={form.name} autoFocus={editingId !== 'new'}
+                     onChange={(e) => setForm({ ...form, name: e.target.value })} />
             </div>
             {editingId === 'new' && (
               <div className="grid gap-2">
-                <Label>Contraseña</Label>
-                <PasswordInput value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="w-40" />
+                <Label htmlFor="usr-password">Contraseña</Label>
+                <PasswordInput id="usr-password" value={form.password}
+                               onChange={(e) => setForm({ ...form, password: e.target.value })} />
               </div>
             )}
             <div className="grid gap-2">
-              <Label>Rol</Label>
+              <Label htmlFor="usr-role">Rol</Label>
               <Select value={form.role} onValueChange={(role) => setForm({ ...form, role })}>
-                <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                <SelectTrigger id="usr-role" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="staff">Staff</SelectItem>
                   <SelectItem value="admin">Admin</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <Button onClick={handleSave} disabled={saving}>{saving ? 'Guardando…' : editingId === 'new' ? 'Crear' : 'Guardar'}</Button>
+          </div>
+          <DialogFooter>
             <Button variant="outline" onClick={cancelEdit}>Cancelar</Button>
-          </CardContent>
-        </Card>
-      )}
+            <Button onClick={handleSave} disabled={saving}>
+              {saving ? 'Guardando…' : editingId === 'new' ? 'Crear' : 'Guardar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardContent>
