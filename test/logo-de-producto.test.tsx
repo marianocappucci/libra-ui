@@ -31,7 +31,12 @@ function montarLogin(extra: { logo?: ProductLogo; wordmarkClassName?: string } =
 }
 
 function montarLayout(
-  extra: { logo?: ProductLogo; wordmarkClassName?: string; icon?: typeof Icono } = {},
+  extra: {
+    logo?: ProductLogo
+    wordmarkClassName?: string
+    icon?: typeof Icono
+    getUserSubtitle?: (u: { role?: string; name?: string }) => string | undefined
+  } = {},
 ) {
   const Layout = createLayout<{ role?: string; name?: string }>({
     productName: 'LibraDesk',
@@ -132,5 +137,37 @@ describe('sidebar: el logo reemplaza a la inicial', () => {
     // `truncate` no está en conflicto con nada, así que sobrevive al merge.
     expect(nombre.className).toContain('truncate')
     expect(nombre.className).not.toContain('font-semibold')
+  })
+})
+
+describe('el encabezado: las dos lineas contra el alto del logo', () => {
+  // La ALTURA no se puede medir aca — jsdom no aplica Tailwind. Esto fija la
+  // intencion; el alto real se midio en un navegador (ver el PR).
+  it('🔴 las dos lineas llevan interlineado ajustado', () => {
+    // Sin esto el bloque suma 36 px (20 del nombre + 16 de la empresa) contra
+    // los 32 del box del logo: al encabezado lo estira el TEXTO, no la marca.
+    montarLayout({ getUserSubtitle: () => 'Tecno Servicios SRL' })
+    expect(screen.getByText('LibraDesk').className).toContain('leading-none')
+    expect(screen.getByText('Tecno Servicios SRL').className).toContain('leading-tight')
+  })
+
+  it('el control — sin empresa, el nombre igual va ajustado', () => {
+    // Los cinco productos que no mandan `getUserSubtitle` tienen una sola linea,
+    // y no por eso tiene que quedar con el interlineado suelto.
+    montarLayout()
+    expect(screen.getByText('LibraDesk').className).toContain('leading-none')
+    expect(screen.queryByText('Tecno Servicios SRL')).not.toBeInTheDocument()
+  })
+
+  it('🔴 el producto todavia puede pisar el interlineado', () => {
+    // El merge de `cn` tiene que seguir dejando decidir al consumidor: si el
+    // default ganara, `wordmarkClassName` seria mentira para esta propiedad.
+    montarLayout({
+      getUserSubtitle: () => 'Tecno Servicios SRL',
+      wordmarkClassName: 'leading-loose',
+    })
+    const nombre = screen.getByText('LibraDesk')
+    expect(nombre.className).toContain('leading-loose')
+    expect(nombre.className).not.toContain('leading-none')
   })
 })
