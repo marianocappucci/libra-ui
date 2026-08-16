@@ -169,10 +169,34 @@ export function createLayout<TUser = { role?: string; name?: string }>({
             {HeaderIcon ? <HeaderIcon className="size-4" /> : productInitial}
           </div>
         )}
-        <div className="flex min-w-0 flex-col group-data-[collapsible=icon]:hidden">
-          <span className={cn('truncate font-semibold', wordmarkClassName)}>{productName}</span>
+        {/* El interlineado de las dos lineas, MEDIDO en un navegador el
+            2026-08-16 y no estimado. Antes: el nombre del producto arrastraba
+            24 px (16 de fuente x 1.5) y el de la empresa 16, o sea un bloque de
+            40 px contra los 32 del box de la marca. El alto del encabezado lo
+            decidia el TEXTO, y entre las dos palabras quedaba mas aire que el
+            que ocupa la marca entera.
+
+            Con esto el bloque baja a 31 px — por debajo de los 32 del box — asi
+            que la fila pasa a medir lo que mide la MARCA, que es lo que pidio
+            el humano: "que entre las dos tengan el mismo alto que el logo".
+
+            Por que `leading-none` arriba y `leading-tight` abajo, y no lo mismo
+            en las dos: los seis nombres de producto (LibraDesk, VentaLibra,
+            RestoLibra, ContaLibra, MedLibra, GestioLibra) no tienen ninguna
+            letra con cola, asi que ajustar la caja al tamano de la fuente no
+            recorta nada. El nombre de la EMPRESA lo escribe el cliente y puede
+            tener una "g" o una "p", asi que ahi se deja el 1.25 de aire.
+
+            `justify-center` es la otra mitad: con el bloque mas bajo que la
+            marca hay que centrarlo contra ella en vez de dejarlo pegado arriba.
+            Y hace falta igual cuando el producto usa un logo mas alto que el
+            default — LibraDesk lo pone en 36 px.
+
+            Va para los seis: este encabezado se dibuja una sola vez, aca. */}
+        <div className="flex min-w-0 flex-col justify-center group-data-[collapsible=icon]:hidden">
+          <span className={cn('truncate font-semibold leading-none', wordmarkClassName)}>{productName}</span>
           {getUserSubtitle && user && getUserSubtitle(user) && (
-            <span className="truncate text-xs text-muted-foreground">{getUserSubtitle(user)}</span>
+            <span className="truncate text-xs leading-tight text-muted-foreground">{getUserSubtitle(user)}</span>
           )}
         </div>
       </>
