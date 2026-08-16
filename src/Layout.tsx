@@ -45,6 +45,8 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { CambiarPassword } from './CambiarPassword'
+import type { ProductLogo } from './branding'
+import { cn } from './utils'
 
 export type NavChild<TUser> = {
   to: string
@@ -82,7 +84,7 @@ function initials(name: string): string {
 
 export function createLayout<TUser = { role?: string; name?: string }>({
   productName, productInitial, navItems, navSections,
-  icon: HeaderIcon, homeTo, accountTo,
+  icon: HeaderIcon, logo, wordmarkClassName, homeTo, accountTo,
   hasModule, getUserName, getUserSubtitle, userMenu,
   useAuth = useAuthDefault as unknown as () => { user: TUser | null; logout: () => Promise<void> },
 }: {
@@ -96,6 +98,13 @@ export function createLayout<TUser = { role?: string; name?: string }>({
   // Icono Lucide para el box del header -- si no se pasa, se muestra
   // `productInitial` como texto (comportamiento de siempre).
   icon?: ComponentType<{ className?: string }>
+  // Logo del producto, a la izquierda del nombre. Si se pasa, reemplaza al box
+  // entero, **incluido `icon`**: son dos formas de llenar el mismo hueco y el
+  // logo es la más específica. Ver `branding.ts`.
+  logo?: ProductLogo
+  // Clases extra para el nombre del producto. Se mergean con
+  // `truncate font-semibold` via `cn`. LibraDesk lo usa para su Montserrat Bold.
+  wordmarkClassName?: string
   // Si se pasan, el logo/footer quedan como `NavLink` clickeable a esas
   // rutas -- si no, quedan como `div` no clickeable (comportamiento de
   // siempre).
@@ -142,11 +151,26 @@ export function createLayout<TUser = { role?: string; name?: string }>({
 
     const HeaderContent = (
       <>
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground font-semibold">
-          {HeaderIcon ? <HeaderIcon className="size-4" /> : productInitial}
-        </div>
+        {logo ? (
+          <img
+            src={logo.src}
+            alt={logo.alt ?? productName}
+            // `max-w-none` NO es decorativo. El preflight de Tailwind le pone
+            // `max-width: 100%` a toda imagen, y con la sidebar colapsada el
+            // contenedor del encabezado deja 15 px de ancho util (48 de la barra
+            // menos dos niveles de padding). Sin esto el logo se recorta a
+            // 15x32 en modo icono. El box de la inicial no tenia el problema
+            // porque un div no lo alcanza esa regla — medido en el navegador el
+            // 2026-08-16, no se ve en jsdom.
+            className={cn('block h-8 w-8 max-w-none shrink-0 object-contain', logo.className)}
+          />
+        ) : (
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground font-semibold">
+            {HeaderIcon ? <HeaderIcon className="size-4" /> : productInitial}
+          </div>
+        )}
         <div className="flex min-w-0 flex-col group-data-[collapsible=icon]:hidden">
-          <span className="truncate font-semibold">{productName}</span>
+          <span className={cn('truncate font-semibold', wordmarkClassName)}>{productName}</span>
           {getUserSubtitle && user && getUserSubtitle(user) && (
             <span className="truncate text-xs text-muted-foreground">{getUserSubtitle(user)}</span>
           )}

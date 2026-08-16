@@ -74,12 +74,46 @@ para que el motor de Tailwind v4 escanee las clases usadas dentro de
 | `libra-ui/AuthContext` | `AuthProvider`, `useAuth` | Contexto de sesión, 100% genérico. |
 | `libra-ui/data-table` | `DataTable`, `sortableHeader`, `anchoColumnaAcciones`, `type DataTableSearch` | Wrapper de TanStack Table + shadcn. Buscador opcional desde `v0.8.0`: pasando `search={{ campos }}` aparece un input que filtra la tabla; sin esa prop el render queda idéntico. `campos` lo declara la página porque el dato crudo no siempre es lo que se ve (`cliente_id: 3` se muestra como "Compulibra", y quien busca escribe lo segundo). |
 | `libra-ui/Usuarios` | `Usuarios({ basePath? })` | Página de gestión de usuarios, 100% genérica. `basePath` (default `/users`) es la ruta del router de usuarios en el backend del consumidor -- LibraDesk pasa `/api/usuarios`. |
-| `libra-ui/Layout` | `createLayout({ productName, productInitial, navItems })` | Factory: recibe la parte propia de cada producto (branding + items de navegación) y devuelve el componente `Layout`. |
-| `libra-ui/Login` | `createLogin({ productName, productInitial, redirectTo })` | Factory: recibe branding + ruta de redirect post-login. |
+| `libra-ui/Layout` | `createLayout({ productName, productInitial, navItems })` | Factory: recibe la parte propia de cada producto (branding + items de navegación) y devuelve el componente `Layout`. Acepta `logo` y `wordmarkClassName` — ver abajo. |
+| `libra-ui/Login` | `createLogin({ productName, productInitial, redirectTo })` | Factory: recibe branding + ruta de redirect post-login. Acepta `logo` y `wordmarkClassName` — ver abajo. |
+| `libra-ui/branding` | `type ProductLogo` | El tipo del logo de producto. Módulo aparte para que `Login` no tenga que importar de `Layout` y arrastrarse la sidebar entera al bundle de la pantalla que carga sin sesión. |
 | `libra-ui/SelectBuscable` | `SelectBuscable`, `type OpcionSelect` | Select con **búsqueda por teclado** (`v0.9.0`). El `Select` de shadcn/Radix obliga a encontrar la opción a ojo en una lista ordenada; con los cientos de clientes que puede tener una empresa real, eso deja de ser viable. Filtra sin acentos y exige todos los términos, igual que el buscador de `data-table` — comparten `coincideBusqueda`. **No necesita `cmdk` ni el primitivo `popover`**: se construye con `input`, `button` y `cn`, que ya están en los 5 consumidores. |
 | `libra-ui/use-mobile` | `useIsMobile` | Hook de breakpoint, 100% genérico. |
 | `libra-ui/utils` | `cn`, `normalizar`, `coincideBusqueda` | Helper `clsx` + `tailwind-merge` de shadcn, más los dos helpers de búsqueda que comparten `data-table` y `SelectBuscable` (sin acentos, todos los términos en cualquier orden). |
 | `libra-ui/iconos-accion` | ~60 componentes de icono (`Eye`, `Pencil`, `Trash2`, `FilePlus`…) | El **vocabulario de iconos de acción y estado** de la familia (`v0.18.0`). Vive acá y no copiado por producto porque la misma acción tiene que dibujarse igual en todos. **Requiere configuración en el consumidor — ver abajo.** |
+
+## El logo del producto y el wordmark (`v0.23.0`)
+
+Por defecto las dos factories dibujan un box con `productInitial` adentro —
+40 px en el login, 32 px en la sidebar. Pasando `logo` ese box se reemplaza por
+una imagen, y `wordmarkClassName` estila el nombre del producto:
+
+```tsx
+import logo from '@/assets/logo-libradesk.png'
+
+createLogin({
+  productName: 'LibraDesk',
+  productInitial: 'L',          // sigue siendo obligatorio: es el fallback
+  logo: { src: logo, className: 'h-[72px] w-[72px]' },
+  wordmarkClassName: 'font-montserrat font-bold text-[22px] text-[#2d2d2d]',
+})
+```
+
+Tres cosas que no son obvias:
+
+- **El tamaño va por clase, no por número.** Tailwind resuelve las clases
+  leyendo el fuente, así que una armada en runtime desde un `size: 72` no se
+  generaría nunca. Las clases se mergean con `cn`, así que la del producto pisa
+  el default en vez de sumarse.
+- **En la sidebar, el logo le gana a `icon`.** Son dos formas de llenar el mismo
+  hueco y el logo es la más específica.
+- **Un logo más alto que 32 px se desborda de la sidebar colapsada**, donde el
+  ancho útil son 32 px. Lo resuelve el producto con
+  `group-data-[collapsible=icon]:h-8`, porque es el único que sabe qué quiere
+  que pase ahí.
+
+Los cinco productos que no pasan nada de esto renderizan exactamente igual que
+antes — misma regla que rige desde `v0.3.0`.
 
 ## Peer dependencies
 

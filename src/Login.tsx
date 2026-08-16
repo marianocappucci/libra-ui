@@ -11,6 +11,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { PasswordInput } from './PasswordInput'
+import type { ProductLogo } from './branding'
+import { cn } from './utils'
 
 // Default = User (el tipo concreto de la instancia pre-configurada de
 // AuthContext.tsx) -- coincide con lo que devuelve el `useAuth` por
@@ -20,11 +22,18 @@ import { PasswordInput } from './PasswordInput'
 // `useAuth` juntos, consistentes entre si.
 export function createLogin<TUser = User>({
   productName, productInitial, redirectTo, onLoginSuccess, useAuth: useAuthOverride, formatError,
-  forgotPasswordPath, demoPath,
+  forgotPasswordPath, demoPath, logo, wordmarkClassName,
 }: {
   productName: string
   productInitial: string
   redirectTo: string
+  // Logo del producto, arriba del nombre. Si se pasa, reemplaza al box con la
+  // inicial; si no, no cambia nada. Ver `branding.ts`.
+  logo?: ProductLogo
+  // Clases extra para el nombre del producto. Se mergean con `text-xl` via
+  // `cn`, así que el producto puede pisar tamaño, peso y color sin perder el
+  // resto. LibraDesk lo usa para su Montserrat Bold.
+  wordmarkClassName?: string
   // Decide el destino segun el usuario logueado (ej. redirigir un rol
   // especifico a una pantalla propia) -- si no se pasa, siempre navega a
   // `redirectTo`, comportamiento identico al de antes de v0.3.0.
@@ -134,10 +143,22 @@ export function createLogin<TUser = User>({
       <div className="flex min-h-svh items-center justify-center bg-muted/40 p-4">
         <Card className="w-full max-w-sm">
           <CardHeader className="text-center">
-            <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground font-semibold">
-              {productInitial}
-            </div>
-            <CardTitle className="text-xl">{productName}</CardTitle>
+            {logo ? (
+              <img
+                src={logo.src}
+                alt={logo.alt ?? productName}
+                // `max-w-none` por lo mismo que en Layout.tsx: el preflight de
+                // Tailwind clampea toda imagen a `max-width: 100%`, y el logo
+                // tiene que medir lo que pide el producto, no lo que le deje el
+                // contenedor.
+                className={cn('mx-auto mb-2 block h-10 w-10 max-w-none object-contain', logo.className)}
+              />
+            ) : (
+              <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground font-semibold">
+                {productInitial}
+              </div>
+            )}
+            <CardTitle className={cn('text-xl', wordmarkClassName)}>{productName}</CardTitle>
             <CardDescription>Iniciá sesión para continuar</CardDescription>
           </CardHeader>
           <CardContent>

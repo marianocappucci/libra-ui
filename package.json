@@ -1,6 +1,6 @@
 {
   "name": "libra-ui",
-  "version": "0.22.0",
+  "version": "0.23.0",
   "private": true,
   "type": "module",
   "description": "Paquete de frontend compartido para los verticales de la familia Libra sin backoffice server-rendered propio (Gestiolibra, MedLibra, VentaLibra).",
@@ -8,6 +8,7 @@
     "./acciones": "./src/acciones.tsx",
     "./api-client": "./src/api-client.ts",
     "./AuthContext": "./src/AuthContext.tsx",
+    "./branding": "./src/branding.ts",
     "./CambiarPassword": "./src/CambiarPassword.tsx",
     "./Configuracion": "./src/Configuracion.tsx",
     "./ConfiguracionSmtp": "./src/ConfiguracionSmtp.tsx",
