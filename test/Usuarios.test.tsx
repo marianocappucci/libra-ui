@@ -30,6 +30,10 @@ const USUARIOS = [
   { id: 'u2', username: 'jperez', name: 'Juan Pérez', role: 'staff', active: false },
 ]
 
+// `delay: null` en todos los `userEvent.setup` de este archivo: la espera
+// artificial por tecla lo hacía pasarse del `testTimeout` de 5 s corriendo bajo
+// cobertura, y en un caso distinto cada vez. No cambia lo que se ejercita —
+// sigue siendo un evento de teclado por carácter—, sólo saca la pausa.
 let pedidos: { url: string; metodo: string; cuerpo: unknown }[] = []
 
 function json(body: unknown) {
@@ -53,7 +57,7 @@ beforeEach(() => {
 
 describe('🔴 el alta y la edición abren en modal', () => {
   it('editar rinde el formulario adentro de un diálogo, con los datos cargados', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<Usuarios />)
     await screen.findByText('Mariano')
 
@@ -78,7 +82,7 @@ describe('🔴 el alta y la edición abren en modal', () => {
   })
 
   it('el alta pide usuario y contraseña, y las manda', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<Usuarios />)
     await screen.findByText('Mariano')
 
@@ -101,7 +105,7 @@ describe('🔴 el alta y la edición abren en modal', () => {
   })
 
   it('🔴 el formulario NO queda en el flujo de la página, entre el encabezado y la grilla', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<Usuarios />)
     await screen.findByText('Mariano')
     await user.click(screen.getByRole('button', { name: /Nuevo usuario/ }))
@@ -158,7 +162,7 @@ describe('🔴 las acciones de la grilla van con icono, no con palabra', () => {
   })
 
   it('el toggle manda el PUT con el estado invertido', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<Usuarios />)
     await screen.findByText('Mariano')
 
@@ -195,7 +199,7 @@ describe('🔴 el admin le puede cambiar la contraseña a otro usuario', () => {
   })
 
   it('manda el PUT a la ruta de contraseña del usuario elegido', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<Usuarios />)
     await screen.findByText('Juan Pérez')
 
@@ -221,7 +225,7 @@ describe('🔴 el admin le puede cambiar la contraseña a otro usuario', () => {
   })
 
   it('respeta el basePath del producto', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<Usuarios basePath="/api/usuarios" />)
     await screen.findByText('Mariano')
 
@@ -240,7 +244,7 @@ describe('🔴 el admin le puede cambiar la contraseña a otro usuario', () => {
   })
 
   it('la contraseña vacía no dispara ninguna llamada', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<Usuarios />)
     await screen.findByText('Mariano')
 
@@ -258,8 +262,41 @@ describe('🔴 el admin le puede cambiar la contraseña a otro usuario', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 
+  it('Cancelar cierra el diálogo sin mandar nada', async () => {
+    const user = userEvent.setup({ delay: null })
+    render(<Usuarios />)
+    await screen.findByText('Mariano')
+
+    await user.click(screen.getByRole('button', { name: 'Cambiar contraseña de Mariano' }))
+    const dialogo = await screen.findByRole('dialog')
+    await user.type(within(dialogo).getByLabelText('Contraseña nueva'), 'arrepentido')
+    await user.click(within(dialogo).getByRole('button', { name: 'Cancelar' }))
+
+    // Lo que importa es la ausencia de la llamada: un Cancelar que cerrara la
+    // vista DESPUÉS de haber mandado el PUT se vería exactamente igual, y del
+    // otro lado la contraseña ya estaría cambiada.
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(pedidos.filter((p) => p.url.endsWith('/password'))).toHaveLength(0)
+  })
+
+  it('lo tipeado no sobrevive al diálogo siguiente', async () => {
+    const user = userEvent.setup({ delay: null })
+    render(<Usuarios />)
+    await screen.findByText('Mariano')
+
+    await user.click(screen.getByRole('button', { name: 'Cambiar contraseña de Mariano' }))
+    await user.type(await screen.findByLabelText('Contraseña nueva'), 'para-mariano')
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancelar' }))
+
+    // Abrir el de OTRO usuario tiene que empezar en blanco. Con el campo
+    // heredado, un Cambiar apurado le pone al segundo la clave que se había
+    // tipeado para el primero -- y las dos personas terminan con la misma.
+    await user.click(screen.getByRole('button', { name: 'Cambiar contraseña de Juan Pérez' }))
+    expect(await screen.findByLabelText('Contraseña nueva')).toHaveValue('')
+  })
+
   it('el error del backend se lee adentro del diálogo, que no se cierra', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     vi.stubGlobal('fetch', vi.fn((_url: string, opciones?: RequestInit) => {
       const metodo = opciones?.method ?? 'GET'
       if (metodo === 'GET') return Promise.resolve(json(USUARIOS))
@@ -288,7 +325,7 @@ describe('🔴 el admin le puede cambiar la contraseña a otro usuario', () => {
 
 describe('🔴 el correo del ABM', () => {
   it('el alta lo manda cuando se completa', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<Usuarios />)
     await screen.findByText('Mariano')
 
@@ -308,7 +345,7 @@ describe('🔴 el correo del ABM', () => {
   })
 
   it('la edición lo manda, y el usuario sin correo se puede editar igual', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<Usuarios />)
     await screen.findByText('Juan Pérez')
 
@@ -329,7 +366,7 @@ describe('🔴 el correo del ABM', () => {
   })
 
   it('🔴 el toggle de activo NO manda el correo', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<Usuarios />)
     await screen.findByText('Mariano')
 
@@ -349,7 +386,7 @@ describe('🔴 el correo del ABM', () => {
 
 describe('🔴 editar a un usuario desactivado no lo reactiva', () => {
   it('el PUT de la edición conserva el estado que tenía', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<Usuarios />)
     await screen.findByText('Juan Pérez')
 
@@ -369,7 +406,7 @@ describe('🔴 editar a un usuario desactivado no lo reactiva', () => {
   })
 
   it('y al activo lo deja activo', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ delay: null })
     render(<Usuarios />)
     await screen.findByText('Mariano')
 
