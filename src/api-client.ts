@@ -144,4 +144,10 @@ export type User = {
   name: string
   role: 'admin' | 'staff'
   active: boolean
+  // Opcional a proposito: la columna existe en `libraauth` desde v0.3.0, pero
+  // no todos los productos la devuelven todavia en su listado. Con el campo
+  // obligatorio, el consumidor que no la devuelve no compila; con `?`, la
+  // pantalla lo trata como vacio y sigue andando. Es la direccion a la que
+  // llega el mail de `POST /auth/forgot-password`.
+  email?: string
 }

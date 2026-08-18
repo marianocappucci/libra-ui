@@ -3,7 +3,7 @@
 // wiki/analyses/auditoria-duplicacion-familia-libra.md.
 import { useEffect, useMemo, useState } from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
-import { Pencil, UserCheck, UserX } from 'lucide-react'
+import { KeyRound, Pencil, UserCheck, UserX } from 'lucide-react'
 import { api, ApiError, type User } from './api-client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -24,7 +24,7 @@ function describeError(err: unknown): string {
   return 'Error de conexión.'
 }
 
-const EMPTY = { username: '', name: '', password: '', role: 'staff' }
+const EMPTY = { username: '', name: '', password: '', email: '', role: 'staff', active: true }
 
 // `basePath` es la ruta del router de usuarios en el backend -- default
 // '/users' preserva el comportamiento anterior a esta prop
@@ -37,6 +37,12 @@ export function Usuarios({ basePath = '/users' }: { basePath?: string } = {}) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState(EMPTY)
   const [saving, setSaving] = useState(false)
+  // El cambio de contraseña ajena tiene su propio diálogo y su propio estado
+  // de error -- ver el comentario del segundo `Dialog`, abajo.
+  const [passwordUser, setPasswordUser] = useState<User | null>(null)
+  const [newPassword, setNewPassword] = useState('')
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+  const [savingPassword, setSavingPassword] = useState(false)
 
   useEffect(() => {
     load()
@@ -59,8 +65,18 @@ export function Usuarios({ basePath = '/users' }: { basePath?: string } = {}) {
   }
 
   function startEdit(user: User) {
+    setForm({
+      username: user.username, name: user.name, password: '',
+      email: user.email ?? '', role: user.role,
+      // 🔴 Se arrastra el estado REAL del usuario. Antes el guardado mandaba
+      // `active: true` fijo, así que editarle el nombre o el correo a alguien
+      // desactivado lo reactivaba sin decir nada -- y quien lo editó no tenía
+      // por qué mirar la columna Estado después de cambiar un apellido. El
+      // formulario no ofrece tocarlo (para eso está el botón de la grilla):
+      // lo que hace falta es no pisarlo.
+      active: user.active,
+    })
     setEditingId(user.id)
-    setForm({ username: user.username, name: user.name, password: '', role: user.role })
   }
 
   function cancelEdit() {
@@ -79,10 +95,13 @@ export function Usuarios({ basePath = '/users' }: { basePath?: string } = {}) {
       if (editingId === 'new') {
         await api.post(basePath, {
           username: form.username.trim(), name: form.name.trim(),
-          password: form.password, role: form.role,
+          password: form.password, email: form.email.trim(), role: form.role,
         })
       } else if (editingId) {
-        await api.put(`${basePath}/${editingId}`, { name: form.name.trim(), role: form.role, active: true })
+        await api.put(`${basePath}/${editingId}`, {
+          name: form.name.trim(), role: form.role, active: form.active,
+          email: form.email.trim(),
+        })
       }
       cancelEdit()
       await load()
@@ -96,10 +115,39 @@ export function Usuarios({ basePath = '/users' }: { basePath?: string } = {}) {
   async function handleDeactivate(user: User) {
     setError(null)
     try {
+      // Sin `email` a propósito, y no por olvido: el backend interpreta su
+      // ausencia como "dejalo como está". Mandar `user.email ?? ''` sería peor
+      // que no mandarlo -- contra un producto cuyo listado todavía no devuelve
+      // el campo, activar o desactivar a alguien le borraría el correo.
       await api.put(`${basePath}/${user.id}`, { name: user.name, role: user.role, active: !user.active })
       await load()
     } catch (err) {
       setError(describeError(err))
+    }
+  }
+
+  function startPasswordChange(user: User) {
+    setPasswordUser(user)
+    setNewPassword('')
+    setPasswordError(null)
+  }
+
+  async function handlePasswordSave() {
+    if (!passwordUser) return
+    if (!newPassword.trim()) {
+      setPasswordError('Escribí la contraseña nueva.')
+      return
+    }
+    setSavingPassword(true)
+    setPasswordError(null)
+    try {
+      await api.put(`${basePath}/${passwordUser.id}/password`, { password: newPassword })
+      setPasswordUser(null)
+      setNewPassword('')
+    } catch (err) {
+      setPasswordError(describeError(err))
+    } finally {
+      setSavingPassword(false)
     }
   }
 
@@ -135,6 +183,15 @@ export function Usuarios({ basePath = '/users' }: { basePath?: string } = {}) {
                     title="Editar" aria-label={`Editar ${u.name}`}
                     onClick={() => startEdit(u)}>
               <Pencil />
+            </Button>
+            {/* La llave y no un candado: el candado es el vocabulario de
+                "bloqueado/permitido" y esto no bloquea nada. De lucide y no de
+                `iconos-accion`, para no dejar esta grilla con dos juegos de
+                iconos: los otros dos botones también son de lucide. */}
+            <Button size="icon" variant="outline" className="size-8"
+                    title="Cambiar contraseña" aria-label={`Cambiar contraseña de ${u.name}`}
+                    onClick={() => startPasswordChange(u)}>
+              <KeyRound />
             </Button>
             <Button size="icon" variant="outline" className="size-8"
                     title={alterna} aria-label={`${alterna} ${u.name}`}
@@ -183,6 +240,19 @@ export function Usuarios({ basePath = '/users' }: { basePath?: string } = {}) {
               <Input id="usr-name" value={form.name} autoFocus={editingId !== 'new'}
                      onChange={(e) => setForm({ ...form, name: e.target.value })} />
             </div>
+            {/* El correo se edita en las dos, alta y edición: es la dirección a
+                la que llega el mail de "olvidé mi contraseña", y un campo que
+                sólo se pudiera cargar en el alta dejaría afuera a todos los
+                usuarios que ya existen -- que son justamente los que se quedan
+                sin entrar. Opcional: el formato lo valida el navegador con
+                `type="email"`, y dejarlo vacío no bloquea el guardado. */}
+            <div className="grid gap-2">
+              <Label htmlFor="usr-email">
+                Correo <span className="font-normal text-muted-foreground">(opcional)</span>
+              </Label>
+              <Input id="usr-email" type="email" value={form.email}
+                     onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            </div>
             {editingId === 'new' && (
               <div className="grid gap-2">
                 <Label htmlFor="usr-password">Contraseña</Label>
@@ -205,6 +275,46 @@ export function Usuarios({ basePath = '/users' }: { basePath?: string } = {}) {
             <Button variant="outline" onClick={cancelEdit}>Cancelar</Button>
             <Button onClick={handleSave} disabled={saving}>
               {saving ? 'Guardando…' : editingId === 'new' ? 'Crear' : 'Guardar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* El cambio de contraseña ajena va en un diálogo aparte y NO como un
+          campo más de la edición.
+
+          Es una operación de otra naturaleza: la edición se guarda entera de
+          una, y una contraseña metida ahí adentro viajaría —o se olvidaría a
+          medio tipear— cada vez que alguien corrige un apellido. Separada, la
+          acción es una sola cosa: o cambia la clave o falla. Y el título dice a
+          quién se le está cambiando, que es lo que evita cambiársela por error
+          al usuario de la fila de al lado. */}
+      <Dialog open={passwordUser !== null} onOpenChange={(o) => { if (!o) setPasswordUser(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cambiar contraseña de {passwordUser?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3">
+            {passwordError && <p className="text-sm text-destructive">{passwordError}</p>}
+            <div className="grid gap-2">
+              <Label htmlFor="usr-nueva-password">Contraseña nueva</Label>
+              <PasswordInput id="usr-nueva-password" value={newPassword} autoFocus
+                             onChange={(e) => setNewPassword(e.target.value)} />
+            </div>
+            {/* Se dice en la pantalla y no sólo en el código: quien la escribe
+                no es quien la va a usar, así que la única forma de que la
+                persona termine con una clave que sólo ella sepa es que la
+                cambie al entrar. Esa pantalla ya existe: es la de cambiar la
+                propia contraseña, contra `/auth/change-password`. */}
+            <p className="text-sm text-muted-foreground">
+              Se la vas a tener que decir. Pedile que la cambie desde su propio
+              perfil apenas entre.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPasswordUser(null)}>Cancelar</Button>
+            <Button onClick={handlePasswordSave} disabled={savingPassword}>
+              {savingPassword ? 'Guardando…' : 'Cambiar'}
             </Button>
           </DialogFooter>
         </DialogContent>
