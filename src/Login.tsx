@@ -82,6 +82,7 @@ export function createLogin<TUser = User>({
     const [error, setError] = useState<string | null>(null)
     const [submitting, setSubmitting] = useState(false)
     const [demo, setDemo] = useState<{ username: string } | null>(null)
+    const [codigoDemo, setCodigoDemo] = useState('')
     const [entrandoALaDemo, setEntrandoALaDemo] = useState(false)
 
     useEffect(() => {
@@ -102,11 +103,16 @@ export function createLogin<TUser = User>({
       return () => { vivo = false }
     }, [])
 
-    async function entrarALaDemo() {
+    async function entrarALaDemo(event?: FormEvent) {
+      event?.preventDefault()
       setError(null)
       setEntrandoALaDemo(true)
       try {
-        await api.post(demoPath as string)
+        // El código viaja SIEMPRE, aunque esté vacío. Mandar el cuerpo sólo
+        // cuando hay algo tipeado dejaría que un campo en blanco pegue como
+        // pegaba el botón de antes, y del otro lado eso es justamente lo que
+        // dejó de alcanzar.
+        await api.post(demoPath as string, { codigo: codigoDemo.trim() })
         // Recarga entera en vez de `navigate`: el POST deja la cookie de
         // sesión puesta, pero el `AuthProvider` ya montó con `user = null` y
         // no tiene forma de enterarse — navegar sin recargar rebota contra
@@ -196,24 +202,43 @@ export function createLogin<TUser = User>({
               )}
             </form>
             {demo && (
-              // Fuera del `<form>`: acá dentro un botón de más es un botón
-              // que el Enter del campo de contraseña puede terminar
-              // disparando.
-              <div className="mt-4 grid gap-2 border-t pt-4">
+              // Form PROPIO, hermano del de credenciales y no anidado: dos
+              // `<form>` uno dentro de otro no son HTML válido, y el Enter
+              // del campo de contraseña terminaría disparando éste.
+              <form onSubmit={entrarALaDemo} className="mt-4 grid gap-2 border-t pt-4">
                 <p className="text-center text-sm text-muted-foreground">
                   Ésta es la demo pública de {productName}: entrás como «{demo.username}»,
                   con datos de prueba que se reponen todos los días.
                 </p>
+                <Label htmlFor="codigo-demo">Código de acceso</Label>
+                <Input
+                  id="codigo-demo"
+                  name="codigo-demo"
+                  value={codigoDemo}
+                  onChange={(e) => setCodigoDemo(e.target.value)}
+                  placeholder="XXXX-XXXX-XXXX"
+                  // Se lo van a copiar de un WhatsApp: el autocorrector que
+                  // capitaliza y el que autocompleta sobran los dos.
+                  autoComplete="off"
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                  // Un `<input>` en mayúsculas por CSS, no transformando el
+                  // valor al tipear: eso último mueve el cursor al final en
+                  // cada tecla. El backend normaliza igual.
+                  className="uppercase placeholder:normal-case"
+                />
+                <p className="text-center text-xs text-muted-foreground">
+                  ¿No tenés uno? Pedínoslo y te lo damos al momento.
+                </p>
                 <Button
-                  type="button"
+                  type="submit"
                   variant="outline"
                   className="w-full"
-                  disabled={entrandoALaDemo}
-                  onClick={entrarALaDemo}
+                  disabled={entrandoALaDemo || codigoDemo.trim() === ''}
                 >
                   {entrandoALaDemo ? 'Entrando…' : 'Entrar a la demo'}
                 </Button>
-              </div>
+              </form>
             )}
           </CardContent>
         </Card>

@@ -243,22 +243,88 @@ describe('el botón de la demo', () => {
     expect(screen.queryByRole('button', BOTON_DEMO)).not.toBeInTheDocument()
   })
 
-  it('al tocarlo entra y RECARGA, no navega', async () => {
+  // ── El código de acceso (libraauth v0.10.0) ─────────────────────────────
+  //
+  // La demo dejó de abrirse sola: el botón manda un código, y sin código no
+  // manda nada. Lo que sigue fija las dos mitades — que con código entra, y
+  // que sin código el botón no puede pegarle al endpoint.
+
+  const CAMPO_CODIGO = { name: /código de acceso/i }
+
+  it('el botón arranca deshabilitado hasta que se escribe un código', async () => {
+    // 🔴 Es el cerrojo del lado de la pantalla. Sin esto el botón sigue
+    // pudiendo pegarle a `POST /auth/demo` con el cuerpo vacío, que es
+    // exactamente la llamada que este cambio existe para cortar.
+    sondaResponde({ enabled: true, username: 'demo' })
+    montar({ demoPath: '/auth/demo' })
+
+    expect(await screen.findByRole('button', BOTON_DEMO)).toBeDisabled()
+    expect(screen.getByRole('textbox', CAMPO_CODIGO)).toBeInTheDocument()
+  })
+
+  it('los espacios de más no habilitan el botón', async () => {
+    sondaResponde({ enabled: true, username: 'demo' })
+    montar({ demoPath: '/auth/demo' })
+    await userEvent.setup().type(
+      await screen.findByRole('textbox', CAMPO_CODIGO), '   ')
+
+    expect(screen.getByRole('button', BOTON_DEMO)).toBeDisabled()
+  })
+
+  it('con un código entra y RECARGA, no navega', async () => {
     // 🔴 Recargar no es un detalle: el POST deja la cookie puesta, pero el
     // AuthProvider ya montó con user=null. Un `navigate` rebota contra el
     // guard de rutas y devuelve al login — el mismo síntoma que esto arregla.
     sondaResponde({ enabled: true, username: 'demo' })
     montar({ demoPath: '/auth/demo' })
-    await userEvent.setup().click(await screen.findByRole('button', BOTON_DEMO))
+    const usuario = userEvent.setup()
+    await usuario.type(
+      await screen.findByRole('textbox', CAMPO_CODIGO), 'H7KQ-9MRT-2XVB')
+    await usuario.click(screen.getByRole('button', BOTON_DEMO))
 
     await waitFor(() => expect(irA).toHaveBeenCalledWith('/dashboard'))
     expect(navegar).not.toHaveBeenCalled()
   })
 
-  it('si el auto-login falla lo dice con el motivo del backend', async () => {
-    // El 503 del motor ("demo user not provisioned") pasa cuando la instancia
-    // todavía no se sembró. "Usuario o contraseña incorrectos" mandaría a
-    // mirar el lugar equivocado.
+  it('el código viaja en el cuerpo del POST', async () => {
+    // Sin esto, el test de arriba pasaría igual con un `api.post` que no
+    // manda nada: entra porque el fetch falso contesta 200, no porque el
+    // código haya llegado.
+    sondaResponde({ enabled: true, username: 'demo' })
+    montar({ demoPath: '/auth/demo' })
+    const usuario = userEvent.setup()
+    await usuario.type(
+      await screen.findByRole('textbox', CAMPO_CODIGO), 'H7KQ-9MRT-2XVB')
+    await usuario.click(screen.getByRole('button', BOTON_DEMO))
+
+    await waitFor(() => expect(irA).toHaveBeenCalled())
+    const post = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls
+      .find((c) => (c[1] as RequestInit | undefined)?.method === 'POST')
+    expect(JSON.parse((post?.[1] as RequestInit).body as string))
+      .toEqual({ codigo: 'H7KQ-9MRT-2XVB' })
+  })
+
+  it('un código con espacios alrededor se manda recortado', async () => {
+    sondaResponde({ enabled: true, username: 'demo' })
+    montar({ demoPath: '/auth/demo' })
+    const usuario = userEvent.setup()
+    await usuario.type(
+      await screen.findByRole('textbox', CAMPO_CODIGO), '  H7KQ-9MRT-2XVB  ')
+    await usuario.click(screen.getByRole('button', BOTON_DEMO))
+
+    await waitFor(() => expect(irA).toHaveBeenCalled())
+    const post = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls
+      .find((c) => (c[1] as RequestInit | undefined)?.method === 'POST')
+    expect(JSON.parse((post?.[1] as RequestInit).body as string).codigo)
+      .toBe('H7KQ-9MRT-2XVB')
+  })
+
+  it('si el ingreso falla lo dice con el motivo del backend', async () => {
+    // El 401 del motor ("el código no es válido o ya venció") es lo que ve
+    // quien tipeó mal. El 503 ("demo user not provisioned") pasa cuando la
+    // instancia todavía no se sembró: son dos causas distintas y decir
+    // "usuario o contraseña incorrectos" mandaría a mirar el lugar
+    // equivocado en las dos.
     vi.stubGlobal('fetch', vi.fn((_url: string, init?: RequestInit) =>
       Promise.resolve(init?.method === 'POST'
         ? new Response(JSON.stringify({ detail: 'demo user not provisioned' }),
@@ -266,12 +332,26 @@ describe('el botón de la demo', () => {
         : new Response(JSON.stringify({ enabled: true, username: 'demo' }),
           { status: 200, headers: { 'content-type': 'application/json' } }))))
     montar({ demoPath: '/auth/demo' })
-    await userEvent.setup().click(await screen.findByRole('button', BOTON_DEMO))
+    const usuario = userEvent.setup()
+    await usuario.type(
+      await screen.findByRole('textbox', CAMPO_CODIGO), 'H7KQ-9MRT-2XVB')
+    await usuario.click(screen.getByRole('button', BOTON_DEMO))
 
     expect(await screen.findByText(/demo user not provisioned/)).toBeInTheDocument()
     expect(irA).not.toHaveBeenCalled()
-    // Y se puede reintentar: quedar deshabilitado dejaría la pantalla muerta.
+    // Y se puede reintentar: quedar deshabilitado dejaría la pantalla muerta
+    // justo cuando alguien acaba de tipear mal un código.
     expect(screen.getByRole('button', BOTON_DEMO)).toBeEnabled()
+  })
+
+  it('el campo del código no aparece fuera de una demo', async () => {
+    // La otra mitad del par: en la instancia de un cliente no hay ni botón ni
+    // campo, así que el campo no puede ser una vía de ingreso ahí.
+    sondaResponde({ detail: 'Not Found' }, { status: 404 })
+    montar({ demoPath: '/auth/demo' })
+
+    await waitFor(() => expect(fetch).toHaveBeenCalled())
+    expect(screen.queryByRole('textbox', CAMPO_CODIGO)).not.toBeInTheDocument()
   })
 })
 
