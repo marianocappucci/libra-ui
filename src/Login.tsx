@@ -83,6 +83,10 @@ export function createLogin<TUser = User>({
     const [submitting, setSubmitting] = useState(false)
     const [demo, setDemo] = useState<{ username: string } | null>(null)
     const [codigoDemo, setCodigoDemo] = useState('')
+    // Sólo importa en una demo: es lo que despliega el login de credenciales,
+    // que ahí arranca plegado. En el resto de las instancias no se usa — el
+    // formulario se dibuja siempre.
+    const [mostrarLogin, setMostrarLogin] = useState(false)
     const [entrandoALaDemo, setEntrandoALaDemo] = useState(false)
 
     useEffect(() => {
@@ -165,47 +169,20 @@ export function createLogin<TUser = User>({
               </div>
             )}
             <CardTitle className={cn('text-xl', wordmarkClassName)}>{productName}</CardTitle>
-            <CardDescription>Iniciá sesión para continuar</CardDescription>
+            <CardDescription>
+              {demo ? 'Ingresá con tu código de acceso' : 'Iniciá sesión para continuar'}
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <form className="grid gap-4" onSubmit={handleSubmit}>
-              <div className="grid gap-2">
-                <Label htmlFor="username">Usuario</Label>
-                <Input
-                  id="username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  autoFocus
-                  required
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="password">Contraseña</Label>
-                <PasswordInput
-                  id="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-              </div>
-              {error && <p className="text-sm text-destructive">{error}</p>}
-              <Button type="submit" disabled={submitting} className="w-full">
-                {submitting ? 'Ingresando…' : 'Ingresar'}
-              </Button>
-              {forgotPasswordPath && (
-                <Link
-                  to={forgotPasswordPath}
-                  className="text-center text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-                >
-                  ¿Olvidaste tu contraseña?
-                </Link>
-              )}
-            </form>
+            {/* 🔑 En una demo el código va PRIMERO y el login queda plegado.
+                El visitante tiene una sola forma de entrar —la suya— y no se
+                come un "usuario o contraseña incorrectos" antes de encontrar
+                el campo que le corresponde.
+
+                Fuera de una demo, `demo` es null y esto no dibuja nada: el
+                login se renderiza abajo igual que siempre. */}
             {demo && (
-              // Form PROPIO, hermano del de credenciales y no anidado: dos
-              // `<form>` uno dentro de otro no son HTML válido, y el Enter
-              // del campo de contraseña terminaría disparando éste.
-              <form onSubmit={entrarALaDemo} className="mt-4 grid gap-2 border-t pt-4">
+              <form onSubmit={entrarALaDemo} className="mb-4 grid gap-2">
                 <p className="text-center text-sm text-muted-foreground">
                   Ésta es la demo pública de {productName}: entrás como «{demo.username}»,
                   con datos de prueba que se reponen todos los días.
@@ -222,6 +199,7 @@ export function createLogin<TUser = User>({
                   autoComplete="off"
                   autoCapitalize="characters"
                   spellCheck={false}
+                  autoFocus
                   // Un `<input>` en mayúsculas por CSS, no transformando el
                   // valor al tipear: eso último mueve el cursor al final en
                   // cada tecla. El backend normaliza igual.
@@ -230,15 +208,83 @@ export function createLogin<TUser = User>({
                 <p className="text-center text-xs text-muted-foreground">
                   ¿No tenés uno? Pedínoslo y te lo damos al momento.
                 </p>
+                {error && <p className="text-sm text-destructive">{error}</p>}
                 <Button
                   type="submit"
-                  variant="outline"
                   className="w-full"
                   disabled={entrandoALaDemo || codigoDemo.trim() === ''}
                 >
                   {entrandoALaDemo ? 'Entrando…' : 'Entrar a la demo'}
                 </Button>
               </form>
+            )}
+
+            {/* El login de credenciales. En una demo cuelga de un link, porque
+                ahí es para quien administra la instancia y no para el
+                visitante — pero tiene que seguir existiendo: sin él nadie
+                entra a Configuración, al ABM de usuarios ni al backup. */}
+            {demo && !mostrarLogin && (
+              <div className="border-t pt-4 text-center">
+                <button
+                  type="button"
+                  onClick={() => setMostrarLogin(true)}
+                  aria-expanded={false}
+                  className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                >
+                  Soy administrador
+                </button>
+              </div>
+            )}
+
+            {/* Plegado = NO renderizado, no escondido con `hidden`. Un form
+                oculto por CSS sigue en el DOM: sus campos se alcanzan con el
+                tabulador y un lector de pantalla los anuncia si la clase no
+                llega a aplicarse. Sin renderizar, no hay forma de que aparezca
+                por accidente. */}
+            {(!demo || mostrarLogin) && (
+            <form
+              className={cn('grid gap-4', demo && 'border-t pt-4')}
+              onSubmit={handleSubmit}
+            >
+              <div className="grid gap-2">
+                <Label htmlFor="username">Usuario</Label>
+                <Input
+                  id="username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  // En una demo el foco se lo lleva el campo del código, que
+                  // es lo primero que toca el visitante.
+                  autoFocus={!demo}
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="password">Contraseña</Label>
+                <PasswordInput
+                  id="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+              </div>
+              {/* En una demo el error del código se muestra arriba, junto al
+                  campo que lo produjo; acá abajo sólo el del login. */}
+              {error && !demo && <p className="text-sm text-destructive">{error}</p>}
+              {error && demo && mostrarLogin && (
+                <p className="text-sm text-destructive">{error}</p>
+              )}
+              <Button type="submit" disabled={submitting} className="w-full">
+                {submitting ? 'Ingresando…' : 'Ingresar'}
+              </Button>
+              {forgotPasswordPath && (
+                <Link
+                  to={forgotPasswordPath}
+                  className="text-center text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                >
+                  ¿Olvidaste tu contraseña?
+                </Link>
+              )}
+            </form>
             )}
           </CardContent>
         </Card>
