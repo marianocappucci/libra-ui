@@ -353,5 +353,91 @@ describe('el botón de la demo', () => {
     await waitFor(() => expect(fetch).toHaveBeenCalled())
     expect(screen.queryByRole('textbox', CAMPO_CODIGO)).not.toBeInTheDocument()
   })
+
+  // ── El login de credenciales, plegado en una demo ────────────────────────
+  //
+  // El visitante veía dos formas de entrar y tenía una sola: probaba la de
+  // arriba, no tenía credenciales, y se comía un "usuario o contraseña
+  // incorrectos" antes de encontrar el campo que le correspondía.
+  //
+  // 🔴 El par que importa son los DOS lados: plegado en la demo, y **visible
+  // como siempre** en las otras cinco instancias. Sin el segundo, esconderlo
+  // de más pasaría en verde y dejaría a cinco productos sin pantalla de login.
+
+  const ADMIN = { name: /soy administrador/i }
+
+  it('en una demo el campo Usuario arranca escondido', async () => {
+    sondaResponde({ enabled: true, username: 'demo' })
+    montar({ demoPath: '/auth/demo' })
+    await screen.findByRole('textbox', CAMPO_CODIGO)
+
+    expect(screen.queryByLabelText(/usuario/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', ADMIN)).toBeInTheDocument()
+  })
+
+  it('«Soy administrador» lo despliega', async () => {
+    sondaResponde({ enabled: true, username: 'demo' })
+    montar({ demoPath: '/auth/demo' })
+    await userEvent.setup().click(await screen.findByRole('button', ADMIN))
+
+    expect(screen.getByLabelText(/usuario/i)).toBeVisible()
+    expect(screen.getByRole('button', { name: /^ingresar$/i })).toBeVisible()
+    // Y el link se va: ya cumplió, y dejarlo sugeriría que hay algo más.
+    expect(screen.queryByRole('button', ADMIN)).not.toBeInTheDocument()
+  })
+
+  it('🔴 fuera de una demo el login se ve como siempre', async () => {
+    // La mitad que evita que esconderlo de más pase en verde.
+    sondaResponde({ detail: 'Not Found' }, { status: 404 })
+    montar({ demoPath: '/auth/demo' })
+
+    await waitFor(() => expect(fetch).toHaveBeenCalled())
+    expect(screen.getByLabelText(/usuario/i)).toBeVisible()
+    expect(screen.queryByRole('button', ADMIN)).not.toBeInTheDocument()
+  })
+
+  it('sin demoPath tampoco se esconde nada', async () => {
+    montar()
+
+    expect(screen.getByLabelText(/usuario/i)).toBeVisible()
+    expect(screen.queryByRole('button', ADMIN)).not.toBeInTheDocument()
+  })
+
+  it('en una demo el código va primero en el DOM', async () => {
+    // El orden de lectura, no sólo la presencia: es lo que hace que el
+    // visitante vea lo suyo antes que el login del administrador.
+    sondaResponde({ enabled: true, username: 'demo' })
+    montar({ demoPath: '/auth/demo' })
+    const codigo = await screen.findByRole('textbox', CAMPO_CODIGO)
+    // Se despliega el login: plegado no hay campo Usuario en el DOM, así que
+    // el orden se compara una vez que los dos existen.
+    await userEvent.setup().click(screen.getByRole('button', ADMIN))
+    const usuario = screen.getByLabelText(/usuario/i)
+
+    expect(codigo.compareDocumentPosition(usuario))
+      .toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+  })
+
+  it('el encabezado dice que se entra con código', async () => {
+    sondaResponde({ enabled: true, username: 'demo' })
+    montar({ demoPath: '/auth/demo' })
+
+    expect(await screen.findByText(/ingresá con tu código de acceso/i)).toBeInTheDocument()
+    expect(screen.queryByText(/iniciá sesión para continuar/i)).not.toBeInTheDocument()
+  })
+
+  it('el login de credenciales sigue funcionando en una demo', async () => {
+    // 🔴 Esconderlo no puede romperlo: es por donde entra quien administra la
+    // instancia, y sin él no hay forma de llegar a Configuración ni al backup.
+    sondaResponde({ enabled: true, username: 'demo' })
+    const { login } = montar({ demoPath: '/auth/demo' })
+    const u = userEvent.setup()
+    await u.click(await screen.findByRole('button', ADMIN))
+    await u.type(screen.getByLabelText(/usuario/i), 'admin')
+    await u.type(screen.getByLabelText(/^contraseña$/i), 'la-del-admin')
+    await u.click(screen.getByRole('button', { name: /^ingresar$/i }))
+
+    await waitFor(() => expect(login).toHaveBeenCalledWith('admin', 'la-del-admin'))
+  })
 })
 
