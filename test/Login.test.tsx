@@ -243,7 +243,7 @@ describe('el botón de la demo', () => {
     expect(screen.queryByRole('button', BOTON_DEMO)).not.toBeInTheDocument()
   })
 
-  // ── El código de acceso (libraauth v0.10.0) ─────────────────────────────
+  // ── El código de acceso (libraauth v0.26.0) ─────────────────────────────
   //
   // La demo dejó de abrirse sola: el botón manda un código, y sin código no
   // manda nada. Lo que sigue fija las dos mitades — que con código entra, y
