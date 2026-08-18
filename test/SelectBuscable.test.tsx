@@ -211,3 +211,105 @@ describe('SelectBuscable', () => {
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('SelectBuscable dentro de un formulario', () => {
+  // `FormControl` de shadcn es un `Slot.Root`: le pasa `id`, `aria-describedby`
+  // y `aria-invalid` al hijo sin saber qué componente es. Un `<input>` o el
+  // `SelectTrigger` de Radix las reciben como atributos del DOM; un componente
+  // propio las recibe como props de React y, **si no las declara, se pierden
+  // sin ningún error**. Hasta la v0.25.0 éste no las declaraba: adentro de un
+  // formulario, con su `<FormLabel>` puesto, quedaba sin nombre accesible.
+  //
+  // Estos tests no montan un `FormControl` —vive en el consumidor, no acá, y
+  // stubearlo sería probar el stub—. Montan el DOM que ese `FormControl`
+  // produce, que es lo que de verdad tiene que funcionar.
+
+  it('🔴 el `id` llega al disparador, así el `htmlFor` de la etiqueta lo nombra', () => {
+    // Éste es el defecto que motivó el cambio: la etiqueta estaba, era visible,
+    // y el lector de pantalla igual anunciaba «botón, Cliente…» — el valor, no
+    // el campo. Y sin `id` no había forma de atarla desde afuera.
+    render(
+      <>
+        <label htmlFor="cliente">Cliente (locatario)</label>
+        <SelectBuscable id="cliente" value="" onChange={vi.fn()} opciones={CLIENTES} placeholder="Cliente…" />
+      </>,
+    )
+
+    // Un `<label for>` nombra al `<button>` porque el botón es un elemento
+    // *labelable*. Es el mismo mecanismo por el que el `SelectTrigger` de Radix
+    // ya andaba solo adentro de un `FormControl`.
+    expect(screen.getByRole('combobox', { name: 'Cliente (locatario)' })).toBeInTheDocument()
+  })
+
+  it('el `ariaLabel` explícito le gana a la etiqueta, para el que ya lo pasa', () => {
+    // Los seis productos que consumen esto vienen pasando `ariaLabel` a mano
+    // porque era la única salida. No tienen que sacarlo para actualizar: si
+    // están los dos, gana `aria-label`, que es lo que dice el algoritmo de
+    // nombre accesible.
+    render(
+      <>
+        <label htmlFor="cliente">La etiqueta visible</label>
+        <SelectBuscable id="cliente" ariaLabel="El aria-label" value="" onChange={vi.fn()} opciones={CLIENTES} />
+      </>,
+    )
+    expect(screen.getByRole('combobox', { name: 'El aria-label' })).toBeInTheDocument()
+  })
+
+  it('el mensaje de validación se anuncia, y el campo queda marcado en error', () => {
+    // Lo mismo que el `id`, y por el mismo motivo: `FormControl` los inyecta y
+    // se perdían. El `<FormMessage>` se veía en pantalla y no se anunciaba
+    // nunca.
+    render(
+      <>
+        <label htmlFor="cliente">Cliente</label>
+        <SelectBuscable
+          id="cliente"
+          aria-describedby="cliente-msg"
+          aria-invalid
+          value="" onChange={vi.fn()} opciones={CLIENTES}
+        />
+        <p id="cliente-msg">Elegí un cliente</p>
+      </>,
+    )
+
+    const combo = screen.getByRole('combobox', { name: 'Cliente' })
+    expect(combo).toHaveAccessibleDescription('Elegí un cliente')
+    expect(combo).toBeInvalid()
+  })
+
+  it('el `id` de afuera no le pisa el suyo al desplegable', async () => {
+    // El componente ya tenía un `useId()` propio para el `aria-controls` del
+    // listbox. Al sumar la prop hubo que separarlos: si el desplegable pasara a
+    // usar el `id` del control, dos selects con el mismo `id` —o el `id` del
+    // botón repetido en el div— romperían el `aria-controls`.
+    const user = userEvent.setup()
+    render(
+      <SelectBuscable id="cliente" ariaLabel="Cliente" value="" onChange={vi.fn()} opciones={CLIENTES} />,
+    )
+
+    const combo = screen.getByRole('combobox', { name: 'Cliente' })
+    expect(combo).toHaveAttribute('id', 'cliente')
+
+    await user.click(combo)
+    const listbox = screen.getByRole('listbox')
+    expect(listbox.id).not.toBe('cliente')
+    // Y el `aria-controls` sigue apuntando al desplegable de verdad.
+    expect(combo).toHaveAttribute('aria-controls', listbox.id)
+  })
+
+  it('sin `id` no aparece el atributo, y todo lo de siempre sigue igual', async () => {
+    // El uso suelto —un `<Label>` al lado, sin formulario— es el mayoritario en
+    // los consumidores. No tiene que cambiar nada para él.
+    const user = userEvent.setup()
+    render(<ConEstado />)
+
+    const combo = screen.getByRole('combobox', { name: 'Cliente' })
+    expect(combo).not.toHaveAttribute('id')
+    expect(combo).not.toHaveAttribute('aria-describedby')
+
+    await user.click(combo)
+    expect(screen.getByRole('listbox')).toBeInTheDocument()
+  })
+})

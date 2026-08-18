@@ -9,6 +9,12 @@
 // dependencia obligaría a tocar los 5 antes de poder usar esto en uno. Se
 // construye con `@/components/ui/input`, `@/components/ui/button` y `cn`,
 // que sí están en todos.
+//
+// **v0.25.0 (2026-08-17)**: pasa a declarar `id`, `aria-describedby` y
+// `aria-invalid`, que es lo que un `<FormControl>` de shadcn le inyecta. Antes
+// las tiraba en silencio y el control quedaba **sin nombre accesible incluso
+// dentro de un formulario con su `<FormLabel>` puesto**. Ver el bloque de
+// props de abajo.
 import {
   useEffect, useId, useMemo, useRef, useState,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -37,11 +43,32 @@ type Props = {
   /** Clase del botón que abre el desplegable (para fijarle el ancho). */
   className?: string
   ariaLabel?: string
+  // --- Lo que inyecta un `FormControl` de shadcn ---------------------------
+  //
+  // `FormControl` es un `Slot.Root`: le pasa estas tres props **al hijo**, sin
+  // saber qué componente es. Un `<input>` o el `SelectTrigger` de Radix las
+  // reciben en el DOM y funcionan solas; un componente propio las recibe como
+  // props de React y **si no las declara, se pierden en silencio**. Eso es lo
+  // que pasaba acá: adentro de un formulario, con su `<FormLabel>` puesto,
+  // este control igual quedaba sin nombre accesible.
+  //
+  // No hay que pasarlas a mano: van solas si el uso está dentro de un
+  // `<FormControl>`. Declararlas es lo que hace que lleguen.
+  /** El `id` del control. El `htmlFor` del `<FormLabel>` apunta acá: es lo que
+   *  ata la etiqueta visible al botón y le da nombre accesible. */
+  id?: string
+  /** Ids del `<FormDescription>` y del `<FormMessage>`. Sin esto, el mensaje
+   *  de validación se ve en pantalla pero no se anuncia. */
+  'aria-describedby'?: string
+  /** Marca el campo en error. Sin esto, un lector de pantalla no distingue un
+   *  campo inválido de uno más. */
+  'aria-invalid'?: boolean | 'true' | 'false'
 }
 
 export function SelectBuscable({
   value, onChange, opciones, placeholder = 'Elegí una opción…',
   emptyMessage = 'Sin resultados.', disabled, className, ariaLabel,
+  id, 'aria-describedby': describedBy, 'aria-invalid': invalido,
 }: Props) {
   const [abierto, setAbierto] = useState(false)
   const [consulta, setConsulta] = useState('')
@@ -49,7 +76,10 @@ export function SelectBuscable({
   const contenedor = useRef<HTMLDivElement>(null)
   const campo = useRef<HTMLInputElement>(null)
   const lista = useRef<HTMLDivElement>(null)
-  const id = useId()
+  // El id del desplegable, que es interno: lo usa el `aria-controls` del
+  // botón y nadie de afuera lo nombra. Va aparte del `id` de la prop —que es
+  // el del control— y por eso se llama distinto.
+  const idInterno = useId()
 
   const seleccionada = opciones.find((o) => o.value === value)
 
@@ -117,13 +147,16 @@ export function SelectBuscable({
   return (
     <div className="relative" ref={contenedor}>
       <Button
+        id={id}
         type="button"
         variant="outline"
         role="combobox"
         aria-expanded={abierto}
         aria-haspopup="listbox"
-        aria-controls={abierto ? `${id}-lista` : undefined}
+        aria-controls={abierto ? `${idInterno}-lista` : undefined}
         aria-label={ariaLabel}
+        aria-describedby={describedBy}
+        aria-invalid={invalido}
         disabled={disabled}
         onClick={() => setAbierto((v) => !v)}
         className={cn('justify-between font-normal', !seleccionada && 'text-muted-foreground', className)}
@@ -148,7 +181,7 @@ export function SelectBuscable({
             />
           </div>
 
-          <div ref={lista} id={`${id}-lista`} role="listbox" className="max-h-60 overflow-y-auto">
+          <div ref={lista} id={`${idInterno}-lista`} role="listbox" className="max-h-60 overflow-y-auto">
             {filtradas.length === 0 ? (
               <p className="px-2 py-3 text-center text-sm text-muted-foreground">{emptyMessage}</p>
             ) : (
