@@ -77,7 +77,7 @@ para que el motor de Tailwind v4 escanee las clases usadas dentro de
 | `libra-ui/Layout` | `createLayout({ productName, productInitial, navItems })` | Factory: recibe la parte propia de cada producto (branding + items de navegación) y devuelve el componente `Layout`. Acepta `logo` y `wordmarkClassName` — ver abajo. |
 | `libra-ui/Login` | `createLogin({ productName, productInitial, redirectTo })` | Factory: recibe branding + ruta de redirect post-login. Acepta `logo` y `wordmarkClassName` — ver abajo. |
 | `libra-ui/branding` | `type ProductLogo` | El tipo del logo de producto. Módulo aparte para que `Login` no tenga que importar de `Layout` y arrastrarse la sidebar entera al bundle de la pantalla que carga sin sesión. |
-| `libra-ui/SelectBuscable` | `SelectBuscable`, `type OpcionSelect` | Select con **búsqueda por teclado** (`v0.9.0`). El `Select` de shadcn/Radix obliga a encontrar la opción a ojo en una lista ordenada; con los cientos de clientes que puede tener una empresa real, eso deja de ser viable. Filtra sin acentos y exige todos los términos, igual que el buscador de `data-table` — comparten `coincideBusqueda`. **No necesita `cmdk` ni el primitivo `popover`**: se construye con `input`, `button` y `cn`, que ya están en los 5 consumidores. |
+| `libra-ui/SelectBuscable` | `SelectBuscable`, `type OpcionSelect` | Select con **búsqueda por teclado** (`v0.9.0`). El `Select` de shadcn/Radix obliga a encontrar la opción a ojo en una lista ordenada; con los cientos de clientes que puede tener una empresa real, eso deja de ser viable. Filtra sin acentos y exige todos los términos, igual que el buscador de `data-table` — comparten `coincideBusqueda`. **No necesita `cmdk` ni el primitivo `popover`**: se construye con `input`, `button` y `cn`, que ya están en los 5 consumidores. Desde `v0.25.0` **anda solo adentro de un `<FormControl>`**: declara el `id`, el `aria-describedby` y el `aria-invalid` que el Slot le inyecta, así el `htmlFor` del `<FormLabel>` lo nombra — ver abajo. |
 | `libra-ui/use-mobile` | `useIsMobile` | Hook de breakpoint, 100% genérico. |
 | `libra-ui/utils` | `cn`, `normalizar`, `coincideBusqueda` | Helper `clsx` + `tailwind-merge` de shadcn, más los dos helpers de búsqueda que comparten `data-table` y `SelectBuscable` (sin acentos, todos los términos en cualquier orden). |
 | `libra-ui/iconos-accion` | ~60 componentes de icono (`Eye`, `Pencil`, `Trash2`, `FilePlus`…) | El **vocabulario de iconos de acción y estado** de la familia (`v0.18.0`). Vive acá y no copiado por producto porque la misma acción tiene que dibujarse igual en todos. **Requiere configuración en el consumidor — ver abajo.** |
@@ -114,6 +114,46 @@ Tres cosas que no son obvias:
 
 Los cinco productos que no pasan nada de esto renderizan exactamente igual que
 antes — misma regla que rige desde `v0.3.0`.
+
+## `SelectBuscable` adentro de un `<FormControl>` (`v0.25.0`)
+
+`FormControl` de shadcn es un `Slot.Root`: le pasa `id`, `aria-describedby` y
+`aria-invalid` **al hijo**, sin saber qué componente es. Un `<input>` o el
+`SelectTrigger` de Radix las reciben como atributos del DOM y funcionan solos.
+Un componente propio las recibe como props de React y, **si no las declara, se
+pierden sin ningún error**.
+
+Eso es lo que pasaba acá hasta la `v0.24.0`. El resultado no era sutil: adentro
+de un formulario, con su `<FormLabel>` puesto y visible en pantalla, el control
+quedaba **sin nombre accesible**. Un lector de pantalla anunciaba «botón, Todos
+los clientes» — el valor, nunca de qué campo.
+
+Desde la `v0.25.0` las tres van declaradas, así que esto anda sin agregar nada:
+
+```tsx
+<FormField control={form.control} name="cliente_id" render={({ field }) => (
+  <FormItem>
+    <FormLabel>Cliente (locatario)</FormLabel>
+    <FormControl>
+      {/* el id, el aria-describedby y el aria-invalid llegan solos */}
+      <SelectBuscable value={field.value} onChange={field.onChange} opciones={…} />
+    </FormControl>
+    <FormMessage />
+  </FormItem>
+)} />
+```
+
+Tres cosas que no son obvias:
+
+- **`ariaLabel` sigue siendo necesario fuera de un formulario.** Con un
+  `<Label>` suelto al lado no hay `htmlFor` que ate nada, y el rol `combobox`
+  **no se nombra por su contenido**. Ése es el uso mayoritario en los
+  consumidores y no cambia.
+- **Si están los dos, gana `ariaLabel`.** Lo dice el algoritmo de nombre
+  accesible. Los productos que ya lo pasan a mano no tienen que sacarlo para
+  actualizar.
+- **El `id` del desplegable es otro**, interno y con `useId()`. Si se lo pisara
+  con el del control, el `aria-controls` del botón apuntaría al botón mismo.
 
 ## Peer dependencies
 
