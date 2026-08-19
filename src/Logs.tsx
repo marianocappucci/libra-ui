@@ -6,7 +6,7 @@
 // `libraauth.auditoria.build_logs_router()`.
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import { api, ApiError } from './api-client'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -15,7 +15,11 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import {
-  ChevronDown, ChevronRight, KeyRound, LogIn, LogOut, ScrollText, ShieldAlert,
+  Tabs, TabsContent, TabsList, TabsTrigger,
+} from '@/components/ui/tabs'
+import {
+  Activity, ChevronDown, ChevronRight, KeyRound, LogIn, LogOut, ScrollText,
+  ShieldAlert,
 } from 'lucide-react'
 
 const TODOS = '__todos__'
@@ -99,9 +103,16 @@ function Cambios({ cambios }: { cambios: Record<string, [unknown, unknown]> }) {
 /**
  * Logs — admin-only, gateado también en el backend (`require_admin`).
  *
- * Dos tablas y no una: la actividad del sistema y los accesos son dos preguntas
- * distintas ("quién borró esto" / "quién entró"), se filtran distinto y se
- * miran en momentos distintos. Contalibra las muestra igual.
+ * **Dos pestañas y no dos tablas apiladas** (desde el 2026-08-19): la actividad
+ * del sistema y los accesos son dos preguntas distintas ("quién borró esto" /
+ * "quién entró"), se filtran distinto y se miran en momentos distintos.
+ * Apiladas, para llegar a los accesos había que scrollear las 100 filas de la
+ * página de actividad, así que la mitad de abajo se veía por accidente.
+ * Contalibra y Restolibra, que tienen su propia copia de esta pantalla, las
+ * muestran igual.
+ *
+ * Los filtros son de la actividad y por eso viven adentro de su pestaña: no
+ * aplican a los accesos, que llegan enteros en la misma respuesta.
  *
  * La actividad la escribe el `flush` de SQLAlchemy, así que **no hay nada que
  * activar por entidad**: lo que aparece acá es todo lo que el sistema escribió.
@@ -163,183 +174,193 @@ export function Logs({ basePath = '/logs' }: { basePath?: string } = {}) {
         <ScrollText className="size-5" />Logs
       </h2>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Actividad del sistema</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-3">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            {/* `htmlFor` + `id` en el trigger: sin eso el `Label` queda suelto
-                y un lector de pantalla anuncia el select sin nombre. */}
-            <div className="grid gap-2">
-              <Label htmlFor="filtro-entidad">Entidad</Label>
-              <Select value={entidad} onValueChange={filtrar(setEntidad)}>
-                <SelectTrigger id="filtro-entidad"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={TODOS}>Todas</SelectItem>
-                  {data.entidades.map((e) => (
-                    <SelectItem key={e} value={e}>{e.replace('_', ' ')}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="filtro-accion">Acción</Label>
-              <Select value={accion} onValueChange={filtrar(setAccion)}>
-                <SelectTrigger id="filtro-accion"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={TODOS}>Todas</SelectItem>
-                  {Object.entries(data.acciones).map(([id, meta]) => (
-                    <SelectItem key={id} value={id}>{meta.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="filtro-usuario">Usuario</Label>
-              <Select value={usuario} onValueChange={filtrar(setUsuario)}>
-                <SelectTrigger id="filtro-usuario"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={TODOS}>Todos</SelectItem>
-                  {data.usuarios.map((u) => (
-                    <SelectItem key={u} value={u}>{u}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="desde">Desde</Label>
-              <Input id="desde" type="date" value={desde}
-                onChange={(e) => filtrar(setDesde)(e.target.value)} />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="hasta">Hasta</Label>
-              <Input id="hasta" type="date" value={hasta}
-                onChange={(e) => filtrar(setHasta)(e.target.value)} />
-            </div>
-          </div>
-
-          <div className="overflow-x-auto rounded-md border">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
-                <tr>
-                  <th className="w-8 p-2" />
-                  <th className="p-2 font-medium">Fecha</th>
-                  <th className="p-2 font-medium">Acción</th>
-                  <th className="p-2 font-medium">Qué</th>
-                  <th className="p-2 font-medium">Usuario</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.actividad.length === 0 && (
-                  <tr><td colSpan={5} className="p-6 text-center text-muted-foreground">
-                    {data.total === 0 && entidad === TODOS && accion === TODOS && usuario === TODOS && !desde && !hasta
-                      ? 'Todavía no hay actividad registrada.'
-                      : 'No hay actividad con esos filtros.'}
-                  </td></tr>
-                )}
-                {data.actividad.map((fila: ActividadLog) => {
-                  const meta = data.acciones[fila.accion]
-                  const tieneCambios = fila.cambios !== null && Object.keys(fila.cambios).length > 0
-                  const desplegada = abierta === fila.id
-                  return (
-                    <Fragment key={fila.id}>
-                      <tr
-                        className={`border-t ${tieneCambios ? 'cursor-pointer hover:bg-muted/40' : ''}`}
-                        onClick={() => tieneCambios && setAbierta(desplegada ? null : fila.id)}
-                      >
-                        <td className="p-2 text-muted-foreground">
-                          {tieneCambios && (desplegada ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />)}
-                        </td>
-                        <td className="whitespace-nowrap p-2 text-muted-foreground" title={fila.ts}>
-                          {cuando(fila.ts)}
-                        </td>
-                        <td className="p-2">
-                          <Badge variant="outline" style={meta ? { borderColor: meta.color, color: meta.color } : undefined}>
-                            {meta?.label ?? fila.accion}
-                          </Badge>
-                        </td>
-                        <td className="p-2">
-                          {fila.descripcion}
-                          {fila.entidad_id !== null && (
-                            <span className="ml-1 text-xs text-muted-foreground">#{fila.entidad_id}</span>
-                          )}
-                        </td>
-                        <td className="whitespace-nowrap p-2">{fila.usuario}</td>
-                      </tr>
-                      {desplegada && fila.cambios && (
-                        <tr className="border-t bg-muted/20">
-                          <td />
-                          <td colSpan={4} className="p-2"><Cambios cambios={fila.cambios} /></td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {data.total_pages > 1 && (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">
-                Página {data.page} de {data.total_pages} · {data.total} registros
-              </span>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" disabled={data.page <= 1}
-                  onClick={() => { setPage((p) => p - 1); setAbierta(null) }}>Anterior</Button>
-                <Button variant="outline" size="sm" disabled={data.page >= data.total_pages}
-                  onClick={() => { setPage((p) => p + 1); setAbierta(null) }}>Siguiente</Button>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
+      <Tabs defaultValue="actividad" className="gap-4">
+        {/* El nombre de la pestaña ES el título de la sección: repetirlo en un
+            `CardHeader` adentro sería decir lo mismo dos veces a un renglón de
+            distancia. */}
+        <TabsList>
+          <TabsTrigger value="actividad">
+            <Activity className="size-4" />Actividad del sistema
+          </TabsTrigger>
+          <TabsTrigger value="accesos">
             <KeyRound className="size-4" />Accesos
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto rounded-md border">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
-                <tr>
-                  <th className="p-2 font-medium">Fecha</th>
-                  <th className="p-2 font-medium">Evento</th>
-                  <th className="p-2 font-medium">Usuario</th>
-                  <th className="p-2 font-medium">IP</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.accesos.length === 0 && (
-                  <tr><td colSpan={4} className="p-6 text-center text-muted-foreground">
-                    Todavía no hay accesos registrados.
-                  </td></tr>
-                )}
-                {data.accesos.map((a) => {
-                  const meta = EVENTO_META[a.evento]
-                  const Icono = meta?.icon ?? LogIn
-                  return (
-                    <tr key={a.id} className="border-t">
-                      <td className="whitespace-nowrap p-2 text-muted-foreground" title={a.ts}>{cuando(a.ts)}</td>
-                      <td className="p-2">
-                        <span className={`flex items-center gap-1.5 ${meta?.className ?? ''}`}>
-                          <Icono className="size-4" />{meta?.label ?? a.evento}
-                        </span>
-                      </td>
-                      <td className="p-2">{a.username}</td>
-                      <td className="p-2 font-mono text-xs text-muted-foreground">{a.ip || '—'}</td>
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="actividad">
+          <Card>
+            <CardContent className="grid gap-3">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                {/* `htmlFor` + `id` en el trigger: sin eso el `Label` queda suelto
+                    y un lector de pantalla anuncia el select sin nombre. */}
+                <div className="grid gap-2">
+                  <Label htmlFor="filtro-entidad">Entidad</Label>
+                  <Select value={entidad} onValueChange={filtrar(setEntidad)}>
+                    <SelectTrigger id="filtro-entidad"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={TODOS}>Todas</SelectItem>
+                      {data.entidades.map((e) => (
+                        <SelectItem key={e} value={e}>{e.replace('_', ' ')}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="filtro-accion">Acción</Label>
+                  <Select value={accion} onValueChange={filtrar(setAccion)}>
+                    <SelectTrigger id="filtro-accion"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={TODOS}>Todas</SelectItem>
+                      {Object.entries(data.acciones).map(([id, meta]) => (
+                        <SelectItem key={id} value={id}>{meta.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="filtro-usuario">Usuario</Label>
+                  <Select value={usuario} onValueChange={filtrar(setUsuario)}>
+                    <SelectTrigger id="filtro-usuario"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={TODOS}>Todos</SelectItem>
+                      {data.usuarios.map((u) => (
+                        <SelectItem key={u} value={u}>{u}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="desde">Desde</Label>
+                  <Input id="desde" type="date" value={desde}
+                    onChange={(e) => filtrar(setDesde)(e.target.value)} />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="hasta">Hasta</Label>
+                  <Input id="hasta" type="date" value={hasta}
+                    onChange={(e) => filtrar(setHasta)(e.target.value)} />
+                </div>
+              </div>
+
+              <div className="overflow-x-auto rounded-md border">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
+                    <tr>
+                      <th className="w-8 p-2" />
+                      <th className="p-2 font-medium">Fecha</th>
+                      <th className="p-2 font-medium">Acción</th>
+                      <th className="p-2 font-medium">Qué</th>
+                      <th className="p-2 font-medium">Usuario</th>
                     </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+                  </thead>
+                  <tbody>
+                    {data.actividad.length === 0 && (
+                      <tr><td colSpan={5} className="p-6 text-center text-muted-foreground">
+                        {data.total === 0 && entidad === TODOS && accion === TODOS && usuario === TODOS && !desde && !hasta
+                          ? 'Todavía no hay actividad registrada.'
+                          : 'No hay actividad con esos filtros.'}
+                      </td></tr>
+                    )}
+                    {data.actividad.map((fila: ActividadLog) => {
+                      const meta = data.acciones[fila.accion]
+                      const tieneCambios = fila.cambios !== null && Object.keys(fila.cambios).length > 0
+                      const desplegada = abierta === fila.id
+                      return (
+                        <Fragment key={fila.id}>
+                          <tr
+                            className={`border-t ${tieneCambios ? 'cursor-pointer hover:bg-muted/40' : ''}`}
+                            onClick={() => tieneCambios && setAbierta(desplegada ? null : fila.id)}
+                          >
+                            <td className="p-2 text-muted-foreground">
+                              {tieneCambios && (desplegada ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />)}
+                            </td>
+                            <td className="whitespace-nowrap p-2 text-muted-foreground" title={fila.ts}>
+                              {cuando(fila.ts)}
+                            </td>
+                            <td className="p-2">
+                              <Badge variant="outline" style={meta ? { borderColor: meta.color, color: meta.color } : undefined}>
+                                {meta?.label ?? fila.accion}
+                              </Badge>
+                            </td>
+                            <td className="p-2">
+                              {fila.descripcion}
+                              {fila.entidad_id !== null && (
+                                <span className="ml-1 text-xs text-muted-foreground">#{fila.entidad_id}</span>
+                              )}
+                            </td>
+                            <td className="whitespace-nowrap p-2">{fila.usuario}</td>
+                          </tr>
+                          {desplegada && fila.cambios && (
+                            <tr className="border-t bg-muted/20">
+                              <td />
+                              <td colSpan={4} className="p-2"><Cambios cambios={fila.cambios} /></td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {data.total_pages > 1 && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    Página {data.page} de {data.total_pages} · {data.total} registros
+                  </span>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" disabled={data.page <= 1}
+                      onClick={() => { setPage((p) => p - 1); setAbierta(null) }}>Anterior</Button>
+                    <Button variant="outline" size="sm" disabled={data.page >= data.total_pages}
+                      onClick={() => { setPage((p) => p + 1); setAbierta(null) }}>Siguiente</Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="accesos">
+          <Card>
+            <CardContent>
+              <div className="overflow-x-auto rounded-md border">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
+                    <tr>
+                      <th className="p-2 font-medium">Fecha</th>
+                      <th className="p-2 font-medium">Evento</th>
+                      <th className="p-2 font-medium">Usuario</th>
+                      <th className="p-2 font-medium">IP</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.accesos.length === 0 && (
+                      <tr><td colSpan={4} className="p-6 text-center text-muted-foreground">
+                        Todavía no hay accesos registrados.
+                      </td></tr>
+                    )}
+                    {data.accesos.map((a) => {
+                      const meta = EVENTO_META[a.evento]
+                      const Icono = meta?.icon ?? LogIn
+                      return (
+                        <tr key={a.id} className="border-t">
+                          <td className="whitespace-nowrap p-2 text-muted-foreground" title={a.ts}>{cuando(a.ts)}</td>
+                          <td className="p-2">
+                            <span className={`flex items-center gap-1.5 ${meta?.className ?? ''}`}>
+                              <Icono className="size-4" />{meta?.label ?? a.evento}
+                            </span>
+                          </td>
+                          <td className="p-2">{a.username}</td>
+                          <td className="p-2 font-mono text-xs text-muted-foreground">{a.ip || '—'}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
