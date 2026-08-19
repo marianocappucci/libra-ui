@@ -243,7 +243,31 @@ export function createLayout<TUser = { role?: string; name?: string }>({
                             </NavLink>
                           </SidebarMenuButton>
                           {user && item.badge && item.badge(user) != null && (
-                            <SidebarMenuBadge className="bg-destructive text-destructive-foreground">
+                            <SidebarMenuBadge
+                              // Ambar y no `bg-destructive`: el badge cuenta cosas que
+                              // llegaron y hay que mirar (pagos sin conciliar,
+                              // comprobantes a facturar), no errores.
+                              //
+                              // Y el rojo venia roto de legibilidad: lo acompanaba
+                              // `text-destructive-foreground`, que NO es una variable
+                              // del tema de ningun producto -- los `index.css` definen
+                              // `--destructive` a secas. La clase no se emite, pero
+                              // tailwind-merge igual la toma por clase de color y borra
+                              // el `text-sidebar-foreground` de la base, asi que el
+                              // numero terminaba heredando el color del sidebar: negro
+                              // sobre rojo, 4,15:1 medido en el navegador, debajo del
+                              // 4,5 que pide AA para 12 px.
+                              //
+                              // Los pares hover/activo se pisan a mano porque la base
+                              // reasigna el color a `text-sidebar-accent-foreground`
+                              // apenas el mouse toca el item.
+                              className={cn(
+                                'bg-amber-100 font-semibold text-amber-900',
+                                'peer-hover/menu-button:text-amber-900 peer-data-[active=true]/menu-button:text-amber-900',
+                                'dark:bg-amber-500/20 dark:text-amber-200',
+                                'dark:peer-hover/menu-button:text-amber-200 dark:peer-data-[active=true]/menu-button:text-amber-200',
+                              )}
+                            >
                               {item.badge(user)}
                             </SidebarMenuBadge>
                           )}
