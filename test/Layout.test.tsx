@@ -200,6 +200,26 @@ describe('secciones, hideFor y submenús', () => {
     // el de `null` no tiene que dejar un badge vacío colgado
     expect(screen.getByText('Cerrados')).toBeInTheDocument()
   })
+
+  it('el badge no pide un color de texto que ningún tema define', () => {
+    const Layout = createLayout<Usuario>({
+      productName: 'LibraDesk',
+      productInitial: 'L',
+      navItems: [{ to: '/pendientes', label: 'Pendientes', icon: Icono, badge: () => 106 }],
+      useAuth: () => ({ user: { role: 'admin' }, logout: vi.fn() }),
+    })
+    render(<MemoryRouter><Layout><p>contenido</p></Layout></MemoryRouter>)
+    const badge = screen.getByText('106')
+    // `--destructive-foreground` no existe en el `index.css` de ningún
+    // producto: la clase no se emite, tailwind-merge igual borra el
+    // `text-sidebar-foreground` de la base, y el número se queda sin color
+    // propio. Que no vuelva a entrar por copiar y pegar.
+    expect(badge.className).not.toMatch(/text-destructive-foreground/)
+    // Esto mira clases, no píxeles: prueba que el badge PIDE un color de
+    // texto explicito, no que el navegador lo pinte legible. El contraste se
+    // mide en el navegador contra el CSS compilado del producto.
+    expect(badge.className).toMatch(/text-amber-900/)
+  })
 })
 
 // ── La cabecera ───────────────────────────────────────────────────────────────
