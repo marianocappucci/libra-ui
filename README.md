@@ -62,7 +62,7 @@ fuente que no se desactualiza: `avatar`, `badge`, `button`, `card`,
 
 > Un primitivo nuevo en este paquete es un cambio que **rompe el build de
 > los consumidores que no lo tengan**, y no lo avisa nadie hasta el
-> `npm run build` de cada uno. `tabs` entro en la v0.29.0 (las pestanas de
+> `npm run build` de cada uno. `tabs` entro en la v0.30.0 (las pestanas de
 > `Logs`) y hubo que agregarlo a Gestiolibra y a VentaLibra en el mismo
 > movimiento; LibraDesk y MedLibra ya lo tenian. Al sumar uno, revisar los
 > consumidores ANTES de publicar el tag.
