@@ -53,10 +53,19 @@ aplica `resolve.alias` a todo lo que procesa, incluido código que vive en
 `node_modules`.
 
 Cada consumidor necesita, como prerrequisito, tener instalados los mismos
-primitivos de shadcn que usan estos componentes: `card`, `button`,
-`input`, `label`, `badge`, `select`, `table`, `sidebar`, `separator`,
-`avatar`. Los tres ya los tienen (mismo stack normalizado, ver
+primitivos de shadcn que usan estos componentes. La lista sale de un
+`grep -rho "@/components/ui/[a-z-]*" src | sort -u`, que es la unica
+fuente que no se desactualiza: `avatar`, `badge`, `button`, `card`,
+`dialog`, `dropdown-menu`, `input`, `label`, `select`, `sidebar`,
+`table` y `tabs` (mismo stack normalizado, ver
 `wiki/concepts/estandares-desarrollo.md`).
+
+> Un primitivo nuevo en este paquete es un cambio que **rompe el build de
+> los consumidores que no lo tengan**, y no lo avisa nadie hasta el
+> `npm run build` de cada uno. `tabs` entro en la v0.29.0 (las pestanas de
+> `Logs`) y hubo que agregarlo a Gestiolibra y a VentaLibra en el mismo
+> movimiento; LibraDesk y MedLibra ya lo tenian. Al sumar uno, revisar los
+> consumidores ANTES de publicar el tag.
 
 También hace falta un `@source` en el CSS de Tailwind de cada consumidor
 para que el motor de Tailwind v4 escanee las clases usadas dentro de

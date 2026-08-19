@@ -13,6 +13,11 @@
 //    resultado que ahora tiene 2 muestra una tabla vacía que parece un error.
 // 4. **El diff se ve al desplegar.** Sin el antes/después, "editado" no dice
 //    qué se editó, que es la mitad del valor de la pantalla.
+// 5. **Las dos mitades son dos pestañas.** Desde el 2026-08-19 los accesos no
+//    van debajo de la actividad sino en su propia pestaña, y la pestaña que no
+//    está activa no está en el DOM: un test que busque un acceso sin cambiar
+//    de pestaña no lo encuentra, y eso es lo correcto — es lo mismo que le
+//    pasa a quien mira la pantalla.
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -68,6 +73,11 @@ beforeEach(() => {
 
 async function esperarCarga() {
   await waitFor(() => expect(screen.getByText('Cliente — Compulibra')).toBeInTheDocument())
+}
+
+// La actividad es la pestaña por defecto; los accesos hay que ir a buscarlos.
+async function irAAccesos() {
+  await userEvent.click(screen.getByRole('tab', { name: /Accesos/ }))
 }
 
 // El stub de shadcn no propaga el `id` del trigger al `<select>` nativo, así
@@ -293,6 +303,7 @@ describe('Logs — estados de la pantalla', () => {
     })
     render(<Logs />)
     await esperarCarga()
+    await irAAccesos()
 
     const tablaAccesos = screen.getAllByRole('table').at(-1)!
     expect(within(tablaAccesos).getByText('password_reset')).toBeInTheDocument()
@@ -303,6 +314,7 @@ describe('Logs — estados de la pantalla', () => {
     responder({ accesos: [] })
     render(<Logs />)
     await esperarCarga()
+    await irAAccesos()
     expect(screen.getByText('Todavía no hay accesos registrados.')).toBeInTheDocument()
   })
 })
@@ -311,6 +323,7 @@ describe('Logs — accesos', () => {
   it('el intento fallido se distingue del ingreso', async () => {
     render(<Logs />)
     await esperarCarga()
+    await irAAccesos()
 
     expect(screen.getByText('Ingreso')).toBeInTheDocument()
     expect(screen.getByText('Intento fallido')).toBeInTheDocument()
@@ -320,8 +333,46 @@ describe('Logs — accesos', () => {
   it('muestra la IP, que es el dato por el que se mira esta tabla', async () => {
     render(<Logs />)
     await esperarCarga()
+    await irAAccesos()
 
     const tablaAccesos = screen.getAllByRole('table').at(-1)!
     expect(within(tablaAccesos).getByText('203.0.113.7')).toBeInTheDocument()
+  })
+})
+
+describe('Logs — las dos mitades no comparten pantalla', () => {
+  it('la actividad es la pestaña por defecto y los accesos no están debajo', async () => {
+    render(<Logs />)
+    await esperarCarga()
+
+    // El acceso viene en la MISMA respuesta que ya se rendeó y aun así no está
+    // en el DOM. Ese es el control que distingue una pestaña de dos tablas
+    // apiladas: sin él, el test pasaría igual con el diseño viejo.
+    expect(screen.queryByText('fantasma')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('table')).toHaveLength(1)
+  })
+
+  it('al ir a accesos la actividad deja de estar, y sus filtros también', async () => {
+    render(<Logs />)
+    await esperarCarga()
+    await irAAccesos()
+
+    expect(screen.getByText('fantasma')).toBeInTheDocument()
+    expect(screen.queryByText('Cliente — Compulibra')).not.toBeInTheDocument()
+    // Los filtros son de la actividad: no aplican a los accesos y por eso
+    // viven adentro de esa pestaña, no arriba de las dos.
+    expect(screen.queryByLabelText('Desde')).not.toBeInTheDocument()
+  })
+
+  it('se vuelve a la actividad sin recargar', async () => {
+    render(<Logs />)
+    await esperarCarga()
+    urls = []
+    await irAAccesos()
+    await userEvent.click(screen.getByRole('tab', { name: /Actividad/ }))
+
+    expect(screen.getByText('Cliente — Compulibra')).toBeInTheDocument()
+    // Cambiar de pestaña no vuelve a pedir: las dos mitades llegan juntas.
+    expect(urls).toHaveLength(0)
   })
 })
