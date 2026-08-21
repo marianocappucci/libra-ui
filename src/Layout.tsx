@@ -377,7 +377,26 @@ export function createLayout<TUser = { role?: string; name?: string }>({
     return (
       <SidebarProvider>
         <AppSidebar />
-        <SidebarInset>
+        {/* 🔴 `min-w-0` NO es decorativo: sin el, el contenido ancho empuja el
+            layout entero en vez de scrollear adentro de su contenedor.
+
+            `SidebarInset` es un item de un flex row, y por lo tanto tiene
+            `min-width: auto`, o sea que no puede encogerse por debajo del
+            min-content de lo que lleva adentro. Cuando ese min-content supera
+            el espacio disponible, el inset se queda con el ancho COMPLETO del
+            wrapper y se suma al hueco de 256px de la sidebar: el `<body>`
+            termina con 256px de scroll horizontal.
+
+            Medido en `dev.libraclub.com.ar` el 2026-08-20, sobre la agenda
+            semanal: inset 1105 sobre una ventana de 1105 y 256px de exceso;
+            poniendole `min-width:0` en vivo, el inset pasa a 849 y el exceso a
+            CERO, con la grilla ancha scrolleando adentro de su
+            `overflow-x-auto` como corresponde.
+
+            El `<main>` de abajo ya tenia su propio `min-w-0` por esta misma
+            razon; faltaba el de este nivel. Le pasa a los seis productos, no
+            solo al que lo destapo — cualquier pantalla con contenido ancho. */}
+        <SidebarInset className="min-w-0">
           {/* Unico resto de la barra vieja: en mobile la sidebar arranca
               cerrada y sin esto no hay como abrirla. En desktop no hace falta
               -- la sidebar esta a la vista y Ctrl/Cmd+B la colapsa. */}

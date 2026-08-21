@@ -383,3 +383,22 @@ describe('el menú del usuario', () => {
     expect(screen.getByRole('link', { name: /Mi cuenta/ })).toHaveAttribute('href', '/mi-cuenta')
   })
 })
+
+// El inset tiene que poder encogerse: sin eso, una pantalla con contenido ancho
+// no scrollea adentro de su contenedor, empuja el layout entero y el `<body>`
+// termina con scroll horizontal.
+//
+// 🟡 **Este test NO prueba el layout, y hay que saberlo.** jsdom no calcula
+// anchos: lo único que fija es que la clase siga puesta. La prueba de verdad se
+// hizo en un navegador —`dev.libraclub.com.ar`, 2026-08-20, agenda semanal—:
+// con `min-width:auto` el inset medía 1105 sobre una ventana de 1105 y sobraban
+// 256px; con `min-width:0` pasó a 849 y el exceso a cero. Si alguna vez esto
+// falla, el camino es volver a medirlo así, no discutir la clase.
+describe('el inset se puede encoger', () => {
+  it('lleva min-w-0, que es lo que deja scrollear al contenido ancho', () => {
+    montar({ role: 'admin', name: 'Ana' })
+    const inset = document.querySelector('[data-slot="sidebar-inset"], main')
+    expect(inset).toBeTruthy()
+    expect(inset!.className).toContain('min-w-0')
+  })
+})
