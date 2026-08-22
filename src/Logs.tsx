@@ -4,9 +4,49 @@
 // colores de cada acción** — no hay nada del dominio de un producto acá
 // adentro. El backend que la alimenta es
 // `libraauth.auditoria.build_logs_router()`.
-import { Fragment, useCallback, useEffect, useState } from 'react'
+//
+// ## 2026-08-22 — la consola queda normalizada contra la de Contalibra
+//
+// Había dos consolas de Logs en la familia: ésta (LibraDesk, MedLibra,
+// Gestiolibra, VentaLibra, LibraClub) y la copia propia de Contalibra y
+// Restolibra, que alimenta otro backend. Se veían distinto en todo: la fecha,
+// el paginador, los filtros, los estados vacíos y la mitad de los accesos.
+//
+// **La referencia visual es la de Contalibra** y las directrices que se
+// adoptan acá son cinco:
+//
+// 1. **La actividad se agrupa por día**, con un separador que dice la fecha una
+//    vez, y la fila pasa a mostrar sólo la hora. Antes cada fila repetía
+//    `05-08 14:32`: la fecha cien veces por página para leer, en realidad, la
+//    hora.
+// 2. **La acción se filtra con las píldoras de color**, no con un `select`.
+//    El backend ya manda `{label, color}` por acción — el color estaba
+//    dibujado en el badge de cada fila pero no se podía usar para filtrar.
+// 3. **El paginador dice cuánto se está viendo** ("Mostrando 100 de 2.480") y
+//    navega con flechas, en vez de dos botones que no dicen dónde estás.
+// 4. **Los estados vacíos son un icono y una frase centrados**, no una celda
+//    de tabla con texto.
+// 5. **Los accesos son una lista, no una tabla.** Son cuatro datos por
+//    renglón; una tabla con encabezados para eso es andamiaje de más.
+//
+// Lo que NO se copió de Contalibra, y por qué:
+//
+// - **El botón "Exportar CSV".** `build_logs_router()` no tiene endpoint de
+//   exportación: el botón daría 404 en los cinco productos. Es una pantalla
+//   distinta de la que se puede hacer acá.
+// - **El filtro multi-valor.** Las píldoras de Contalibra seleccionan varios
+//   tipos a la vez; acá el router recibe `accion: str = ""` (un solo valor).
+//   Las píldoras filtran de a una —tocar la activa vuelve a "todas"—, que es
+//   lo que el backend sabe contestar. Hacerlo multi-valor es un cambio de
+//   libraauth y de sus cinco consumidores, no de esta pantalla.
+//
+// Y lo que se conserva de acá y Contalibra no tiene: **la fila desplegable con
+// el antes/después**. Es lo que hace que "editado" diga qué se editó. El log
+// de Contalibra es una línea de tiempo de ventas, caja y stock, sin diff campo
+// por campo: allá el acordeón se abriría vacío, así que no se le puso.
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { api, ApiError } from './api-client'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -18,9 +58,10 @@ import {
   Tabs, TabsContent, TabsList, TabsTrigger,
 } from '@/components/ui/tabs'
 import {
-  Activity, ChevronDown, ChevronRight, KeyRound, LogIn, LogOut, ShieldAlert,
+  BookText, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Inbox, LogIn,
+  LogOut, Shield, ShieldAlert,
 } from 'lucide-react'
-import type { ComponentType } from 'react'
+import type { ComponentType, ReactNode } from 'react'
 import { TituloPantalla } from './titulo-pantalla'
 
 const TODOS = '__todos__'
@@ -58,23 +99,30 @@ export type LogsData = {
   accesos: AccesoLog[]
 }
 
+/** Badge lleno y no icono suelto, igual que Contalibra: el evento de acceso es
+ *  una etiqueta ("qué pasó"), y en una lista sin columnas un icono a secas se
+ *  pierde entre el nombre de usuario y la IP. */
 const EVENTO_META: Record<string, { label: string; icon: typeof LogIn; className: string }> = {
-  login: { label: 'Ingreso', icon: LogIn, className: 'text-emerald-600' },
-  logout: { label: 'Salida', icon: LogOut, className: 'text-muted-foreground' },
-  login_fallido: { label: 'Intento fallido', icon: ShieldAlert, className: 'text-destructive' },
+  login: { label: 'Ingreso', icon: LogIn, className: 'bg-emerald-600 text-white hover:bg-emerald-600' },
+  logout: { label: 'Salida', icon: LogOut, className: 'bg-muted-foreground text-white hover:bg-muted-foreground' },
+  login_fallido: { label: 'Intento fallido', icon: ShieldAlert, className: 'bg-destructive text-white hover:bg-destructive' },
 }
 
-/** `2026-08-05 14:32:10` → `05-08 14:32`. La fecha completa queda en el title:
- *  la tabla se lee de arriba hacia abajo y el año repetido 100 veces es ruido.
+/** `2026-08-05 14:32:10` → `["05-08-2026", "14:32:10"]`.
  *
- *  El separador es el GUION desde el 2026-08-12: el formato visible del
- *  ecosistema es `dd-mm-aaaa`, y este componente lo consumen los seis
- *  productos. */
-function cuando(ts: string): string {
-  const [fecha, hora] = ts.split(' ')
-  if (!fecha || !hora) return ts
-  const [, mes, dia] = fecha.split('-')
-  return `${dia}-${mes} ${hora.slice(0, 5)}`
+ *  Un `ts` que no tenga esa forma se devuelve entero como fecha y sin hora, en
+ *  vez de recortarse a ciegas: `slice(11, 19)` sobre un texto corto devuelve
+ *  la cadena vacía, que en pantalla es una celda en blanco que parece un dato
+ *  faltante en vez de un formato inesperado.
+ *
+ *  El separador es el GUION: el formato visible del ecosistema es
+ *  `dd-mm-aaaa`, y este componente lo consumen los seis productos. */
+const FORMA_TS = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}:\d{2}:\d{2})/
+
+function partirTs(ts: string): { fecha: string; hora: string } {
+  const m = FORMA_TS.exec(ts)
+  if (!m) return { fecha: ts, hora: '—' }
+  return { fecha: `${m[3]}-${m[2]}-${m[1]}`, hora: m[4] }
 }
 
 function valor(v: unknown): string {
@@ -98,6 +146,20 @@ function Cambios({ cambios }: { cambios: Record<string, [unknown, unknown]> }) {
         ))}
       </tbody>
     </table>
+  )
+}
+
+/** El estado vacío de las dos pestañas: un icono y una frase, centrados.
+ *  Directriz de Contalibra — una celda de tabla con texto adentro se lee como
+ *  una fila más, y lo que hay que comunicar es que no hay filas. */
+function SinDatos({ icono: Icono, children }: {
+  icono: ComponentType<{ className?: string }>
+  children: ReactNode
+}) {
+  return (
+    <p className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted-foreground">
+      <Icono className="size-6" />{children}
+    </p>
   )
 }
 
@@ -165,6 +227,33 @@ export function Logs({ basePath = '/logs', icono }: {
     return (v: string) => { set(v); setPage(1); setAbierta(null) }
   }
 
+  function limpiarFiltros() {
+    setPage(1)
+    setAbierta(null)
+    setEntidad(TODOS)
+    setAccion(TODOS)
+    setUsuario(TODOS)
+    setDesde('')
+    setHasta('')
+  }
+
+  // Un grupo por día, en el orden en que vienen las filas. El backend las manda
+  // ordenadas por `ts` descendente, así que basta con cortar cuando cambia la
+  // fecha: agrupar con un `Map` reordenaría los días si alguna vez dejaran de
+  // venir contiguos, que es peor que mostrar dos grupos con la misma fecha.
+  const grupos = useMemo(() => {
+    const out: { fecha: string; filas: ActividadLog[] }[] = []
+    for (const fila of data?.actividad ?? []) {
+      const { fecha } = partirTs(fila.ts)
+      const ultimo = out[out.length - 1]
+      if (ultimo && ultimo.fecha === fecha) ultimo.filas.push(fila)
+      else out.push({ fecha, filas: [fila] })
+    }
+    return out
+  }, [data])
+
+  const sinFiltros = entidad === TODOS && accion === TODOS && usuario === TODOS && !desde && !hasta
+
   if (loading && !data) {
     return <p className="py-6 text-center text-sm text-muted-foreground">Cargando…</p>
   }
@@ -177,29 +266,58 @@ export function Logs({ basePath = '/logs', icono }: {
     <div className="grid gap-4">
       <TituloPantalla icono={icono}>Logs</TituloPantalla>
 
+      {error && <p className="text-sm text-destructive">{error}</p>}
+
       <Tabs defaultValue="actividad" className="gap-4">
         {/* El nombre de la pestaña ES el título de la sección: repetirlo en un
             `CardHeader` adentro sería decir lo mismo dos veces a un renglón de
-            distancia. */}
+            distancia. Los rótulos y los iconos son los de Contalibra. */}
         <TabsList>
           <TabsTrigger value="actividad">
-            <Activity className="size-4" />Actividad del sistema
+            <BookText className="size-4" />Actividad del sistema
           </TabsTrigger>
           <TabsTrigger value="accesos">
-            <KeyRound className="size-4" />Accesos
+            <Shield className="size-4" />Accesos de usuarios
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="actividad">
+        <TabsContent value="actividad" className="grid gap-4">
           <Card>
-            <CardContent className="grid gap-3">
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <CardContent className="grid gap-4">
+              {/* Las píldoras de acción: el color lo manda el backend, es el
+                  mismo con el que se pinta el badge de cada fila. La que no
+                  está elegida baja a 0.4 de opacidad — sin nada elegido están
+                  todas enteras, que es el estado "todas". */}
+              <div className="grid gap-2">
+                <Label>Acción</Label>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(data.acciones).map(([id, meta]) => {
+                    const elegida = accion === TODOS || accion === id
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        aria-pressed={accion === id}
+                        onClick={() => filtrar(setAccion)(accion === id ? TODOS : id)}
+                        className="rounded-full transition-opacity"
+                        style={{ opacity: elegida ? 1 : 0.4 }}
+                      >
+                        <Badge style={{ backgroundColor: meta.color }} className="cursor-pointer gap-1 text-white hover:opacity-90">
+                          {meta.label}
+                        </Badge>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-end gap-3">
                 {/* `htmlFor` + `id` en el trigger: sin eso el `Label` queda suelto
                     y un lector de pantalla anuncia el select sin nombre. */}
                 <div className="grid gap-2">
                   <Label htmlFor="filtro-entidad">Entidad</Label>
                   <Select value={entidad} onValueChange={filtrar(setEntidad)}>
-                    <SelectTrigger id="filtro-entidad"><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="filtro-entidad" className="w-48"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value={TODOS}>Todas</SelectItem>
                       {data.entidades.map((e) => (
@@ -209,21 +327,9 @@ export function Logs({ basePath = '/logs', icono }: {
                   </Select>
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="filtro-accion">Acción</Label>
-                  <Select value={accion} onValueChange={filtrar(setAccion)}>
-                    <SelectTrigger id="filtro-accion"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={TODOS}>Todas</SelectItem>
-                      {Object.entries(data.acciones).map(([id, meta]) => (
-                        <SelectItem key={id} value={id}>{meta.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-2">
                   <Label htmlFor="filtro-usuario">Usuario</Label>
                   <Select value={usuario} onValueChange={filtrar(setUsuario)}>
-                    <SelectTrigger id="filtro-usuario"><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="filtro-usuario" className="w-48"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value={TODOS}>Todos</SelectItem>
                       {data.usuarios.map((u) => (
@@ -234,88 +340,120 @@ export function Logs({ basePath = '/logs', icono }: {
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="desde">Desde</Label>
-                  <Input id="desde" type="date" value={desde}
+                  <Input id="desde" type="date" className="w-40" value={desde}
                     onChange={(e) => filtrar(setDesde)(e.target.value)} />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="hasta">Hasta</Label>
-                  <Input id="hasta" type="date" value={hasta}
+                  <Input id="hasta" type="date" className="w-40" value={hasta}
                     onChange={(e) => filtrar(setHasta)(e.target.value)} />
                 </div>
+                <Button size="sm" variant="outline" onClick={limpiarFiltros}>Limpiar</Button>
               </div>
+            </CardContent>
+          </Card>
 
-              <div className="overflow-x-auto rounded-md border">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
-                    <tr>
-                      <th className="w-8 p-2" />
-                      <th className="p-2 font-medium">Fecha</th>
-                      <th className="p-2 font-medium">Acción</th>
-                      <th className="p-2 font-medium">Qué</th>
-                      <th className="p-2 font-medium">Usuario</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.actividad.length === 0 && (
-                      <tr><td colSpan={5} className="p-6 text-center text-muted-foreground">
-                        {data.total === 0 && entidad === TODOS && accion === TODOS && usuario === TODOS && !desde && !hasta
-                          ? 'Todavía no hay actividad registrada.'
-                          : 'No hay actividad con esos filtros.'}
-                      </td></tr>
-                    )}
-                    {data.actividad.map((fila: ActividadLog) => {
-                      const meta = data.acciones[fila.accion]
-                      const tieneCambios = fila.cambios !== null && Object.keys(fila.cambios).length > 0
-                      const desplegada = abierta === fila.id
-                      return (
-                        <Fragment key={fila.id}>
-                          <tr
-                            className={`border-t ${tieneCambios ? 'cursor-pointer hover:bg-muted/40' : ''}`}
-                            onClick={() => tieneCambios && setAbierta(desplegada ? null : fila.id)}
-                          >
-                            <td className="p-2 text-muted-foreground">
-                              {tieneCambios && (desplegada ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />)}
+          {/* Cuánto se está viendo y de cuánto, arriba de la tabla: la
+              directriz de Contalibra es que el paginador diga dónde estás, no
+              sólo cómo moverte. Va siempre, aunque haya una sola página — con
+              una sola página lo que informa es el total. */}
+          <div className="flex items-center justify-between px-1 text-sm text-muted-foreground">
+            <span>
+              Mostrando <strong className="text-foreground">{data.actividad.length}</strong>
+              {' '}de <strong className="text-foreground">{data.total}</strong> registros
+            </span>
+            <div className="flex items-center gap-2">
+              {/* `aria-label` y no sólo el icono: un botón cuyo único contenido
+                  es un `svg` no tiene nombre accesible, y el paginador de una
+                  pantalla de admin es de lo primero que se navega por teclado. */}
+              <Button size="icon" variant="outline" className="size-7" aria-label="Anterior"
+                disabled={data.page <= 1}
+                onClick={() => { setPage((p) => p - 1); setAbierta(null) }}><ChevronLeft /></Button>
+              <span>Pág {data.page} / {data.total_pages}</span>
+              <Button size="icon" variant="outline" className="size-7" aria-label="Siguiente"
+                disabled={data.page >= data.total_pages}
+                onClick={() => { setPage((p) => p + 1); setAbierta(null) }}><ChevronRight /></Button>
+            </div>
+          </div>
+
+          <Card>
+            <CardContent className="p-0">
+              {data.actividad.length === 0 ? (
+                <SinDatos icono={Inbox}>
+                  {sinFiltros
+                    ? 'Todavía no hay actividad registrada.'
+                    : 'No hay actividad con esos filtros.'}
+                </SinDatos>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="border-b text-muted-foreground">
+                      <tr>
+                        <th className="w-8 p-3" />
+                        <th className="w-24 p-3 text-left font-medium">Hora</th>
+                        <th className="w-32 p-3 text-left font-medium">Acción</th>
+                        <th className="p-3 text-left font-medium">Qué</th>
+                        <th className="w-40 p-3 text-left font-medium">Usuario</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {grupos.map((g) => (
+                        <Fragment key={g.fecha}>
+                          <tr className="bg-muted/50">
+                            <td colSpan={5} className="px-3 py-1.5">
+                              <span className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+                                <CalendarDays className="size-3.5" />{g.fecha}
+                              </span>
                             </td>
-                            <td className="whitespace-nowrap p-2 text-muted-foreground" title={fila.ts}>
-                              {cuando(fila.ts)}
-                            </td>
-                            <td className="p-2">
-                              <Badge variant="outline" style={meta ? { borderColor: meta.color, color: meta.color } : undefined}>
-                                {meta?.label ?? fila.accion}
-                              </Badge>
-                            </td>
-                            <td className="p-2">
-                              {fila.descripcion}
-                              {fila.entidad_id !== null && (
-                                <span className="ml-1 text-xs text-muted-foreground">#{fila.entidad_id}</span>
-                              )}
-                            </td>
-                            <td className="whitespace-nowrap p-2">{fila.usuario}</td>
                           </tr>
-                          {desplegada && fila.cambios && (
-                            <tr className="border-t bg-muted/20">
-                              <td />
-                              <td colSpan={4} className="p-2"><Cambios cambios={fila.cambios} /></td>
-                            </tr>
-                          )}
+                          {g.filas.map((fila) => {
+                            const meta = data.acciones[fila.accion]
+                            const tieneCambios = fila.cambios !== null && Object.keys(fila.cambios).length > 0
+                            const desplegada = abierta === fila.id
+                            return (
+                              <Fragment key={fila.id}>
+                                <tr
+                                  className={`border-b last:border-0 ${tieneCambios ? 'cursor-pointer hover:bg-muted/30' : ''}`}
+                                  onClick={() => tieneCambios && setAbierta(desplegada ? null : fila.id)}
+                                >
+                                  <td className="p-3 text-muted-foreground">
+                                    {tieneCambios && (
+                                      <ChevronDown
+                                        className={`size-4 transition-transform ${desplegada ? '' : '-rotate-90'}`}
+                                      />
+                                    )}
+                                  </td>
+                                  <td className="whitespace-nowrap p-3 font-mono text-xs text-muted-foreground" title={fila.ts}>
+                                    {partirTs(fila.ts).hora}
+                                  </td>
+                                  <td className="p-3">
+                                    <Badge style={meta ? { backgroundColor: meta.color } : undefined}
+                                      className={meta ? 'text-white' : undefined}
+                                      variant={meta ? undefined : 'outline'}>
+                                      {meta?.label ?? fila.accion}
+                                    </Badge>
+                                  </td>
+                                  <td className="p-3">
+                                    {fila.descripcion}
+                                    {fila.entidad_id !== null && (
+                                      <span className="ml-1 text-xs text-muted-foreground">#{fila.entidad_id}</span>
+                                    )}
+                                  </td>
+                                  <td className="whitespace-nowrap p-3">{fila.usuario}</td>
+                                </tr>
+                                {desplegada && fila.cambios && (
+                                  <tr className="border-b bg-muted/20 last:border-0">
+                                    <td />
+                                    <td colSpan={4} className="p-3"><Cambios cambios={fila.cambios} /></td>
+                                  </tr>
+                                )}
+                              </Fragment>
+                            )
+                          })}
                         </Fragment>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {data.total_pages > 1 && (
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">
-                    Página {data.page} de {data.total_pages} · {data.total} registros
-                  </span>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" disabled={data.page <= 1}
-                      onClick={() => { setPage((p) => p - 1); setAbierta(null) }}>Anterior</Button>
-                    <Button variant="outline" size="sm" disabled={data.page >= data.total_pages}
-                      onClick={() => { setPage((p) => p + 1); setAbierta(null) }}>Siguiente</Button>
-                  </div>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </CardContent>
@@ -324,42 +462,36 @@ export function Logs({ basePath = '/logs', icono }: {
 
         <TabsContent value="accesos">
           <Card>
-            <CardContent>
-              <div className="overflow-x-auto rounded-md border">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
-                    <tr>
-                      <th className="p-2 font-medium">Fecha</th>
-                      <th className="p-2 font-medium">Evento</th>
-                      <th className="p-2 font-medium">Usuario</th>
-                      <th className="p-2 font-medium">IP</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.accesos.length === 0 && (
-                      <tr><td colSpan={4} className="p-6 text-center text-muted-foreground">
-                        Todavía no hay accesos registrados.
-                      </td></tr>
-                    )}
-                    {data.accesos.map((a) => {
-                      const meta = EVENTO_META[a.evento]
-                      const Icono = meta?.icon ?? LogIn
-                      return (
-                        <tr key={a.id} className="border-t">
-                          <td className="whitespace-nowrap p-2 text-muted-foreground" title={a.ts}>{cuando(a.ts)}</td>
-                          <td className="p-2">
-                            <span className={`flex items-center gap-1.5 ${meta?.className ?? ''}`}>
-                              <Icono className="size-4" />{meta?.label ?? a.evento}
-                            </span>
-                          </td>
-                          <td className="p-2">{a.username}</td>
-                          <td className="p-2 font-mono text-xs text-muted-foreground">{a.ip || '—'}</td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
+            {/* Sin título: lo dice la pestaña. Lo que no dice la pestaña es
+                hasta dónde llega la lista, y eso sí va. */}
+            <CardHeader className="flex items-center justify-end space-y-0">
+              <span className="text-xs text-muted-foreground">Últimos 100 eventos</span>
+            </CardHeader>
+            <CardContent className="p-0">
+              {data.accesos.length === 0 ? (
+                <SinDatos icono={Shield}>Todavía no hay accesos registrados.</SinDatos>
+              ) : (
+                <ul className="divide-y">
+                  {data.accesos.map((a) => {
+                    const meta = EVENTO_META[a.evento]
+                    const Icono = meta?.icon ?? Shield
+                    const { fecha, hora } = partirTs(a.ts)
+                    return (
+                      <li key={a.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2 text-sm">
+                        <div className="flex items-center gap-3">
+                          <Badge className={`gap-1 ${meta?.className ?? ''}`}>
+                            <Icono className="size-3.5" />{meta?.label ?? a.evento}
+                          </Badge>
+                          <span className="font-medium">{a.username}</span>
+                        </div>
+                        <span className="font-mono text-xs text-muted-foreground">
+                          {a.ip || '—'} · {hora === '—' ? fecha : `${fecha} ${hora}`}
+                        </span>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
