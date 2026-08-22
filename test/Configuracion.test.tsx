@@ -23,6 +23,10 @@ import {
   createConfiguracion,
 } from '../src/Configuracion'
 
+function IconoFalso({ className }: { className?: string }) {
+  return <svg data-testid="icono" className={className} />
+}
+
 const EMPRESA = {
   empresa_nombre: 'Ferretería Suipacha', empresa_direccion: 'Suipacha 123',
   empresa_cuit: '20-12345678-9', empresa_telefono: '', empresa_email: '',
@@ -80,6 +84,7 @@ beforeEach(() => {
 describe('🔴 El "según corresponda"', () => {
   it('sólo muestra las secciones que el producto declaró', async () => {
     const Configuracion = createConfiguracion({
+      icono: IconoFalso,
       secciones: [
         ...SECCIONES_BASE,
         { clave: 'balanza', label: 'Balanza', contenido: <p>balanza acá</p> },
@@ -97,6 +102,7 @@ describe('🔴 El "según corresponda"', () => {
 
   it('un producto que factura sí declara ARCA', async () => {
     const Configuracion = createConfiguracion({
+      icono: IconoFalso,
       secciones: [...SECCIONES_BASE, SECCION_ARCA],
     })
     montar(<Configuracion />)
@@ -105,14 +111,14 @@ describe('🔴 El "según corresponda"', () => {
   })
 
   it('sin ninguna sección es un error de programación, no una pantalla vacía', () => {
-    expect(() => createConfiguracion({ secciones: [] })).toThrow(/al menos una/)
+    expect(() => createConfiguracion({ secciones: [], icono: IconoFalso })).toThrow(/al menos una/)
   })
 })
 
 
 describe('La sección activa', () => {
   it('arranca en la primera', async () => {
-    const Configuracion = createConfiguracion({ secciones: SECCIONES_BASE })
+    const Configuracion = createConfiguracion({ secciones: SECCIONES_BASE, icono: IconoFalso })
     montar(<Configuracion />)
 
     expect(await screen.findByRole('button', { name: /Empresa/ }))
@@ -120,7 +126,7 @@ describe('La sección activa', () => {
   })
 
   it('sale de la URL, así se puede linkear', async () => {
-    const Configuracion = createConfiguracion({ secciones: SECCIONES_BASE })
+    const Configuracion = createConfiguracion({ secciones: SECCIONES_BASE, icono: IconoFalso })
     montar(<Configuracion />, '/configuracion?seccion=datos')
 
     expect(await screen.findByRole('button', { name: /Datos \/ Backup/ }))
@@ -129,7 +135,7 @@ describe('La sección activa', () => {
   })
 
   it('una sección inventada en la URL cae en la primera y no rompe', async () => {
-    const Configuracion = createConfiguracion({ secciones: SECCIONES_BASE })
+    const Configuracion = createConfiguracion({ secciones: SECCIONES_BASE, icono: IconoFalso })
     montar(<Configuracion />, '/configuracion?seccion=no-existe')
 
     expect(await screen.findByRole('button', { name: /Empresa/ }))
@@ -137,7 +143,7 @@ describe('La sección activa', () => {
   })
 
   it('cambiar de sección la escribe en la URL', async () => {
-    const Configuracion = createConfiguracion({ secciones: SECCIONES_BASE })
+    const Configuracion = createConfiguracion({ secciones: SECCIONES_BASE, icono: IconoFalso })
     montar(<Configuracion />)
     const usuario = userEvent.setup()
 
@@ -147,7 +153,7 @@ describe('La sección activa', () => {
   })
 
   it('sólo se renderiza el contenido de la activa', async () => {
-    const Configuracion = createConfiguracion({ secciones: SECCIONES_BASE })
+    const Configuracion = createConfiguracion({ secciones: SECCIONES_BASE, icono: IconoFalso })
     montar(<Configuracion />)
 
     await screen.findByText(/Datos de la empresa/)

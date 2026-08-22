@@ -18,6 +18,8 @@ import {
 } from '@/components/ui/select'
 import { DataTable, sortableHeader } from './data-table'
 import { PasswordInput } from './PasswordInput'
+import type { ComponentType } from 'react'
+import { TituloPantalla } from './titulo-pantalla'
 
 function describeError(err: unknown): string {
   if (err instanceof ApiError) return err.detail
@@ -30,7 +32,15 @@ const EMPTY = { username: '', name: '', password: '', email: '', role: 'staff', 
 // '/users' preserva el comportamiento anterior a esta prop
 // (Gestiolibra/MedLibra/VentaLibra montan `users.router` en `/users`).
 // LibraDesk monta el suyo en `/api/usuarios` y pasa esa ruta explicita.
-export function Usuarios({ basePath = '/users' }: { basePath?: string } = {}) {
+export function Usuarios({ basePath = '/users', icono }: {
+  basePath?: string
+  /** El icono que el sidebar del producto le da a esta pantalla.
+   *  **Obligatorio y sin default**: VentaLibra usa `Building2` para
+   *  `/usuarios` donde los otros usan `UserCog`, asi que un default aca le
+   *  pondria a un producto el icono de otro. Que sea requerido hace que el
+   *  compilador —y no un guard— obligue a cada consumidor a decir el suyo. */
+  icono: ComponentType<{ className?: string }>
+}) {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -208,7 +218,7 @@ export function Usuarios({ basePath = '/users' }: { basePath?: string } = {}) {
   return (
     <div className="grid gap-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Usuarios</h2>
+        <TituloPantalla icono={icono}>Usuarios</TituloPantalla>
         <Button onClick={startCreate}>+ Nuevo usuario</Button>
       </div>
 

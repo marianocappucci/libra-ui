@@ -24,6 +24,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { Logs } from '../src/Logs'
 
+function IconoFalso({ className }: { className?: string }) {
+  return <svg data-testid="icono" className={className} />
+}
+
 const RESPUESTA = {
   actividad: [
     {
@@ -90,7 +94,7 @@ function selectDe(cual: keyof typeof FILTROS): HTMLSelectElement {
 
 describe('Logs — actividad', () => {
   it('muestra qué pasó, quién lo hizo y cuándo', async () => {
-    render(<Logs />)
+    render(<Logs icono={IconoFalso} />)
     await esperarCarga()
 
     // Acotado a la tabla: "Editado" también es una opción del filtro de
@@ -105,7 +109,7 @@ describe('Logs — actividad', () => {
   })
 
   it('el antes y el después se ven al desplegar la fila', async () => {
-    render(<Logs />)
+    render(<Logs icono={IconoFalso} />)
     await esperarCarga()
     expect(screen.queryByText('Nombre viejo')).not.toBeInTheDocument()
 
@@ -117,7 +121,7 @@ describe('Logs — actividad', () => {
 
   it('avisa distinto cuando no hay nada que cuando el filtro no matchea', async () => {
     responder({ actividad: [], total: 0 })
-    render(<Logs />)
+    render(<Logs icono={IconoFalso} />)
     await waitFor(() => {
       expect(screen.getByText('Todavía no hay actividad registrada.')).toBeInTheDocument()
     })
@@ -126,13 +130,13 @@ describe('Logs — actividad', () => {
 
 describe('Logs — el backend manda', () => {
   it('respeta el basePath del producto', async () => {
-    render(<Logs basePath="/api/logs" />)
+    render(<Logs basePath="/api/logs" icono={IconoFalso} />)
     await esperarCarga()
     expect(urls[0]).toContain('/api/logs?')
   })
 
   it('el default es /logs', async () => {
-    render(<Logs />)
+    render(<Logs icono={IconoFalso} />)
     await esperarCarga()
     expect(urls[0]).toMatch(/^\/logs\?/)
   })
@@ -141,7 +145,7 @@ describe('Logs — el backend manda', () => {
     // Es lo que permite que la misma pantalla sirva a cuatro dominios
     // distintos sin tocarla.
     responder({ entidades: ['paciente', 'receta', 'estudio'] })
-    render(<Logs />)
+    render(<Logs icono={IconoFalso} />)
     await esperarCarga()
 
     const opciones = within(selectDe('entidad')).getAllByRole('option').map((o) => o.textContent)
@@ -151,7 +155,7 @@ describe('Logs — el backend manda', () => {
 
 describe('Logs — filtros', () => {
   it('el filtro de entidad viaja al backend', async () => {
-    render(<Logs />)
+    render(<Logs icono={IconoFalso} />)
     await esperarCarga()
     urls = []
 
@@ -161,7 +165,7 @@ describe('Logs — filtros', () => {
   })
 
   it('el filtro de fecha viaja al backend', async () => {
-    render(<Logs />)
+    render(<Logs icono={IconoFalso} />)
     await esperarCarga()
     urls = []
 
@@ -172,7 +176,7 @@ describe('Logs — filtros', () => {
 
   it('cambiar un filtro vuelve a la página 1', async () => {
     responder({ total: 250, total_pages: 3 })
-    render(<Logs />)
+    render(<Logs icono={IconoFalso} />)
     await esperarCarga()
 
     await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
@@ -193,13 +197,13 @@ describe('Logs — estados de la pantalla', () => {
         status: 403, headers: { 'content-type': 'application/json' },
       }),
     )))
-    render(<Logs />)
+    render(<Logs icono={IconoFalso} />)
     await waitFor(() => expect(screen.getByText('no autorizado')).toBeInTheDocument())
   })
 
   it('avisa cuando el filtro no matchea nada, distinto de cuando no hay nada', async () => {
     responder({ actividad: [], total: 0 })
-    render(<Logs />)
+    render(<Logs icono={IconoFalso} />)
     await waitFor(() => expect(screen.getByText('Todavía no hay actividad registrada.')).toBeInTheDocument())
 
     await userEvent.selectOptions(selectDe('accion'), 'editar')
@@ -210,7 +214,7 @@ describe('Logs — estados de la pantalla', () => {
   })
 
   it('la fila se cierra al volver a tocarla, y una sin cambios no abre nada', async () => {
-    render(<Logs />)
+    render(<Logs icono={IconoFalso} />)
     await esperarCarga()
 
     await userEvent.click(screen.getByText('Cliente — Compulibra'))
@@ -231,7 +235,7 @@ describe('Logs — estados de la pantalla', () => {
         cambios: { activo: [null, true], baja: [true, false] },
       }],
     })
-    render(<Logs />)
+    render(<Logs icono={IconoFalso} />)
     await waitFor(() => expect(screen.getByText('Cliente — X')).toBeInTheDocument())
     await userEvent.click(screen.getByText('Cliente — X'))
 
@@ -250,13 +254,13 @@ describe('Logs — estados de la pantalla', () => {
         entidad: 'cliente', entidad_id: 1, descripcion: 'Cliente — Y', cambios: null,
       }],
     })
-    render(<Logs />)
+    render(<Logs icono={IconoFalso} />)
     await waitFor(() => expect(screen.getByTitle('sin-formato')).toHaveTextContent('sin-formato'))
   })
 
   it('se puede ir y volver entre páginas', async () => {
     responder({ total: 250, total_pages: 3 })
-    render(<Logs />)
+    render(<Logs icono={IconoFalso} />)
     await esperarCarga()
 
     expect(screen.getByRole('button', { name: 'Anterior' })).toBeDisabled()
@@ -269,13 +273,13 @@ describe('Logs — estados de la pantalla', () => {
   })
 
   it('sin más de una página no hay paginador', async () => {
-    render(<Logs />)
+    render(<Logs icono={IconoFalso} />)
     await esperarCarga()
     expect(screen.queryByRole('button', { name: 'Siguiente' })).not.toBeInTheDocument()
   })
 
   it('el filtro hasta también viaja', async () => {
-    render(<Logs />)
+    render(<Logs icono={IconoFalso} />)
     await esperarCarga()
     urls = []
 
@@ -293,7 +297,7 @@ describe('Logs — estados de la pantalla', () => {
         entidad: 'cliente', entidad_id: 1, descripcion: 'Cliente — Z', cambios: null,
       }],
     })
-    render(<Logs />)
+    render(<Logs icono={IconoFalso} />)
     await waitFor(() => expect(screen.getByText('archivar')).toBeInTheDocument())
   })
 
@@ -301,7 +305,7 @@ describe('Logs — estados de la pantalla', () => {
     responder({
       accesos: [{ id: 1, ts: '2026-08-05 10:00:00', evento: 'password_reset', username: 'ana', ip: '', detalle: '' }],
     })
-    render(<Logs />)
+    render(<Logs icono={IconoFalso} />)
     await esperarCarga()
     await irAAccesos()
 
@@ -312,7 +316,7 @@ describe('Logs — estados de la pantalla', () => {
 
   it('sin accesos lo dice', async () => {
     responder({ accesos: [] })
-    render(<Logs />)
+    render(<Logs icono={IconoFalso} />)
     await esperarCarga()
     await irAAccesos()
     expect(screen.getByText('Todavía no hay accesos registrados.')).toBeInTheDocument()
@@ -321,7 +325,7 @@ describe('Logs — estados de la pantalla', () => {
 
 describe('Logs — accesos', () => {
   it('el intento fallido se distingue del ingreso', async () => {
-    render(<Logs />)
+    render(<Logs icono={IconoFalso} />)
     await esperarCarga()
     await irAAccesos()
 
@@ -331,7 +335,7 @@ describe('Logs — accesos', () => {
   })
 
   it('muestra la IP, que es el dato por el que se mira esta tabla', async () => {
-    render(<Logs />)
+    render(<Logs icono={IconoFalso} />)
     await esperarCarga()
     await irAAccesos()
 
@@ -342,7 +346,7 @@ describe('Logs — accesos', () => {
 
 describe('Logs — las dos mitades no comparten pantalla', () => {
   it('la actividad es la pestaña por defecto y los accesos no están debajo', async () => {
-    render(<Logs />)
+    render(<Logs icono={IconoFalso} />)
     await esperarCarga()
 
     // El acceso viene en la MISMA respuesta que ya se rendeó y aun así no está
@@ -353,7 +357,7 @@ describe('Logs — las dos mitades no comparten pantalla', () => {
   })
 
   it('al ir a accesos la actividad deja de estar, y sus filtros también', async () => {
-    render(<Logs />)
+    render(<Logs icono={IconoFalso} />)
     await esperarCarga()
     await irAAccesos()
 
@@ -365,7 +369,7 @@ describe('Logs — las dos mitades no comparten pantalla', () => {
   })
 
   it('se vuelve a la actividad sin recargar', async () => {
-    render(<Logs />)
+    render(<Logs icono={IconoFalso} />)
     await esperarCarga()
     urls = []
     await irAAccesos()
