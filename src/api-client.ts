@@ -13,11 +13,21 @@
 export class ApiError extends Error {
   status: number
   detail: string
+  /** El `detail` sin aplanar, cuando el backend manda un objeto en vez de una
+   *  cadena.
+   *
+   *  🔴 Sin esto, un `detail` estructurado llegaba como `"[object Object]"`:
+   *  `String({...})` no falla, así que el error se mostraba igual y no había
+   *  forma de leer el código que traía adentro. El gate de Términos contesta
+   *  `{code, version, mensaje}`, y es lo que distingue "faltan permisos" de
+   *  "falta aceptar el contrato" — dos 403 que se ven iguales desde afuera. */
+  detailData?: unknown
 
-  constructor(status: number, detail: string) {
+  constructor(status: number, detail: string, detailData?: unknown) {
     super(detail)
     this.status = status
     this.detail = detail
+    this.detailData = detailData
   }
 }
 
@@ -79,6 +89,55 @@ export function _reiniciarAvisoDeSesion() {
   yaAviso = false
 }
 
+// ── Términos y Condiciones pendientes de aceptación ───────────────────────
+//
+// El backend (`libraauth.terminos`) corta CUALQUIER llamada gateada por rol con
+// un 403 y `detail.code = "terminos_pendientes"` mientras la instancia no haya
+// aceptado la versión vigente del contrato.
+//
+// 🔑 **Se intercepta acá, en el cliente HTTP, y no pantalla por pantalla.** Es
+// el mismo criterio que la sesión vencida y por el mismo motivo: son 40 y pico
+// de pantallas entre los ocho productos, y la que se olvide de manejarlo no
+// falla — muestra "forbidden" en rojo donde iban los datos, que es indistinguible
+// de un problema de permisos.
+
+/** El código que manda el backend en `detail.code`. */
+export const CODIGO_TERMINOS_PENDIENTES = 'terminos_pendientes'
+
+export type TerminosPendientes = { code: string; version: string; mensaje?: string }
+
+let alHaberTerminosPendientes: (info: TerminosPendientes) => void = () => {}
+
+/** Registra qué hacer cuando el backend avisa que faltan aceptar los Términos.
+ *  Lo usa `GateTerminos`; un producto no necesita llamarlo. */
+export function configurarTerminosPendientes(accion: (info: TerminosPendientes) => void) {
+  alHaberTerminosPendientes = accion
+}
+
+function terminosPendientesDe(status: number, data: unknown): TerminosPendientes | null {
+  if (status !== 403) return null
+  if (!data || typeof data !== 'object' || !('detail' in data)) return null
+  const detail = (data as { detail: unknown }).detail
+  if (!detail || typeof detail !== 'object') return null
+  const info = detail as Partial<TerminosPendientes>
+  return info.code === CODIGO_TERMINOS_PENDIENTES
+    ? { code: info.code, version: String(info.version ?? ''), mensaje: info.mensaje }
+    : null
+}
+
+/** El `detail` de un error, aplanado a texto pero conservando el original.
+ *  Un objeto se resume por su clave `mensaje` si la tiene; sin esto,
+ *  `String(objeto)` deja `"[object Object]"` en la pantalla. */
+function detalleDe(data: unknown, statusText: string): [string, unknown] {
+  if (!data || typeof data !== 'object' || !('detail' in data)) return [statusText, undefined]
+  const detail = (data as { detail: unknown }).detail
+  if (detail && typeof detail === 'object') {
+    const mensaje = (detail as { mensaje?: unknown }).mensaje
+    return [typeof mensaje === 'string' ? mensaje : statusText, detail]
+  }
+  return [String(detail), detail]
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const response = await fetch(path, {
     method,
@@ -97,10 +156,10 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   const data = isJson ? await response.json() : undefined
 
   if (!response.ok) {
-    const detail = (data && typeof data === 'object' && 'detail' in data)
-      ? String((data as { detail: unknown }).detail)
-      : response.statusText
-    throw new ApiError(response.status, detail)
+    const pendientes = terminosPendientesDe(response.status, data)
+    if (pendientes) alHaberTerminosPendientes(pendientes)
+    const [detail, detailData] = detalleDe(data, response.statusText)
+    throw new ApiError(response.status, detail, detailData)
   }
 
   return data as T
@@ -115,10 +174,12 @@ async function requestForm<T>(method: string, path: string, form: FormData): Pro
   const isJson = response.headers.get('content-type')?.includes('application/json')
   const data = isJson ? await response.json() : undefined
   if (!response.ok) {
-    const detail = (data && typeof data === 'object' && 'detail' in data)
-      ? String((data as { detail: unknown }).detail)
-      : response.statusText
-    throw new ApiError(response.status, detail)
+    // Mismo trato que `request` también para los Términos: un upload es una
+    // llamada gateada por rol como cualquier otra, y el backend la corta igual.
+    const pendientes = terminosPendientesDe(response.status, data)
+    if (pendientes) alHaberTerminosPendientes(pendientes)
+    const [detail, detailData] = detalleDe(data, response.statusText)
+    throw new ApiError(response.status, detail, detailData)
   }
   return data as T
 }
