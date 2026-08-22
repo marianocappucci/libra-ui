@@ -18,9 +18,10 @@ import {
   Tabs, TabsContent, TabsList, TabsTrigger,
 } from '@/components/ui/tabs'
 import {
-  Activity, ChevronDown, ChevronRight, KeyRound, LogIn, LogOut, ScrollText,
-  ShieldAlert,
+  Activity, ChevronDown, ChevronRight, KeyRound, LogIn, LogOut, ShieldAlert,
 } from 'lucide-react'
+import type { ComponentType } from 'react'
+import { TituloPantalla } from './titulo-pantalla'
 
 const TODOS = '__todos__'
 
@@ -121,7 +122,11 @@ function Cambios({ cambios }: { cambios: Record<string, [unknown, unknown]> }) {
  * es el de Gestiolibra/MedLibra/VentaLibra; LibraDesk monta el suyo bajo
  * `/api/logs` y pasa esa ruta explícita — mismo criterio que `Usuarios`.
  */
-export function Logs({ basePath = '/logs' }: { basePath?: string } = {}) {
+export function Logs({ basePath = '/logs', icono }: {
+  basePath?: string
+  /** El icono del sidebar de este producto. Obligatorio: ver `Usuarios`. */
+  icono: ComponentType<{ className?: string }>
+}) {
   const [data, setData] = useState<LogsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -170,9 +175,7 @@ export function Logs({ basePath = '/logs' }: { basePath?: string } = {}) {
 
   return (
     <div className="grid gap-4">
-      <h2 className="flex items-center gap-2 text-lg font-semibold">
-        <ScrollText className="size-5" />Logs
-      </h2>
+      <TituloPantalla icono={icono}>Logs</TituloPantalla>
 
       <Tabs defaultValue="actividad" className="gap-4">
         {/* El nombre de la pestaña ES el título de la sección: repetirlo en un

@@ -45,6 +45,7 @@ import { Label } from '@/components/ui/label'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import { TituloPantalla } from './titulo-pantalla'
 
 export type SeccionConfig = {
   clave: string
@@ -733,7 +734,11 @@ export const SECCION_ARCA: SeccionConfig = {
   contenido: <ArcaCard />,
 }
 
-export function createConfiguracion({ secciones }: { secciones: SeccionConfig[] }) {
+export function createConfiguracion({ secciones, icono }: {
+  secciones: SeccionConfig[]
+  /** El icono del sidebar de este producto. Obligatorio: ver `Usuarios`. */
+  icono: ComponentType<{ className?: string }>
+}) {
   if (secciones.length === 0) {
     throw new Error('createConfiguracion necesita al menos una sección')
   }
@@ -745,7 +750,7 @@ export function createConfiguracion({ secciones }: { secciones: SeccionConfig[] 
 
     return (
       <div className="grid gap-4">
-        <h2 className="text-lg font-semibold">Configuración</h2>
+        <TituloPantalla icono={icono}>Configuración</TituloPantalla>
 
         <nav className="flex flex-wrap gap-1 border-b" aria-label="Secciones de configuración">
           {secciones.map((s) => {

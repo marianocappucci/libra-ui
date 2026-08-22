@@ -22,6 +22,10 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Usuarios } from '../src/Usuarios'
 
+function IconoFalso({ className }: { className?: string }) {
+  return <svg data-testid="icono" className={className} />
+}
+
 const USUARIOS = [
   { id: 'u1', username: 'admin', name: 'Mariano', role: 'admin', active: true, email: 'mariano@empresa.com' },
   // Sin `email` a propósito: el campo es opcional en el tipo porque no todos
@@ -58,7 +62,7 @@ beforeEach(() => {
 describe('🔴 el alta y la edición abren en modal', () => {
   it('editar rinde el formulario adentro de un diálogo, con los datos cargados', async () => {
     const user = userEvent.setup({ delay: null })
-    render(<Usuarios />)
+    render(<Usuarios icono={IconoFalso} />)
     await screen.findByText('Mariano')
 
     // Control: sin esto, un diálogo que ya estuviera abierto haría pasar el
@@ -83,7 +87,7 @@ describe('🔴 el alta y la edición abren en modal', () => {
 
   it('el alta pide usuario y contraseña, y las manda', async () => {
     const user = userEvent.setup({ delay: null })
-    render(<Usuarios />)
+    render(<Usuarios icono={IconoFalso} />)
     await screen.findByText('Mariano')
 
     await user.click(screen.getByRole('button', { name: /Nuevo usuario/ }))
@@ -106,7 +110,7 @@ describe('🔴 el alta y la edición abren en modal', () => {
 
   it('🔴 el formulario NO queda en el flujo de la página, entre el encabezado y la grilla', async () => {
     const user = userEvent.setup({ delay: null })
-    render(<Usuarios />)
+    render(<Usuarios icono={IconoFalso} />)
     await screen.findByText('Mariano')
     await user.click(screen.getByRole('button', { name: /Nuevo usuario/ }))
 
@@ -128,7 +132,7 @@ describe('🔴 el alta y la edición abren en modal', () => {
 
 describe('🔴 las acciones de la grilla van con icono, no con palabra', () => {
   it('editar y desactivar son botones de icono con nombre accesible', async () => {
-    render(<Usuarios />)
+    render(<Usuarios icono={IconoFalso} />)
     await screen.findByText('Mariano')
 
     const editar = screen.getByRole('button', { name: 'Editar Mariano' })
@@ -145,7 +149,7 @@ describe('🔴 las acciones de la grilla van con icono, no con palabra', () => {
   })
 
   it('un usuario inactivo ofrece Activar, y el dibujo es otro', async () => {
-    render(<Usuarios />)
+    render(<Usuarios icono={IconoFalso} />)
     await screen.findByText('Juan Pérez')
 
     // La columna cambia por fila: `Juan Pérez` está inactivo, así que su botón
@@ -163,7 +167,7 @@ describe('🔴 las acciones de la grilla van con icono, no con palabra', () => {
 
   it('el toggle manda el PUT con el estado invertido', async () => {
     const user = userEvent.setup({ delay: null })
-    render(<Usuarios />)
+    render(<Usuarios icono={IconoFalso} />)
     await screen.findByText('Mariano')
 
     await user.click(screen.getByRole('button', { name: 'Desactivar Mariano' }))
@@ -179,7 +183,7 @@ describe('🔴 las acciones de la grilla van con icono, no con palabra', () => {
 
 describe('🔴 el admin le puede cambiar la contraseña a otro usuario', () => {
   it('cada fila ofrece la acción, con el nombre del usuario en el rótulo accesible', async () => {
-    render(<Usuarios />)
+    render(<Usuarios icono={IconoFalso} />)
     await screen.findByText('Mariano')
 
     // Las dos filas, no sólo la primera: es una columna, y afirmarla sobre una
@@ -200,7 +204,7 @@ describe('🔴 el admin le puede cambiar la contraseña a otro usuario', () => {
 
   it('manda el PUT a la ruta de contraseña del usuario elegido', async () => {
     const user = userEvent.setup({ delay: null })
-    render(<Usuarios />)
+    render(<Usuarios icono={IconoFalso} />)
     await screen.findByText('Juan Pérez')
 
     // Se elige el SEGUNDO usuario a propósito: con el primero, un componente
@@ -226,7 +230,7 @@ describe('🔴 el admin le puede cambiar la contraseña a otro usuario', () => {
 
   it('respeta el basePath del producto', async () => {
     const user = userEvent.setup({ delay: null })
-    render(<Usuarios basePath="/api/usuarios" />)
+    render(<Usuarios icono={IconoFalso} basePath="/api/usuarios" />)
     await screen.findByText('Mariano')
 
     await user.click(screen.getByRole('button', { name: 'Cambiar contraseña de Mariano' }))
@@ -245,7 +249,7 @@ describe('🔴 el admin le puede cambiar la contraseña a otro usuario', () => {
 
   it('la contraseña vacía no dispara ninguna llamada', async () => {
     const user = userEvent.setup({ delay: null })
-    render(<Usuarios />)
+    render(<Usuarios icono={IconoFalso} />)
     await screen.findByText('Mariano')
 
     await user.click(screen.getByRole('button', { name: 'Cambiar contraseña de Mariano' }))
@@ -264,7 +268,7 @@ describe('🔴 el admin le puede cambiar la contraseña a otro usuario', () => {
 
   it('Cancelar cierra el diálogo sin mandar nada', async () => {
     const user = userEvent.setup({ delay: null })
-    render(<Usuarios />)
+    render(<Usuarios icono={IconoFalso} />)
     await screen.findByText('Mariano')
 
     await user.click(screen.getByRole('button', { name: 'Cambiar contraseña de Mariano' }))
@@ -281,7 +285,7 @@ describe('🔴 el admin le puede cambiar la contraseña a otro usuario', () => {
 
   it('lo tipeado no sobrevive al diálogo siguiente', async () => {
     const user = userEvent.setup({ delay: null })
-    render(<Usuarios />)
+    render(<Usuarios icono={IconoFalso} />)
     await screen.findByText('Mariano')
 
     await user.click(screen.getByRole('button', { name: 'Cambiar contraseña de Mariano' }))
@@ -308,7 +312,7 @@ describe('🔴 el admin le puede cambiar la contraseña a otro usuario', () => {
         status: 404, headers: { 'content-type': 'application/json' },
       }))
     }))
-    render(<Usuarios />)
+    render(<Usuarios icono={IconoFalso} />)
     await screen.findByText('Mariano')
 
     await user.click(screen.getByRole('button', { name: 'Cambiar contraseña de Mariano' }))
@@ -326,7 +330,7 @@ describe('🔴 el admin le puede cambiar la contraseña a otro usuario', () => {
 describe('🔴 el correo del ABM', () => {
   it('el alta lo manda cuando se completa', async () => {
     const user = userEvent.setup({ delay: null })
-    render(<Usuarios />)
+    render(<Usuarios icono={IconoFalso} />)
     await screen.findByText('Mariano')
 
     await user.click(screen.getByRole('button', { name: /Nuevo usuario/ }))
@@ -346,7 +350,7 @@ describe('🔴 el correo del ABM', () => {
 
   it('la edición lo manda, y el usuario sin correo se puede editar igual', async () => {
     const user = userEvent.setup({ delay: null })
-    render(<Usuarios />)
+    render(<Usuarios icono={IconoFalso} />)
     await screen.findByText('Juan Pérez')
 
     await user.click(screen.getByRole('button', { name: 'Editar Juan Pérez' }))
@@ -367,7 +371,7 @@ describe('🔴 el correo del ABM', () => {
 
   it('🔴 el toggle de activo NO manda el correo', async () => {
     const user = userEvent.setup({ delay: null })
-    render(<Usuarios />)
+    render(<Usuarios icono={IconoFalso} />)
     await screen.findByText('Mariano')
 
     await user.click(screen.getByRole('button', { name: 'Desactivar Mariano' }))
@@ -387,7 +391,7 @@ describe('🔴 el correo del ABM', () => {
 describe('🔴 editar a un usuario desactivado no lo reactiva', () => {
   it('el PUT de la edición conserva el estado que tenía', async () => {
     const user = userEvent.setup({ delay: null })
-    render(<Usuarios />)
+    render(<Usuarios icono={IconoFalso} />)
     await screen.findByText('Juan Pérez')
 
     // `Juan Pérez` está inactivo. La edición mandaba `active: true` fijo, así
@@ -407,7 +411,7 @@ describe('🔴 editar a un usuario desactivado no lo reactiva', () => {
 
   it('y al activo lo deja activo', async () => {
     const user = userEvent.setup({ delay: null })
-    render(<Usuarios />)
+    render(<Usuarios icono={IconoFalso} />)
     await screen.findByText('Mariano')
 
     // El control del caso anterior: si el componente hubiera pasado de mandar
