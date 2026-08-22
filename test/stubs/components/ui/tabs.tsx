@@ -15,15 +15,28 @@ const TabsCtx = createContext<{
   setValue: (v: string) => void
 }>({ value: '', setValue: () => {} })
 
-export function Tabs({ defaultValue = '', children }: {
+// Los DOS modos, no sólo el no-controlado: `Logs` usa `defaultValue` y
+// `Configuracion` usa `value` + `onValueChange`, porque su sección activa sale
+// de la URL. Un stub que ignorara `value` dejaría pasar un conmutador que se
+// pinta solo y nunca escucha a quien lo controla — que en `Configuracion` es
+// exactamente el defecto que importa (entrar con `?seccion=datos` y ver
+// resaltada la primera pestaña).
+export function Tabs({ defaultValue = '', value, onValueChange, children }: {
   defaultValue?: string
   value?: string
+  onValueChange?: (v: string) => void
   className?: string
   children?: ReactNode
 }) {
-  const [value, setValue] = useState(defaultValue)
+  const [interno, setInterno] = useState(defaultValue)
+  const controlado = value !== undefined
   return (
-    <TabsCtx.Provider value={{ value, setValue }}>
+    <TabsCtx.Provider
+      value={{
+        value: controlado ? value : interno,
+        setValue: (v) => { if (!controlado) setInterno(v); onValueChange?.(v) },
+      }}
+    >
       <div>{children}</div>
     </TabsCtx.Provider>
   )

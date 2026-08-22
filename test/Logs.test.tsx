@@ -18,6 +18,15 @@
 //    está activa no está en el DOM: un test que busque un acceso sin cambiar
 //    de pestaña no lo encuentra, y eso es lo correcto — es lo mismo que le
 //    pasa a quien mira la pantalla.
+// 6. **La fecha se dice una vez por día.** Desde el 2026-08-22 la consola sigue
+//    las directrices de la de Contalibra: separador por día y la fila con la
+//    hora sola. Es lo primero que se rompe si alguien "arregla" la columna
+//    volviendo a meterle la fecha, y en pantalla no se nota hasta que hay dos
+//    días distintos.
+// 7. **La acción se filtra con las píldoras.** El filtro dejó de ser un
+//    `select`; lo que no cambió es que el filtrado es del lado del servidor,
+//    así que lo que se afirma es que el valor VIAJA, no que la lista se vea
+//    distinta.
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -84,12 +93,27 @@ async function irAAccesos() {
   await userEvent.click(screen.getByRole('tab', { name: /Accesos/ }))
 }
 
+// Los accesos son un `ul` desde el 2026-08-22 (antes una tabla). `role=list`
+// y no una clase de Tailwind: lo que importa es que siga siendo una lista para
+// quien la navega con lector de pantalla.
+function listaDeAccesos(): HTMLElement {
+  return screen.getByRole('list')
+}
+
 // El stub de shadcn no propaga el `id` del trigger al `<select>` nativo, así
-// que los tres filtros se toman por orden: entidad, acción, usuario.
-const FILTROS = { entidad: 0, accion: 1, usuario: 2 }
+// que los dos filtros de lista se toman por orden: entidad, usuario. La acción
+// ya no está acá: desde el 2026-08-22 se filtra con las píldoras de color.
+const FILTROS = { entidad: 0, usuario: 1 }
 
 function selectDe(cual: keyof typeof FILTROS): HTMLSelectElement {
   return screen.getAllByRole('combobox')[FILTROS[cual]] as HTMLSelectElement
+}
+
+// La píldora de una acción, por su etiqueta ("Editado", "Borrado"). Se toma el
+// `button` y no el `Badge` de adentro: el badge es un `span` y el click tiene
+// que ir al control.
+function pildoraDe(label: string): HTMLElement {
+  return screen.getByRole('button', { name: label })
 }
 
 describe('Logs — actividad', () => {
@@ -97,15 +121,46 @@ describe('Logs — actividad', () => {
     render(<Logs icono={IconoFalso} />)
     await esperarCarga()
 
-    // Acotado a la tabla: "Editado" también es una opción del filtro de
-    // acción, así que una búsqueda global encuentra dos.
+    // Acotado a la tabla: "Editado" también es la etiqueta de la píldora de
+    // filtro, así que una búsqueda global encuentra dos.
     const tablaActividad = screen.getAllByRole('table')[0]
     expect(within(tablaActividad).getByText('Editado')).toBeInTheDocument()
     expect(within(tablaActividad).getByText('tecnico1')).toBeInTheDocument()
-    // `2026-08-05 14:32:10` se muestra como `05-08 14:32`, con la fecha
-    // completa en el title. El separador es el guion desde el 2026-08-12: el
-    // formato visible del ecosistema es dd-mm-aaaa.
-    expect(screen.getByTitle('2026-08-05 14:32:10')).toHaveTextContent('05-08 14:32')
+    // La fila muestra SÓLO la hora — la fecha la dice el separador del día.
+    // El `title` conserva el `ts` completo para el que quiera el dato exacto.
+    expect(screen.getByTitle('2026-08-05 14:32:10')).toHaveTextContent('14:32:10')
+  })
+
+  it('la fecha se dice una vez por día, no una vez por fila', async () => {
+    // Dos filas del 05 y una del 04. Si la fecha volviera a la fila habría
+    // tres apariciones del 05-08-2026 en vez de una: ese es el control que
+    // distingue "hay un separador" de "cada fila repite la fecha".
+    responder({
+      actividad: [
+        { ...RESPUESTA.actividad[0], id: 30, ts: '2026-08-05 14:32:10' },
+        { ...RESPUESTA.actividad[1], id: 20, ts: '2026-08-05 09:00:00' },
+        { ...RESPUESTA.actividad[1], id: 10, ts: '2026-08-04 18:15:00' },
+      ],
+      total: 3,
+    })
+    render(<Logs icono={IconoFalso} />)
+    await esperarCarga()
+
+    expect(screen.getAllByText('05-08-2026')).toHaveLength(1)
+    expect(screen.getAllByText('04-08-2026')).toHaveLength(1)
+    // Y las horas sí, una por fila.
+    expect(screen.getByText('09:00:00')).toBeInTheDocument()
+    expect(screen.getByText('18:15:00')).toBeInTheDocument()
+  })
+
+  it('dice cuántos registros se están viendo y de cuántos', async () => {
+    responder({ total: 250, total_pages: 3 })
+    render(<Logs icono={IconoFalso} />)
+    await esperarCarga()
+
+    // "Mostrando 2 de 250": el 2 son las filas de esta página, el 250 el total
+    // del filtro. Sin el total, el paginador dice "Pág 1 / 3" y no cuánto es.
+    expect(screen.getByText(/Mostrando/)).toHaveTextContent('Mostrando 2 de 250 registros')
   })
 
   it('el antes y el después se ven al desplegar la fila', async () => {
@@ -164,6 +219,58 @@ describe('Logs — filtros', () => {
     await waitFor(() => expect(urls.some((u) => u.includes('entidad=turno'))).toBe(true))
   })
 
+  it('la píldora de acción viaja al backend', async () => {
+    render(<Logs icono={IconoFalso} />)
+    await esperarCarga()
+    urls = []
+
+    await userEvent.click(pildoraDe('Borrado'))
+
+    // El valor que viaja es la CLAVE de la acción, no la etiqueta: el backend
+    // filtra por `borrar`, "Borrado" es sólo lo que se muestra.
+    await waitFor(() => expect(urls.some((u) => u.includes('accion=borrar'))).toBe(true))
+  })
+
+  it('tocar la píldora activa vuelve a todas', async () => {
+    render(<Logs icono={IconoFalso} />)
+    await esperarCarga()
+
+    urls = []
+    await userEvent.click(pildoraDe('Borrado'))
+    // Control positivo dentro del mismo test: si el filtro no viajara NUNCA,
+    // el "no aparece `accion=`" de más abajo pasaría en verde sin medir nada.
+    await waitFor(() => expect(urls.some((u) => u.includes('accion=borrar'))).toBe(true))
+    expect(pildoraDe('Borrado')).toHaveAttribute('aria-pressed', 'true')
+    urls = []
+
+    await userEvent.click(pildoraDe('Borrado'))
+
+    await waitFor(() => expect(urls.length).toBeGreaterThan(0))
+    // Sin ninguna elegida no se manda el parámetro: "todas" es la ausencia del
+    // filtro, no un valor especial que el backend tenga que conocer.
+    expect(urls.every((u) => !u.includes('accion='))).toBe(true)
+    expect(pildoraDe('Borrado')).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('Limpiar borra todos los filtros de una', async () => {
+    render(<Logs icono={IconoFalso} />)
+    await esperarCarga()
+
+    await userEvent.click(pildoraDe('Editado'))
+    await userEvent.selectOptions(selectDe('entidad'), 'turno')
+    await userEvent.type(screen.getByLabelText('Desde'), '2026-08-01')
+    await waitFor(() => expect(urls.some((u) => u.includes('desde=2026-08-01'))).toBe(true))
+    urls = []
+
+    await userEvent.click(screen.getByRole('button', { name: 'Limpiar' }))
+
+    await waitFor(() => expect(urls.length).toBeGreaterThan(0))
+    const ultima = urls[urls.length - 1]
+    expect(ultima).not.toContain('accion=')
+    expect(ultima).not.toContain('entidad=')
+    expect(ultima).not.toContain('desde=')
+  })
+
   it('el filtro de fecha viaja al backend', async () => {
     render(<Logs icono={IconoFalso} />)
     await esperarCarga()
@@ -206,7 +313,7 @@ describe('Logs — estados de la pantalla', () => {
     render(<Logs icono={IconoFalso} />)
     await waitFor(() => expect(screen.getByText('Todavía no hay actividad registrada.')).toBeInTheDocument())
 
-    await userEvent.selectOptions(selectDe('accion'), 'editar')
+    await userEvent.click(pildoraDe('Editado'))
 
     await waitFor(() => {
       expect(screen.getByText('No hay actividad con esos filtros.')).toBeInTheDocument()
@@ -255,7 +362,12 @@ describe('Logs — estados de la pantalla', () => {
       }],
     })
     render(<Logs icono={IconoFalso} />)
-    await waitFor(() => expect(screen.getByTitle('sin-formato')).toHaveTextContent('sin-formato'))
+    // El `ts` entero encabeza el grupo, y la hora queda en raya: recortar a
+    // ciegas con `slice(11, 19)` sobre un texto corto devuelve la cadena
+    // vacía, que en pantalla es una celda en blanco — parece un dato faltante
+    // en vez de un formato que no se entendió.
+    await waitFor(() => expect(screen.getByText('sin-formato')).toBeInTheDocument())
+    expect(screen.getByTitle('sin-formato')).toHaveTextContent('—')
   })
 
   it('se puede ir y volver entre páginas', async () => {
@@ -272,10 +384,16 @@ describe('Logs — estados de la pantalla', () => {
     await waitFor(() => expect(urls.some((u) => u.includes('page=1'))).toBe(true))
   })
 
-  it('sin más de una página no hay paginador', async () => {
+  it('con una sola página el paginador está pero no lleva a ningún lado', async () => {
+    // Cambió el 2026-08-22: antes desaparecía. La directriz de Contalibra es
+    // que la línea diga siempre cuánto se está viendo, y con una sola página
+    // eso sigue siendo información — lo que no tiene que haber es a dónde ir.
     render(<Logs icono={IconoFalso} />)
     await esperarCarga()
-    expect(screen.queryByRole('button', { name: 'Siguiente' })).not.toBeInTheDocument()
+
+    expect(screen.getByText(/Mostrando/)).toHaveTextContent('Mostrando 2 de 2 registros')
+    expect(screen.getByRole('button', { name: 'Anterior' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Siguiente' })).toBeDisabled()
   })
 
   it('el filtro hasta también viaja', async () => {
@@ -301,7 +419,7 @@ describe('Logs — estados de la pantalla', () => {
     await waitFor(() => expect(screen.getByText('archivar')).toBeInTheDocument())
   })
 
-  it('un acceso con evento desconocido y sin IP no rompe la tabla', async () => {
+  it('un acceso con evento desconocido y sin IP no rompe la lista', async () => {
     responder({
       accesos: [{ id: 1, ts: '2026-08-05 10:00:00', evento: 'password_reset', username: 'ana', ip: '', detalle: '' }],
     })
@@ -309,9 +427,11 @@ describe('Logs — estados de la pantalla', () => {
     await esperarCarga()
     await irAAccesos()
 
-    const tablaAccesos = screen.getAllByRole('table').at(-1)!
-    expect(within(tablaAccesos).getByText('password_reset')).toBeInTheDocument()
-    expect(within(tablaAccesos).getByText('—')).toBeInTheDocument()
+    const renglon = listaDeAccesos().querySelector('li')!
+    expect(within(renglon).getByText('password_reset')).toBeInTheDocument()
+    // Sin IP la raya ocupa su lugar, y la fecha sigue estando: si se rompiera
+    // el renglón entero, la ausencia de la IP no se distinguiría.
+    expect(renglon).toHaveTextContent('— · 05-08-2026 10:00:00')
   })
 
   it('sin accesos lo dice', async () => {
@@ -334,13 +454,26 @@ describe('Logs — accesos', () => {
     expect(screen.getByText('fantasma')).toBeInTheDocument()
   })
 
-  it('muestra la IP, que es el dato por el que se mira esta tabla', async () => {
+  it('muestra la IP, que es el dato por el que se mira esta lista', async () => {
     render(<Logs icono={IconoFalso} />)
     await esperarCarga()
     await irAAccesos()
 
-    const tablaAccesos = screen.getAllByRole('table').at(-1)!
-    expect(within(tablaAccesos).getByText('203.0.113.7')).toBeInTheDocument()
+    const renglones = listaDeAccesos().querySelectorAll('li')
+    expect(renglones).toHaveLength(2)
+    expect(renglones[0]).toHaveTextContent('203.0.113.7')
+  })
+
+  it('los accesos son una lista y no una tabla', async () => {
+    // Directriz de Contalibra: cuatro datos por renglón no necesitan
+    // encabezados de columna. El control es que NO quede ninguna tabla en la
+    // pestaña — sin él, agregar la lista al lado de la tabla vieja pasaría.
+    render(<Logs icono={IconoFalso} />)
+    await esperarCarga()
+    await irAAccesos()
+
+    expect(screen.queryByRole('table')).not.toBeInTheDocument()
+    expect(listaDeAccesos()).toBeInTheDocument()
   })
 })
 
