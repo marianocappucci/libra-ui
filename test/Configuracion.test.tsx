@@ -15,7 +15,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactElement } from 'react'
-import { MemoryRouter } from 'react-router-dom'
+import { Link, MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -93,11 +93,11 @@ describe('🔴 El "según corresponda"', () => {
     montar(<Configuracion />)
 
     for (const esperada of ['Empresa', 'Correo', 'Datos / Backup', 'Balanza']) {
-      expect(await screen.findByRole('button', { name: new RegExp(esperada) }))
+      expect(await screen.findByRole('tab', { name: new RegExp(esperada) }))
         .toBeInTheDocument()
     }
     // Y **no** aparece la de ARCA, que este producto no declaró.
-    expect(screen.queryByRole('button', { name: /ARCA/ })).toBeNull()
+    expect(screen.queryByRole('tab', { name: /ARCA/ })).toBeNull()
   })
 
   it('un producto que factura sí declara ARCA', async () => {
@@ -107,7 +107,7 @@ describe('🔴 El "según corresponda"', () => {
     })
     montar(<Configuracion />)
 
-    expect(await screen.findByRole('button', { name: /ARCA/ })).toBeInTheDocument()
+    expect(await screen.findByRole('tab', { name: /ARCA/ })).toBeInTheDocument()
   })
 
   it('sin ninguna sección es un error de programación, no una pantalla vacía', () => {
@@ -121,16 +121,16 @@ describe('La sección activa', () => {
     const Configuracion = createConfiguracion({ secciones: SECCIONES_BASE, icono: IconoFalso })
     montar(<Configuracion />)
 
-    expect(await screen.findByRole('button', { name: /Empresa/ }))
-      .toHaveAttribute('aria-current', 'page')
+    expect(await screen.findByRole('tab', { name: /Empresa/ }))
+      .toHaveAttribute('aria-selected', 'true')
   })
 
   it('sale de la URL, así se puede linkear', async () => {
     const Configuracion = createConfiguracion({ secciones: SECCIONES_BASE, icono: IconoFalso })
     montar(<Configuracion />, '/configuracion?seccion=datos')
 
-    expect(await screen.findByRole('button', { name: /Datos \/ Backup/ }))
-      .toHaveAttribute('aria-current', 'page')
+    expect(await screen.findByRole('tab', { name: /Datos \/ Backup/ }))
+      .toHaveAttribute('aria-selected', 'true')
     expect(screen.getByText(/Copia de tus datos/)).toBeInTheDocument()
   })
 
@@ -138,8 +138,38 @@ describe('La sección activa', () => {
     const Configuracion = createConfiguracion({ secciones: SECCIONES_BASE, icono: IconoFalso })
     montar(<Configuracion />, '/configuracion?seccion=no-existe')
 
-    expect(await screen.findByRole('button', { name: /Empresa/ }))
-      .toHaveAttribute('aria-current', 'page')
+    expect(await screen.findByRole('tab', { name: /Empresa/ }))
+      .toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('la pestaña marcada sigue a la URL aunque nadie haya tocado la barra', async () => {
+    // 🔴 El control que faltaba hasta el 2026-08-22. Los otros tests de esta
+    // sección miran el PRIMER render, y ahí un conmutador no-controlado
+    // (`defaultValue`) acierta por casualidad: arranca en la sección que pide
+    // la URL. La diferencia recién se ve cuando la URL cambia DESPUÉS —el
+    // botón "atrás" del navegador, un link a otra sección—, que es cuando un
+    // `defaultValue` deja la píldora clavada donde estaba mientras abajo se
+    // muestra otro contenido.
+    //
+    // Medido: cambiando `value` por `defaultValue` en `createConfiguracion`,
+    // los otros cinco tests de esta sección siguen en verde y sólo cae éste.
+    const Configuracion = createConfiguracion({ secciones: SECCIONES_BASE, icono: IconoFalso })
+    render(
+      <MemoryRouter initialEntries={['/configuracion']}>
+        <Link to="/configuracion?seccion=datos">ir a datos</Link>
+        <Configuracion />
+      </MemoryRouter>,
+    )
+    const usuario = userEvent.setup()
+    expect(await screen.findByRole('tab', { name: /Empresa/ }))
+      .toHaveAttribute('aria-selected', 'true')
+
+    await usuario.click(screen.getByRole('link', { name: 'ir a datos' }))
+
+    expect(await screen.findByRole('tab', { name: /Datos \/ Backup/ }))
+      .toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: /Empresa/ }))
+      .toHaveAttribute('aria-selected', 'false')
   })
 
   it('cambiar de sección la escribe en la URL', async () => {
@@ -147,7 +177,7 @@ describe('La sección activa', () => {
     montar(<Configuracion />)
     const usuario = userEvent.setup()
 
-    await usuario.click(await screen.findByRole('button', { name: /Datos \/ Backup/ }))
+    await usuario.click(await screen.findByRole('tab', { name: /Datos \/ Backup/ }))
 
     expect(await screen.findByText(/Copia de tus datos/)).toBeInTheDocument()
   })

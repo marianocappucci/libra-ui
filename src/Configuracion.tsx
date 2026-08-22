@@ -16,12 +16,25 @@
  *        ],
  *      })
  *
- *  ## El conmutador es propio y no `@/components/ui/tabs`
+ *  ## El conmutador son las pestañas de shadcn, iguales a las de Contalibra
  *
- *  De los cuatro consumidores, **sólo MedLibra tiene el componente `tabs`**
- *  instalado (medido el 2026-08-05). Un paquete compartido que lo importara
- *  rompería el build de los otros tres, y agregarlo en cada uno para esto sería
- *  arrastrar una dependencia por un conmutador de cuatro botones.
+ *  Hasta el 2026-08-22 era un `<nav>` propio con el subrayado del ítem activo.
+ *  El motivo era real cuando se escribió: de los cuatro consumidores **sólo
+ *  MedLibra tenía `@/components/ui/tabs` instalado** (medido el 2026-08-05), y
+ *  un paquete compartido que lo importara rompía el build de los otros tres.
+ *
+ *  Ese motivo ya no corre: `libra-ui/Logs` importa `tabs` desde la v0.29.0, así
+ *  que **los cinco productos que montan esta pantalla ya lo tienen
+ *  vendorizado**. Lo que quedaba era la consecuencia — la Configuración de
+ *  Gestiolibra se veía distinta de la de Contalibra sin que nadie lo hubiera
+ *  decidido.
+ *
+ *  > 🔴 **El que NO lo tiene es LibraCargo**, que importa de este módulo sólo
+ *  > `DatosBackupCard` (no usa `createConfiguracion`). El import de `tabs` es
+ *  > del módulo entero, así que le llega igual: **subirle el pin sin
+ *  > vendorizarle `components/ui/tabs.tsx` le rompe el build**. No es un error
+ *  > de runtime — no llega a compilar. Es la misma trampa que se comió a
+ *  > Gestiolibra y VentaLibra con la v0.29.0.
  *
  *  ## La sección activa va en la URL
  *
@@ -45,6 +58,9 @@ import { Label } from '@/components/ui/label'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import {
+  Tabs, TabsList, TabsTrigger,
+} from '@/components/ui/tabs'
 import { TituloPantalla } from './titulo-pantalla'
 
 export type SeccionConfig = {
@@ -752,30 +768,34 @@ export function createConfiguracion({ secciones, icono }: {
       <div className="grid gap-4">
         <TituloPantalla icono={icono}>Configuración</TituloPantalla>
 
-        <nav className="flex flex-wrap gap-1 border-b" aria-label="Secciones de configuración">
-          {secciones.map((s) => {
-            const activa = s.clave === actual.clave
-            const Icono = s.icono
-            return (
-              <button
-                key={s.clave}
-                type="button"
-                aria-current={activa ? 'page' : undefined}
-                onClick={() => setParams({ seccion: s.clave })}
-                className={
-                  'flex items-center gap-2 border-b-2 px-3 py-2 text-sm transition-colors ' +
-                  (activa
-                    ? 'border-primary font-medium text-foreground'
-                    : 'border-transparent text-muted-foreground hover:text-foreground')
-                }
-              >
-                {Icono && <Icono className="h-4 w-4" />}
-                {s.label}
-              </button>
-            )
-          })}
-        </nav>
+        {/* La barra separada del contenido por una línea, igual que Contalibra.
+            El `pb-2` es el aire entre las píldoras y esa línea: sin él el
+            `TabsList` queda apoyado sobre el borde. */}
+        <div className="border-b pb-2">
+          {/* `value` y no `defaultValue`: la sección la manda la URL, así que
+              el conmutador es controlado. Con `defaultValue` un `?seccion=`
+              distinto al arrancar pintaría la primera pestaña y mostraría el
+              contenido de otra. */}
+          <Tabs value={actual.clave} onValueChange={(v) => setParams({ seccion: v })}>
+            <TabsList>
+              {secciones.map((s) => {
+                const Icono = s.icono
+                return (
+                  <TabsTrigger key={s.clave} value={s.clave}>
+                    {Icono && <Icono className="size-4" />}{s.label}
+                  </TabsTrigger>
+                )
+              })}
+            </TabsList>
+          </Tabs>
+        </div>
 
+        {/* El contenido va afuera del `Tabs` y no en un `TabsContent`: las
+            secciones son componentes con estado y pedidos propios, y Radix
+            desmonta la pestaña inactiva. Adentro, cambiar de pestaña y volver
+            recargaría el formulario y perdería lo tipeado sin guardar; acá el
+            contenido lo elige la URL, que es lo mismo que hacía el conmutador
+            anterior. */}
         <div className="grid gap-4">{actual.contenido}</div>
       </div>
     )
