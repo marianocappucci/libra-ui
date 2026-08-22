@@ -5,9 +5,13 @@
 // casos de acá abajo NO son hipotéticos: son los dos bugs que este guard tuvo
 // mientras se escribía, el 2026-08-21, y los dos daban un informe tranquilizador
 // y falso.
-import { describe, expect, it } from 'vitest'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
-  describirDesajustes, iconoDelTitulo, iconosDelNav, resolverAlias, rutasDelRouter,
+  auditarTitulos, describirDesajustes, iconoDelTitulo, iconosDelNav, resolverAlias,
+  rutasDelRouter,
 } from '../src/auditoria-de-titulos'
 
 const NAV = `
@@ -112,6 +116,82 @@ describe('resolverAlias', () => {
     // `Stock` no debe resolverse por la línea de `IconoStock`.
     const fuente = "import { PackageSearch as IconoStock } from 'x'"
     expect(resolverAlias(fuente, 'Stock')).toBe('Stock')
+  })
+})
+
+describe('auditarTitulos, de punta a punta', () => {
+  // Se arma un producto de mentira en disco: es la unica forma de ejercitar la
+  // lectura de archivos, que es justo donde el guard falla en silencio (un
+  // archivo que no existe devuelve '' y la pantalla desaparece del informe sin
+  // que nada avise).
+  let raiz: string
+
+  beforeAll(() => {
+    raiz = mkdtempSync(join(tmpdir(), 'auditoria-'))
+    mkdirSync(join(raiz, 'components'), { recursive: true })
+    mkdirSync(join(raiz, 'pages'), { recursive: true })
+    writeFileSync(join(raiz, 'components', 'Layout.tsx'), `
+      const NAV = [
+        { to: '/clientes', label: 'Clientes', icon: Users },
+        { to: '/stock', label: 'Stock', icon: Boxes },
+        { to: '/remitos', label: 'Remitos', icon: FileText },
+        { to: '/config', label: 'Config', icon: Settings },
+        { to: '/sin-pantalla', label: 'Huerfana', icon: Ghost },
+      ]`)
+    writeFileSync(join(raiz, 'App.tsx'), `
+      <Route path="/clientes" element={<ProtectedRoute><Clientes /></ProtectedRoute>} />
+      <Route path="/clientes/:id" element={<ProtectedRoute><ClienteDetalle /></ProtectedRoute>} />
+      <Route path="/stock" element={<ProtectedRoute><Stock /></ProtectedRoute>} />
+      <Route path="/remitos/:id" element={<ProtectedRoute><RemitoDetalle /></ProtectedRoute>} />
+      <Route path="/config" element={<ProtectedRoute><Config /></ProtectedRoute>} />
+      <Route path="/fuera-del-nav" element={<ProtectedRoute><Suelta /></ProtectedRoute>} />`)
+
+    // Cumple.
+    writeFileSync(join(raiz, 'pages', 'Clientes.tsx'),
+      "import { Users } from 'lucide-react'\n<TituloPantalla icono={Users}>Clientes</TituloPantalla>")
+    // El detalle hereda el icono de su entrada del menu: tambien cumple.
+    writeFileSync(join(raiz, 'pages', 'ClienteDetalle.tsx'),
+      "import { Users } from 'lucide-react'\n<TituloPantalla icono={Users}>Cliente</TituloPantalla>")
+    // Icono equivocado.
+    writeFileSync(join(raiz, 'pages', 'Stock.tsx'),
+      "import { Archive } from 'lucide-react'\n<TituloPantalla icono={Archive}>Stock</TituloPantalla>")
+    // Titulo sin icono.
+    writeFileSync(join(raiz, 'pages', 'RemitoDetalle.tsx'), '<h2 className="text-lg">Remito</h2>')
+    // Sin titulo propio: NO es un pendiente.
+    writeFileSync(join(raiz, 'pages', 'Config.tsx'), '<div>panel</div>')
+  })
+
+  afterAll(() => rmSync(raiz, { recursive: true, force: true }))
+
+  it('🔴 clasifica cada pantalla donde corresponde', () => {
+    const a = auditarTitulos(raiz)
+    expect(a.conIcono).toBe(2)
+    expect(a.distinto.map((d) => d.pantalla)).toEqual(['Stock'])
+    expect(a.sinIcono.map((d) => d.pantalla)).toEqual(['RemitoDetalle'])
+    expect(a.sinTitulo.map((d) => d.pantalla)).toEqual(['Config'])
+  })
+
+  it('🔴 el control — dice cuánto midió, no sólo qué encontró mal', () => {
+    // Sin esto, un parser roto que devolviera todo vacío pasaría los `toEqual`
+    // de listas vacías del test de un producto ya normalizado.
+    const a = auditarTitulos(raiz)
+    expect(a.rutasDelNav).toBe(5)
+    expect(a.pantallas).toBe(5)
+  })
+
+  it('la ruta que no está en el menú no se cuenta', () => {
+    // `/fuera-del-nav` no tiene entrada: no es un desajuste, es una pantalla
+    // que se llega por link. Y `/sin-pantalla` está en el menú sin ruta.
+    const a = auditarTitulos(raiz)
+    expect([...a.distinto, ...a.sinIcono, ...a.sinTitulo].map((d) => d.pantalla))
+      .not.toContain('Suelta')
+  })
+
+  it('el control negativo — un directorio vacío no inventa nada', () => {
+    const vacio = mkdtempSync(join(tmpdir(), 'auditoria-vacia-'))
+    const a = auditarTitulos(vacio)
+    expect(a).toMatchObject({ rutasDelNav: 0, pantallas: 0, conIcono: 0 })
+    rmSync(vacio, { recursive: true, force: true })
   })
 })
 
