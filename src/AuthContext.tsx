@@ -7,6 +7,7 @@
 // tres consumidores no cambien una linea. Ver wiki/entities/libra-ui.md.
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { api, ApiError, type User } from './api-client'
+import { GateTerminos } from './Terminos'
 
 export type AuthContextValue<TUser> = {
   user: TUser | null
@@ -19,6 +20,16 @@ export function createAuthContext<TUser>(config: {
   mePath: string
   loginPath: string
   logoutPath: string
+  /** Prefijo del router de Términos del backend (`libraauth.terminos`).
+   *  Default `/terminos`; Contalibra y Restolibra sirven su API bajo `/api`. */
+  terminosPath?: string
+  /** Apaga el gate de Términos para este contexto.
+   *
+   *  🔴 Existe para el backoffice de superadmin, que administra instancias
+   *  ajenas y no tiene contrato propio que aceptar. **No usarlo en un producto
+   *  de cliente**: la pantalla es lo único que le da forma de aceptar, y sin
+   *  ella el 403 del backend deja la instancia sin salida. */
+  sinGateDeTerminos?: boolean
 }) {
   const AuthContext = createContext<AuthContextValue<TUser> | null>(null)
 
@@ -44,9 +55,27 @@ export function createAuthContext<TUser>(config: {
       setUser(null)
     }
 
+    // 🔑 **El gate vive acá y no en cada producto** por lo mismo que la sesión
+    // vencida vive en `api-client`: son ocho productos y más de cuarenta
+    // pantallas, y el que se olvide de envolverse no falla — se queda sin gate,
+    // que es la única de las dos mitades que se nota.
+    //
+    // Va ADENTRO del Provider: la pantalla necesita `useAuth()` para poder
+    // ofrecer "cerrar sesión" a quien no tiene facultades para aceptar.
     return (
       <AuthContext.Provider value={{ user, loading, login, logout }}>
-        {children}
+        {config.sinGateDeTerminos ? children : (
+          <GateTerminos
+            // Sólo con sesión: sin usuario, `GET /terminos` contesta 401 y no
+            // hay a quién pedirle una aceptación. La pantalla de login no se
+            // puede bloquear con esto.
+            activo={!!user}
+            basePath={config.terminosPath ?? '/terminos'}
+            onSalir={() => { void logout() }}
+          >
+            {children}
+          </GateTerminos>
+        )}
       </AuthContext.Provider>
     )
   }
