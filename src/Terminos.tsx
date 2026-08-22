@@ -18,6 +18,43 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { api, configurarTerminosPendientes } from './api-client'
 
+/** Estilos del contrato inyectado.
+ *
+ *  🔴 **Hacen falta y no son cosmética.** El HTML del contrato entra por
+ *  `dangerouslySetInnerHTML`, así que sus etiquetas no llevan ninguna clase de
+ *  Tailwind — y el preflight de Tailwind le saca a `h2`, `ul` y `table` todo el
+ *  estilo del navegador. Sin esto, 33 secciones, dos tablas y una docena de
+ *  listas salen como un muro de texto de 14 px: medido en el navegador, `h2`
+ *  salía con el mismo tamaño y el mismo peso que un `<p>`, las listas sin
+ *  viñeta y las tablas sin un solo borde. Un contrato que no se puede leer es
+ *  un contrato que nadie lee — y acá lo que se firma es haberlo leído.
+ *
+ *  Va como `<style>` y no como clases de Tailwind porque el HTML lo genera el
+ *  backend: no hay dónde colgarlas. Los colores salen de las variables de
+ *  shadcn que los ocho productos ya definen, con un valor de reserva por si
+ *  alguno no la tuviera.
+ */
+const ESTILOS_DEL_CONTRATO = `
+.terminos-texto h1 { display: none; }
+.terminos-texto h2 { font-size: 1rem; font-weight: 600; margin: 1.5rem 0 .5rem; }
+.terminos-texto h3 { font-size: .9375rem; font-weight: 600; margin: 1rem 0 .375rem; }
+.terminos-texto p { margin: 0 0 .75rem; }
+.terminos-texto ul { list-style: disc; margin: 0 0 .75rem; padding-left: 1.25rem; }
+.terminos-texto ol { list-style: decimal; margin: 0 0 .75rem; padding-left: 1.25rem; }
+.terminos-texto li { margin-bottom: .25rem; }
+.terminos-texto strong { font-weight: 600; }
+.terminos-texto table { width: 100%; border-collapse: collapse; margin: 0 0 1rem; }
+.terminos-texto th, .terminos-texto td {
+  border: 1px solid var(--border, #e5e7eb); padding: .375rem .5rem; text-align: left;
+}
+.terminos-texto th { font-weight: 600; background: var(--muted, #f8fafc); }
+.terminos-texto blockquote {
+  border-left: 3px solid var(--border, #e5e7eb); padding-left: .75rem;
+  margin: 0 0 .75rem; color: var(--muted-foreground, #64748b);
+}
+.terminos-texto code { font-family: ui-monospace, SFMono-Regular, monospace; font-size: .8125rem; }
+`
+
 export type EstadoTerminos = {
   version: string
   vigente_desde: string
@@ -71,6 +108,7 @@ export function PantallaTerminos({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background p-4 sm:p-8">
+      <style>{ESTILOS_DEL_CONTRATO}</style>
       <div className="flex h-full w-full max-w-4xl flex-col overflow-hidden rounded-lg border bg-card shadow-lg">
 
         <header className="border-b px-6 py-5">
