@@ -195,6 +195,25 @@ describe('aceptar', () => {
     expect(screen.getByRole('button', { name: /Aceptar y continuar/i })).not.toBeDisabled()
   })
 
+  it('🔴 el contrato viaja con sus estilos, o sale como un muro de texto', async () => {
+    // El HTML entra por `dangerouslySetInnerHTML` y sus etiquetas no llevan
+    // clases: el preflight de Tailwind le saca a `h2`, `ul` y `table` todo el
+    // estilo del navegador. Medido en el navegador antes de agregarlos, `h2`
+    // salía con el mismo tamaño y peso que un `<p>` y las tablas sin un borde.
+    //
+    // Esto no mide el render —jsdom no aplica CSS de verdad— sino que las reglas
+    // sigan viajando con el componente. Es lo que se pondría rojo si alguien las
+    // borrara por "cosméticas".
+    fetchMock.mockImplementation(() => Promise.resolve(json(ESTADO)))
+    const { container } = render(<PantallaTerminos />)
+    await screen.findByText('TÉRMINOS Y CONDICIONES')
+
+    const estilos = container.querySelector('style')?.textContent ?? ''
+    expect(estilos).toContain('.terminos-texto h2')
+    expect(estilos).toContain('.terminos-texto table')
+    expect(estilos).toContain('.terminos-texto ul')
+  })
+
   it('usa el prefijo que se le pase', async () => {
     // Contalibra y Restolibra sirven su API bajo /api.
     fetchMock.mockImplementation(() => Promise.resolve(json(ESTADO)))
