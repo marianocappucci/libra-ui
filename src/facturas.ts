@@ -18,18 +18,23 @@ export type Caja = {
   medios_pago: string[]
 }
 
-// "cuenta_corriente" es un medio del POS, no de cobro de un comprobante: es la
+// 🔴 Acá vivía `MEDIOS_PAGO_LABELS`, una copia TypeScript de la lista del
+// motor. **Divergía en las dos direcciones**: tenía `cheque`, que la lista
+// canónica no ofrecía, y le faltaban las tarjetas. Como `FacturaDetalle` armaba
+// con ella el fallback del selector de cobro, esta pantalla estaba ofreciendo
+// medios que el backend rechazaba y escondiendo los que sí aceptaba.
+//
+// La lista es del backend y llega por API (`GET /api/ventas/medios-pago`); acá
+// no se declara ninguna. Lo único que quedó del lado del navegador son los
+// íconos y las abreviaturas, en `libra-ui/medios-pago`, y son **lookups
+// parciales con fallback**: agregar un medio en LibraCore no rompe ninguna
+// pantalla.
+//
+// Ver `wiki/concepts/medios-de-pago-familia-libra.md`.
+//
+// ("cuenta_corriente" sigue sin ser un medio de cobro de un comprobante: es la
 // marca de venta a crédito. La pantalla de cobro lo filtra y el backend lo
-// rechaza -- ver `libracore.cobros`.
-export const MEDIOS_PAGO_LABELS: Record<string, string> = {
-  efectivo: 'Efectivo',
-  transferencia: 'Transferencia',
-  mercadopago: 'Mercado Pago',
-  cuenta_dni: 'Cuenta DNI',
-  billetera: 'Otras billeteras',
-  cuenta_corriente: 'Cuenta corriente',
-  cheque: 'Cheque',
-}
+// rechaza — ver `libracore.cobros`.)
 
 export type FacturaItem = {
   description: string
