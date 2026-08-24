@@ -47,9 +47,35 @@ function json(body: unknown, status = 200) {
   })
 }
 
+// 🔴 El vocabulario del motor, que esta pantalla ahora **pide por API** en vez
+// de traer una copia propia. Hasta el 2026-08-24 `facturas.ts` declaraba
+// `MEDIOS_PAGO_LABELS` y el selector de cobro se llenaba de ahí; esa copia
+// divergía de la canónica en las dos direcciones (tenía `cheque`, le faltaban
+// las tarjetas), así que **ofrecía medios que el backend rechazaba**.
+//
+// Estos tests stubeaban el endpoint sin querer —cualquier URL que no fuera
+// `/api/cajas` devolvía el detalle de la factura— y por eso pasaban contra la
+// copia. Ahora se stubea de verdad.
+const MEDIOS_DEL_MOTOR = [
+  { id: 'efectivo', label: 'Efectivo' },
+  { id: 'transferencia', label: 'Transferencia' },
+  { id: 'tarjeta_debito', label: 'Tarjeta de débito' },
+  { id: 'mercadopago', label: 'Mercado Pago' },
+  { id: 'cuenta_corriente', label: 'Cuenta corriente' },
+]
+
+/** El stub de las dos rutas que la pantalla pide al montar. Devuelve `null`
+ *  para lo que no le toca, así el caller decide. */
+function respuestaComun(url: string, cajas: unknown): Response | null {
+  const u = String(url)
+  if (u.includes('/api/ventas/medios-pago')) return json(MEDIOS_DEL_MOTOR)
+  if (u.includes('/api/cajas')) return json(cajas)
+  return null
+}
+
 function montar(detalle: FacturaDetalleType, props: { esAdmin?: boolean } = {}) {
   fetchMock.mockImplementation((url: string) =>
-    Promise.resolve(String(url).includes('/api/cajas') ? json([]) : json(detalle)),
+    Promise.resolve(respuestaComun(url, []) ?? json(detalle)),
   )
   render(
     <MemoryRouter initialEntries={['/facturas/1']}>
@@ -146,7 +172,7 @@ describe('cobro', () => {
 
   function montarConCajas(detalle = CON_CAE) {
     fetchMock.mockImplementation((url: string) =>
-      Promise.resolve(String(url).includes('/api/cajas') ? json(CAJAS) : json(detalle)),
+      Promise.resolve(respuestaComun(url, CAJAS) ?? json(detalle)),
     )
     render(
       <MemoryRouter initialEntries={['/facturas/1']}>
@@ -209,7 +235,8 @@ describe('cobro', () => {
   it('si el cobro falla, el error se ve y el diálogo no se cierra', async () => {
     fetchMock.mockImplementation((url: string) => {
       const u = String(url)
-      if (u.includes('/api/cajas')) return Promise.resolve(json(CAJAS))
+      const comun = respuestaComun(u, CAJAS)
+      if (comun) return Promise.resolve(comun)
       if (u.includes('/cobrar')) return Promise.resolve(json({ detail: 'la caja está cerrada' }, 422))
       return Promise.resolve(json(CON_CAE))
     })
@@ -260,7 +287,8 @@ describe('ARCA, notas y borrado', () => {
   it('el error de ARCA se muestra tal cual lo manda el backend', async () => {
     fetchMock.mockImplementation((url: string) => {
       const u = String(url)
-      if (u.includes('/api/cajas')) return Promise.resolve(json([]))
+      const comun = respuestaComun(u, [])
+      if (comun) return Promise.resolve(comun)
       if (u.includes('/autorizar')) return Promise.resolve(json({ detail: 'ARCA: CUIT no habilitado' }, 400))
       return Promise.resolve(json(SIN_CAE))
     })
@@ -314,7 +342,8 @@ describe('ARCA, notas y borrado', () => {
   it('duplicar arma el borrador en el backend', async () => {
     fetchMock.mockImplementation((url: string) => {
       const u = String(url)
-      if (u.includes('/api/cajas')) return Promise.resolve(json([]))
+      const comun = respuestaComun(u, [])
+      if (comun) return Promise.resolve(comun)
       if (u.includes('/duplicar')) {
         return Promise.resolve(json({
           tipo: 11, client_id: 3, client_name: 'Cliente SA', concepto: 1,
@@ -513,9 +542,8 @@ describe('comprobantes relacionados', () => {
 describe('estados de carga', () => {
   it('si el comprobante no carga, lo dice y no rompe', async () => {
     fetchMock.mockImplementation((url: string) =>
-      Promise.resolve(String(url).includes('/api/cajas')
-        ? json([])
-        : json({ detail: 'comprobante inexistente' }, 404)),
+      Promise.resolve(respuestaComun(url, [])
+        ?? json({ detail: 'comprobante inexistente' }, 404)),
     )
     render(
       <MemoryRouter initialEntries={['/facturas/99']}>
