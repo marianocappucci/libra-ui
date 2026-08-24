@@ -33,9 +33,7 @@ import {
   Receipt, Send,
 } from 'lucide-react'
 
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10)
-}
+import { hoyISO } from './fechas'
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
@@ -168,7 +166,7 @@ export function FacturaDetalle({ esAdmin = false }: { esAdmin?: boolean } = {}) 
     setError(null)
     try {
       await api.post(`/api/facturas/${facturaId}/cobrar`, {
-        fecha: todayIso(),
+        fecha: hoyISO(),
         caja_id: cajaId ? Number(cajaId) : null,
         pagos: cobroPagos.filter((p) => Number(p.monto) > 0).map((p) => ({ medio_id: p.medio, monto: Number(p.monto), referencia: p.referencia })),
       })

@@ -13,6 +13,8 @@
  *  así: "hoy" es el día de pared del usuario, no el de UTC.
  */
 
+import { hoyISO } from '../fechas'
+
 /** Un `YYYY-MM-DD` a `Date` anclada al mediodía UTC. */
 function aFecha(iso: string): Date {
   const [anio, mes, dia] = iso.split('-').map(Number)
@@ -23,15 +25,19 @@ function aIso(d: Date): string {
   return d.toISOString().slice(0, 10)
 }
 
-/** Hoy en `YYYY-MM-DD`, **hora local**.
+/** Hoy en `YYYY-MM-DD`, en hora de Argentina.
  *
- *  `toISOString()` a secas daría UTC y en Argentina (UTC-3) después de las
- *  21:00 devuelve el día siguiente — la agenda abriría en el día equivocado
- *  toda la noche. */
+ *  🔴 **Delega en `hoyISO()` y no calcula nada.** Hasta la unificación del
+ *  2026-08-24 tenía su propia cuenta —restarle el `getTimezoneOffset()` al
+ *  instante y recortar el ISO—, que arreglaba el corrimiento de las 21:00 pero
+ *  leía el día de la zona del NAVEGADOR. La regla del ecosistema es UTC-3 fijo,
+ *  así que la agenda de un cliente con la máquina en otro huso abría en un día
+ *  y el resto del producto trabajaba en otro.
+ *
+ *  El nombre se conserva porque lo importan los productos; el canónico es
+ *  `hoyISO` de `libra-ui/fechas`. */
 export function hoyLocal(): string {
-  const d = new Date()
-  return new Date(d.getTime() - d.getTimezoneOffset() * 60000)
-    .toISOString().slice(0, 10)
+  return hoyISO()
 }
 
 export function sumarDias(iso: string, n: number): string {
