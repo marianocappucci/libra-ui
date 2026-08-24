@@ -76,6 +76,36 @@ export function iconoDe(medio: string): LucideIcon {
   return ICONO[medio] ?? ICONO_POR_DEFECTO
 }
 
+/** Los medios que se cobran **escaneando un QR o desde una billetera**.
+ *
+ *  🔴 **Espeja a `libracore.medios_pago.MEDIOS_ELECTRONICOS`**, y eso es una
+ *  duplicación con la que hay que convivir: el backend la necesita para su
+ *  `WHERE ... IN (...)` y el navegador para decidir si ofrece el botón del QR,
+ *  y no hay forma de que una sea la otra sin un pedido de red que esta decisión
+ *  no justifica.
+ *
+ *  Lo que sí se puede es que haya **una sola copia del lado del navegador** en
+ *  vez de una por producto. Estaba escrita a mano en `VentaDetalle.tsx` de
+ *  Contalibra —con `qr`— y en el de Restolibra —**sin `qr`**, ya divergiendo—,
+ *  más un `frozenset` propio en VentaLibra que acepta las dos grafías de
+ *  MercadoPago.
+ *
+ *  Incluye `mercado_pago` (VentaLibra) y `qr`, que son históricos: hay filas con
+ *  esos valores y el botón tiene que aparecer igual. */
+export const MEDIOS_ELECTRONICOS = [
+  'mercadopago', 'mercado_pago', 'billetera', 'cuenta_dni', 'qr',
+] as const
+
+/** Si el pago se hizo por un medio que MercadoPago puede referenciar.
+ *
+ *  Es lo que decide si se ofrece el botón de cobrar con QR:
+ *  `add_venta_pago_referencia_mp` sella la referencia sobre una fila de pago con
+ *  uno de estos medios, y **sin esa fila el pago se acredita en MercadoPago y no
+ *  queda atado a la venta**. */
+export function esElectronico(medio: string): boolean {
+  return (MEDIOS_ELECTRONICOS as readonly string[]).includes(medio)
+}
+
 /** La abreviatura para una columna angosta.
  *
  *  🔴 **Nunca devuelve vacío ni un guión.** Un medio que nadie nombró sólo se
