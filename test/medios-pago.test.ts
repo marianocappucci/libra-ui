@@ -17,7 +17,8 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import {
-  ETIQUETA_CORTA, ICONO, ICONO_POR_DEFECTO, etiqueta, etiquetaCorta, iconoDe,
+  ETIQUETA_CORTA, ICONO, ICONO_POR_DEFECTO, esElectronico, etiqueta, etiquetaCorta,
+  iconoDe,
 } from '../src/medios-pago'
 
 describe('un medio que este módulo no conoce', () => {
@@ -81,13 +82,22 @@ describe('las grafías históricas', () => {
   )
 })
 
-describe('este módulo no declara la lista', () => {
-  it('🔴 no exporta ningún array de medios', () => {
+describe('este módulo no declara EL VOCABULARIO', () => {
+  it('🔴 no exporta ninguna lista de medios que pretenda ser la completa', () => {
     // El guard que impide que la copia vuelva. Un `export const MEDIOS = [...]`
     // acá es exactamente el defecto que este módulo existe para cerrar: una
     // lista en el frontend que nada compara contra la del backend.
+    //
+    // `MEDIOS_ELECTRONICOS` está exento **a propósito y por nombre**: no es el
+    // vocabulario, es un SUBCONJUNTO —qué medios puede referenciar MercadoPago—
+    // y espeja a `libracore.medios_pago.MEDIOS_ELECTRONICOS`. Exceptuarlo por
+    // nombre y no por forma es lo que obliga a que el próximo que quiera agregar
+    // una lista tenga que tocar este test y explicarse.
+    const EXENTOS = new Set(['MEDIOS_ELECTRONICOS'])
     const fuente = readFileSync(resolve(__dirname, '../src/medios-pago.ts'), 'utf8')
-    const arraysExportados = fuente.match(/export const \w+\s*(:[^=]+)?=\s*\[/g) ?? []
+    const arraysExportados = [...fuente.matchAll(/export const (\w+)\s*(?::[^=]+)?=\s*\[/g)]
+      .map((m) => m[1])
+      .filter((nombre) => !EXENTOS.has(nombre))
     expect(arraysExportados).toEqual([])
   })
 
@@ -95,7 +105,32 @@ describe('este módulo no declara la lista', () => {
     // Sin esto, un regex mal escrito daría una lista vacía siempre y el test de
     // arriba pasaría con la copia adentro.
     const ejemplo = 'export const MEDIOS: string[] = [\n  "efectivo",\n]'
-    expect(ejemplo.match(/export const \w+\s*(:[^=]+)?=\s*\[/g)).toHaveLength(1)
+    expect([...ejemplo.matchAll(/export const (\w+)\s*(?::[^=]+)?=\s*\[/g)]).toHaveLength(1)
+  })
+})
+
+describe('los medios electrónicos', () => {
+  // Es lo que decide si se ofrece el botón de cobrar con QR. Sin una fila de
+  // pago con uno de estos medios, `add_venta_pago_referencia_mp` no tiene dónde
+  // sellar la referencia y **el pago se acredita en MercadoPago sin quedar
+  // atado a la venta**.
+  it.each(['mercadopago', 'billetera', 'cuenta_dni'])('«%s» lo es', (medio) => {
+    expect(esElectronico(medio)).toBe(true)
+  })
+
+  it('🔴 las grafías históricas también', () => {
+    // `qr` sólo existió dentro de un `WHERE ... IN (...)`, y `mercado_pago` es
+    // la de VentaLibra. Hay filas con las dos, y el botón tiene que aparecer.
+    expect(esElectronico('qr')).toBe(true)
+    expect(esElectronico('mercado_pago')).toBe(true)
+  })
+
+  it('🔴 el control — el efectivo NO lo es', () => {
+    // Sin esto, "devolver siempre true" pasaría todo lo de arriba, y la venta en
+    // efectivo ofrecería un cobro por QR que no tiene dónde registrarse.
+    expect(esElectronico('efectivo')).toBe(false)
+    expect(esElectronico('transferencia')).toBe(false)
+    expect(esElectronico('cuenta_corriente')).toBe(false)
   })
 })
 
