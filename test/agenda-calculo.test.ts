@@ -3,7 +3,7 @@
 // Es la mitad del módulo que se puede probar sin montar nada, y la que más
 // silenciosamente se rompe: un día corrido no tira ningún error, simplemente
 // pone el turno del jueves en la columna del miércoles.
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   NOMBRES_DIAS, celdasGrillaMes, diaCorto, diaLargo, hora, hoyLocal,
   inicioGrillaMes, lunesDe, mesLargo, mismoMes, rangoSemana, sumarDias,
@@ -94,14 +94,22 @@ describe('fechas', () => {
     expect(hora('2026-08-20T21:30:00')).toBe('21:30')
   })
 
-  it('hoyLocal devuelve un YYYY-MM-DD del día de pared', () => {
-    const d = new Date()
-    const esperado = [
-      d.getFullYear(),
-      String(d.getMonth() + 1).padStart(2, '0'),
-      String(d.getDate()).padStart(2, '0'),
-    ].join('-')
-    expect(hoyLocal()).toBe(esperado)
+  it('hoyLocal da el día de Argentina, no el del runner', () => {
+    // 🔴 Antes este test calculaba lo esperado con `getFullYear/getMonth/
+    // getDate`, o sea **con la misma técnica que el código que probaba**. Un
+    // test así no puede fallar por un defecto de zona: comparte la premisa con
+    // lo que mide, y sólo verificaba que el string tuviera guiones.
+    //
+    // Con el reloj fijo a las 23:30 del 31-08 en Argentina —02:30 UTC del
+    // 01-09— el día de UTC y el de Argentina son distintos, que es la única
+    // condición en la que este assert significa algo.
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-01T02:30:00Z'))
+    try {
+      expect(hoyLocal()).toBe('2026-08-31')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 
