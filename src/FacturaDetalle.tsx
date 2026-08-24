@@ -12,9 +12,10 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { api, ApiError } from './api-client'
 import {
-  MEDIOS_PAGO_LABELS, type BorradorDuplicado, type Caja, type Factura,
+  type BorradorDuplicado, type Caja, type Factura,
   type FacturaDetalle as FacturaDetalleType,
 } from './facturas'
+import { etiqueta } from './medios-pago'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -46,10 +47,6 @@ function labelComprobante(f: Factura): string {
   return `${letra} ${pv}-${num}`
 }
 
-function medioLabel(m: string): string {
-  return (MEDIOS_PAGO_LABELS as Record<string, string>)[m] ?? m
-}
-
 // La caja habilita `cuenta_corriente` porque en el POS es un medio real ("se lo
 // lleva a cuenta"), pero cobrar una FACTURA con ese medio no significa nada: es
 // la marca de que se emitio a credito. libracore descarta esos movimientos de
@@ -58,7 +55,16 @@ function medioLabel(m: string): string {
 // y la cuenta corriente mostraba la misma deuda dos veces. El backend tambien
 // lo rechaza (ver app/web/api/facturas.py).
 const MEDIO_CUENTA_CORRIENTE = 'cuenta_corriente'
-const MEDIOS_COBRO = Object.keys(MEDIOS_PAGO_LABELS).filter((m) => m !== MEDIO_CUENTA_CORRIENTE)
+
+// 🔴 Aca habia un `MEDIOS_COBRO` armado con `Object.keys(MEDIOS_PAGO_LABELS)`,
+// o sea con la copia TypeScript de la lista. Esa copia divergia de la canonica
+// en las dos direcciones: tenia `cheque`, que el backend no ofrecia, y le
+// faltaban las tarjetas. El fallback de esta pantalla estaba OFRECIENDO MEDIOS
+// QUE EL BACKEND RECHAZABA, y escondiendo los que si aceptaba.
+//
+// Ahora sale de `GET /api/ventas/medios-pago`, que es el motor. Si ese pedido
+// falla no se inventa nada: se muestra el aviso de que hay que configurar la
+// caja, que es lo que realmente pasa.
 
 function estaAutorizada(f: Factura): boolean {
   return Boolean(f.cae) && f.cae !== 'PENDIENTE'
@@ -102,6 +108,10 @@ export function FacturaDetalle({ esAdmin = false }: { esAdmin?: boolean } = {}) 
   const [cobroPagos, setCobroPagos] = useState<{ medio: string; monto: string; referencia: string }[]>([{ medio: 'efectivo', monto: '', referencia: '' }])
   const [cajas, setCajas] = useState<Caja[]>([])
   const [cajaId, setCajaId] = useState<string>('')
+  //: El vocabulario que sirve el motor. Vacío hasta que conteste, y vacío para
+  //: siempre si el producto no expone esa ruta — en los dos casos manda lo que
+  //: tenga configurado la caja, que es el camino normal.
+  const [mediosDelMotor, setMediosDelMotor] = useState<{ id: string; label: string }[]>([])
   const [confirmNota, setConfirmNota] = useState<'nota-credito' | 'nota-debito' | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
@@ -111,11 +121,25 @@ export function FacturaDetalle({ esAdmin = false }: { esAdmin?: boolean } = {}) 
       const def = cs.find((c) => c.es_default) ?? cs[0]
       if (def) setCajaId(String(def.id))
     }).catch(() => {})
+    // El vocabulario del motor, para el fallback y para las etiquetas.
+    //
+    // 🔴 **Se comprueba la forma, no se confía en ella.** Este componente lo
+    // consumen seis productos y no todos exponen esta ruta; el que no la tiene
+    // devuelve el HTML del catch-all con 200, y un `.map()` sobre eso rompe la
+    // pantalla ENTERA de la factura — no sólo el selector de cobro. El costo de
+    // equivocarse acá no es perder los medios, es perder la factura.
+    api.get<{ id: string; label: string }[]>('/api/ventas/medios-pago')
+      .then((ms) => setMediosDelMotor(Array.isArray(ms) ? ms : []))
+      .catch(() => {})
   }, [])
 
   const cajaActual = cajas.find((c) => String(c.id) === cajaId)
   const mediosDeCaja = (cajaActual?.medios_pago ?? []).filter((m) => m !== MEDIO_CUENTA_CORRIENTE)
-  const mediosDisponibles = mediosDeCaja.length > 0 ? mediosDeCaja : MEDIOS_COBRO
+  const mediosDisponibles = mediosDeCaja.length > 0
+    ? mediosDeCaja
+    : mediosDelMotor.map((m) => m.id).filter((m) => m !== MEDIO_CUENTA_CORRIENTE)
+  const etiquetasDelMotor = Object.fromEntries(mediosDelMotor.map((m) => [m.id, m.label]))
+  const medioLabel = (m: string) => etiqueta(m, etiquetasDelMotor)
 
   useEffect(() => {
     if (mediosDisponibles.length === 0) return
