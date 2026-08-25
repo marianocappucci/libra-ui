@@ -45,8 +45,12 @@ export const ETIQUETA_CORTA: Record<string, string> = {
   cuenta_corriente: 'Cta. Cte.',
   // Grafías históricas: hay ventas viejas con estos medios y las grillas las
   // muestran igual. Ver `HISTORICOS` en el motor.
+  //
+  // `mercado_pago` estaba acá y salió el 2026-08-25, junto con su entrada en el
+  // motor: las filas de VentaLibra que la tenían se migraron primero. Desde
+  // entonces ver el slug crudo en una grilla es la señal de que algo la volvió
+  // a escribir, y taparlo con una abreviatura escondería justamente eso.
   tarjeta: 'Tarjeta',
-  mercado_pago: 'MP',
   debito: 'T. déb.',
   credito: 'T. créd.',
 }
@@ -63,7 +67,6 @@ export const ICONO: Record<string, LucideIcon> = {
   cheque: Receipt,
   cuenta_corriente: ArrowRightLeft,
   tarjeta: CreditCard,
-  mercado_pago: Smartphone,
   debito: CreditCard,
   credito: CreditCard,
 }
@@ -90,10 +93,15 @@ export function iconoDe(medio: string): LucideIcon {
  *  más un `frozenset` propio en VentaLibra que acepta las dos grafías de
  *  MercadoPago.
  *
- *  Incluye `mercado_pago` (VentaLibra) y `qr`, que son históricos: hay filas con
- *  esos valores y el botón tiene que aparecer igual. */
+ *  Incluye `qr`, que es histórico: nunca estuvo declarado en ninguna lista, así
+ *  que si hay filas con ese valor no salieron de un selector — y el botón tiene
+ *  que aparecer igual.
+ *
+ *  Incluía también `mercado_pago`, la grafía de VentaLibra, hasta el
+ *  2026-08-25: salió junto con la del motor, después de migrar las filas que la
+ *  tenían y verificar cero. */
 export const MEDIOS_ELECTRONICOS = [
-  'mercadopago', 'mercado_pago', 'billetera', 'cuenta_dni', 'qr',
+  'mercadopago', 'billetera', 'cuenta_dni', 'qr',
 ] as const
 
 /** Si el pago se hizo por un medio que MercadoPago puede referenciar.
