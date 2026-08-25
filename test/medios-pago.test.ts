@@ -74,12 +74,29 @@ describe('la etiqueta que manda el backend', () => {
 describe('las grafías históricas', () => {
   // Hay ventas viejas con estos medios y las grillas las muestran igual. Ver
   // `HISTORICOS` en `libracore.medios_pago`.
-  it.each(['tarjeta', 'mercado_pago', 'debito', 'credito'])(
+  it.each(['tarjeta', 'debito', 'credito'])(
     '🔴 «%s» tiene abreviatura e ícono propios', (medio) => {
       expect(ETIQUETA_CORTA[medio]).toBeTruthy()
       expect(ICONO[medio]).toBeDefined()
     },
   )
+
+  it('🔴 «mercado_pago» ya NO: salió del vocabulario el 2026-08-25', () => {
+    // La única grafía histórica que se retiró, y el orden por el que se pudo:
+    // medir sobre las instancias reales (3 filas, todas en `ventalibra-dev`),
+    // migrarlas, verificar cero después de desplegar, y recién ahí sacarla —
+    // del motor y de acá, que son las dos casas canónicas del vocabulario.
+    //
+    // Verla escrita cruda en una grilla es ahora la señal de que algo la volvió
+    // a escribir. Devolverle una abreviatura escondería justamente esa señal.
+    expect(ETIQUETA_CORTA.mercado_pago).toBeUndefined()
+    expect(ICONO.mercado_pago).toBeUndefined()
+    expect(esElectronico('mercado_pago')).toBe(false)
+    // El control: la grafía buena sigue completa en las tres.
+    expect(ETIQUETA_CORTA.mercadopago).toBe('MP')
+    expect(ICONO.mercadopago).toBeDefined()
+    expect(esElectronico('mercadopago')).toBe(true)
+  })
 })
 
 describe('este módulo no declara EL VOCABULARIO', () => {
@@ -118,11 +135,10 @@ describe('los medios electrónicos', () => {
     expect(esElectronico(medio)).toBe(true)
   })
 
-  it('🔴 las grafías históricas también', () => {
-    // `qr` sólo existió dentro de un `WHERE ... IN (...)`, y `mercado_pago` es
-    // la de VentaLibra. Hay filas con las dos, y el botón tiene que aparecer.
+  it('🔴 `qr`, que es histórico, también', () => {
+    // `qr` sólo existió dentro de un `WHERE ... IN (...)`: si hay filas con ese
+    // valor no salieron de un selector, y el botón tiene que aparecer igual.
     expect(esElectronico('qr')).toBe(true)
-    expect(esElectronico('mercado_pago')).toBe(true)
   })
 
   it('🔴 el control — el efectivo NO lo es', () => {
