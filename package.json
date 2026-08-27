@@ -17,6 +17,7 @@
     "./ConfiguracionSmtp": "./src/ConfiguracionSmtp.tsx",
     "./data-table": "./src/data-table.tsx",
     "./FacturaDetalle": "./src/FacturaDetalle.tsx",
+    "./Facturas": "./src/Facturas.tsx",
     "./facturas": "./src/facturas.ts",
     "./fechas": "./src/fechas.ts",
     "./iconos-accion": "./src/iconos-accion.tsx",
