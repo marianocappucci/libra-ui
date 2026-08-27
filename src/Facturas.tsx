@@ -131,20 +131,33 @@ export function Facturas({
     return 'Error de conexión.'
   }
 
-  function armarQuery(): string {
-    const params = new URLSearchParams({ vista, page: String(page) })
-    if (q) params.set('q', q)
-    if (desde) params.set('desde', desde)
-    if (hasta) params.set('hasta', hasta)
+  /** Los filtros que se le mandan al backend.
+   *
+   * 🔴 Se pueden pasar por parámetro, y no es un adorno: `limpiarFiltros` los
+   * necesita. La versión anterior hacía `setQ('')` y después
+   * `setTimeout(cargar, 0)`, pero `cargar` es la función de ESTE render y
+   * cierra sobre el `q` **viejo**: la pantalla borraba los campos y volvía a
+   * consultar con el filtro puesto. Los inputs vacíos y la tabla filtrada — el
+   * operador cree que no hay más comprobantes.
+   *
+   * Venía de Contalibra y se encontró al extraer esto y escribirle un test.
+   */
+  type Filtros = { q: string; desde: string; hasta: string }
+
+  function armarQuery(f: Filtros, pagina: number): string {
+    const params = new URLSearchParams({ vista, page: String(pagina) })
+    if (f.q) params.set('q', f.q)
+    if (f.desde) params.set('desde', f.desde)
+    if (f.hasta) params.set('hasta', f.hasta)
     return params.toString()
   }
 
-  async function cargar() {
+  async function cargar(f: Filtros = { q, desde, hasta }, pagina: number = page) {
     setLoading(true)
     setError(null)
     try {
       const datos = await api.get<{ items: Factura[]; total: number; total_pages: number }>(
-        `/api/facturas?${armarQuery()}`,
+        `/api/facturas?${armarQuery(f, pagina)}`,
       )
       setFacturas(datos.items)
       setTotal(datos.total)
@@ -162,8 +175,11 @@ export function Facturas({
   }
 
   function limpiarFiltros() {
+    const vacios = { q: '', desde: '', hasta: '' }
     setQ(''); setDesde(''); setHasta(''); setPage(1)
-    setTimeout(cargar, 0)
+    // Con los filtros explícitos, no con lo que haya en el estado: acá todavía
+    // tiene lo viejo.
+    cargar(vacios, 1)
   }
 
   const esNota = vista === 'nc' || vista === 'nd'

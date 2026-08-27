@@ -170,3 +170,80 @@ describe('las pestañas', () => {
     await waitFor(() => expect(urlesDelListado().at(-1)).toContain('vista=nd'))
   })
 })
+
+
+describe('los filtros', () => {
+  it('limpiarlos vuelve a pedir el listado sin ellos', async () => {
+    // Sin esto, el botón de la X borra lo que se ve en los inputs y deja la
+    // tabla mostrando el resultado filtrado: la pantalla se contradice a sí
+    // misma y el operador cree que no hay más comprobantes.
+    montar()
+    await waitFor(() => expect(urlesDelListado()).toHaveLength(1))
+
+    await userEvent.type(screen.getByLabelText('Buscar comprobantes'), 'Perez')
+    await userEvent.click(screen.getByLabelText('Buscar'))
+    await waitFor(() => expect(urlesDelListado().at(-1)).toContain('q=Perez'))
+
+    await userEvent.click(screen.getByLabelText('Limpiar filtros'))
+    await waitFor(() => expect(urlesDelListado().at(-1)).not.toContain('q=Perez'))
+    expect(screen.getByLabelText('Buscar comprobantes')).toHaveValue('')
+  })
+
+  it('el botón de limpiar sólo aparece si hay algo que limpiar', async () => {
+    montar()
+    await screen.findByText('Ana Perez')
+    expect(screen.queryByLabelText('Limpiar filtros')).toBeNull()
+  })
+})
+
+describe('cuando el backend no contesta', () => {
+  it('lo dice, en vez de quedarse en Cargando para siempre', async () => {
+    fetchMock.mockImplementation(() => Promise.reject(new TypeError('sin red')))
+    montar()
+    expect(await screen.findByText(/Error de conexión/)).toBeInTheDocument()
+  })
+})
+
+describe('la paginación', () => {
+  it('pide la página que se aprieta', async () => {
+    fetchMock.mockImplementation(() =>
+      Promise.resolve(json({ items: [AUTORIZADA], total: 120, total_pages: 3, page: 1 })),
+    )
+    montar()
+    await screen.findByText('Ana Perez')
+
+    await userEvent.click(screen.getByLabelText('Página siguiente'))
+    await waitFor(() => expect(urlesDelListado().at(-1)).toContain('page=2'))
+  })
+
+  it('no se dibuja con una sola página', async () => {
+    // El control: con `total_pages` en 1 no hay nada que paginar, y unos
+    // botones que no llevan a ningún lado son ruido.
+    montar()
+    await screen.findByText('Ana Perez')
+    expect(screen.queryByLabelText('Página siguiente')).toBeNull()
+  })
+})
+
+describe('las notas', () => {
+  it('muestran de qué comprobante cuelgan', async () => {
+    // 🔑 Una nota de crédito suelta no significa nada: lo que importa es qué
+    // factura anula. Esa columna sólo existe en las vistas de notas.
+    const NC = {
+      ...AUTORIZADA, id: 99, tipo: 13, numero: 2, total: 14000,
+      cbte_asoc_tipo: 11, cbte_asoc_pv: 3, cbte_asoc_nro: 7,
+    }
+    fetchMock.mockImplementation((url: string) =>
+      Promise.resolve(String(url).includes('vista=nc')
+        ? json({ items: [NC], total: 1, total_pages: 1, page: 1 })
+        : json({ items: [AUTORIZADA], total: 1, total_pages: 1, page: 1 })),
+    )
+    montar()
+    await screen.findByText('Ana Perez')
+
+    await userEvent.click(screen.getByRole('tab', { name: /Notas de Crédito/ }))
+    expect(await screen.findByText('0003-00000007')).toBeInTheDocument()
+    // Y el importe de una NC se lee como lo que es: algo que resta.
+    expect(screen.getByText(/^- /)).toBeInTheDocument()
+  })
+})
