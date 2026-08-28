@@ -96,6 +96,10 @@ function notaRelacion(kind: 'nota-credito' | 'nota-debito'): string {
 export function FacturaDetalle({
   esAdmin = false,
   muestraCobros = true,
+  urlDelPdf = (id) => `/facturas/${id}/pdf`,
+  urlDelTicket = (id) => `/facturas/${id}/ticket`,
+  urlDelRecibo = (id) => `/facturas/${id}/recibo`,
+  mediosDeCobro,
 }: {
   esAdmin?: boolean
   /** 🔑 Si este producto cruza los cobros contra el comprobante.
@@ -115,6 +119,33 @@ export function FacturaDetalle({
    * qué. Es la misma decisión que ya se tomó para su listado.
    */
   muestraCobros?: boolean
+  /** Dónde vive el PDF del comprobante. `null` esconde el botón.
+   *
+   * 🔴 **Las tres rutas de documentos estaban hardcodeadas sin `/api`**, porque
+   * en Contalibra y Restolibra las sirve su router Jinja2 viejo. Un producto que
+   * no tenga ese router —LibraClub— apuntaba a `/facturas/{id}/pdf`, que en
+   * estas SPA **no da 404**: cae en el catch-all y devuelve el `index.html` con
+   * **200**. El usuario apretaba «Ver PDF» y se le abría una pestaña con la
+   * aplicación. Reportado el 2026-08-28 y verificado sobre `dev`: las tres
+   * devolvían `text/html`.
+   *
+   * El default es la ruta vieja, así que los dos productos que la tienen no
+   * cambian. */
+  urlDelPdf?: ((id: number) => string) | null
+  /** Ídem para el ticket. `null` esconde el botón: no todos los productos
+   *  imprimen uno. */
+  urlDelTicket?: ((id: number) => string) | null
+  /** Ídem para el recibo del cobro. Además de esto, el botón necesita
+   *  `muestraCobros` y que haya cobros. */
+  urlDelRecibo?: ((id: number) => string) | null
+  /** Los medios que ofrece el selector de cobro, para el producto que no expone
+   *  `/api/cajas` ni `/api/ventas/medios-pago`.
+   *
+   * 🔑 Sin esto, `muestraCobros` no se puede prender en un producto con caja
+   * propia: los dos pedidos fallan, el selector abre **vacío** y el cobro no se
+   * puede completar. Con la lista puesta, el bloque funciona sin que el producto
+   * tenga que inventar dos rutas que no le corresponden. */
+  mediosDeCobro?: { id: string; label: string }[]
 } = {}) {
   const { id } = useParams<{ id: string }>()
   const facturaId = Number(id)
@@ -138,9 +169,19 @@ export function FacturaDetalle({
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   useEffect(() => {
+    // 🔴 **Se comprueba la forma, igual que abajo con los medios.** El producto
+    // que no expone esta ruta devuelve el HTML del catch-all **con 200**, y
+    // `setCajas` guardaba eso: el `cajas.find(...)` del render siguiente tiraba
+    // `Cannot read properties of undefined` y se caía la pantalla **entera** del
+    // comprobante, no sólo el selector. El `.catch()` no alcanzaba porque el
+    // estado ya había quedado con un valor que no es una lista.
+    //
+    // El comentario de abajo ya decía esto para `/api/ventas/medios-pago`; la
+    // guarda estaba en una de las dos rutas y no en la otra.
     api.get<Caja[]>('/api/cajas').then((cs) => {
-      setCajas(cs)
-      const def = cs.find((c) => c.es_default) ?? cs[0]
+      const lista = Array.isArray(cs) ? cs : []
+      setCajas(lista)
+      const def = lista.find((c) => c.es_default) ?? lista[0]
       if (def) setCajaId(String(def.id))
     }).catch(() => {})
     // El vocabulario del motor, para el fallback y para las etiquetas.
@@ -157,10 +198,20 @@ export function FacturaDetalle({
 
   const cajaActual = cajas.find((c) => String(c.id) === cajaId)
   const mediosDeCaja = (cajaActual?.medios_pago ?? []).filter((m) => m !== MEDIO_CUENTA_CORRIENTE)
+  // El orden importa y es de más específico a más general: la caja elegida, si
+  // el producto tiene cajas; después la lista que el producto pasa por prop —el
+  // que tiene caja propia y no expone las rutas del motor—; y al final el
+  // vocabulario del motor, que es el camino de Contalibra y Restolibra.
+  const mediosPropios = (mediosDeCobro ?? []).map((m) => m.id)
+    .filter((m) => m !== MEDIO_CUENTA_CORRIENTE)
   const mediosDisponibles = mediosDeCaja.length > 0
     ? mediosDeCaja
-    : mediosDelMotor.map((m) => m.id).filter((m) => m !== MEDIO_CUENTA_CORRIENTE)
-  const etiquetasDelMotor = Object.fromEntries(mediosDelMotor.map((m) => [m.id, m.label]))
+    : mediosPropios.length > 0
+      ? mediosPropios
+      : mediosDelMotor.map((m) => m.id).filter((m) => m !== MEDIO_CUENTA_CORRIENTE)
+  const etiquetasDelMotor = Object.fromEntries(
+    [...mediosDelMotor, ...(mediosDeCobro ?? [])].map((m) => [m.id, m.label]),
+  )
   const medioLabel = (m: string) => etiqueta(m, etiquetasDelMotor)
 
   useEffect(() => {
@@ -307,9 +358,9 @@ export function FacturaDetalle({
         </h2>
         {detalle && (
           <div className="flex flex-wrap gap-2">
-            <Button asChild size="sm" variant="outline"><a href={`/facturas/${facturaId}/pdf`} target="_blank" rel="noreferrer"><FileDown />Ver PDF</a></Button>
-            <Button asChild size="sm" variant="outline"><a href={`/facturas/${facturaId}/ticket`} target="_blank" rel="noreferrer"><Printer />Ticket</a></Button>
-            {detalle.cobros.length > 0 && muestraCobros && <Button asChild size="sm" variant="outline"><a href={`/facturas/${facturaId}/recibo`} target="_blank" rel="noreferrer"><ReceiptText />Recibo</a></Button>}
+            {urlDelPdf && <Button asChild size="sm" variant="outline"><a href={urlDelPdf(facturaId)} target="_blank" rel="noreferrer"><FileDown />Ver PDF</a></Button>}
+            {urlDelTicket && <Button asChild size="sm" variant="outline"><a href={urlDelTicket(facturaId)} target="_blank" rel="noreferrer"><Printer />Ticket</a></Button>}
+            {detalle.cobros.length > 0 && muestraCobros && urlDelRecibo && <Button asChild size="sm" variant="outline"><a href={urlDelRecibo(facturaId)} target="_blank" rel="noreferrer"><ReceiptText />Recibo</a></Button>}
             <Dialog open={emailOpen} onOpenChange={setEmailOpen}>
               <DialogTrigger asChild>
                 <Button size="sm" variant="outline"><Mail />Enviar por email</Button>

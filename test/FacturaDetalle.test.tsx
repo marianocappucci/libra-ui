@@ -73,7 +73,7 @@ function respuestaComun(url: string, cajas: unknown): Response | null {
   return null
 }
 
-function montar(detalle: FacturaDetalleType, props: { esAdmin?: boolean; muestraCobros?: boolean } = {}) {
+function montar(detalle: FacturaDetalleType, props: Partial<Parameters<typeof FacturaDetalle>[0]> = {}) {
   fetchMock.mockImplementation((url: string) =>
     Promise.resolve(respuestaComun(url, []) ?? json(detalle)),
   )
@@ -601,5 +601,93 @@ describe('sin cruce de cobros', () => {
 
     expect(screen.getByText(/75123456789012/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Nota de Crédito/ })).toBeInTheDocument()
+  })
+})
+
+
+describe('las rutas de los documentos', () => {
+  // 🔴 Estaban hardcodeadas sin `/api`, porque en Contalibra y Restolibra las
+  // sirve su router Jinja2 viejo. En LibraClub —que no lo tiene— «Ver PDF»
+  // apuntaba a `/facturas/1/pdf`, que en estas SPA **no da 404**: cae en el
+  // catch-all y devuelve el `index.html` con 200. El usuario apretaba el botón
+  // y se le abría una pestaña con la aplicación. Lo reportó el humano el
+  // 2026-08-28; verificado sobre `dev`, las tres devolvían `text/html`.
+
+  it('por defecto son las del router viejo, así los dos productos no cambian', async () => {
+    montar(CON_CAE)
+    expect(await screen.findByRole('link', { name: /Ver PDF/ }))
+      .toHaveAttribute('href', '/facturas/1/pdf')
+    expect(screen.getByRole('link', { name: /Ticket/ }))
+      .toHaveAttribute('href', '/facturas/1/ticket')
+  })
+
+  it('🔴 el producto puede decir dónde vive su PDF', async () => {
+    montar(CON_CAE, { urlDelPdf: (id) => `/api/facturas/${id}/pdf` })
+    expect(await screen.findByRole('link', { name: /Ver PDF/ }))
+      .toHaveAttribute('href', '/api/facturas/1/pdf')
+  })
+
+  it('🔴 y con `null` el botón no se dibuja', async () => {
+    // Un producto que no imprime ticket no tiene que ofrecerlo: el botón
+    // llevaría a una pestaña con la aplicación adentro.
+    montar(CON_CAE, { urlDelTicket: null })
+    // Control positivo: la pantalla SÍ cargó y el otro botón está.
+    expect(await screen.findByRole('link', { name: /Ver PDF/ })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Ticket/ })).toBeNull()
+  })
+})
+
+describe('los medios de cobro que pasa el producto', () => {
+  /** El producto que **no expone** `/api/cajas` ni `/api/ventas/medios-pago`,
+   *  que es el caso entero para el que existe la prop. Las dos rutas fallan,
+   *  como en LibraClub, donde caen en el catch-all de la SPA.
+   *
+   *  ⚠️ La primera versión de este test usaba el `montar` común, y ése contesta
+   *  **siempre** la lista del motor: el selector se llenaba por el fallback y el
+   *  test pasaba con la prop ignorada. Lo delató la mutación. */
+  function montarSinRutasDelMotor(props: Partial<Parameters<typeof FacturaDetalle>[0]>) {
+    fetchMock.mockImplementation((url: string) => {
+      const u = String(url)
+      if (u.includes('/api/ventas/medios-pago') || u.includes('/api/cajas')) {
+        return Promise.resolve(new Response('<!doctype html>', {
+          status: 200, headers: { 'content-type': 'text/html' },
+        }))
+      }
+      return Promise.resolve(json(CON_CAE))
+    })
+    render(
+      <MemoryRouter initialEntries={['/facturas/1']}>
+        <Routes>
+          <Route path="/facturas/:id" element={<FacturaDetalle {...props} />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+  }
+
+  it('🔑 alimentan el selector cuando el producto no expone las rutas del motor', async () => {
+    const user = userEvent.setup()
+    montarSinRutasDelMotor({
+      muestraCobros: true,
+      mediosDeCobro: [
+        { id: 'efectivo', label: 'Efectivo' },
+        { id: 'tarjeta_debito', label: 'Tarjeta de débito' },
+      ],
+    })
+
+    await user.click(await screen.findByRole('button', { name: /Registrar cobro/ }))
+    const etiquetas = (await screen.findAllByRole('option')).map((o) => o.textContent)
+    expect(etiquetas).toContain('Efectivo')
+    expect(etiquetas).toContain('Tarjeta de débito')
+  })
+
+  it('🔴 el control — sin la prop, ese selector queda VACÍO', async () => {
+    // Es el estado que la prop viene a arreglar, y lo que hacía que
+    // `muestraCobros` fuera inusable en un producto con caja propia: el bloque
+    // se dibuja, ofrece el botón, y el diálogo abre sin un solo medio.
+    const user = userEvent.setup()
+    montarSinRutasDelMotor({ muestraCobros: true })
+
+    await user.click(await screen.findByRole('button', { name: /Registrar cobro/ }))
+    expect(screen.queryAllByRole('option')).toEqual([])
   })
 })
