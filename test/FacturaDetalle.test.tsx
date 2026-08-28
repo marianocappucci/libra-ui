@@ -73,7 +73,7 @@ function respuestaComun(url: string, cajas: unknown): Response | null {
   return null
 }
 
-function montar(detalle: FacturaDetalleType, props: { esAdmin?: boolean } = {}) {
+function montar(detalle: FacturaDetalleType, props: { esAdmin?: boolean; muestraCobros?: boolean } = {}) {
   fetchMock.mockImplementation((url: string) =>
     Promise.resolve(respuestaComun(url, []) ?? json(detalle)),
   )
@@ -565,5 +565,41 @@ describe('estados de carga', () => {
       total_cobrado: 1000, pendiente: 0,
     })
     expect(await screen.findByRole('link', { name: /Recibo/ })).toBeInTheDocument()
+  })
+})
+
+
+describe('sin cruce de cobros', () => {
+  // 🔴 El caso de LibraClub. Los medios del selector salen de `/api/cajas` y
+  // `/api/ventas/medios-pago`, que ese producto **no expone**: los dos pedidos
+  // fallan y quedan en su `.catch()`. Sin apagar el bloque, la pantalla dice
+  // «Pendiente de cobro» sobre algo que puede estar cobrado, ofrece un botón, y
+  // el diálogo abre con el selector VACÍO — un callejón sin salida.
+  it('no ofrece cobrar lo que no puede cobrar', async () => {
+    montar(CON_CAE, { muestraCobros: false })
+    await screen.findByRole('button', { name: /Duplicar/ })
+
+    expect(screen.queryByText(/Pendiente de cobro/)).toBeNull()
+    expect(screen.queryByRole('button', { name: /Registrar cobro/ })).toBeNull()
+  })
+
+  it('con la bandera puesta sí lo ofrece', async () => {
+    // El control: sin esto, una pantalla que nunca mostrara el bloque pasaría
+    // igual el test de arriba.
+    montar(CON_CAE)
+    await screen.findByRole('button', { name: /Duplicar/ })
+
+    expect(screen.getByText(/Pendiente de cobro/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Registrar cobro/ })).toBeInTheDocument()
+  })
+
+  it('el resto del comprobante se sigue viendo', async () => {
+    // Apagar los cobros no puede llevarse la factura: el número, el CAE y las
+    // acciones fiscales son lo que este producto sí tiene.
+    montar(CON_CAE, { muestraCobros: false, esAdmin: true })
+    await screen.findByRole('button', { name: /Duplicar/ })
+
+    expect(screen.getByText(/75123456789012/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Nota de Crédito/ })).toBeInTheDocument()
   })
 })
