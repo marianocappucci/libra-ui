@@ -93,7 +93,29 @@ function notaRelacion(kind: 'nota-credito' | 'nota-debito'): string {
 /** `esAdmin` gatea generar notas de crédito/débito y eliminar un comprobante
  *  sin CAE. Default `false`: si un producto olvida pasarlo, la pantalla queda
  *  de menos y no de más. */
-export function FacturaDetalle({ esAdmin = false }: { esAdmin?: boolean } = {}) {
+export function FacturaDetalle({
+  esAdmin = false,
+  muestraCobros = true,
+}: {
+  esAdmin?: boolean
+  /** 🔑 Si este producto cruza los cobros contra el comprobante.
+   *
+   * Con `false` desaparece todo el bloque de cobro: el estado «Pendiente de
+   * cobro», el botón y su diálogo.
+   *
+   * No es cosmético. Los medios de pago del selector salen de `/api/cajas` y
+   * `/api/ventas/medios-pago`, que **no todos los productos exponen** —los dos
+   * pedidos ya tienen su `.catch()` por eso—. En el que no las tiene, el bloque
+   * igual se dibuja: dice «Pendiente de cobro» sobre algo que puede estar
+   * cobrado, ofrece un botón, y el diálogo abre con el selector **vacío**. Un
+   * callejón sin salida.
+   *
+   * El caso vivo es LibraClub: ahí el cruce `caja_movimientos.factura_id` sólo
+   * lo llena el cobro por QR, así que ni el estado ni el selector tendrían con
+   * qué. Es la misma decisión que ya se tomó para su listado.
+   */
+  muestraCobros?: boolean
+} = {}) {
   const { id } = useParams<{ id: string }>()
   const facturaId = Number(id)
   const navigate = useNavigate()
@@ -287,7 +309,7 @@ export function FacturaDetalle({ esAdmin = false }: { esAdmin?: boolean } = {}) 
           <div className="flex flex-wrap gap-2">
             <Button asChild size="sm" variant="outline"><a href={`/facturas/${facturaId}/pdf`} target="_blank" rel="noreferrer"><FileDown />Ver PDF</a></Button>
             <Button asChild size="sm" variant="outline"><a href={`/facturas/${facturaId}/ticket`} target="_blank" rel="noreferrer"><Printer />Ticket</a></Button>
-            {detalle.cobros.length > 0 && <Button asChild size="sm" variant="outline"><a href={`/facturas/${facturaId}/recibo`} target="_blank" rel="noreferrer"><ReceiptText />Recibo</a></Button>}
+            {detalle.cobros.length > 0 && muestraCobros && <Button asChild size="sm" variant="outline"><a href={`/facturas/${facturaId}/recibo`} target="_blank" rel="noreferrer"><ReceiptText />Recibo</a></Button>}
             <Dialog open={emailOpen} onOpenChange={setEmailOpen}>
               <DialogTrigger asChild>
                 <Button size="sm" variant="outline"><Mail />Enviar por email</Button>
@@ -373,9 +395,9 @@ export function FacturaDetalle({ esAdmin = false }: { esAdmin?: boolean } = {}) 
                     <span><strong>Pago parcial</strong> — Cobrado: {formatCurrency(detalle.total_cobrado)} <span className="font-medium text-destructive">Pendiente: {formatCurrency(detalle.pendiente)}</span></span>
                   )}
                 </span>
-                {detalle.pendiente > 0 && <Button size="sm" onClick={() => setCobroOpen(true)}><CircleDollarSign />Registrar cobro</Button>}
+                {detalle.pendiente > 0 && muestraCobros && <Button size="sm" onClick={() => setCobroOpen(true)}><CircleDollarSign />Registrar cobro</Button>}
               </div>
-            ) : estaAutorizada(detalle.factura) ? (
+            ) : estaAutorizada(detalle.factura) && muestraCobros ? (
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm">
                 <span className="flex items-center gap-2">
                   <Hourglass className="size-4 shrink-0 text-muted-foreground" />
