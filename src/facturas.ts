@@ -1,6 +1,7 @@
-// Dominio de facturación compartido por los dos productos que emiten
-// comprobantes con pantalla propia: Contalibra y Restolibra. Los otros tres
-// verticales facturan desde el turno o desde el POS y no usan nada de esto.
+// Dominio de facturación compartido por los productos que emiten comprobantes:
+// Contalibra, Restolibra y —desde el 2026-08-27— LibraClub, que montó las dos
+// pantallas del kit. Los otros tres verticales facturan desde el turno o desde
+// el POS y no usan nada de esto.
 //
 // Estos tipos vivían duplicados en el `api.ts` de cada producto, byte a byte
 // -- se verificó con un diff antes de moverlos, no de memoria. Cada `api.ts`
@@ -10,6 +11,25 @@
 //
 // El backend que los alimenta es `libracore` -- ver su `db/facturas.py` y
 // `facturas_borrador.py`.
+
+/** Las condiciones frente al IVA que ofrece un selector de cliente.
+ *
+ * 🔑 **La lista la fija ARCA, no el producto.** Estaba escrita dos veces
+ * —Contalibra y Restolibra, idénticas— y la consumen los dos formularios de
+ * cliente de cada uno. Una lista fiscal que diverge entre productos es cómo un
+ * cliente termina cargado con una condición que su instancia acepta y la otra
+ * no.
+ *
+ * `as const` a propósito: el `.includes()` de los formularios compara contra
+ * `readonly string[]`, y sin esto el tipo se ensancha a `string[]`. */
+export const IVA_CONDITIONS = [
+  'Responsable Inscripto',
+  'Monotributista',
+  'IVA Exento',
+  'Consumidor Final',
+  'No Alcanzado',
+  'IVA No Responsable',
+] as const
 
 export type Caja = {
   id: number

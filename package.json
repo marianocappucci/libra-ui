@@ -25,6 +25,8 @@
     "./Login": "./src/Login.tsx",
     "./Logs": "./src/Logs.tsx",
     "./medios-pago": "./src/medios-pago.ts",
+    "./mp": "./src/mp.ts",
+    "./MpBandeja": "./src/MpBandeja.tsx",
     "./PasswordInput": "./src/PasswordInput.tsx",
     "./PasswordReset": "./src/PasswordReset.tsx",
     "./SelectBuscable": "./src/SelectBuscable.tsx",
