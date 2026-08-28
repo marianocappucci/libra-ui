@@ -73,7 +73,7 @@ function respuestaComun(url: string, cajas: unknown): Response | null {
   return null
 }
 
-function montar(detalle: FacturaDetalleType, props: { esAdmin?: boolean } = {}) {
+function montar(detalle: FacturaDetalleType, props: { esAdmin?: boolean; muestraCobros?: boolean } = {}) {
   fetchMock.mockImplementation((url: string) =>
     Promise.resolve(respuestaComun(url, []) ?? json(detalle)),
   )
