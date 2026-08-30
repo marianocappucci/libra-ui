@@ -229,6 +229,39 @@ describe('🔴 El "según corresponda"', () => {
     expect(await screen.findByText(/Datos de la empresa/)).toBeInTheDocument()
   })
 
+  it('🔴 el pie del producto sale UNA vez, y en todas las secciones', async () => {
+    // LibraDesk lleva ahí la atribución del set de iconos: su licencia ISC pide
+    // conservar el aviso de copyright en las distribuciones, y un producto que
+    // se sirve compilado es una distribución. No es un cartel de
+    // agradecimiento: es la condición bajo la que se puede usar el set.
+    const Configuracion = createConfiguracion({
+      icono: IconoFalso, producto: 'LibraDesk',
+      integraciones: { email: true },
+      pie: <p>Iconos: Lucide (ISC).</p>,
+    })
+    montar(<Configuracion />)
+    const usuario = userEvent.setup()
+
+    expect(await screen.findByText(/Iconos: Lucide/)).toBeInTheDocument()
+
+    // Y sigue estando al cambiar de sección: si viviera adentro de una, se
+    // perdería al salir de ella.
+    await usuario.click(screen.getByRole('tab', { name: /Datos \/ Backup/ }))
+    expect(await screen.findByText(/Iconos: Lucide/)).toBeInTheDocument()
+    // Una sola vez, no una por sección.
+    expect(screen.getAllByText(/Iconos: Lucide/)).toHaveLength(1)
+  })
+
+  it('el control — sin `pie` no aparece nada de más', async () => {
+    const Configuracion = createConfiguracion({
+      icono: IconoFalso, producto: 'Contalibra', integraciones: { email: true },
+    })
+    montar(<Configuracion />)
+
+    await screen.findAllByRole('tab')
+    expect(screen.queryByText(/Iconos:/)).toBeNull()
+  })
+
   it('sin ninguna sección es un error de programación, no una pantalla vacía', () => {
     expect(() => createConfiguracion({
       icono: IconoFalso, producto: 'X', empresa: false, datos: false,
