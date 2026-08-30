@@ -304,6 +304,16 @@ En una instancia que **ya** tiene fila no cambia nada: el `GET` devuelve el slug
 real y es ése el que viaja de vuelta. Contalibra y Restolibra son multi-empresa
 y no declaran nada: su fila se dio de alta con la razón social.
 
+### Con una sola integración no hay sub-navegación (`v0.49.0`)
+
+Una barra lateral de 192 px con un solo botón, ocupando el ancho de la pestaña
+entera, se lee como algo roto y no como una navegación. Con una integración
+declarada el contenido va directo; con dos o más aparece la sub-navegación.
+
+El caso vivo es **MedLibra**: desde el ADR-036 no factura por ARCA —la
+facturación es de Contalibra— ni cobra por MercadoPago, así que de las tres
+integraciones le queda una, el correo.
+
 ### Los endpoints que consume
 
 | Sección | Router del motor | Prefijo por defecto |
