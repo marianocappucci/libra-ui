@@ -102,12 +102,24 @@ export function MercadoPagoCard({
   basePath = '/api/config/mercadopago',
   rutaWebhook = '/webhooks/mercadopago',
   autoFacturar = AUTO_FACTURAR_POR_DEFECTO,
+  webhook = true,
 }: {
   basePath?: string
+  /** Dónde escucha el webhook ESTE producto. LibraClub lo tiene en
+   *  `/api/portal/webhook`, no en la ruta de la familia. */
   rutaWebhook?: string
   /** `false` en un producto que todavía no emite factura al acreditarse el
    *  pago: mostrar un interruptor que no hace nada es peor que no mostrarlo. */
   autoFacturar?: TextoAutoFacturar | false
+  /** 🔴 `false` en un producto **sin webhook de MercadoPago**. Esconde el campo
+   *  del Webhook Secret y el bloque de la URL.
+   *
+   *  El caso vivo es **VentaLibra**, y su ausencia de webhook es deliberada y
+   *  está documentada: en la instancia real del cliente el webhook no llegó
+   *  nunca —cero POST en el log— y el cobro se resuelve con un poll. Pedirle al
+   *  comercio una firma secreta para un webhook que no existe es mandarlo a
+   *  configurar algo que no hace nada, y despues a buscar por qué "no anda". */
+  webhook?: boolean
 } = {}) {
   const [cfg, setCfg] = useState<ConfigMercadoPago | null>(null)
   const [token, setToken] = useState('')
@@ -223,11 +235,13 @@ export function MercadoPagoCard({
           onChange={setToken}
           placeholder={placeholderDeSecreto(cfg.mp_access_token_cargado, cfg.mp_access_token, 'APP_USR-…')}
         />
-        <Campo
-          id="mp-webhook-secret" label="Webhook Secret" type="password" value={secreto}
-          onChange={setSecreto}
-          placeholder={placeholderDeSecreto(cfg.mp_webhook_secret_cargado, cfg.mp_webhook_secret, 'La firma que genera MercadoPago')}
-        />
+        {webhook && (
+          <Campo
+            id="mp-webhook-secret" label="Webhook Secret" type="password" value={secreto}
+            onChange={setSecreto}
+            placeholder={placeholderDeSecreto(cfg.mp_webhook_secret_cargado, cfg.mp_webhook_secret, 'La firma que genera MercadoPago')}
+          />
+        )}
         <Campo
           id="mp-concepto" label="Descripción del cobro" value={cfg.mp_concepto_descripcion}
           onChange={(v) => setCfg({ ...cfg, mp_concepto_descripcion: v })}
@@ -267,6 +281,7 @@ export function MercadoPagoCard({
           </div>
         )}
 
+        {webhook && (
         <div className="col-span-full grid gap-2 rounded-md border bg-muted/40 p-3 text-sm">
           <p className="font-medium">URL del webhook para registrar en MercadoPago</p>
           <div className="flex gap-2">
@@ -279,6 +294,7 @@ export function MercadoPagoCard({
             Evento a suscribir: Pagos (payment). El Webhook Secret lo genera MP al guardar el webhook.
           </p>
         </div>
+        )}
 
         {!puedeCobrarPorQr(cfg) && (
           <p className="col-span-full rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
@@ -296,7 +312,7 @@ export function MercadoPagoCard({
               <Send />{probando ? 'Probando…' : 'Probar conexión'}
             </Button>
           )}
-          {(cfg.mp_access_token_cargado || cfg.mp_webhook_secret_cargado) && (
+          {(cfg.mp_access_token_cargado || (webhook && cfg.mp_webhook_secret_cargado)) && (
             <Button type="button" variant="outline" disabled={ocupado} onClick={() => void quitarCredenciales()}>
               Quitar credenciales
             </Button>

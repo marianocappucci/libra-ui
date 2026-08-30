@@ -776,6 +776,32 @@ describe('MercadoPago', () => {
     expect(screen.queryByText(/Faltan datos/)).toBeNull()
   })
 
+  it('🔴 un producto SIN webhook no pide una firma para un webhook que no existe', async () => {
+    // VentaLibra cobra por poll y no monta webhook: está documentado y medido
+    // —en la instancia real del cliente no llegó ni un POST—. Pedirle al
+    // comercio el Webhook Secret lo manda a configurar algo que no hace nada, y
+    // después a buscar por qué "no anda".
+    montar(<MercadoPagoCard webhook={false} />)
+
+    await screen.findByLabelText(/Access Token/)
+    expect(screen.queryByLabelText(/Webhook Secret/)).toBeNull()
+    expect(screen.queryByText(/URL del webhook/)).toBeNull()
+  })
+
+  it('sin webhook, guardar no toca el secreto que hubiera guardado', async () => {
+    // El campo no está, así que `secreto` queda vacío — y vacío significa "no
+    // lo toqués" del lado del motor. Si mandara `null` o el valor enmascarado,
+    // esconder el campo BORRARÍA la firma de una instancia que sí la tenía.
+    montar(<MercadoPagoCard webhook={false} />)
+    const usuario = userEvent.setup()
+
+    await screen.findByLabelText(/Access Token/)
+    await usuario.click(screen.getByRole('button', { name: /Guardar MercadoPago/ }))
+
+    const put = await esperarPedido('/mercadopago', 'PUT')
+    expect(JSON.parse(String(put.body)).mp_webhook_secret).toBe('')
+  })
+
   it('muestra la URL del webhook para registrar en MercadoPago', async () => {
     montar(<MercadoPagoCard />)
 
