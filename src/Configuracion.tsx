@@ -162,7 +162,23 @@ export function createConfiguracion({
    *  Datos / Backup: lo que se parametriza al arrancar antes de lo que se toca
    *  una vez y da miedo. */
   propias?: SeccionConfig[]
-  empresa?: false | { basePath?: string }
+  /** La pestaña "Empresa". Por defecto es la `EmpresaCard` del kit, contra
+   *  `/api/config/empresa`.
+   *
+   *  🔴 `contenido` la reemplaza **sin moverla de lugar**, y hace falta en dos
+   *  productos por motivos distintos:
+   *
+   *  - **LibraCargo** guarda los datos de la empresa en una tabla propia y con
+   *    más campos —razón social, localidad, provincia, sitio web, pie de
+   *    impresión—, no en el `config.json` del motor.
+   *  - **LibraDesk** esconde el botón de guardar a quien no es admin. El
+   *    backend ya rechaza el `PUT`, así que sin eso un usuario de staff vería
+   *    un botón que siempre le contesta 403.
+   *
+   *  Sin esta opción los dos tendrían que declararla como sección propia, y
+   *  "Empresa" caería DESPUÉS de Integraciones — distinta de los otros seis, que
+   *  es lo que esta pantalla vino a terminar. */
+  empresa?: false | { basePath?: string; contenido?: ReactNode }
   datos?: false | { basePath?: string }
   /** El botón fijo al final de la barra. Baja una copia sin entrar a la
    *  pestaña: el cliente lo aprieta antes de hacer algo que lo pone nervioso. */
@@ -195,7 +211,7 @@ export function createConfiguracion({
   const secciones: SeccionConfig[] = [
     ...(opcEmpresa ? [{
       clave: 'empresa', label: 'Empresa', icono: Building2,
-      contenido: <EmpresaCard {...opcEmpresa} />,
+      contenido: opcEmpresa.contenido ?? <EmpresaCard basePath={opcEmpresa.basePath} />,
     }] : []),
     // Con UNA sola integración el contenido va directo: una barra lateral de
     // 192 px con un solo botón, ocupando el ancho de la pestaña entera, se lee

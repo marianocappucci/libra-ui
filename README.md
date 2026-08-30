@@ -345,6 +345,22 @@ significa "no lo toqués" del lado del motor. Hay un test que lo sostiene.
 `rutaWebhook` es la otra mitad del mismo problema: **LibraClub** sí tiene
 webhook, pero en `/api/portal/webhook`, no en la ruta de la familia.
 
+### El producto puede poner su propia tarjeta de Empresa (`v0.52.0`)
+
+`empresa: { contenido: <MiTarjeta /> }` reemplaza el formulario del kit **sin
+mover la pestaña de lugar**. Hace falta en dos productos, por motivos distintos:
+
+- **LibraCargo** guarda los datos de la empresa en una tabla propia y con más
+  campos —razón social, localidad, provincia, sitio web, pie de impresión—, no
+  en el `config.json` del motor.
+- **LibraDesk** esconde el botón de guardar a quien no es admin. El backend ya
+  rechaza el `PUT`, así que sin eso un usuario de staff vería un botón que
+  siempre le contesta 403.
+
+Sin esta opción los dos tendrían que declararla como sección propia, y
+"Empresa" caería **después** de Integraciones — distinta de los otros seis, que
+es justamente lo que esta pantalla vino a terminar.
+
 ### Los endpoints que consume
 
 | Sección | Router del motor | Prefijo por defecto |
