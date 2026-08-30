@@ -24,6 +24,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Check, Copy, Phone, Save, Send } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
+import { BadgeEstado, type TonoEstado } from '../badge-estado'
 import { Campo, AccionesDeSeccion } from './campos'
 import { TutorialMercadoPago } from './tutoriales'
 import { Button } from '@/components/ui/button'
@@ -34,6 +35,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
+import { fechaHora } from '@/lib/fechas'
 
 /** Lo que devuelve `GET {basePath}`. Los dos secretos vienen enmascarados y
  *  acompañados de un booleano que dice si hay algo cargado. */
@@ -47,6 +49,12 @@ export type ConfigMercadoPago = {
   mp_user_id: string
   mp_pos_id: string
   mp_auto_facturar_ventas: boolean
+  /** De qué ambiente es la credencial: `''` (no hay), `prueba`, `produccion` o
+   *  `indeterminado`. Lo deriva el motor — ver `AVISO_DE_AMBIENTE`. */
+  mp_ambiente?: string
+  /** Cuándo se determinó, `'YYYY-MM-DD HH:MM:SS'`. Vacío cuando no hizo falta
+   *  preguntar (un token `TEST-` se reconoce solo). */
+  mp_ambiente_verificado?: string
 }
 
 const VACIA: ConfigMercadoPago = {
@@ -54,6 +62,43 @@ const VACIA: ConfigMercadoPago = {
   mp_webhook_secret: '', mp_webhook_secret_cargado: false,
   mp_concepto_descripcion: '', mp_iva_rate: '0',
   mp_user_id: '', mp_pos_id: '', mp_auto_facturar_ventas: false,
+  mp_ambiente: '', mp_ambiente_verificado: '',
+}
+
+/** Qué pastilla le corresponde a cada ambiente.
+ *
+ *  🔴 **Por qué esto está en pantalla.** MercadoPago no tiene un ambiente de
+ *  homologación como ARCA: no hay host de sandbox, es el mismo
+ *  `api.mercadopago.com` y lo que define el ambiente es el token. Sin este
+ *  cartel las dos fallas son mudas — un token de producción en una instancia
+ *  `dev` cobra plata de verdad, y uno de prueba en la instancia de un cliente
+ *  no cobra nada — y las dos se ven exactamente igual: el QR se genera y la
+ *  orden se crea.
+ *
+ *  `indeterminado` no es un error: es "hay un token y todavía nadie le
+ *  preguntó a MercadoPago de quién es". Se sale de ahí con "Probar conexión".
+ */
+const AVISO_DE_AMBIENTE: Record<string, { tono: TonoEstado; texto: string; ayuda: string }> = {
+  // ⚠️ Los tres textos arrancan con "Ambiente" y NO con "Credenciales": el
+  // tutorial de esta misma tarjeta ya dice "Credenciales de producción" —es el
+  // nombre de la pestaña del panel de MercadoPago—, y dos frases casi iguales
+  // en la misma pantalla diciendo cosas distintas se leen mal.
+  prueba: {
+    tono: 'atencion',
+    texto: 'Ambiente de prueba',
+    ayuda: 'Los cobros de esta instancia NO son reales: no entra plata a ninguna cuenta.',
+  },
+  produccion: {
+    tono: 'ok',
+    texto: 'Ambiente de producción',
+    ayuda: 'Los cobros de esta instancia son reales y entran a la cuenta del titular.',
+  },
+  indeterminado: {
+    tono: 'neutro',
+    texto: 'Ambiente sin verificar',
+    ayuda: 'Hay un Access Token cargado, pero todavía no se sabe si es de prueba o real. '
+      + 'Probá la conexión para averiguarlo.',
+  },
 }
 
 /** Si el QR de caja puede cobrar.
@@ -202,6 +247,11 @@ export function MercadoPagoCard({
       // El `user_id` es justo lo que hay que copiar en el campo de al lado para
       // armar el QR de caja, así que se muestra en vez de un "OK" pelado.
       setAviso(`Conectado — ${r.nickname ?? 'cuenta verificada'}${r.user_id ? ` (User ID ${r.user_id})` : ''}`)
+      // 🔴 Recargar NO es de más: probar es lo que AVERIGUA el ambiente, así
+      // que sin esto el cartel sigue diciendo "sin verificar" justo después de
+      // haberlo verificado, y la única forma de verlo cambiar sería recargar la
+      // pantalla a mano.
+      await cargar()
     } catch (err) {
       setError(describirError(err))
     } finally {
@@ -220,14 +270,28 @@ export function MercadoPagoCard({
     return <p className="py-6 text-center text-sm text-muted-foreground">Cargando…</p>
   }
 
+  // Sin credencial cargada no hay ambiente del que hablar, y un backend viejo
+  // —un producto que todavía no subió el pin de LibraCore— no manda el campo:
+  // en los dos casos el cartel no aparece, en vez de decir algo inventado.
+  const aviso_ambiente = AVISO_DE_AMBIENTE[cfg.mp_ambiente ?? '']
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
+        <CardTitle className="flex flex-wrap items-center gap-2 text-base">
           <Phone className="size-4" />MercadoPago
+          {aviso_ambiente && <BadgeEstado tono={aviso_ambiente.tono}>{aviso_ambiente.texto}</BadgeEstado>}
         </CardTitle>
       </CardHeader>
       <CardContent className="grid gap-3 sm:grid-cols-2">
+        {aviso_ambiente && (
+          <p className="col-span-full text-xs text-muted-foreground">
+            {aviso_ambiente.ayuda}
+            {cfg.mp_ambiente_verificado
+              ? ` Verificado el ${fechaHora(cfg.mp_ambiente_verificado)}.`
+              : ''}
+          </p>
+        )}
         <div className="col-span-full"><TutorialMercadoPago /></div>
 
         <Campo
