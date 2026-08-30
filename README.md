@@ -87,6 +87,7 @@ para que el motor de Tailwind v4 escanee las clases usadas dentro de
 | `libra-ui/Login` | `createLogin({ productName, productInitial, redirectTo })` | Factory: recibe branding + ruta de redirect post-login. Acepta `logo` y `wordmarkClassName` — ver abajo. |
 | `libra-ui/branding` | `type ProductLogo` | El tipo del logo de producto. Módulo aparte para que `Login` no tenga que importar de `Layout` y arrastrarse la sidebar entera al bundle de la pantalla que carga sin sesión. |
 | `libra-ui/SelectBuscable` | `SelectBuscable`, `type OpcionSelect` | Select con **búsqueda por teclado** (`v0.9.0`). El `Select` de shadcn/Radix obliga a encontrar la opción a ojo en una lista ordenada; con los cientos de clientes que puede tener una empresa real, eso deja de ser viable. Filtra sin acentos y exige todos los términos, igual que el buscador de `data-table` — comparten `coincideBusqueda`. **No necesita `cmdk` ni el primitivo `popover`**: se construye con `input`, `button` y `cn`, que ya están en los 5 consumidores. Desde `v0.25.0` **anda solo adentro de un `<FormControl>`**: declara el `id`, el `aria-describedby` y el `aria-invalid` que el Slot le inyecta, así el `htmlFor` del `<FormLabel>` lo nombra — ver abajo. |
+| `libra-ui/Configuracion` | `createConfiguracion({ icono, producto, integraciones, propias })`, `EmpresaCard`, `MercadoPagoCard`, `ArcaCard`, `EmailCard`, `DatosBackupCard`, los `Tutorial*` | **La pantalla de Configuración de la familia, entera** (`v0.47.0`). Tutoriales incluidos. Exige tres primitivos más del consumidor — ver abajo. |
 | `libra-ui/use-mobile` | `useIsMobile` | Hook de breakpoint, 100% genérico. |
 | `libra-ui/utils` | `cn`, `normalizar`, `coincideBusqueda` | Helper `clsx` + `tailwind-merge` de shadcn, más los dos helpers de búsqueda que comparten `data-table` y `SelectBuscable` (sin acentos, todos los términos en cualquier orden). |
 | `libra-ui/iconos-accion` | ~60 componentes de icono (`Eye`, `Pencil`, `Trash2`, `FilePlus`…) | El **vocabulario de iconos de acción y estado** de la familia (`v0.18.0`). Vive acá y no copiado por producto porque la misma acción tiene que dibujarse igual en todos. **Requiere configuración en el consumidor — ver abajo.** |
@@ -195,3 +196,105 @@ cosas para sus iconos de **identidad**, los del menú, que se le pasan a
 > consumidor— porque este paquete viaja como TSX crudo y pasa por el pipeline
 > del consumidor, no por el pre-bundle de dependencias. Con el plugin sacado
 > del `vite.config.ts`, el build falla.
+
+## La pantalla de Configuración, y lo que exige del consumidor (`v0.47.0`)
+
+`libra-ui/Configuracion` dejó de ser "el armado de las pestañas" para pasar a
+ser **la pantalla de Configuración de la familia, entera**: Empresa (datos +
+logo), Integraciones (MercadoPago / ARCA / Email-SMTP en una sub-navegación
+lateral), las secciones propias del producto, y Datos / Backup — más el botón de
+*Backup rápido* fijo al final de la barra, y los **tutoriales** de MercadoPago,
+ARCA y Gmail.
+
+El pedido que la originó (2026-08-29) es explícito sobre el porqué:
+
+> *"Quiero que todas las pantallas de configuración de todas las aplicaciones de
+> la familia Libra sean iguales a la de Contalibra […] la idea es que después si
+> hago una modificación en la configuración o una actualización se actualice en
+> todas."*
+
+Mientras la versión buena vivía adentro de Contalibra, arreglarla no arreglaba a
+los otros siete. Por eso está acá.
+
+```tsx
+export const Configuracion = createConfiguracion({
+  icono: Settings,
+  producto: 'MedLibra',                 // sale en los tutoriales; ver abajo
+  integraciones: { arca: true, email: true },
+  propias: [
+    { clave: 'sedes', label: 'Sedes', icono: MapPin, contenido: <SedesCard /> },
+  ],
+})
+```
+
+### `producto` no es decorativo
+
+Dos tutoriales nombran al sistema: el de Gmail le pide al cliente que cree una
+contraseña de aplicación **con ese nombre**, y el de Padrón A13 le dice que elija
+como representante el certificado que configuró en ese sistema. Un valor
+equivocado no rompe nada — hace que el tutorial explique mal, que es peor,
+porque parece correcto.
+
+### Lo que el producto tiene que tener vendorizado
+
+Además de los primitivos que este paquete ya usaba (`card`, `button`, `input`,
+`label`, `select`, `tabs`, `badge`), esta pantalla necesita **tres piezas más**.
+Las tres son copias de archivo: `radix-ui` ya es dependencia de los ocho
+productos, así que **no hay que instalar nada**.
+
+| Archivo | Para qué |
+|---|---|
+| `components/ui/switch.tsx` | El interruptor de "facturar automáticamente" de MercadoPago. |
+| `components/ui/alert-dialog.tsx` | Base del confirmador. |
+| `components/confirm-dialog.tsx` | La confirmación de la restauración de datos. Ya lo exigía `libra-ui/FacturaDetalle`. |
+
+Y una función: **`@/lib/fechas` tiene que exportar `fechaHora`**, que es con lo
+que se muestra la fecha de cada copia de backup en `dd-mm-aaaa HH:MM`. Los
+productos que tienen su formateador en otro módulo (LibraCargo, LibraDesk)
+resuelven esto con un **adaptador que re-exporta el suyo**, no con una segunda
+implementación: el formateo va en un helper único por producto.
+
+> ⚠️ Lo que falta acá **no se degrada en silencio: no compila**. Es la misma
+> trampa que se comió a Gestiolibra y VentaLibra con la v0.29.0 y a LibraCargo
+> con `tabs` en la v0.35.0 — el import es del módulo entero, así que le llega
+> igual al producto que sólo usa `DatosBackupCard`.
+
+### Ruptura respecto de `v0.46.0`
+
+`SECCIONES_BASE`, `SECCION_ARCA` y la prop `secciones` **ya no existen**. Un
+producto que suba el pin sin migrar su `Configuracion.tsx` falla en el
+`tsc -b` con *"has no exported member"*, que es lo buscado: la alternativa
+—dejarlos como alias— lo habría dejado compilando y mostrando las pestañas
+planas viejas, divergiendo en silencio, que es justo lo que esta versión vino a
+terminar.
+
+La migración es declarar `producto`, mover las secciones propias a `propias` y
+declarar las integraciones:
+
+```diff
+-  secciones: [...SECCIONES_BASE, SECCION_ARCA, { clave: 'balanza', … }],
++  producto: 'VentaLibra',
++  integraciones: { mercadopago: true, arca: true, email: true },
++  propias: [{ clave: 'balanza', … }],
+```
+
+### Los endpoints que consume
+
+| Sección | Router del motor | Prefijo por defecto |
+|---|---|---|
+| Empresa + logo | `libracore.config_router.build_empresa_router` / `build_empresa_admin_router` | `/api/config/empresa` |
+| MercadoPago | `libracore.mp_config_router.build_mp_config_router` | `/api/config/mercadopago` |
+| ARCA | `libracore.arca_router.build_arca_router` | `/config/arca` |
+| Email / SMTP | el router de SMTP de libraauth | `/admin/smtp` |
+| Datos / Backup | `libracore.config_router.build_backup_router` | `/api/config` |
+
+Cada uno acepta un `basePath` porque los productos ya publicaron rutas
+distintas y cambiar un prefijo rompe el frontend desplegado. La ruta se
+normaliza producto por producto, no de prepo desde el kit.
+
+🔴 **La sección de MercadoPago asume que los secretos vuelven enmascarados**
+(`APP_USR-…9f2a`), que es lo que hace `build_mp_config_router`. Los dos campos
+secretos arrancan vacíos con la máscara de `placeholder`, y vacío significa "no
+lo toqués". Un backend propio que devolviera el token en claro haría que
+guardar cualquier otro campo lo reemplace por su propia máscara — el cobro con
+QR deja de andar sin ningún error en pantalla.

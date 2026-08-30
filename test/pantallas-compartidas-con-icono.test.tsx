@@ -10,7 +10,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Logs } from '../src/Logs'
 import { Usuarios } from '../src/Usuarios'
-import { createConfiguracion, SECCIONES_BASE } from '../src/Configuracion'
+import { createConfiguracion } from '../src/Configuracion'
 
 function IconoFalso({ className }: { className?: string }) {
   return <svg data-testid="el-icono" className={className} />
@@ -39,7 +39,7 @@ describe('las pantallas compartidas rinden el icono que reciben', () => {
   })
 
   it('Configuración', () => {
-    const Configuracion = createConfiguracion({ secciones: SECCIONES_BASE, icono: IconoFalso })
+    const Configuracion = createConfiguracion({ icono: IconoFalso, producto: 'Contalibra' })
     render(<MemoryRouter><Configuracion /></MemoryRouter>)
     expect(screen.getByTestId('el-icono')).toBeInTheDocument()
   })
