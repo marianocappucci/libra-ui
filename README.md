@@ -361,6 +361,17 @@ Sin esta opción los dos tendrían que declararla como sección propia, y
 "Empresa" caería **después** de Integraciones — distinta de los otros seis, que
 es justamente lo que esta pantalla vino a terminar.
 
+### El pie de la pantalla (`v0.53.0`)
+
+`pie: <ReactNode>` se rinde debajo de todas las secciones, **una sola vez**, y
+sobrevive al cambio de pestaña.
+
+🔴 Existe por un requisito legal, no por estética: **LibraDesk** lleva ahí la
+atribución del set de iconos, cuya licencia ISC pide conservar el aviso de
+copyright en las distribuciones — y un producto que se sirve compilado es una
+distribución. Sin este slot, migrar esa pantalla al kit **borraría la
+atribución**, o la repetiría en cada sección.
+
 ### Los endpoints que consume
 
 | Sección | Router del motor | Prefijo por defecto |
