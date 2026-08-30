@@ -49,7 +49,12 @@ it('al día muestra el destino y la fecha', async () => {
 
   await waitFor(() => expect(screen.getByText(/al día/)).toBeInTheDocument())
   expect(screen.getByText(/drive_compulibra:libra\/compulibra/)).toBeInTheDocument()
-  expect(screen.getByText(/10 guardadas afuera/)).toBeInTheDocument()
+  // "copias" y no sólo el número: es la redacción de Contalibra, que es la que
+  // quedó como canónica al unificar la pantalla (v0.47.0).
+  expect(screen.getByText(/10 copias guardadas afuera/)).toBeInTheDocument()
+  // El nombre del archivo también sale: sin él, "la copia está al día" no se
+  // puede contrastar contra lo que hay del otro lado.
+  expect(screen.getByText(/backup_automatico_20260812_040000\.zip/)).toBeInTheDocument()
 })
 
 it('con problemas muestra el motivo que da el backend', async () => {
