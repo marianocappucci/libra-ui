@@ -314,6 +314,20 @@ El caso vivo es **MedLibra**: desde el ADR-036 no factura por ARCA —la
 facturación es de Contalibra— ni cobra por MercadoPago, así que de las tres
 integraciones le queda una, el correo.
 
+### El aviso de credenciales incompletas de MercadoPago (`v0.50.0`)
+
+Para cobrar con el QR del mostrador hacen falta **los tres** datos, no sólo el
+token: el `user_id` es el collector de la cuenta y el `pos_id` el `external_id`
+de la caja, y los dos van en la URL de la orden. Con el token solo, el POS no
+puede armar el cobro y el síntoma es un `404` que no dice eso.
+
+La sección muestra un aviso mientras falte alguno. Venía de las pantallas
+propias de VentaLibra y LibraClub, que lo calculaban en el backend
+(`esta_configurado()`); acá se calcula en la pantalla, porque el router del
+motor no lo devuelve. **Perderlo al unificar habría sido un retroceso**: sin él,
+una caja a medio configurar se descubre recién cuando un cliente escanea el
+cartel impreso y no pasa nada.
+
 ### Los endpoints que consume
 
 | Sección | Router del motor | Prefijo por defecto |
