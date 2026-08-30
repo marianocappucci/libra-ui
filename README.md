@@ -372,6 +372,27 @@ copyright en las distribuciones — y un producto que se sirve compilado es una
 distribución. Sin este slot, migrar esa pantalla al kit **borraría la
 atribución**, o la repetiría en cada sección.
 
+### El ambiente de la credencial de MercadoPago (`v0.54.0`)
+
+La tarjeta de MercadoPago muestra una pastilla que dice **de qué ambiente es el
+token cargado**: `Ambiente de prueba`, `Ambiente de producción` o `Ambiente sin
+verificar`.
+
+🔴 MercadoPago **no tiene un ambiente de homologación** como ARCA: no hay host
+de sandbox, es el mismo `api.mercadopago.com` para los dos y lo que define el
+ambiente es el token. Sin el cartel, las dos fallas son mudas y se ven
+idénticas — un token de producción en una instancia `dev` **cobra plata de
+verdad**, y uno de prueba en la instancia de un cliente **no cobra nada**; en
+los dos casos el QR se genera y la orden se crea igual.
+
+La clasificación la hace el motor (`libracore >= v1.65.0`), que devuelve
+`mp_ambiente` y `mp_ambiente_verificado` en el `GET`. **Los dos campos son
+opcionales**: contra un backend anterior el cartel no aparece, en vez de
+afirmar lo que no se sabe. Sin credencial cargada tampoco aparece.
+
+`Probar conexión` es lo que **averigua** el ambiente, así que recarga la
+sección al terminar.
+
 ### Los endpoints que consume
 
 | Sección | Router del motor | Prefijo por defecto |
