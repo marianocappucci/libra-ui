@@ -1,67 +1,75 @@
-/** La pantalla de Configuración compartida (ítem 5 de los pendientes
- *  transversales del 2026-08-04).
+/** La pantalla de Configuración compartida — **la copia única de la familia**.
  *
- *  > *"Todo el menú de configuración de contalibra disponible en todas las
- *  > suites según corresponda o no. (solo administradores)."*
+ *  > *"Quiero que todas las pantallas de configuración de todas las
+ *  > aplicaciones de la familia Libra sean iguales a la de Contalibra […] la
+ *  > idea es que después si hago una modificación en la configuración o una
+ *  > actualización se actualice en todas, que todo esté normalizado y sea
+ *  > transversal."* — el humano, 2026-08-29.
  *
- *  El **"según corresponda"** es la parte importante del pedido, y por eso el
- *  producto declara sus secciones en vez de recibir una pantalla cerrada:
- *  MedLibra no imprime tickets de comanda, LibraDesk no factura por ARCA,
- *  VentaLibra sí hace las dos cosas. Mismo idioma que `createLayout({navItems})`.
+ *  Antes de ese pedido había **tres pantallas distintas** para lo mismo:
  *
- *      export const Configuracion = createConfiguracion({
- *        secciones: [
- *          ...SECCIONES_BASE,                       // empresa, correo, datos
- *          { clave: 'ticket', label: 'Ticket', contenido: <ConfigTicket /> },
- *        ],
- *      })
+ *  - Contalibra y Restolibra, con un `Config.tsx` propio de ~950 líneas cada
+ *    uno: pestañas de shadcn, sub-navegación lateral en Integraciones, botón de
+ *    *Backup rápido*, y los **tutoriales** de MercadoPago, ARCA y Gmail;
+ *  - Gestiolibra, MedLibra, VentaLibra y LibraClub, con `createConfiguracion`
+ *    de este paquete: pestañas planas, sin sub-navegación, sin backup rápido y
+ *    sin ningún tutorial;
+ *  - LibraCargo con pestañas propias y LibraDesk con un conmutador por rutas.
  *
- *  ## El conmutador son las pestañas de shadcn, iguales a las de Contalibra
+ *  🔴 **Mientras la versión buena viviera adentro de un producto, arreglarla no
+ *  arreglaba a los otros siete.** Ese es el punto del pedido, y es la razón de
+ *  que esta pantalla —tutoriales incluidos— esté acá.
  *
- *  Hasta el 2026-08-22 era un `<nav>` propio con el subrayado del ítem activo.
- *  El motivo era real cuando se escribió: de los cuatro consumidores **sólo
- *  MedLibra tenía `@/components/ui/tabs` instalado** (medido el 2026-08-05), y
- *  un paquete compartido que lo importara rompía el build de los otros tres.
+ *  ## La estructura, calcada de Contalibra
  *
- *  Ese motivo ya no corre: `libra-ui/Logs` importa `tabs` desde la v0.29.0, así
- *  que **los cinco productos que montan esta pantalla ya lo tienen
- *  vendorizado**. Lo que quedaba era la consecuencia — la Configuración de
- *  Gestiolibra se veía distinta de la de Contalibra sin que nadie lo hubiera
- *  decidido.
+ *      Configuración                                    [Backup rápido]
+ *      ─────────────────────────────────────────────────────────────
+ *      [Empresa] [Integraciones] [·las del producto·] [Datos / Backup]
+ *      ─────────────────────────────────────────────────────────────
  *
- *  > 🔴 **El que NO lo tiene es LibraCargo**, que importa de este módulo sólo
- *  > `DatosBackupCard` (no usa `createConfiguracion`). El import de `tabs` es
- *  > del módulo entero, así que le llega igual: **subirle el pin sin
- *  > vendorizarle `components/ui/tabs.tsx` le rompe el build**. No es un error
- *  > de runtime — no llega a compilar. Es la misma trampa que se comió a
- *  > Gestiolibra y VentaLibra con la v0.29.0.
+ *  **Integraciones agrupa MercadoPago / ARCA / Email en una sub-navegación
+ *  lateral**, no como pestañas de primer nivel. Es lo que hacía la vieja
+ *  `config.html` y lo que Contalibra conservó: las tres son "con qué otro
+ *  sistema habla esto", y sacarlas al primer nivel deja una barra de siete
+ *  pestañas donde tres son de lo mismo.
+ *
+ *  ## El "según corresponda" sigue siendo del producto
+ *
+ *  MedLibra no imprime tickets de comanda; LibraDesk no factura por ARCA —manda
+ *  a Contalibra o a SOS Contador—; VentaLibra usa balanza. El producto declara
+ *  qué integraciones tiene y qué secciones propias agrega; lo que **no** puede
+ *  hacer es cambiar el armado, que es lo que se venía divergiendo.
  *
  *  ## La sección activa va en la URL
  *
- *  `?seccion=datos`, para que se pueda mandar "andá a Datos / Backup" por
- *  mensaje y el botón "atrás" del navegador haga lo que se espera. Es lo mismo
- *  que LibraDesk resolvió con una ruta por pestaña; acá va en el query para que
- *  el producto monte **una sola** ruta.
+ *  `?seccion=datos`, y dentro de Integraciones `?integracion=arca`, para que se
+ *  pueda mandar "andá a Datos / Backup" por mensaje y el botón "atrás" del
+ *  navegador haga lo que se espera.
  */
-import { type ComponentType, type ReactNode, useEffect, useRef, useState } from 'react'
+import type { ComponentType, ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Building2, Database, Download, Mail, Receipt, Upload } from 'lucide-react'
-import { api, ApiError } from './api-client'
-import { ConfiguracionSmtp } from './ConfiguracionSmtp'
-import { Badge } from '@/components/ui/badge'
+import {
+  Building2, Database, Download, Mail, Phone, Power, ShieldCheck,
+} from 'lucide-react'
+
 import { Button } from '@/components/ui/button'
-import {
-  Card, CardContent, CardDescription, CardHeader, CardTitle,
-} from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
-import {
-  Tabs, TabsList, TabsTrigger,
-} from '@/components/ui/tabs'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { TituloPantalla } from './titulo-pantalla'
+import { ArcaCard } from './configuracion/arca'
+import { DatosBackupCard, ResguardoExternoCard } from './configuracion/datos'
+import { EmailCard } from './configuracion/email'
+import { EmpresaCard } from './configuracion/empresa'
+import { MercadoPagoCard, type TextoAutoFacturar } from './configuracion/mercadopago'
+
+export type { BackupGuardado, ResguardoExterno } from './configuracion/datos'
+export type { DatosEmpresa } from './configuracion/empresa'
+export type { ConfigArca, EstadoArca } from './configuracion/arca'
+export type { ConfigMercadoPago, TextoAutoFacturar } from './configuracion/mercadopago'
+export { ArcaCard, DatosBackupCard, EmailCard, EmpresaCard, MercadoPagoCard, ResguardoExternoCard }
+export {
+  Tutorial, TutorialArcaCertificado, TutorialArcaPadron, TutorialCode, TutorialGmail,
+  TutorialLink, TutorialMercadoPago, TutorialNote, TutorialStep,
+} from './configuracion/tutoriales'
 
 export type SeccionConfig = {
   clave: string
@@ -70,691 +78,129 @@ export type SeccionConfig = {
   contenido: ReactNode
 }
 
-function describirError(err: unknown): string {
-  if (err instanceof ApiError) return err.detail
-  return 'Error de conexión.'
-}
-
-
-// ── Empresa ───────────────────────────────────────────────────────────────
-
-export type DatosEmpresa = {
-  empresa_nombre: string
-  empresa_direccion: string
-  empresa_cuit: string
-  empresa_telefono: string
-  empresa_email: string
-  empresa_iibb: string
-  empresa_iva_condition: string
-  empresa_inicio_actividades: string
-}
-
-const VACIO: DatosEmpresa = {
-  empresa_nombre: '', empresa_direccion: '', empresa_cuit: '', empresa_telefono: '',
-  empresa_email: '', empresa_iibb: '', empresa_iva_condition: 'Monotributista',
-  empresa_inicio_actividades: '',
-}
-
-const CAMPOS: { key: keyof DatosEmpresa; label: string; placeholder?: string }[] = [
-  { key: 'empresa_nombre', label: 'Nombre o razón social' },
-  { key: 'empresa_cuit', label: 'CUIT', placeholder: '20-12345678-9' },
-  { key: 'empresa_direccion', label: 'Dirección' },
-  { key: 'empresa_telefono', label: 'Teléfono' },
-  { key: 'empresa_email', label: 'Email' },
-  { key: 'empresa_iibb', label: 'Ingresos brutos' },
-  { key: 'empresa_inicio_actividades', label: 'Inicio de actividades', placeholder: '01/2020' },
-]
-
-const CONDICIONES_IVA = [
-  'Responsable Inscripto', 'Monotributista', 'IVA Exento',
-  'Consumidor Final', 'No Alcanzado',
-]
-
-/** Los ocho campos que encabezan comprobantes y PDF. */
-export function EmpresaCard() {
-  const [datos, setDatos] = useState<DatosEmpresa>(VACIO)
-  const [cargando, setCargando] = useState(true)
-  const [guardando, setGuardando] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [guardado, setGuardado] = useState(false)
-
-  useEffect(() => { cargar() }, [])
-
-  async function cargar() {
-    setCargando(true)
-    try {
-      setDatos(await api.get<DatosEmpresa>('/api/config/empresa'))
-    } catch (err) {
-      setError(describirError(err))
-    } finally {
-      setCargando(false)
-    }
+/** Con qué otros sistemas habla el producto. Lo que no se declara, no aparece:
+ *  una pestaña de MercadoPago en un producto sin endpoints de MercadoPago
+ *  guarda credenciales que nadie va a leer. */
+export type Integraciones = {
+  mercadopago?: boolean | {
+    basePath?: string
+    rutaWebhook?: string
+    autoFacturar?: TextoAutoFacturar | false
   }
+  arca?: boolean | { basePath?: string }
+  email?: boolean | { basePath?: string }
+  /** Integraciones propias del producto, en la misma sub-navegación. El caso
+   *  vivo es la **Facturación de LibraDesk**, que no emite por ARCA sino que
+   *  manda lo facturable a Contalibra o a SOS Contador: es una integración con
+   *  otro sistema, así que va acá y no como pestaña de primer nivel. */
+  extra?: SeccionConfig[]
+}
 
-  async function guardar(e: React.FormEvent) {
-    e.preventDefault()
-    setGuardando(true)
-    setError(null)
-    setGuardado(false)
-    try {
-      setDatos(await api.put<DatosEmpresa>('/api/config/empresa', datos))
-      setGuardado(true)
-    } catch (err) {
-      setError(describirError(err))
-    } finally {
-      setGuardando(false)
-    }
-  }
+function opciones<T extends object>(valor: boolean | T | undefined): T | null {
+  if (!valor) return null
+  return (valor === true ? {} : valor) as T
+}
+
+/** La sub-navegación lateral de Integraciones.
+ *
+ *  🔑 Al elegir una sub-sección se reescriben **las dos** claves del query
+ *  (`seccion` e `integracion`). Escribir sólo `integracion` borraría `seccion`
+ *  —`setParams` reemplaza el query entero, no lo mergea— y la pantalla saltaría
+ *  a la primera pestaña en el mismo click.
+ */
+function SubNavegacion({ secciones }: { secciones: SeccionConfig[] }) {
+  const [params, setParams] = useSearchParams()
+  const pedida = params.get('integracion')
+  const actual = secciones.find((s) => s.clave === pedida) ?? secciones[0]
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Datos de la empresa</CardTitle>
-        <CardDescription>
-          Encabezan los comprobantes y los PDF. Si quedan vacíos, salen sin datos
-          del emisor.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {cargando ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">Cargando…</p>
-        ) : (
-          <form className="grid gap-4" onSubmit={guardar}>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {CAMPOS.map(({ key, label, placeholder }) => (
-                <div key={key} className="grid gap-2">
-                  <Label htmlFor={`cfg-${key}`}>{label}</Label>
-                  <Input
-                    id={`cfg-${key}`}
-                    value={datos[key]}
-                    placeholder={placeholder}
-                    onChange={(e) => setDatos({ ...datos, [key]: e.target.value })}
-                  />
-                </div>
-              ))}
-              <div className="grid gap-2">
-                <Label>Condición frente al IVA</Label>
-                <Select
-                  value={datos.empresa_iva_condition}
-                  onValueChange={(v) => setDatos({ ...datos, empresa_iva_condition: v })}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {CONDICIONES_IVA.map((c) => (
-                      <SelectItem key={c} value={c}>{c}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            {guardado && <p className="text-sm text-muted-foreground">Datos guardados.</p>}
-
-            <div>
-              <Button type="submit" disabled={guardando}>
-                {guardando ? 'Guardando…' : 'Guardar'}
-              </Button>
-            </div>
-          </form>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
-
-/** El logo que encabeza los comprobantes.
- *
- *  El generador de PDF de LibraCore ya lo buscaba en `LOGO_DIR`; lo que no
- *  existía hasta v1.10.0 era el modo de ponerlo ahí sin entrar al volumen del
- *  contenedor.
- */
-export function LogoCard() {
-  // `version` fuerza a recargar la imagen después de subir o borrar: el
-  // navegador cachea la URL y sin esto se sigue viendo el logo anterior aunque
-  // el nuevo ya esté en el servidor.
-  const [version, setVersion] = useState(0)
-  const [hayLogo, setHayLogo] = useState<boolean | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [subiendo, setSubiendo] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    let vivo = true
-    fetch('/api/config/empresa/logo', { credentials: 'include' })
-      .then((r) => { if (vivo) setHayLogo(r.ok) })
-      .catch(() => { if (vivo) setHayLogo(false) })
-    return () => { vivo = false }
-  }, [version])
-
-  async function subir(archivo: File) {
-    setSubiendo(true)
-    setError(null)
-    try {
-      const form = new FormData()
-      form.append('logo', archivo)
-      await api.postForm('/api/config/empresa/logo', form)
-      setVersion((v) => v + 1)
-    } catch (err) {
-      setError(describirError(err))
-    } finally {
-      setSubiendo(false)
-      if (inputRef.current) inputRef.current.value = ''
-    }
-  }
-
-  async function borrar() {
-    setError(null)
-    try {
-      await api.del('/api/config/empresa/logo')
-      setVersion((v) => v + 1)
-    } catch (err) {
-      setError(describirError(err))
-    }
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Logo</CardTitle>
-        <CardDescription>
-          Sale en el encabezado de los comprobantes. PNG o JPG.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-4">
-        {hayLogo === null ? (
-          <p className="text-sm text-muted-foreground">Cargando…</p>
-        ) : hayLogo ? (
-          <img
-            src={`/api/config/empresa/logo?v=${version}`}
-            alt="Logo de la empresa"
-            className="max-h-24 w-auto rounded border bg-white object-contain p-2"
-          />
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            Todavía no hay logo cargado; los comprobantes salen sin él.
-          </p>
-        )}
-
-        {error && <p className="text-sm text-destructive">{error}</p>}
-
-        <div className="flex flex-wrap gap-2">
-          <input
-            ref={inputRef}
-            type="file"
-            accept="image/png,image/jpeg"
-            className="hidden"
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) subir(f) }}
-          />
-          <Button
-            type="button"
-            variant="outline"
-            disabled={subiendo}
-            onClick={() => inputRef.current?.click()}
-          >
-            <Upload className="mr-2 h-4 w-4" />
-            {subiendo ? 'Subiendo…' : hayLogo ? 'Reemplazar' : 'Subir logo'}
-          </Button>
-          {hayLogo && (
-            <Button type="button" variant="outline" onClick={borrar}>Quitar</Button>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
-
-// ── Datos / Backup ────────────────────────────────────────────────────────
-
-export type BackupGuardado = {
-  filename: string
-  size_mb: number
-  mtime: string
-}
-
-/** Estado de la copia del backup en la nube del cliente (add-on).
- *
- *  `contratado: false` es "no tenés el add-on", **no** una falla: la pantalla no
- *  puede mostrarle una alarma a quien no lo contrató. Y `al_dia: false` con
- *  `contratado: true` sí lo es — el backend distingue en `motivo` si la última
- *  subida falló o si anduvo pero es de hace días, que desde afuera se ven igual.
- */
-export type ResguardoExterno = {
-  contratado: boolean
-  al_dia: boolean | null
-  motivo: string | null
-  detalle: {
-    cuando: string | null
-    archivo: string | null
-    destino: string | null
-    bytes: number | null
-    en_destino: number | null
-    error: string | null
-  } | null
-}
-
-/** La tarjeta del resguardo externo, con sus tres estados.
- *
- *  Vive acá y no en cada producto porque `libra-ui` es lo que comparten las
- *  pantallas de Configuración de Gestiolibra, MedLibra y VentaLibra: escrita una
- *  vez, la tienen los tres.
- */
-export function ResguardoExternoCard() {
-  const [estado, setEstado] = useState<ResguardoExterno | null>(null)
-
-  useEffect(() => {
-    // No bloquea la pantalla: si el endpoint no está —una instancia con un
-    // LibraCore anterior a v1.32.0— la tarjeta simplemente no aparece.
-    api.get<ResguardoExterno>('/api/config/resguardo-externo')
-      .then(setEstado)
-      .catch(() => setEstado(null))
-  }, [])
-
-  if (!estado) return null
-
-  if (!estado.contratado) {
-    return (
-      <Card className="border-dashed">
-        <CardHeader>
-          <CardTitle className="text-base text-muted-foreground">Copia externa</CardTitle>
-          <CardDescription>
-            Tus copias viven en este servidor. Con el resguardo externo se guardan
-            todas las noches en tu propia cuenta de Google Drive o Dropbox, así
-            siguen estando aunque el servidor no esté. Consultanos para activarlo.
-          </CardDescription>
-        </CardHeader>
-      </Card>
-    )
-  }
-
-  return (
-    <Card className={estado.al_dia ? 'border-emerald-500/40' : 'border-amber-500/60'}>
-      <CardHeader>
-        <CardTitle className={`text-base ${estado.al_dia ? '' : 'text-amber-600 dark:text-amber-400'}`}>
-          Copia externa {estado.al_dia ? 'al día' : 'con problemas'}
-        </CardTitle>
-        <CardDescription>
-          {estado.al_dia
-            ? <>También se guarda fuera de este servidor, en <span className="font-mono">{estado.detalle?.destino}</span>.</>
-            : estado.motivo}
-        </CardDescription>
-      </CardHeader>
-      {estado.al_dia && estado.detalle && (
-        <CardContent>
-          <p className="text-xs text-muted-foreground">
-            Última copia: {estado.detalle.cuando}
-            {estado.detalle.en_destino != null && <> · {estado.detalle.en_destino} guardadas afuera</>}
-          </p>
-        </CardContent>
-      )}
-    </Card>
-  )
-}
-
-/** Bajar una copia de los datos, y volver a una anterior.
- *
- *  El archivo es un **ZIP con las bases y los archivos de la instancia**, no un
- *  `.db` suelto: tres productos de la familia tienen `usuarios` en una base
- *  separada del dominio, y MedLibra guarda además los documentos clínicos en
- *  disco. Ver `libracore/respaldo.py`.
- */
-export function DatosBackupCard() {
-  const [backups, setBackups] = useState<BackupGuardado[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [aviso, setAviso] = useState<string | null>(null)
-  const [ocupado, setOcupado] = useState(false)
-  const [aRestaurar, setARestaurar] = useState<File | null>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => { recargar() }, [])
-
-  async function recargar() {
-    setError(null)
-    try {
-      setBackups(await api.get<BackupGuardado[]>('/api/config/backups'))
-    } catch (err) {
-      setError(describirError(err))
-    }
-  }
-
-  async function crear() {
-    setOcupado(true)
-    setError(null)
-    setAviso(null)
-    try {
-      await api.post('/api/config/backups')
-      setAviso('Copia guardada en el servidor.')
-      await recargar()
-    } catch (err) {
-      setError(describirError(err))
-    } finally {
-      setOcupado(false)
-    }
-  }
-
-  async function restaurar(archivo: File) {
-    setOcupado(true)
-    setError(null)
-    setAviso(null)
-    try {
-      const form = new FormData()
-      form.append('backup_file', archivo)
-      const r = await api.postForm<{ backup_previo: string }>('/api/config/restore', form)
-      setAviso(`Datos restaurados. El estado anterior quedó guardado como ${r.backup_previo}.`)
-      await recargar()
-    } catch (err) {
-      setError(describirError(err))
-    } finally {
-      setOcupado(false)
-      setARestaurar(null)
-      if (inputRef.current) inputRef.current.value = ''
-    }
-  }
-
-  return (
-    <div className="grid gap-4">
-      {/* Va arriba de todo: si la copia externa está fallando, es lo primero
-          que el cliente tiene que ver al entrar a esta pantalla. */}
-      <ResguardoExternoCard />
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Copia de tus datos</CardTitle>
-          <CardDescription>
-            Un archivo ZIP con la base de datos y los archivos del sistema.
-            Guardalo fuera del servidor.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
-          {/* Link directo y no `fetch`: el navegador maneja la descarga con la
-              misma cookie, sin pasar el ZIP entero por memoria del JS. */}
-          <Button asChild>
-            <a href="/api/config/backup-ahora">
-              <Download className="mr-2 h-4 w-4" />
-              Descargar copia
-            </a>
-          </Button>
-          <Button type="button" variant="outline" disabled={ocupado} onClick={crear}>
-            {ocupado ? 'Trabajando…' : 'Guardar copia en el servidor'}
-          </Button>
-        </CardContent>
-      </Card>
-
-      {(error || aviso) && (
-        <p className={error ? 'text-sm text-destructive' : 'text-sm text-muted-foreground'}>
-          {error ?? aviso}
-        </p>
-      )}
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Copias guardadas en el servidor</CardTitle>
-          <CardDescription>
-            Se conservan las 10 más recientes. Las de <code>antes_restore</code> las
-            hace el sistema solo, justo antes de restaurar.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {backups === null ? (
-            <p className="text-sm text-muted-foreground">Cargando…</p>
-          ) : backups.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Todavía no hay ninguna.</p>
-          ) : (
-            <ul className="grid gap-2">
-              {backups.map((b) => (
-                <li key={b.filename} className="flex flex-wrap items-center gap-2 text-sm">
-                  <Badge variant="outline">{b.mtime}</Badge>
-                  <span className="text-muted-foreground">{b.size_mb} MB</span>
-                  <a className="underline" href={`/api/config/backups/${b.filename}`}>
-                    {b.filename}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Restaurar</CardTitle>
-          <CardDescription>
-            Reemplaza <strong>todos</strong> los datos actuales por los del archivo.
-            Antes de hacerlo, el sistema guarda solo una copia del estado actual.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3">
-          <input
-            ref={inputRef}
-            type="file"
-            accept=".zip,application/zip"
-            className="hidden"
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) setARestaurar(f) }}
-          />
-          {aRestaurar === null ? (
-            <div>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={ocupado}
-                onClick={() => inputRef.current?.click()}
-              >
-                <Upload className="mr-2 h-4 w-4" />
-                Elegir archivo y restaurar
-              </Button>
-            </div>
-          ) : (
-            // Confirmación en dos pasos, en la misma tarjeta. No se usa un
-            // diálogo porque `alert-dialog` no está instalado en los tres
-            // consumidores; lo que importa es que **elegir el archivo no
-            // dispare el restore**, y eso se cumple igual.
-            <div className="grid gap-2 rounded border border-destructive/40 p-3">
-              <p className="text-sm">
-                Se van a reemplazar todos los datos actuales por los de{' '}
-                <strong>{aRestaurar.name}</strong>. El estado de ahora queda
-                guardado como copia por si hace falta volver.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="destructive"
-                  disabled={ocupado}
-                  onClick={() => restaurar(aRestaurar)}
-                >
-                  {ocupado ? 'Restaurando…' : 'Restaurar'}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={ocupado}
-                  onClick={() => {
-                    setARestaurar(null)
-                    if (inputRef.current) inputRef.current.value = ''
-                  }}
-                >
-                  Cancelar
-                </Button>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+    <div className="flex flex-col gap-4 sm:flex-row">
+      <div className="flex shrink-0 flex-row gap-1 sm:w-48 sm:flex-col sm:border-r sm:pr-2">
+        {secciones.map((s) => {
+          const Icono = s.icono
+          const activa = actual.clave === s.clave
+          return (
+            <button
+              key={s.clave} type="button"
+              aria-current={activa ? 'page' : undefined}
+              onClick={() => setParams({ seccion: 'integraciones', integracion: s.clave })}
+              className={`flex items-center gap-2 rounded-md border-l-2 px-3 py-2 text-left text-sm transition-colors ${
+                activa
+                  ? 'border-primary bg-primary/5 font-medium text-primary'
+                  : 'border-transparent text-muted-foreground hover:bg-muted'
+              }`}
+            >
+              {Icono && <Icono className="size-4" />}{s.label}
+            </button>
+          )
+        })}
+      </div>
+      <div className="max-w-2xl flex-1">{actual.contenido}</div>
     </div>
   )
 }
 
-
-// ── ARCA ──────────────────────────────────────────────────────────────────
-
-export type ConfigArca = {
-  empresa: string
-  cuit: string
-  punto_venta: number
-  ambiente: string
-  certificado_path: string
-  clave_path: string
-}
-
-/** Facturación electrónica. Los tres verticales de instancia única
- *  (Gestiolibra, MedLibra, VentaLibra) tienen el mismo `GET`/`PUT
- *  /config/arca` — se verificó que los routers son idénticos antes de
- *  compartir esta pantalla. */
-export function ArcaCard() {
-  const [cuit, setCuit] = useState('')
-  const [puntoVenta, setPuntoVenta] = useState('1')
-  const [certificadoPath, setCertificadoPath] = useState('')
-  const [clavePath, setClavePath] = useState('')
-  const [ambiente, setAmbiente] = useState('homologacion')
-  const [cargando, setCargando] = useState(true)
-  const [guardando, setGuardando] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [guardado, setGuardado] = useState(false)
-
-  useEffect(() => { cargar() }, [])
-
-  async function cargar() {
-    setCargando(true)
-    try {
-      const cfg = await api.get<ConfigArca | null>('/config/arca')
-      if (cfg) {
-        setCuit(cfg.cuit)
-        setPuntoVenta(String(cfg.punto_venta))
-        setCertificadoPath(cfg.certificado_path)
-        setClavePath(cfg.clave_path)
-        setAmbiente(cfg.ambiente)
-      }
-    } catch (err) {
-      setError(describirError(err))
-    } finally {
-      setCargando(false)
-    }
-  }
-
-  async function guardar() {
-    setGuardando(true)
-    setError(null)
-    setGuardado(false)
-    try {
-      await api.put('/config/arca', {
-        cuit, punto_venta: Number(puntoVenta),
-        certificado_path: certificadoPath, clave_path: clavePath, ambiente,
-      })
-      setGuardado(true)
-    } catch (err) {
-      setError(describirError(err))
-    } finally {
-      setGuardando(false)
-    }
-  }
-
-  if (cargando) {
-    return <p className="py-6 text-center text-sm text-muted-foreground">Cargando…</p>
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Facturación electrónica (ARCA)</CardTitle>
-        <CardDescription>
-          El certificado y la clave se referencian por path en el servidor —
-          subir el archivo real sigue siendo una tarea manual.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="grid max-w-lg gap-3">
-        <div className="grid gap-2">
-          <Label htmlFor="arca-cuit">CUIT</Label>
-          <Input id="arca-cuit" value={cuit} onChange={(e) => setCuit(e.target.value)} />
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="arca-pv">Punto de venta</Label>
-          <Input
-            id="arca-pv" className="w-32" value={puntoVenta}
-            onChange={(e) => setPuntoVenta(e.target.value)}
-          />
-        </div>
-        <div className="grid gap-2">
-          <Label>Ambiente</Label>
-          <Select value={ambiente} onValueChange={setAmbiente}>
-            <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="homologacion">Homologación</SelectItem>
-              <SelectItem value="produccion">Producción</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="arca-cert">Path del certificado</Label>
-          <Input
-            id="arca-cert" value={certificadoPath}
-            onChange={(e) => setCertificadoPath(e.target.value)}
-          />
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="arca-clave">Path de la clave privada</Label>
-          <Input
-            id="arca-clave" value={clavePath}
-            onChange={(e) => setClavePath(e.target.value)}
-          />
-        </div>
-        {error && <p className="text-sm text-destructive">{error}</p>}
-        {guardado && <p className="text-sm text-muted-foreground">Guardado.</p>}
-        <div>
-          <Button onClick={guardar} disabled={guardando}>
-            {guardando ? 'Guardando…' : 'Guardar'}
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
-
-// ── El armado ─────────────────────────────────────────────────────────────
-
-/** Las tres secciones que aplican a **los seis** productos.
- *
- *  El producto las extiende con las suyas — el "según corresponda" del pedido
- *  se declara ahí, no acá.
- */
-export const SECCIONES_BASE: SeccionConfig[] = [
-  {
-    clave: 'empresa',
-    label: 'Empresa',
-    icono: Building2,
-    contenido: <><EmpresaCard /><LogoCard /></>,
-  },
-  {
-    clave: 'correo',
-    label: 'Correo',
-    icono: Mail,
-    // Sin esto el `forgot-password` de las seis suites devuelve
-    // `503 "el envío de correo no está configurado"`: el mecanismo está
-    // terminado desde libraauth v0.5.0 y lo que faltaba era la pantalla para
-    // cargar el SMTP.
-    contenido: <ConfiguracionSmtp />,
-  },
-  {
-    clave: 'datos',
-    label: 'Datos / Backup',
-    icono: Database,
-    contenido: <DatosBackupCard />,
-  },
-]
-
-/** La sección de ARCA, para los productos que facturan. */
-export const SECCION_ARCA: SeccionConfig = {
-  clave: 'arca',
-  label: 'ARCA',
-  icono: Receipt,
-  contenido: <ArcaCard />,
-}
-
-export function createConfiguracion({ secciones, icono }: {
-  secciones: SeccionConfig[]
-  /** El icono del sidebar de este producto. Obligatorio: ver `Usuarios`. */
+export function createConfiguracion({
+  icono, producto, integraciones, propias = [], empresa, datos, backupRapido = true,
+}: {
+  /** El icono que el sidebar de este producto le da a /configuracion. */
   icono: ComponentType<{ className?: string }>
+  /** Cómo se llama el producto. Sale en los tutoriales de Gmail y de Padrón
+   *  A13, que le piden al cliente que nombre **este** sistema. Escribir
+   *  "Contalibra" en el kit haría que MedLibra le pida al cliente una
+   *  contraseña de aplicación llamada *Contalibra*. */
+  producto: string
+  integraciones?: Integraciones
+  /** Las secciones propias del producto. Van entre Integraciones y
+   *  Datos / Backup: lo que se parametriza al arrancar antes de lo que se toca
+   *  una vez y da miedo. */
+  propias?: SeccionConfig[]
+  empresa?: false | { basePath?: string }
+  datos?: false | { basePath?: string }
+  /** El botón fijo al final de la barra. Baja una copia sin entrar a la
+   *  pestaña: el cliente lo aprieta antes de hacer algo que lo pone nervioso. */
+  backupRapido?: boolean
 }) {
+  const opcEmpresa = empresa === false ? null : (empresa ?? {})
+  const opcDatos = datos === false ? null : (datos ?? {})
+  const basePathDatos = opcDatos?.basePath ?? '/api/config'
+
+  const opcMp = opciones(integraciones?.mercadopago)
+  const opcArca = opciones(integraciones?.arca)
+  const opcEmail = opciones(integraciones?.email)
+
+  const deIntegraciones: SeccionConfig[] = [
+    ...(opcMp ? [{
+      clave: 'mercadopago', label: 'MercadoPago', icono: Phone,
+      contenido: <MercadoPagoCard {...opcMp} />,
+    }] : []),
+    ...(opcArca ? [{
+      clave: 'arca', label: 'ARCA / AFIP', icono: ShieldCheck,
+      contenido: <ArcaCard producto={producto} {...opcArca} />,
+    }] : []),
+    ...(opcEmail ? [{
+      clave: 'email', label: 'Email / SMTP', icono: Mail,
+      contenido: <EmailCard producto={producto} {...opcEmail} />,
+    }] : []),
+    ...(integraciones?.extra ?? []),
+  ]
+
+  const secciones: SeccionConfig[] = [
+    ...(opcEmpresa ? [{
+      clave: 'empresa', label: 'Empresa', icono: Building2,
+      contenido: <EmpresaCard {...opcEmpresa} />,
+    }] : []),
+    ...(deIntegraciones.length > 0 ? [{
+      clave: 'integraciones', label: 'Integraciones', icono: Power,
+      contenido: <SubNavegacion secciones={deIntegraciones} />,
+    }] : []),
+    ...propias,
+    ...(opcDatos ? [{
+      clave: 'datos', label: 'Datos / Backup', icono: Database,
+      contenido: <DatosBackupCard basePath={basePathDatos} />,
+    }] : []),
+  ]
+
   if (secciones.length === 0) {
     throw new Error('createConfiguracion necesita al menos una sección')
   }
@@ -768,14 +214,14 @@ export function createConfiguracion({ secciones, icono }: {
       <div className="grid gap-4">
         <TituloPantalla icono={icono}>Configuración</TituloPantalla>
 
-        {/* La barra separada del contenido por una línea, igual que Contalibra.
-            El `pb-2` es el aire entre las píldoras y esa línea: sin él el
-            `TabsList` queda apoyado sobre el borde. */}
-        <div className="border-b pb-2">
+        {/* La barra separada del contenido por una línea, y el botón de backup
+            rápido fijo a la derecha — igual que Contalibra. El `pb-2` es el
+            aire entre las píldoras y esa línea: sin él el `TabsList` queda
+            apoyado sobre el borde. */}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
           {/* `value` y no `defaultValue`: la sección la manda la URL, así que
               el conmutador es controlado. Con `defaultValue` un `?seccion=`
-              distinto al arrancar pintaría la primera pestaña y mostraría el
-              contenido de otra. */}
+              distinto al arrancar pintaría una pestaña y mostraría otra. */}
           <Tabs value={actual.clave} onValueChange={(v) => setParams({ seccion: v })}>
             <TabsList>
               {secciones.map((s) => {
@@ -788,14 +234,18 @@ export function createConfiguracion({ secciones, icono }: {
               })}
             </TabsList>
           </Tabs>
+          {backupRapido && opcDatos && (
+            <Button asChild size="sm" variant="outline">
+              <a href={`${basePathDatos}/backup-ahora`} download><Download />Backup rápido</a>
+            </Button>
+          )}
         </div>
 
         {/* El contenido va afuera del `Tabs` y no en un `TabsContent`: las
             secciones son componentes con estado y pedidos propios, y Radix
             desmonta la pestaña inactiva. Adentro, cambiar de pestaña y volver
             recargaría el formulario y perdería lo tipeado sin guardar; acá el
-            contenido lo elige la URL, que es lo mismo que hacía el conmutador
-            anterior. */}
+            contenido lo elige la URL. */}
         <div className="grid gap-4">{actual.contenido}</div>
       </div>
     )
