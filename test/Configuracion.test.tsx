@@ -58,6 +58,7 @@ const MP = {
   mp_concepto_descripcion: 'Cobro mercadopago', mp_iva_rate: '0',
   mp_user_id: '75023836', mp_pos_id: 'default',
   mp_auto_facturar_ventas: true,
+  mp_ambiente: 'produccion', mp_ambiente_verificado: '2026-08-30 14:05:00',
 }
 
 function json(body: unknown, status = 200) {
@@ -872,6 +873,101 @@ describe('MercadoPago', () => {
 
     expect(await screen.findByLabelText(/URL del webhook/))
       .toHaveValue(`${window.location.origin}/webhooks/mercadopago`)
+  })
+
+  // ── De qué ambiente es la credencial ───────────────────────────────────────
+  //
+  // 🔴 MercadoPago no tiene un ambiente de homologación como ARCA: es el mismo
+  // `api.mercadopago.com` y lo que define el ambiente es el token. Sin este
+  // cartel las dos fallas son mudas — producción en una instancia `dev` cobra
+  // plata de verdad, prueba en la de un cliente no cobra nada — y las dos se
+  // ven igual: el QR se genera y la orden se crea.
+
+  /** Un backend que devuelve ESTE `mp_ambiente`. El segundo GET puede devolver
+   *  otro, que es lo que pasa después de probar la conexión. */
+  function backendConAmbiente(...ambientes: string[]) {
+    let vuelta = 0
+    vi.stubGlobal('fetch', vi.fn((url: string, opciones?: RequestInit) => {
+      const u = String(url)
+      pedidos.push({ url: u, metodo: opciones?.method ?? 'GET', body: opciones?.body ?? null })
+      if (u.includes('/mercadopago/probar')) {
+        return Promise.resolve(json({ ok: true, nickname: 'FERRETERIA', user_id: 75023836 }))
+      }
+      const cual = ambientes[Math.min(vuelta++, ambientes.length - 1)]
+      return Promise.resolve(json({ ...MP, mp_ambiente: cual }))
+    }))
+  }
+
+  it('dice cuándo las credenciales son de PRUEBA, y que no se cobra de verdad', async () => {
+    backendConAmbiente('prueba')
+    montar(<MercadoPagoCard />)
+
+    expect(await screen.findByText('Ambiente de prueba')).toBeInTheDocument()
+    expect(screen.getByText(/Los cobros de esta instancia NO son reales/)).toBeInTheDocument()
+  })
+
+  it('dice cuándo son de PRODUCCIÓN, y que los cobros son reales', async () => {
+    // El control del de arriba: sin él, un cartel que dijera siempre "prueba"
+    // dejaría al anterior en verde y sería peor que no tener cartel.
+    backendConAmbiente('produccion')
+    montar(<MercadoPagoCard />)
+
+    expect(await screen.findByText('Ambiente de producción')).toBeInTheDocument()
+    expect(screen.getByText(/Los cobros de esta instancia son reales/)).toBeInTheDocument()
+  })
+
+  it('con un token sin verificar no adivina: dice que no se sabe', async () => {
+    backendConAmbiente('indeterminado')
+    montar(<MercadoPagoCard />)
+
+    expect(await screen.findByText('Ambiente sin verificar')).toBeInTheDocument()
+    expect(screen.getByText(/todavía no se sabe si es de prueba o real/)).toBeInTheDocument()
+  })
+
+  it('🔴 probar la conexión actualiza el cartel, que es lo que probar AVERIGUA', async () => {
+    // Sin recargar después del `probar`, el cartel seguiría diciendo "sin
+    // verificar" justo después de haberlo verificado, y la única forma de verlo
+    // cambiar sería recargar la pantalla a mano.
+    backendConAmbiente('indeterminado', 'prueba')
+    montar(<MercadoPagoCard />)
+    const usuario = userEvent.setup()
+
+    expect(await screen.findByText('Ambiente sin verificar')).toBeInTheDocument()
+    await usuario.click(screen.getByRole('button', { name: /Probar conexión/ }))
+
+    expect(await screen.findByText('Ambiente de prueba')).toBeInTheDocument()
+    expect(screen.queryByText('Ambiente sin verificar')).toBeNull()
+  })
+
+  it('sin credenciales cargadas no hay ambiente del que hablar', async () => {
+    backendConAmbiente('')
+    montar(<MercadoPagoCard />)
+
+    await screen.findByLabelText(/User ID \(QR\)/)
+    expect(screen.queryByText(/^Ambiente de (prueba|producción)$/)).toBeNull()
+    expect(screen.queryByText('Ambiente sin verificar')).toBeNull()
+  })
+
+  it('un backend viejo, sin el campo, no rompe la pantalla ni inventa un cartel', async () => {
+    // El producto que todavía no subió el pin de LibraCore: el `GET` no manda
+    // `mp_ambiente`. Decir "producción" ahí sería afirmar lo que no se sabe.
+    vi.stubGlobal('fetch', vi.fn((url: string) => {
+      const sinCampo: Record<string, unknown> = { ...MP }
+      delete sinCampo.mp_ambiente
+      delete sinCampo.mp_ambiente_verificado
+      return Promise.resolve(json(String(url).includes('/probar') ? { ok: true } : sinCampo))
+    }))
+    montar(<MercadoPagoCard />)
+
+    expect(await screen.findByLabelText(/User ID \(QR\)/)).toHaveValue('75023836')
+    expect(screen.queryByText(/^Ambiente de (prueba|producción)$/)).toBeNull()
+    expect(screen.queryByText('Ambiente sin verificar')).toBeNull()
+  })
+
+  it('la fecha de verificación se muestra en dd-mm-aaaa, no en ISO', async () => {
+    montar(<MercadoPagoCard />)
+
+    expect(await screen.findByText(/Verificado el 30-08-2026 14:05/)).toBeInTheDocument()
   })
 })
 
