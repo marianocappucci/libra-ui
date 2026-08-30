@@ -62,9 +62,11 @@ export type EstadoArca = {
   error_certificado?: string
 }
 
-const VACIA: ConfigArca = {
-  empresa: 'default', cuit: '', punto_venta: 1, ambiente: 'homologacion', alias: '',
-  certificado_path: '', clave_path: '', tiene_certificado: false, tiene_clave: false,
+function vacia(empresa: string): ConfigArca {
+  return {
+    empresa, cuit: '', punto_venta: 1, ambiente: 'homologacion', alias: '',
+    certificado_path: '', clave_path: '', tiene_certificado: false, tiene_clave: false,
+  }
 }
 
 /** Cuántos días antes de vencer se empieza a avisar. Un certificado dura dos
@@ -146,10 +148,24 @@ function SubirMitad({ label, accept, cargado, disabled, onArchivo }: {
  *  (`/config/arca` en cuatro, `/api/config/arca` en Contalibra y Restolibra) y
  *  cambiar el prefijo rompe el frontend desplegado. La ruta se normaliza
  *  producto por producto, no de prepo desde el kit.
+ *
+ *  🔴 **`empresa` es el slug de la fila de `arca_config`, y en una instancia
+ *  nueva es lo único que evita una falla muda.** Cuatro productos leen su
+ *  configuración de facturación con un slug FIJO —`negocio` en Gestiolibra,
+ *  `consultorio` en MedLibra, `venta` en VentaLibra, `complejo` en LibraClub—.
+ *  Si la instancia todavía no tiene fila, el `GET` devuelve `null` y el primer
+ *  guardado crea una: sin este dato la crearía como **`default`**, que el
+ *  servicio de facturación de esos cuatro **no lee nunca**. El admin sube el
+ *  certificado, la pantalla dice "Guardado", y al emitir la primera factura el
+ *  producto responde que ARCA no está configurado.
+ *
+ *  En una instancia que YA tiene fila no cambia nada: el `GET` devuelve el
+ *  slug real y es ése el que viaja de vuelta.
  */
-export function ArcaCard({ producto, basePath = '/config/arca' }: {
+export function ArcaCard({ producto, basePath = '/config/arca', empresa = 'default' }: {
   producto: string
   basePath?: string
+  empresa?: string
 }) {
   const [cfg, setCfg] = useState<ConfigArca | null>(null)
   // 🔴 El punto de venta va como STRING mientras se edita, aunque el backend lo
@@ -169,11 +185,11 @@ export function ArcaCard({ producto, basePath = '/config/arca' }: {
     setCargando(true)
     try {
       const actual = await api.get<ConfigArca | null>(basePath)
-      setCfg(actual ?? VACIA)
-      setPuntoVenta(String((actual ?? VACIA).punto_venta))
+      setCfg(actual ?? vacia(empresa))
+      setPuntoVenta(String((actual ?? vacia(empresa)).punto_venta))
     } catch (err) {
       setError(describirError(err))
-      setCfg(VACIA)
+      setCfg(vacia(empresa))
     } finally {
       setCargando(false)
     }
@@ -184,7 +200,7 @@ export function ArcaCard({ producto, basePath = '/config/arca' }: {
     } catch {
       setEstado(null)
     }
-  }, [basePath])
+  }, [basePath, empresa])
 
   useEffect(() => { void cargar() }, [cargar])
 
