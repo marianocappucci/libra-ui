@@ -56,6 +56,25 @@ const VACIA: ConfigMercadoPago = {
   mp_user_id: '', mp_pos_id: '', mp_auto_facturar_ventas: false,
 }
 
+/** Si el QR de caja puede cobrar.
+ *
+ *  🔴 **Hacen falta los TRES, no sólo el token.** El QR de mostrador es el
+ *  cartel impreso: el `user_id` es el collector de la cuenta y el `pos_id` es
+ *  el external_id de la caja, y los dos van en la URL de la orden. Con el token
+ *  solo, el POS no puede armar el cobro y el sintoma es un 404 que no dice eso.
+ *
+ *  El aviso venia de las pantallas propias de VentaLibra y LibraClub, que lo
+ *  calculaban en el backend (`esta_configurado()`). Se calcula acá porque el
+ *  router del motor no lo devuelve — y perderlo al unificar habria sido un
+ *  retroceso: sin el, una caja mal configurada se descubre recien cuando un
+ *  cliente escanea el cartel y no pasa nada.
+ */
+export function puedeCobrarPorQr(cfg: ConfigMercadoPago): boolean {
+  return cfg.mp_access_token_cargado
+    && cfg.mp_user_id.trim() !== ''
+    && cfg.mp_pos_id.trim() !== ''
+}
+
 function describirError(err: unknown): string {
   if (err instanceof ApiError) return err.detail
   return 'Error de conexión.'
@@ -260,6 +279,13 @@ export function MercadoPagoCard({
             Evento a suscribir: Pagos (payment). El Webhook Secret lo genera MP al guardar el webhook.
           </p>
         </div>
+
+        {!puedeCobrarPorQr(cfg) && (
+          <p className="col-span-full rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
+            Faltan datos: el mostrador no va a ofrecer el cobro con QR hasta que
+            el Access Token, el User ID y el POS ID estén los tres cargados.
+          </p>
+        )}
 
         <AccionesDeSeccion>
           <Button disabled={ocupado} onClick={() => void guardar()}>

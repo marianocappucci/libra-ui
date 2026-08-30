@@ -756,6 +756,26 @@ describe('MercadoPago', () => {
     expect(screen.queryByRole('button', { name: /Quitar credenciales/ })).toBeNull()
   })
 
+  it('🔴 avisa que el QR no cobra si faltan datos, aunque el token esté cargado', async () => {
+    // Hacen falta los TRES: el `user_id` es el collector de la cuenta y el
+    // `pos_id` el external_id de la caja, y los dos van en la URL de la orden.
+    // Sin el aviso, una caja a medio configurar se descubre recién cuando un
+    // cliente escanea el cartel impreso del mostrador y no pasa nada.
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(json({ ...MP, mp_pos_id: '' }))))
+    montar(<MercadoPagoCard />)
+
+    expect(await screen.findByText(/Faltan datos/)).toBeInTheDocument()
+  })
+
+  it('el control — con los tres cargados el aviso no está', async () => {
+    // Sin esto, un aviso que se mostrara SIEMPRE pasaría el test de arriba y
+    // le diría a un comercio que cobra bien que le falta configurar algo.
+    montar(<MercadoPagoCard />)
+
+    await screen.findByLabelText(/User ID \(QR\)/)
+    expect(screen.queryByText(/Faltan datos/)).toBeNull()
+  })
+
   it('muestra la URL del webhook para registrar en MercadoPago', async () => {
     montar(<MercadoPagoCard />)
 
