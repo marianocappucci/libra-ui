@@ -278,6 +278,32 @@ declarar las integraciones:
 +  propias: [{ clave: 'balanza', … }],
 ```
 
+### `empresa` en ARCA: el que no lo declara escribe en el lugar equivocado (`v0.48.0`)
+
+Cuatro productos leen su configuración de facturación con un slug **fijo** de la
+tabla `arca_config`:
+
+| Producto | Slug |
+|---|---|
+| Gestiolibra | `negocio` |
+| MedLibra | `consultorio` |
+| VentaLibra | `venta` |
+| LibraClub | `complejo` |
+
+🔴 En una instancia **que todavía no tiene fila**, el `GET` devuelve `null` y el
+primer guardado crea una. Sin declarar `empresa`, la crea como `default` — que
+el servicio de facturación de esos cuatro **no lee nunca**. El admin sube el
+certificado, la pantalla dice *"Guardado"*, y al emitir la primera factura el
+producto contesta que ARCA no está configurado.
+
+```tsx
+integraciones: { arca: { empresa: 'consultorio' } }
+```
+
+En una instancia que **ya** tiene fila no cambia nada: el `GET` devuelve el slug
+real y es ése el que viaja de vuelta. Contalibra y Restolibra son multi-empresa
+y no declaran nada: su fila se dio de alta con la razón social.
+
 ### Los endpoints que consume
 
 | Sección | Router del motor | Prefijo por defecto |

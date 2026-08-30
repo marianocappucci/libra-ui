@@ -548,6 +548,78 @@ describe('ARCA', () => {
     await esperarPedido('/config/arca/credenciales', 'DELETE')
   })
 
+  it('🔴 en una instancia SIN fila, la crea con el slug que declara el producto', async () => {
+    // La falla que esto impide es muda: Gestiolibra lee su facturación con
+    // `negocio`, MedLibra con `consultorio`, VentaLibra con `venta` y LibraClub
+    // con `complejo`. Si el primer guardado creara la fila como `default`, la
+    // pantalla diría "Guardado" y el producto seguiría contestando que ARCA no
+    // está configurado al emitir la primera factura.
+    vi.stubGlobal('fetch', vi.fn((url: string, opciones?: RequestInit) => {
+      const u = String(url)
+      const metodo = opciones?.method ?? 'GET'
+      pedidos.push({ url: u, metodo, body: opciones?.body ?? null })
+      if (u.includes('/estado')) return Promise.resolve(json({ configurado: false }))
+      // Instancia nueva: todavía no hay fila.
+      return Promise.resolve(json(metodo === 'GET' ? null : { ok: true }))
+    }))
+    montar(<ArcaCard producto="MedLibra" empresa="consultorio" />)
+    const usuario = userEvent.setup()
+
+    await screen.findByLabelText(/^CUIT$/)
+    await usuario.click(screen.getByRole('button', { name: /Guardar ARCA/ }))
+
+    const put = await esperarPedido('/config/arca', 'PUT')
+    expect(JSON.parse(String(put.body)).empresa).toBe('consultorio')
+  })
+
+  it('el control — sin declararlo cae en `default`, que es lo correcto para Contalibra', async () => {
+    // Contalibra y Restolibra son multi-empresa: no tienen un slug fijo, y su
+    // fila se dio de alta con la razón social. Si `empresa` fuera obligatorio o
+    // el default fuera otro, el test de arriba pasaría igual y estos dos
+    // romperían.
+    vi.stubGlobal('fetch', vi.fn((url: string, opciones?: RequestInit) => {
+      const u = String(url)
+      const metodo = opciones?.method ?? 'GET'
+      pedidos.push({ url: u, metodo, body: opciones?.body ?? null })
+      if (u.includes('/estado')) return Promise.resolve(json({ configurado: false }))
+      return Promise.resolve(json(metodo === 'GET' ? null : { ok: true }))
+    }))
+    montar(<ArcaCard producto="Contalibra" />)
+    const usuario = userEvent.setup()
+
+    await screen.findByLabelText(/^CUIT$/)
+    await usuario.click(screen.getByRole('button', { name: /Guardar ARCA/ }))
+
+    const put = await esperarPedido('/config/arca', 'PUT')
+    expect(JSON.parse(String(put.body)).empresa).toBe('default')
+  })
+
+  it('en una instancia que YA tiene fila, manda el slug real y no el declarado', async () => {
+    // El caso de Contalibra en producción: la fila se llama como la razón
+    // social. Pisarla con el slug declarado crearía una segunda fila al lado de
+    // la que la instancia venía usando.
+    //
+    // ⚠️ La fila del servidor se llama `razon-social-real` y NO `default`: con
+    // el fixture normal —que devuelve `default`— este assert se cumpliría
+    // también si el componente ignorara la respuesta y usara siempre su
+    // fallback, que es justo lo que hay que distinguir.
+    vi.stubGlobal('fetch', vi.fn((url: string, opciones?: RequestInit) => {
+      const u = String(url)
+      const metodo = opciones?.method ?? 'GET'
+      pedidos.push({ url: u, metodo, body: opciones?.body ?? null })
+      if (u.includes('/estado')) return Promise.resolve(json(estadoArca))
+      return Promise.resolve(json(metodo === 'GET' ? { ...ARCA, empresa: 'razon-social-real' } : { ok: true }))
+    }))
+    montar(<ArcaCard producto="Contalibra" empresa="otro-slug" />)
+    const usuario = userEvent.setup()
+
+    await screen.findByLabelText(/^CUIT$/)
+    await usuario.click(screen.getByRole('button', { name: /Guardar ARCA/ }))
+
+    const put = await esperarPedido('/config/arca', 'PUT')
+    expect(JSON.parse(String(put.body)).empresa).toBe('razon-social-real')
+  })
+
   it('el tutorial de Padrón A13 nombra a ESTE producto', async () => {
     montar(<ArcaCard producto="MedLibra" />)
 
