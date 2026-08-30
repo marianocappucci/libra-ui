@@ -169,6 +169,34 @@ describe('🔴 El "según corresponda"', () => {
     expect(screen.queryByRole('button', { name: /ARCA/ })).toBeNull()
   })
 
+  it('con UNA sola integración no dibuja la sub-navegación', async () => {
+    // Una barra lateral con un botón solo, ocupando el ancho de la pestaña, se
+    // lee como algo roto. El caso vivo es MedLibra: desde el ADR-036 no factura
+    // por ARCA ni cobra por MercadoPago, y le queda sólo el correo.
+    const Configuracion = createConfiguracion({
+      icono: IconoFalso, producto: 'MedLibra', integraciones: { email: true },
+    })
+    montar(<Configuracion />, '/configuracion?seccion=integraciones')
+
+    // El contenido está…
+    expect(await screen.findByText(/Correo saliente/)).toBeInTheDocument()
+    // …y el botón de la sub-navegación no.
+    expect(screen.queryByRole('button', { name: /Email \/ SMTP/ })).toBeNull()
+  })
+
+  it('el control — con dos, la sub-navegación sí está', async () => {
+    // Sin esto, una pantalla que NUNCA dibujara la sub-navegación pasaría el
+    // test de arriba y dejaría a Contalibra sin forma de llegar a ARCA.
+    const Configuracion = createConfiguracion({
+      icono: IconoFalso, producto: 'Contalibra',
+      integraciones: { mercadopago: true, email: true },
+    })
+    montar(<Configuracion />, '/configuracion?seccion=integraciones')
+
+    expect(await screen.findByRole('button', { name: /MercadoPago/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Email \/ SMTP/ })).toBeInTheDocument()
+  })
+
   it('sin ninguna sección es un error de programación, no una pantalla vacía', () => {
     expect(() => createConfiguracion({
       icono: IconoFalso, producto: 'X', empresa: false, datos: false,
