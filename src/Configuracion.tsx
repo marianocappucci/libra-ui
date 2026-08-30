@@ -86,6 +86,9 @@ export type Integraciones = {
     basePath?: string
     rutaWebhook?: string
     autoFacturar?: TextoAutoFacturar | false
+    /** `false` en un producto sin webhook de MercadoPago — el caso vivo es
+     *  VentaLibra, que cobra por poll. Ver `MercadoPagoCard`. */
+    webhook?: boolean
   }
   /** `empresa` es el slug de la fila de `arca_config`. Los cuatro productos
    *  que leen su facturación con un slug fijo TIENEN que declararlo: sin él,
