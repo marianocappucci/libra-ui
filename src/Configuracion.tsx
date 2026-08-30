@@ -148,7 +148,7 @@ function SubNavegacion({ secciones }: { secciones: SeccionConfig[] }) {
 }
 
 export function createConfiguracion({
-  icono, producto, integraciones, propias = [], empresa, datos, backupRapido = true,
+  icono, producto, integraciones, propias = [], empresa, datos, backupRapido = true, pie,
 }: {
   /** El icono que el sidebar de este producto le da a /configuracion. */
   icono: ComponentType<{ className?: string }>
@@ -183,6 +183,16 @@ export function createConfiguracion({
   /** El botón fijo al final de la barra. Baja una copia sin entrar a la
    *  pestaña: el cliente lo aprieta antes de hacer algo que lo pone nervioso. */
   backupRapido?: boolean
+  /** Al pie de la pantalla, **debajo de todas las secciones y una sola vez**.
+   *
+   *  🔴 Existe por un requisito legal, no por estética: **LibraDesk** lleva ahí
+   *  la atribución del set de iconos, cuya licencia ISC pide conservar el aviso
+   *  de copyright en las distribuciones — y un producto que se sirve compilado
+   *  es una distribución. Sin este slot, migrar esa pantalla al kit borraría la
+   *  atribución, o la repetiría en cada sección.
+   *
+   *  Va afuera del conmutador a propósito: es del producto, no de la sección. */
+  pie?: ReactNode
 }) {
   const opcEmpresa = empresa === false ? null : (empresa ?? {})
   const opcDatos = datos === false ? null : (datos ?? {})
@@ -277,6 +287,8 @@ export function createConfiguracion({
             recargaría el formulario y perdería lo tipeado sin guardar; acá el
             contenido lo elige la URL. */}
         <div className="grid gap-4">{actual.contenido}</div>
+
+        {pie}
       </div>
     )
   }
