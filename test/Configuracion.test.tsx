@@ -197,6 +197,38 @@ describe('🔴 El "según corresponda"', () => {
     expect(screen.getByRole('button', { name: /Email \/ SMTP/ })).toBeInTheDocument()
   })
 
+  it('🔴 un producto puede poner su propia tarjeta de Empresa, SIN moverla de lugar', async () => {
+    // LibraCargo guarda los datos de la empresa en una tabla propia y con más
+    // campos; LibraDesk esconde el botón de guardar a quien no es admin.
+    // Declararla como sección propia dejaría "Empresa" DESPUÉS de
+    // Integraciones — distinta de los otros seis, que es lo que esta pantalla
+    // vino a terminar.
+    const Configuracion = createConfiguracion({
+      icono: IconoFalso, producto: 'LibraCargo',
+      empresa: { contenido: <p>la tarjeta del producto</p> },
+      integraciones: { email: true },
+    })
+    montar(<Configuracion />)
+
+    // Sigue siendo la PRIMERA pestaña…
+    const pestanias = (await screen.findAllByRole('tab')).map((t) => t.textContent)
+    expect(pestanias[0]).toBe('Empresa')
+    // …y lo que muestra es lo del producto, no el formulario del kit.
+    expect(screen.getByText('la tarjeta del producto')).toBeInTheDocument()
+    expect(screen.queryByLabelText(/Condición de IVA/)).toBeNull()
+  })
+
+  it('el control — sin `contenido`, la pestaña es la del kit', async () => {
+    // Sin esto, una pantalla que NUNCA rindiera la `EmpresaCard` pasaría el
+    // test de arriba y dejaría a los otros seis productos sin el formulario.
+    const Configuracion = createConfiguracion({
+      icono: IconoFalso, producto: 'Contalibra', integraciones: { email: true },
+    })
+    montar(<Configuracion />)
+
+    expect(await screen.findByText(/Datos de la empresa/)).toBeInTheDocument()
+  })
+
   it('sin ninguna sección es un error de programación, no una pantalla vacía', () => {
     expect(() => createConfiguracion({
       icono: IconoFalso, producto: 'X', empresa: false, datos: false,
