@@ -194,9 +194,16 @@ export function createConfiguracion({
       clave: 'empresa', label: 'Empresa', icono: Building2,
       contenido: <EmpresaCard {...opcEmpresa} />,
     }] : []),
+    // Con UNA sola integración el contenido va directo: una barra lateral de
+    // 192 px con un solo botón, ocupando el ancho de la pestaña entera, se lee
+    // como algo roto y no como una navegación. El caso vivo es MedLibra, que
+    // desde el ADR-036 no factura por ARCA ni cobra por MercadoPago y le queda
+    // sólo el correo.
     ...(deIntegraciones.length > 0 ? [{
       clave: 'integraciones', label: 'Integraciones', icono: Power,
-      contenido: <SubNavegacion secciones={deIntegraciones} />,
+      contenido: deIntegraciones.length === 1
+        ? deIntegraciones[0].contenido
+        : <SubNavegacion secciones={deIntegraciones} />,
     }] : []),
     ...propias,
     ...(opcDatos ? [{
