@@ -328,6 +328,23 @@ motor no lo devuelve. **Perderlo al unificar habría sido un retroceso**: sin é
 una caja a medio configurar se descubre recién cuando un cliente escanea el
 cartel impreso y no pasa nada.
 
+### El webhook de MercadoPago es opcional (`v0.51.0`)
+
+`mercadopago: { webhook: false }` esconde el campo del **Webhook Secret** y el
+bloque de la URL.
+
+🔴 El caso vivo es **VentaLibra**, y su ausencia de webhook es deliberada y
+está medida: en la instancia real del cliente no llegó ni un `POST` a
+`/webhooks/mercadopago`, y el cobro se resuelve con un poll. Pedirle al comercio
+una firma secreta para un webhook que no existe es mandarlo a configurar algo
+que no hace nada, y después a buscar por qué "no anda".
+
+Esconder el campo **no borra** lo guardado: el valor viaja vacío y vacío
+significa "no lo toqués" del lado del motor. Hay un test que lo sostiene.
+
+`rutaWebhook` es la otra mitad del mismo problema: **LibraClub** sí tiene
+webhook, pero en `/api/portal/webhook`, no en la ruta de la familia.
+
 ### Los endpoints que consume
 
 | Sección | Router del motor | Prefijo por defecto |
