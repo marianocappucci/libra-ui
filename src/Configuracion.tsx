@@ -63,6 +63,13 @@ import { MercadoPagoCard, type TextoAutoFacturar } from './configuracion/mercado
 
 export type { BackupGuardado, ResguardoExterno } from './configuracion/datos'
 export type { DatosEmpresa } from './configuracion/empresa'
+// 🔑 Las tres condiciones de un EMISOR, con qué comprobante emite cada una.
+// Se exportan porque LibraDesk y LibraCargo tienen tarjeta de Empresa propia
+// —una por el gate de rol, la otra porque sus datos viven en tabla propia— y
+// sin esto las escriben a mano: es exactamente como esos dos terminaron con
+// la condición de IVA en un campo de texto libre mientras los otros seis la
+// eligen de una lista.
+export { CONDICIONES_IVA } from './configuracion/empresa'
 export type { ConfigArca, EstadoArca } from './configuracion/arca'
 export type { ConfigMercadoPago, TextoAutoFacturar } from './configuracion/mercadopago'
 export { ArcaCard, DatosBackupCard, EmailCard, EmpresaCard, MercadoPagoCard, ResguardoExternoCard }

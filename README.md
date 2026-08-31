@@ -372,6 +372,39 @@ copyright en las distribuciones — y un producto que se sirve compilado es una
 distribución. Sin este slot, migrar esa pantalla al kit **borraría la
 atribución**, o la repetiría en cada sección.
 
+### *Probar conexión* del correo, y las condiciones de IVA exportadas (`v0.55.0`)
+
+**El botón de probar el SMTP pasa a estar en los ocho productos.** Vivía en el
+`Config.tsx` de Contalibra y de Restolibra —dos de ocho— contra un
+`GET /api/email/probar` escrito en cada uno de esos dos; en los otros seis no
+existía, así que el correo se configuraba **sin forma de saber si andaba**: el
+primer indicio era un comprobante que no llegaba, o un mail de recuperación de
+contraseña que nadie recibía.
+
+Ahora `EmailCard` trae el botón y pega en `POST {basePath}/probar`, **el mismo
+`basePath` con el que el formulario lee y guarda**. Ese "el mismo" es la razón
+de que el botón signifique algo: la falla que Contalibra ya tuvo fue
+exactamente la contraria —el endpoint leía `config.json` mientras la pantalla
+escribía en la base de libraauth, así que decía *Conectado* contra un servidor
+y los mails salían por otro—.
+
+🔴 **El endpoint lo pone el producto**, montando `build_smtp_probe_router` de
+`libracore >= v1.69.0` con su propio resolver de SMTP y detrás de su gate de
+admin. Sin eso el botón da 404. El router del motor resuelve por `smtp_efectivo`,
+que es la misma función que usan el envío de comprobantes, el de presupuestos y
+la recuperación de contraseña.
+
+`RUTA_SMTP_POR_DEFECTO` (`/admin/smtp`) se exporta desde `ConfiguracionSmtp`:
+es donde seis de los ocho montan el router de libraauth, y el botón y el
+formulario tienen que salir del mismo valor.
+
+**Y `CONDICIONES_IVA` se exporta desde `Configuracion`.** Son las tres
+condiciones de un **emisor** con el comprobante que emite cada una. Las necesitan
+los dos productos que tienen tarjeta de Empresa propia —LibraDesk por el gate
+de rol, LibraCargo porque sus datos viven en tabla propia—: sin esto las
+escriben a mano, que es exactamente como esos dos terminaron con la condición de
+IVA en un campo de texto libre mientras los otros seis la eligen de una lista.
+
 ### El ambiente de la credencial de MercadoPago (`v0.54.0`)
 
 La tarjeta de MercadoPago muestra una pastilla que dice **de qué ambiente es el
