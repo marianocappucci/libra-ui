@@ -27,6 +27,7 @@ import { api, ApiError } from '../api-client'
 import { BadgeEstado, type TonoEstado } from '../badge-estado'
 import { Campo, AccionesDeSeccion } from './campos'
 import { TutorialMercadoPago } from './tutoriales'
+import { QrDeLaCajaDialog } from './qr-de-la-caja'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -119,6 +120,19 @@ export function puedeCobrarPorQr(cfg: ConfigMercadoPago): boolean {
     && cfg.mp_user_id.trim() !== ''
     && cfg.mp_pos_id.trim() !== ''
 }
+
+/** Si tiene sentido ofrecer el cartel del QR para ver e imprimir.
+ *
+ *  🔑 **Pide menos que `puedeCobrarPorQr`, y es a propósito.** El `user_id`
+ *  hace falta para *cobrar* —va en la URL de la orden—, pero para mostrar el
+ *  cartel el motor sólo necesita el token y el `pos_id`. Exigir los tres
+ *  escondería el QR justo cuando alguien está terminando de configurar la
+ *  caja, que es cuando lo quiere imprimir.
+ */
+function puedeVerElQr(cfg: ConfigMercadoPago): boolean {
+  return cfg.mp_access_token_cargado && cfg.mp_pos_id.trim() !== ''
+}
+
 
 function describirError(err: unknown): string {
   if (err instanceof ApiError) return err.detail
@@ -376,6 +390,7 @@ export function MercadoPagoCard({
               <Send />{probando ? 'Probando…' : 'Probar conexión'}
             </Button>
           )}
+          {puedeVerElQr(cfg) && <QrDeLaCajaDialog basePath={basePath} />}
           {(cfg.mp_access_token_cargado || (webhook && cfg.mp_webhook_secret_cargado)) && (
             <Button type="button" variant="outline" disabled={ocupado} onClick={() => void quitarCredenciales()}>
               Quitar credenciales
