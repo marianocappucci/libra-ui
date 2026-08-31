@@ -81,7 +81,16 @@ export function cuerpoAGuardar(
 // FastAPI; Contalibra y Restolibra escriben endpoints propios en
 // '/api/config/smtp' y pasan esa ruta. Mismo criterio que el `basePath` de
 // Usuarios.
-export function ConfiguracionSmtp({ basePath = '/admin/smtp' }: { basePath?: string } = {}) {
+/** Donde seis de los ocho productos montan el router de SMTP de libraauth
+ *  —es el default de ese router—. Se exporta para que `EmailCard` arme la
+ *  URL de *Probar conexión* con **el mismo valor** que el formulario usa
+ *  para leer y guardar: dos defaults iguales escritos en dos lugares es uno
+ *  que se olvida de cambiar. */
+export const RUTA_SMTP_POR_DEFECTO = '/admin/smtp'
+
+export function ConfiguracionSmtp(
+  { basePath = RUTA_SMTP_POR_DEFECTO }: { basePath?: string } = {},
+) {
   const [estado, setEstado] = useState<EstadoSmtp | null>(null)
   const [form, setForm] = useState<Formulario>(VACIO)
   const [passwordTipeada, setPasswordTipeada] = useState('')
