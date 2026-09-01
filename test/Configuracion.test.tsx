@@ -576,7 +576,7 @@ describe('ARCA', () => {
     const usuario = userEvent.setup()
 
     await usuario.upload(
-      await screen.findByLabelText(/Certificado/),
+      await screen.findByLabelText(/Certificado.*Homologaci/),
       new File(['x'], 'mi.crt', { type: 'application/x-x509-ca-cert' }),
     )
 
@@ -592,7 +592,7 @@ describe('ARCA', () => {
     const usuario = userEvent.setup()
 
     await usuario.upload(
-      await screen.findByLabelText(/Clave privada/),
+      await screen.findByLabelText(/Clave privada.*Homologaci/),
       new File(['x'], 'mi.key', { type: 'application/octet-stream' }),
     )
 
@@ -637,7 +637,7 @@ describe('ARCA', () => {
     montar(<ArcaCard producto="Contalibra" />)
     const usuario = userEvent.setup()
 
-    await usuario.click(await screen.findByRole('button', { name: /Quitar certificado y clave/ }))
+    await usuario.click(await screen.findByRole('button', { name: /Quitar el par de homologaci/i }))
 
     await esperarPedido('/config/arca/credenciales', 'DELETE')
   })
