@@ -25,6 +25,10 @@ import { CheckCircle2, Save, Send, ShieldCheck } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
 import { BadgeEstado } from '../badge-estado'
+import {
+  AMBIENTES_ARCA, NOMBRE_DEL_AMBIENTE, nombreDelAmbiente, parDe,
+  type AmbienteArca, type ParDeArca,
+} from './arca-pares'
 import { Campo, AccionesDeSeccion } from './campos'
 import { TutorialArcaCertificado, TutorialArcaPadron } from './tutoriales'
 import { Button } from '@/components/ui/button'
@@ -46,6 +50,9 @@ export type ConfigArca = {
   clave_path: string
   tiene_certificado: boolean
   tiene_clave: boolean
+  /** 🔑 Opcional: un producto con un LibraCore anterior al 2026-09-01 no lo
+   *  manda, y la pantalla tiene que seguir funcionando con un solo par. */
+  pares?: Record<string, ParDeArca>
 }
 
 /** Lo que devuelve `GET {basePath}/estado`. */
@@ -60,6 +67,7 @@ export type EstadoArca = {
   vencido?: boolean
   sujeto?: string
   error_certificado?: string
+  pares?: Record<string, ParDeArca>
 }
 
 function vacia(empresa: string): ConfigArca {
@@ -119,19 +127,26 @@ function AvisoDeVencimiento({ estado }: { estado: EstadoArca }) {
  *  mismo archivo vuelva a disparar el `change`: si no, corregir y resubir el
  *  mismo nombre no hace nada y parece que la pantalla se colgó.
  */
-function SubirMitad({ label, accept, cargado, disabled, onArchivo }: {
+function SubirMitad({ label, accept, cargado, disabled, idSufijo, onArchivo }: {
   label: string
   accept: string
   cargado: boolean
   disabled: boolean
+  /** 🔑 El ambiente al que pertenece este campo. Desde que la tarjeta muestra
+   *  los DOS pares hay dos "Certificado (.crt)" en la misma pantalla: sin
+   *  distinguirlos, el `aria-label` deja de identificar un solo control —para
+   *  quien usa lector de pantalla y para los tests— y no hay forma de decir a
+   *  cuál de los dos ambientes se está subiendo. */
+  idSufijo: string
   onArchivo: (f: File) => void
 }) {
+  const etiqueta = `${label} — ${nombreDelAmbiente(idSufijo)}`
   return (
     <div className="grid gap-2">
       <Label>{label}</Label>
       {cargado && <BadgeEstado tono="ok" className="w-fit"><CheckCircle2 />Cargado</BadgeEstado>}
       <Input
-        type="file" accept={accept} disabled={disabled} aria-label={label}
+        type="file" accept={accept} disabled={disabled} aria-label={etiqueta}
         onChange={(e) => {
           const f = e.target.files?.[0]
           if (f) onArchivo(f)
@@ -139,6 +154,120 @@ function SubirMitad({ label, accept, cargado, disabled, onArchivo }: {
         }}
       />
     </div>
+  )
+}
+
+/** El resumen de un par: si está, hasta cuándo, o qué le falta. */
+function ResumenDelPar({ par }: { par: ParDeArca }) {
+  if (par.error_certificado) {
+    return (
+      <BadgeEstado tono="negativo">
+        El certificado no se puede leer: {par.error_certificado}
+      </BadgeEstado>
+    )
+  }
+  if (!par.tiene_certificado && !par.tiene_clave) {
+    return <BadgeEstado tono="neutro">Sin cargar</BadgeEstado>
+  }
+  if (!par.completo) {
+    // 🔑 Se dice CUÁL falta. "Incompleto" a secas manda a mirar los dos campos.
+    return (
+      <BadgeEstado tono="atencion">
+        Falta {par.tiene_certificado ? 'la clave privada' : 'el certificado'}
+      </BadgeEstado>
+    )
+  }
+  if (par.vencido) {
+    return <BadgeEstado tono="negativo">Vencido el {par.vence}</BadgeEstado>
+  }
+  if ((par.dias_para_vencer ?? 999) <= DIAS_DE_AVISO) {
+    return (
+      <BadgeEstado tono="atencion">
+        Vence el {par.vence} — quedan {par.dias_para_vencer} días
+      </BadgeEstado>
+    )
+  }
+  return (
+    <BadgeEstado tono="ok">
+      <CheckCircle2 />Válido hasta el {par.vence}
+    </BadgeEstado>
+  )
+}
+
+/** El aviso de que el ambiente elegido no tiene con qué facturar.
+ *
+ *  🔴 **Es el hueco que abre tener dos pares.** Con un solo par, "hay
+ *  certificado" y "puedo facturar" eran lo mismo. Ahora el selector puede
+ *  apuntar a un ambiente vacío mientras el otro está completo: la pantalla
+ *  muestra credenciales cargadas por todos lados y la facturación no anda.
+ *
+ *  Es exactamente el paso donde se rompe el flujo que esta pantalla habilita —
+ *  mover la llave a producción antes de haber subido el par de producción—, así
+ *  que se dice acá y no se descubre al emitir el primer comprobante.
+ */
+function AvisoDelSelector({ cfg }: { cfg: ConfigArca }) {
+  const elegido = parDe(cfg, cfg.ambiente)
+  if (elegido.completo) return null
+  const nombre = nombreDelAmbiente(cfg.ambiente)
+  const otro = AMBIENTES_ARCA.find((a) => a !== cfg.ambiente && parDe(cfg, a).completo)
+  return (
+    <BadgeEstado tono="negativo">
+      El ambiente elegido es <strong>{nombre}</strong> y todavía no tiene el par
+      completo: la facturación no va a funcionar.
+      {otro && ` El par de ${NOMBRE_DEL_AMBIENTE[otro].toLowerCase()} sí está cargado.`}
+    </BadgeEstado>
+  )
+}
+
+/** El par de credenciales de UN ambiente: estado, las dos mitades y el quitar.
+ *
+ *  🔴 **Los dos se ven siempre, incluso el que no está en uso.** El momento que
+ *  esta pantalla tiene que cubrir es el de la transición: el operador está
+ *  probando contra homologación y necesita ver, sin mover el selector, que el
+ *  par de producción ya está cargado y hasta cuándo dura. Mostrar sólo el
+ *  ambiente activo convierte el corte a facturación real en un salto a ciegas.
+ */
+function ParDeCredenciales({ ambiente, par, enUso, disabled, onArchivo, onQuitar }: {
+  ambiente: AmbienteArca
+  par: ParDeArca
+  enUso: boolean
+  disabled: boolean
+  onArchivo: (tramo: 'certificado' | 'clave', f: File) => void
+  onQuitar: () => void
+}) {
+  return (
+    <section
+      aria-label={`Credenciales de ${NOMBRE_DEL_AMBIENTE[ambiente]}`}
+      className="grid gap-3 rounded-lg border p-3"
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm font-medium">{NOMBRE_DEL_AMBIENTE[ambiente]}</span>
+        {enUso && <BadgeEstado tono="ok">En uso</BadgeEstado>}
+        <ResumenDelPar par={par} />
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <SubirMitad
+          label="Certificado (.crt)" accept=".crt,.pem" cargado={par.tiene_certificado}
+          disabled={disabled} idSufijo={ambiente}
+          onArchivo={(f) => onArchivo('certificado', f)}
+        />
+        <SubirMitad
+          label="Clave privada (.key)" accept=".key,.pem" cargado={par.tiene_clave}
+          disabled={disabled} idSufijo={ambiente}
+          onArchivo={(f) => onArchivo('clave', f)}
+        />
+      </div>
+
+      {(par.tiene_certificado || par.tiene_clave) && (
+        <Button
+          type="button" variant="outline" size="sm" className="w-fit"
+          disabled={disabled} onClick={onQuitar}
+        >
+          Quitar el par de {NOMBRE_DEL_AMBIENTE[ambiente].toLowerCase()}
+        </Button>
+      )}
+    </section>
   )
 }
 
@@ -223,7 +352,14 @@ export function ArcaCard({ producto, basePath = '/config/arca', empresa = 'defau
     }
   }
 
-  async function subir(tramo: 'certificado' | 'clave', archivo: File) {
+  /** 🔴 El `ambiente` viaja SIEMPRE, incluso para el que está en uso.
+   *
+   *  Sin él el backend cae al selector, que casi siempre es el mismo — y esa
+   *  coincidencia es justo lo que hace peligroso el descuido: funciona en todas
+   *  las pruebas y falla el día que el operador sube el par de producción
+   *  estando parado en homologación, pisando el que no era.
+   */
+  async function subir(ambiente: AmbienteArca, tramo: 'certificado' | 'clave', archivo: File) {
     if (!cfg) return
     setOcupado(true)
     setError(null)
@@ -232,7 +368,9 @@ export function ArcaCard({ producto, basePath = '/config/arca', empresa = 'defau
       const form = new FormData()
       form.append('archivo', archivo)
       await api.postForm(
-        `${basePath}/${tramo}?empresa=${encodeURIComponent(cfg.empresa)}`, form,
+        `${basePath}/${tramo}?empresa=${encodeURIComponent(cfg.empresa)}`
+        + `&ambiente=${encodeURIComponent(ambiente)}`,
+        form,
       )
       await cargar()
     } catch (err) {
@@ -242,14 +380,17 @@ export function ArcaCard({ producto, basePath = '/config/arca', empresa = 'defau
     }
   }
 
-  async function quitarCredenciales() {
+  async function quitarCredenciales(ambiente: AmbienteArca) {
     if (!cfg) return
     setOcupado(true)
     setError(null)
     setAviso(null)
     try {
-      await api.del(`${basePath}/credenciales?empresa=${encodeURIComponent(cfg.empresa)}`)
-      setAviso('Se quitaron el certificado y la clave.')
+      await api.del(
+        `${basePath}/credenciales?empresa=${encodeURIComponent(cfg.empresa)}`
+        + `&ambiente=${encodeURIComponent(ambiente)}`,
+      )
+      setAviso(`Se quitó el par de ${NOMBRE_DEL_AMBIENTE[ambiente].toLowerCase()}.`)
       await cargar()
     } catch (err) {
       setError(describirError(err))
@@ -313,14 +454,23 @@ export function ArcaCard({ producto, basePath = '/config/arca', empresa = 'defau
         </div>
         <Campo id="arca-alias" label="Alias" value={cfg.alias} onChange={(v) => setCfg({ ...cfg, alias: v })} />
 
-        <SubirMitad
-          label="Certificado (.crt)" accept=".crt,.pem" cargado={cfg.tiene_certificado}
-          disabled={ocupado} onArchivo={(f) => void subir('certificado', f)}
-        />
-        <SubirMitad
-          label="Clave privada (.key)" accept=".key,.pem" cargado={cfg.tiene_clave}
-          disabled={ocupado} onArchivo={(f) => void subir('clave', f)}
-        />
+        <div className="col-span-full grid gap-3">
+          {/* 🔑 El aviso va ANTES de los dos bloques: es la respuesta a "¿puedo
+              facturar?", y responderla después de dos formularios de subida la
+              deja abajo del pliegue justo cuando dice que no. */}
+          <AvisoDelSelector cfg={cfg} />
+          {AMBIENTES_ARCA.map((amb) => (
+            <ParDeCredenciales
+              key={amb}
+              ambiente={amb}
+              par={parDe(cfg, amb)}
+              enUso={cfg.ambiente === amb}
+              disabled={ocupado}
+              onArchivo={(tramo, f) => void subir(amb, tramo, f)}
+              onQuitar={() => void quitarCredenciales(amb)}
+            />
+          ))}
+        </div>
 
         <AccionesDeSeccion>
           <Button disabled={ocupado} onClick={() => void guardar()}>
@@ -329,11 +479,6 @@ export function ArcaCard({ producto, basePath = '/config/arca', empresa = 'defau
           {estado?.configurado && (
             <Button type="button" variant="outline" disabled={probando} onClick={() => void probar()}>
               <Send />{probando ? 'Probando…' : 'Probar conexión'}
-            </Button>
-          )}
-          {(cfg.tiene_certificado || cfg.tiene_clave) && (
-            <Button type="button" variant="outline" disabled={ocupado} onClick={() => void quitarCredenciales()}>
-              Quitar certificado y clave
             </Button>
           )}
           {error && <span className="text-sm text-destructive">{error}</span>}
