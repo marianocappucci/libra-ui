@@ -95,7 +95,7 @@ describe('ARCA — cuando el backend dice que no', () => {
     // `.pem`, y lo que distingue uno de otro es el contenido — que es lo que
     // el backend mira.
     await usuario.upload(
-      await screen.findByLabelText(/Certificado/),
+      await screen.findByLabelText(/Certificado.*Homologaci/),
       new File(['-----BEGIN CERTIFICATE REQUEST-----'], 'pedido.pem', { type: 'text/plain' }),
     )
 
@@ -108,7 +108,7 @@ describe('ARCA — cuando el backend dice que no', () => {
     const usuario = userEvent.setup()
 
     await usuario.upload(
-      await screen.findByLabelText(/Clave privada/),
+      await screen.findByLabelText(/Clave privada.*Homologaci/),
       new File(['x'], 'otra.key', { type: 'text/plain' }),
     )
 
@@ -155,7 +155,7 @@ describe('ARCA — cuando el backend dice que no', () => {
     montar(<ArcaCard producto="Contalibra" />)
     const usuario = userEvent.setup()
 
-    await usuario.click(await screen.findByRole('button', { name: /Quitar certificado y clave/ }))
+    await usuario.click(await screen.findByRole('button', { name: /Quitar el par de homologaci/i }))
 
     expect(await screen.findByText(/no tiene configuración de ARCA/)).toBeInTheDocument()
   })
@@ -175,7 +175,7 @@ describe('ARCA — cuando el backend dice que no', () => {
     // Sin certificado no ofrece probar ni quitar: son acciones sobre algo que
     // no está.
     expect(screen.queryByRole('button', { name: /Probar conexión/ })).toBeNull()
-    expect(screen.queryByRole('button', { name: /Quitar certificado/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Quitar el par/i })).toBeNull()
   })
 
   it('un LibraCore viejo sin `/estado` no rompe la pantalla, sólo no avisa el vencimiento', async () => {
