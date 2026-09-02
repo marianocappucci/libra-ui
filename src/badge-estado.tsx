@@ -50,3 +50,40 @@ type BadgeEstadoProps = Omit<ComponentProps<typeof Badge>, 'variant'> & {
 export function BadgeEstado({ tono, className, ...props }: BadgeEstadoProps) {
   return <Badge variant="ghost" data-tono={tono} className={cn(TONOS_ESTADO[tono], className)} {...props} />
 }
+
+// El mismo tono, pero para una FRASE.
+//
+// 🔴 **La pastilla no puede contener una oración, y el modo de fallar no se ve
+// en el código.** `Badge` trae `whitespace-nowrap w-fit shrink-0`: son las tres
+// clases que hacen que una pastilla se vea como una pastilla, y juntas hacen
+// que un texto largo no corte, no achique y **se salga del contenedor**. Con
+// una etiqueta de dos palabras nunca se nota; con "El ambiente elegido es
+// Homologación (pruebas) y todavía no tiene el par completo: la facturación no
+// va a funcionar" se sale de la tarjeta, que es como lo reportó el humano el
+// 2026-09-02 sobre la pantalla de ARCA.
+//
+// Peor: dos de esos avisos interpolan el mensaje de error del certificado, o
+// sea texto de largo **arbitrario**. Ahí no hay frase corta que valga.
+//
+// `w-full` no es decorativo: estos avisos aparecen tanto en una grilla como
+// dentro de una fila `flex-wrap` de pastillas, y ahí lo correcto es que se
+// lleve su propio renglón en vez de competir por el ancho con las etiquetas.
+// Props propias y NO las de `BadgeEstado`: aquellas salen de
+// `ComponentProps<typeof Badge>`, que tipa el `ref` para un `<span>`. Reusarlas
+// compila hasta que alguien le pasa una `ref`, y ahí el error habla de
+// `HTMLSpanElement` en un componente que renderiza un `<div>`.
+type AvisoEstadoProps = ComponentProps<'div'> & { tono: TonoEstado }
+
+export function AvisoEstado({ tono, className, ...props }: AvisoEstadoProps) {
+  return (
+    <div
+      data-tono={tono}
+      className={cn(
+        'w-full rounded-md border px-3 py-2 text-sm',
+        TONOS_ESTADO[tono],
+        className,
+      )}
+      {...props}
+    />
+  )
+}
