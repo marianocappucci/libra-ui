@@ -142,8 +142,43 @@ describe('ARCA — los dos pares', () => {
     }))
     render(<ArcaCard producto="Contalibra" />)
 
-    expect(await screen.findByText(/la facturación no va a funcionar/))
-      .toBeInTheDocument()
+    const aviso = await screen.findByText(/la facturación no va a funcionar/)
+    expect(aviso).toBeInTheDocument()
+    // 🔴 **Y como BLOQUE, no como pastilla.** Este aviso vivió dentro de un
+    // `BadgeEstado`, que trae `whitespace-nowrap w-fit shrink-0`: una frase de
+    // este largo no cortaba, no achicaba y se salía de la tarjeta. Medido en un
+    // navegador: la pastilla ocupa 655px pase lo que pase, así que desborda
+    // cualquier contenedor más angosto que eso. Lo reportó el humano el
+    // 2026-09-02.
+    //
+    // `w-full` es lo que distingue a `AvisoEstado` acá: es la clase que el
+    // aviso tiene y la pastilla no.
+    expect(aviso.className.split(/\s+/)).toContain('w-full')
+  })
+
+  it('🔴 el aviso del certificado ilegible también es un bloque', async () => {
+    // Es el peor de los cuatro avisos para meter en una pastilla: interpola el
+    // mensaje de ARCA, o sea texto de largo **arbitrario**. Con la frase fija
+    // uno puede convencerse de que "entra"; con esta, no hay ancho que alcance.
+    //
+    // Va aparte del aviso del selector a propósito: son dos componentes
+    // distintos, y arreglar uno no arregla el otro. Se probó — mutar sólo uno
+    // dejaba al otro en verde.
+    servir(config({
+      pares: {
+        homologacion: {
+          ambiente: 'homologacion', ...PAR_VACIO, tiene_certificado: true,
+          error_certificado:
+            'no parece un certificado PEM. Tiene que ser el .crt que devuelve '
+            + 'ARCA, no el .csr que se le manda al organismo para pedirlo.',
+        },
+        produccion: { ambiente: 'produccion', ...PAR_VACIO },
+      },
+    }))
+    render(<ArcaCard producto="Contalibra" />)
+
+    const aviso = await screen.findByText(/no parece un certificado PEM/)
+    expect(aviso.className.split(/\s+/)).toContain('w-full')
   })
 
   it('y NO avisa cuando el par del ambiente elegido está completo', async () => {

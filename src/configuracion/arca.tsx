@@ -24,7 +24,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { CheckCircle2, Save, Send, ShieldCheck } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
-import { BadgeEstado } from '../badge-estado'
+import { AvisoEstado, BadgeEstado } from '../badge-estado'
 import {
   AMBIENTES_ARCA, NOMBRE_DEL_AMBIENTE, nombreDelAmbiente, parDe,
   type AmbienteArca, type ParDeArca,
@@ -96,17 +96,17 @@ function describirError(err: unknown): string {
 function AvisoDeVencimiento({ estado }: { estado: EstadoArca }) {
   if (estado.error_certificado) {
     return (
-      <BadgeEstado tono="negativo">
+      <AvisoEstado tono="negativo">
         El certificado cargado no se puede leer: {estado.error_certificado}
-      </BadgeEstado>
+      </AvisoEstado>
     )
   }
   if (!estado.vence) return null
   if (estado.vencido) {
     return (
-      <BadgeEstado tono="negativo">
+      <AvisoEstado tono="negativo">
         Certificado VENCIDO el {estado.vence} — la facturación no va a funcionar
-      </BadgeEstado>
+      </AvisoEstado>
     )
   }
   if ((estado.dias_para_vencer ?? 999) <= DIAS_DE_AVISO) {
@@ -161,9 +161,9 @@ function SubirMitad({ label, accept, cargado, disabled, idSufijo, onArchivo }: {
 function ResumenDelPar({ par }: { par: ParDeArca }) {
   if (par.error_certificado) {
     return (
-      <BadgeEstado tono="negativo">
+      <AvisoEstado tono="negativo">
         El certificado no se puede leer: {par.error_certificado}
-      </BadgeEstado>
+      </AvisoEstado>
     )
   }
   if (!par.tiene_certificado && !par.tiene_clave) {
@@ -211,11 +211,11 @@ function AvisoDelSelector({ cfg }: { cfg: ConfigArca }) {
   const nombre = nombreDelAmbiente(cfg.ambiente)
   const otro = AMBIENTES_ARCA.find((a) => a !== cfg.ambiente && parDe(cfg, a).completo)
   return (
-    <BadgeEstado tono="negativo">
+    <AvisoEstado tono="negativo">
       El ambiente elegido es <strong>{nombre}</strong> y todavía no tiene el par
       completo: la facturación no va a funcionar.
       {otro && ` El par de ${NOMBRE_DEL_AMBIENTE[otro].toLowerCase()} sí está cargado.`}
-    </BadgeEstado>
+    </AvisoEstado>
   )
 }
 
