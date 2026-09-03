@@ -49,7 +49,7 @@ export default defineConfig({
       // (sorting, onRowClick, colgroup, meta) y quedo en 98% y 92.27%.
       //
       // Subio de 63 a 67 el 2026-08-01 con SelectBuscable (68.52% medido).
-      thresholds: { lines: 67, functions: 95, branches: 90 },
+      thresholds: { lines: 96, functions: 95, branches: 90 },
     },
   },
 })
