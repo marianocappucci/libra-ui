@@ -31,6 +31,12 @@ export default defineConfig({
     include: ['test/**/*.test.{ts,tsx}'],
     coverage: {
       include: ['src/**'],
+      // Las primitivas shadcn (`src/ui/`) se centralizaron aca en E4 (2026-09-03)
+      // pero NO se testean, por la misma convencion que en los consumidores: son
+      // wrappers de Radix que se copian tal cual, con sus propios tests aguas
+      // arriba; un test aca solo duplicaria eso. Sin este exclude, sus ~17
+      // archivos sin cobertura hunden los pisos de abajo sin senal real.
+      exclude: ['src/ui/**'],
       reporter: ['text-summary', 'json-summary'],
       // Aca la suite SI es a fondo, no de humo. `lines` queda bajo porque
       // `include` abarca todo src/ y hay modulos sin tests todavia (Layout y
