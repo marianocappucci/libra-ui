@@ -22,7 +22,7 @@ import { cn } from './utils'
 // `useAuth` juntos, consistentes entre si.
 export function createLogin<TUser = User>({
   productName, productInitial, redirectTo, onLoginSuccess, useAuth: useAuthOverride, formatError,
-  forgotPasswordPath, demoPath, logo, wordmarkClassName,
+  forgotPasswordPath, demoPath, totpPath, logo, wordmarkClassName,
 }: {
   productName: string
   productInitial: string
@@ -41,7 +41,7 @@ export function createLogin<TUser = User>({
   // Hook `useAuth` a usar -- por defecto el de la instancia pre-configurada
   // de este mismo modulo (Gestiolibra/MedLibra/VentaLibra). Productos con
   // su propia `createAuthContext` (Contalibra/Restolibra) pasan el suyo.
-  useAuth?: () => { login: (username: string, password: string) => Promise<TUser> }
+  useAuth?: () => { login: (username: string, password: string, extra?: Record<string, unknown>) => Promise<TUser> }
   // Mensaje de error a mostrar ante un ApiError -- por defecto un mensaje
   // generico ("Usuario o contraseña incorrectos."), igual que siempre.
   // Contalibra/Restolibra muestran el detalle real del backend
@@ -68,6 +68,15 @@ export function createLogin<TUser = User>({
   // `api.get` devuelve `undefined` cuando la respuesta no es JSON, y de ahí
   // sale el chequeo de forma de abajo.
   demoPath?: string
+  // Ruta de la sonda del segundo factor (v0.60.0, F2). La usa el backoffice
+  // de superadmin: `GET /api/login/opciones` contesta `{ totp: true }` cuando
+  // el backend tiene `ADMIN_PANEL_TOTP_SECRET`, y sólo entonces la pantalla
+  // agrega el campo «Código de verificación» y manda `{ codigo }` junto a las
+  // credenciales. **Opt-in y condicionado en runtime**, por lo mismo que
+  // `demoPath`: la misma imagen corre con y sin 2FA según su `.env`, y la
+  // sonda se valida por la FORMA de la respuesta, no por el 200 — el catch-all
+  // de la SPA devuelve 200 con HTML a cualquier ruta.
+  totpPath?: string
 }) {
   return function Login() {
     // Cast puntual: TS no puede unificar el tipo generico TUser (para
@@ -75,7 +84,7 @@ export function createLogin<TUser = User>({
     // instancia por defecto dentro del cuerpo de una funcion generica --
     // limitacion conocida de TS con defaults de tipo. Ambas ramas
     // devuelven la misma forma en runtime, el cast es seguro.
-    const { login } = (useAuthOverride ?? useAuth)() as { login: (username: string, password: string) => Promise<TUser> }
+    const { login } = (useAuthOverride ?? useAuth)() as { login: (username: string, password: string, extra?: Record<string, unknown>) => Promise<TUser> }
     const navigate = useNavigate()
     const [username, setUsername] = useState('')
     const [password, setPassword] = useState('')
@@ -88,6 +97,9 @@ export function createLogin<TUser = User>({
     // formulario se dibuja siempre.
     const [mostrarLogin, setMostrarLogin] = useState(false)
     const [entrandoALaDemo, setEntrandoALaDemo] = useState(false)
+    // Segundo factor: `true` sólo si la sonda de `totpPath` lo confirmó.
+    const [totp, setTotp] = useState(false)
+    const [codigo, setCodigo] = useState('')
 
     useEffect(() => {
       if (!demoPath) return
@@ -103,6 +115,17 @@ export function createLogin<TUser = User>({
         })
         // Una instancia normal contesta 404/405 y `api.get` tira: no es un
         // error que mostrar, es la respuesta esperada en 5 de cada 6 casos.
+        .catch(() => {})
+      return () => { vivo = false }
+    }, [])
+
+    useEffect(() => {
+      if (!totpPath) return
+      let vivo = true
+      api.get<{ totp?: boolean } | undefined>(totpPath)
+        // Misma regla que la sonda de la demo: se exige la forma. Un 200 con
+        // HTML llega como `undefined` y no enciende nada.
+        .then((info) => { if (vivo && info?.totp === true) setTotp(true) })
         .catch(() => {})
       return () => { vivo = false }
     }, [])
@@ -140,7 +163,11 @@ export function createLogin<TUser = User>({
       setError(null)
       setSubmitting(true)
       try {
-        const user = await login(username, password)
+        // Sin segundo factor la llamada es la de siempre, con dos argumentos:
+        // los seis productos no tienen por qué enterarse de que existe `extra`.
+        const user = totp
+          ? await login(username, password, { codigo: codigo.trim() })
+          : await login(username, password)
         navigate(onLoginSuccess ? onLoginSuccess(user) : redirectTo, { replace: true })
       } catch (err) {
         setError(err instanceof ApiError ? (formatError ? formatError(err) : 'Usuario o contraseña incorrectos.') : 'Error de conexión.')
@@ -267,6 +294,24 @@ export function createLogin<TUser = User>({
                   required
                 />
               </div>
+              {totp && (
+                <div className="grid gap-2">
+                  <Label htmlFor="codigo">Código de verificación</Label>
+                  <Input
+                    id="codigo"
+                    value={codigo}
+                    onChange={(e) => setCodigo(e.target.value)}
+                    // Los 6 dígitos del autenticador: teclado numérico en el
+                    // teléfono, y `one-time-code` deja que el sistema lo
+                    // autocomplete desde la app o el SMS sin adivinar.
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    placeholder="000000"
+                    required
+                  />
+                </div>
+              )}
               {/* En una demo el error del código se muestra arriba, junto al
                   campo que lo produjo; acá abajo sólo el del login. */}
               {error && !demo && <p className="text-sm text-destructive">{error}</p>}

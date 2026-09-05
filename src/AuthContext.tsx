@@ -12,7 +12,11 @@ import { GateTerminos } from './Terminos'
 export type AuthContextValue<TUser> = {
   user: TUser | null
   loading: boolean
-  login: (username: string, password: string) => Promise<TUser>
+  /** `extra` viaja en el cuerpo del POST junto a usuario y contraseña
+   *  (v0.60.0, F2): el backoffice manda ahí el código del segundo factor
+   *  (`{ codigo }`). Es opcional y los seis productos no lo pasan: para ellos
+   *  el cuerpo sigue siendo `{ username, password }`, byte a byte. */
+  login: (username: string, password: string, extra?: Record<string, unknown>) => Promise<TUser>
   logout: () => Promise<void>
 }
 
@@ -44,8 +48,10 @@ export function createAuthContext<TUser>(config: {
         .finally(() => setLoading(false))
     }, [])
 
-    async function login(username: string, password: string) {
-      const loggedIn = await api.post<TUser>(config.loginPath, { username, password })
+    async function login(username: string, password: string, extra?: Record<string, unknown>) {
+      // Usuario y contraseña van ÚLTIMOS: si `extra` trajera esas claves, las
+      // pisan las que tipeó la persona, no al revés.
+      const loggedIn = await api.post<TUser>(config.loginPath, { ...extra, username, password })
       setUser(loggedIn)
       return loggedIn
     }

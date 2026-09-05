@@ -134,3 +134,30 @@ describe('la factory respeta las rutas de cada producto', () => {
     silenciar.mockRestore()
   })
 })
+
+describe('login con `extra` (v0.60.0, el código del segundo factor)', () => {
+  it('lo manda en el cuerpo junto a usuario y contraseña, y éstos ganan', async () => {
+    function ConCodigo() {
+      const { login } = useAuth()
+      return (
+        <button onClick={() => login('ana', 'clave', { codigo: '123456', username: 'pisado' }).catch(() => {})}>
+          entrar-con-codigo
+        </button>
+      )
+    }
+    const user = userEvent.setup()
+    fetchMock
+      .mockImplementationOnce(() => Promise.resolve(json({ detail: 'No autenticado' }, 401)))
+      .mockImplementationOnce(() => Promise.resolve(json({ id: '1', username: 'ana', role: 'admin' })))
+    render(<AuthProvider><ConCodigo /></AuthProvider>)
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+
+    await user.click(screen.getByText('entrar-con-codigo'))
+    // Al menos dos: al quedar logueado, el GateTerminos pide `/terminos` y
+    // suma una tercera llamada, que no es la que se mide acá.
+    await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2))
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/login')
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body))
+      .toEqual({ codigo: '123456', username: 'ana', password: 'clave' })
+  })
+})
