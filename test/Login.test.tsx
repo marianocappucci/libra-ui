@@ -23,6 +23,7 @@ function montar({
   login?: ReturnType<typeof vi.fn>
   forgotPasswordPath?: string
   demoPath?: string
+  totpPath?: string
   onLoginSuccess?: (u: UsuarioDePrueba) => string
   formatError?: (e: ApiError) => string
 } = {}) {
@@ -441,3 +442,69 @@ describe('el botón de la demo', () => {
   })
 })
 
+
+// ── El segundo factor del backoffice (v0.60.0, F2) ───────────────────────────
+//
+// Opt-in por `totpPath` y condicionado por la sonda, igual que la demo. Las
+// dos mitades importan: que con `{ totp: true }` aparezca el campo y el código
+// viaje, y que sin la prop —los seis productos— la llamada a `login` siga
+// siendo la de siempre, con dos argumentos.
+
+const CAMPO_CODIGO_TOTP = { name: /código de verificación/i }
+
+function sondaTotp(cuerpo: unknown, { json = true, status = 200 } = {}) {
+  vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(
+    typeof cuerpo === 'string' ? cuerpo : JSON.stringify(cuerpo),
+    { status, headers: { 'content-type': json ? 'application/json' : 'text/html' } },
+  ))))
+}
+
+describe('el segundo factor', () => {
+  it('sin totpPath ni pregunta ni muestra el campo', async () => {
+    sondaTotp({ totp: true })
+    const { login } = montar()
+    expect(fetch).not.toHaveBeenCalled()
+    expect(screen.queryByRole('textbox', CAMPO_CODIGO_TOTP)).not.toBeInTheDocument()
+    await completarYEnviar()
+    // La llamada de siempre, con DOS argumentos: los productos no cambian.
+    expect(login).toHaveBeenCalledWith('ana', 'clave')
+  })
+
+  it('con { totp: true } aparece el campo y el código viaja en `extra`', async () => {
+    sondaTotp({ totp: true })
+    const { login } = montar({ totpPath: '/api/login/opciones' })
+    const campo = await screen.findByRole('textbox', CAMPO_CODIGO_TOTP)
+    expect(campo).toHaveAttribute('autocomplete', 'one-time-code')
+    const usuario = userEvent.setup()
+    await usuario.type(screen.getByLabelText('Usuario'), 'ana')
+    await usuario.type(screen.getByLabelText('Contraseña'), 'clave')
+    await usuario.type(campo, '123456')
+    await usuario.click(screen.getByRole('button', { name: 'Ingresar' }))
+    expect(login).toHaveBeenCalledWith('ana', 'clave', { codigo: '123456' })
+    expect(navegar).toHaveBeenCalledWith('/dashboard', { replace: true })
+  })
+
+  it('con { totp: false } no hay campo y la llamada es la de siempre', async () => {
+    sondaTotp({ totp: false })
+    const { login } = montar({ totpPath: '/api/login/opciones' })
+    await waitFor(() => expect(fetch).toHaveBeenCalled())
+    expect(screen.queryByRole('textbox', CAMPO_CODIGO_TOTP)).not.toBeInTheDocument()
+    await completarYEnviar()
+    expect(login).toHaveBeenCalledWith('ana', 'clave')
+  })
+
+  it('🔴 un 200 que no es JSON NO enciende el campo', async () => {
+    // El catch-all de la SPA: cualquier ruta devuelve 200 con el index.html.
+    sondaTotp('<!doctype html><html><body></body></html>', { json: false })
+    montar({ totpPath: '/api/login/opciones' })
+    await waitFor(() => expect(fetch).toHaveBeenCalled())
+    expect(screen.queryByRole('textbox', CAMPO_CODIGO_TOTP)).not.toBeInTheDocument()
+  })
+
+  it('un error de la sonda tampoco lo enciende', async () => {
+    sondaTotp({ detail: 'Not Found' }, { status: 404 })
+    montar({ totpPath: '/api/login/opciones' })
+    await waitFor(() => expect(fetch).toHaveBeenCalled())
+    expect(screen.queryByRole('textbox', CAMPO_CODIGO_TOTP)).not.toBeInTheDocument()
+  })
+})
