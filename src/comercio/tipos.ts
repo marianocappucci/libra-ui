@@ -95,3 +95,41 @@ export function opcionesProducto(
     hint: [p.codigo, p.categoria].filter(Boolean).join(' · ') || undefined,
   }))
 }
+
+// ── Listas de precio (P9-M2) ─────────────────────────────────────────────
+
+export type ListaPrecio = {
+  id: number
+  nombre: string
+  descripcion: string
+  activa: number
+  es_default: number
+}
+
+/** Una fila del editor de precios de una lista: el producto con su precio de
+ *  venta y de costo, y el precio en esta lista (0 y `en_lista: 0` si no está). */
+export type ItemListaPrecio = {
+  id: number
+  codigo: string | null
+  nombre: string
+  unidad: string
+  categoria: string
+  precio_venta: number
+  precio_costo: number
+  precio_lista: number
+  en_lista: number
+}
+
+/** Un quiebre por cantidad: desde `min_quantity` unidades, `amount`. */
+export type Quiebre = { min_quantity: number; amount: number }
+
+/** Lo que devuelve `GET /productos/buscar`, el autocompletado del punto de venta:
+ *  `precio_venta` ya resuelto por la lista pedida, `precio_base` el del producto. */
+export type ProductoBusqueda = {
+  id: number
+  codigo: string
+  nombre: string
+  precio_venta: number
+  precio_base: number
+  unidad: string
+}
