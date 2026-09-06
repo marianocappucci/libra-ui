@@ -43,10 +43,16 @@ export type LineaDePago = {
   /** Sólo efectivo: con cuánto paga el cliente. **No viaja al backend**: es
    *  plata que se devuelve, no que se registra. */
   recibido: string
+  /** El cajero escribió el importe a mano. Mientras no lo haya hecho, el POS
+   *  mantiene la única línea igual al total: al elegir el medio el importe
+   *  tiene que estar puesto (pedido del humano en Contalibra, 2026-08-20), y
+   *  escribirlo en cada venta es el caso normal que no debería costar nada.
+   *  Dividir el pago es la excepción, y la decide el cajero al tocarlo. */
+  tocado?: boolean
 }
 
 export function lineaVacia(medio: string = MEDIO_CON_VUELTO, monto = ''): LineaDePago {
-  return { medio, monto, referencia: '', cobrarConQr: false, recibido: '' }
+  return { medio, monto, referencia: '', cobrarConQr: false, recibido: '', tocado: false }
 }
 
 export function numero(valor: string): number {
