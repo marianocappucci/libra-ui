@@ -1,0 +1,249 @@
+// Las cajas (puntos de cobro): alta, edición, caja por defecto, baja, y el
+// punto de venta de ARCA por mostrador (P9-M3, 2026-09-06). Extraída de
+// `pages/Cajas.tsx` de Restolibra, que era la de Contalibra más el punto de
+// venta; con el backend de LibraCore lo tienen los dos.
+import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { api, ApiError } from '../api-client'
+import type { CajaConfig } from './tipos'
+import { useMediosPago } from './medios-pago'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { BadgeEstado } from '../badge-estado'
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogClose,
+} from '@/components/ui/dialog'
+import { ConfirmDialog } from '@/components/confirm-dialog'
+import { SquareStack, Plus, Eye, Pencil, Trash2, Star, Wallet, Check } from 'lucide-react'
+import { TituloPantalla } from '../titulo-pantalla'
+
+// 🔴 Aca habia un `TODOS_MEDIOS = Object.keys(MEDIOS_PAGO_LABELS)`, o sea la
+// copia TypeScript de la lista del motor. **Esta es la pantalla donde mas
+// dolia**: es donde se elige que medios habilita una caja, asi que un medio
+// que la copia no tuviera --las tarjetas-- no se podia habilitar en ninguna
+// caja del mundo, y uno que tuviera de mas --`cheque`-- se podia habilitar y
+// despues el backend lo rechazaba al cobrar.
+
+export function Cajas() {
+  const { medios: TODOS_MEDIOS, etiqueta: etiquetaDeMedio } = useMediosPago()
+  const [cajas, setCajas] = useState<CajaConfig[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<CajaConfig | null>(null)
+
+  // --- Dialog "Nueva caja" / "Editar caja" (antes páginas /cajas/nueva y
+  // /cajas/:id/editar, ambas servidas por el mismo componente CajaForm) ---
+  const [formOpen, setFormOpen] = useState(false)
+  const [editingCaja, setEditingCaja] = useState<CajaConfig | null>(null)
+  const [nombre, setNombre] = useState('')
+  const [descripcion, setDescripcion] = useState('')
+  const [mediosPago, setMediosPago] = useState<string[]>([])
+  const [activo, setActivo] = useState(true)
+  const [puntoVenta, setPuntoVenta] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => { load() }, [])
+
+  function describeError(err: unknown): string {
+    if (err instanceof ApiError) return err.detail
+    return 'Error de conexión.'
+  }
+
+  async function load() {
+    setLoading(true)
+    setError(null)
+    try {
+      setCajas(await api.get<CajaConfig[]>('/api/cajas'))
+    } catch (err) {
+      setError(describeError(err))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function setDefault(c: CajaConfig) {
+    setError(null)
+    try {
+      await api.post(`/api/cajas/${c.id}/set-default`)
+      await load()
+    } catch (err) {
+      setError(describeError(err))
+    }
+  }
+
+  async function eliminar(c: CajaConfig) {
+    setError(null)
+    try {
+      await api.del(`/api/cajas/${c.id}`)
+      await load()
+    } catch (err) {
+      setError(describeError(err))
+    }
+  }
+
+  function abrirNueva() {
+    setEditingCaja(null)
+    setNombre('')
+    setDescripcion('')
+    setMediosPago([])
+    setActivo(true)
+    setPuntoVenta('')
+    setFormOpen(true)
+  }
+
+  function abrirEditar(c: CajaConfig) {
+    setEditingCaja(c)
+    setNombre(c.nombre)
+    setDescripcion(c.descripcion ?? '')
+    setPuntoVenta(c.punto_venta == null ? '' : String(c.punto_venta))
+    setMediosPago(c.medios_pago)
+    setActivo(!!c.activo)
+    setFormOpen(true)
+  }
+
+  function toggleMedio(medio: string) {
+    setMediosPago((m) => m.includes(medio) ? m.filter((x) => x !== medio) : [...m, medio])
+  }
+
+  async function guardar() {
+    if (!nombre.trim()) return
+    setSaving(true)
+    setError(null)
+    try {
+      // Vacio significa 'usa el de la empresa', que NO es lo mismo que cero:
+      // por eso null y no Number('') --que daria 0 y seria un punto de venta
+      // real e invalido--.
+      const payload = {
+        nombre, descripcion, medios_pago: mediosPago, activo,
+        punto_venta: puntoVenta.trim() === '' ? null : Number(puntoVenta),
+      }
+      if (editingCaja) {
+        await api.put(`/api/cajas/${editingCaja.id}`, payload)
+      } else {
+        await api.post('/api/cajas', payload)
+      }
+      setFormOpen(false)
+      await load()
+    } catch (err) {
+      setError(describeError(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="grid gap-4">
+      <div className="flex items-center justify-between">
+        <TituloPantalla icono={SquareStack}>Cajas</TituloPantalla>
+        <Button onClick={abrirNueva}><Plus />Nueva caja</Button>
+      </div>
+
+      {error && <p className="text-sm text-destructive">{error}</p>}
+
+      {loading ? (
+        <p className="py-6 text-center text-sm text-muted-foreground">Cargando…</p>
+      ) : cajas.length > 0 ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {cajas.map((c) => (
+            <Card key={c.id} className={c.activo ? undefined : 'opacity-50'}>
+              <CardContent className="grid gap-2 pt-6">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="flex items-center gap-2 font-semibold"><Wallet className="size-4 text-emerald-600 dark:text-emerald-400" />{c.nombre}</p>
+                  <div className="flex gap-1">
+                    {!!c.es_default && <BadgeEstado tono="ok">Por defecto</BadgeEstado>}
+                    {!c.activo && <BadgeEstado tono="neutro">Inactiva</BadgeEstado>}
+                  </div>
+                </div>
+
+                {c.descripcion && <p className="text-sm text-muted-foreground">{c.descripcion}</p>}
+
+                <div>
+                  <p className="mb-1 text-sm text-muted-foreground">Medios de pago:</p>
+                  <div className="flex flex-wrap gap-1">
+                    {c.medios_pago.length > 0 ? (
+                      c.medios_pago.map((m) => <Badge key={m} variant="outline">{etiquetaDeMedio(m)}</Badge>)
+                    ) : (
+                      <span className="text-sm text-muted-foreground">Sin medios configurados</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Button size="sm" variant="outline" asChild><Link to={`/caja?caja_id=${c.id}`}><Eye />Ver movimientos</Link></Button>
+                  <Button size="sm" variant="outline" onClick={() => abrirEditar(c)}><Pencil />Editar</Button>
+                  {!c.es_default && (
+                    <>
+                      <Button size="sm" variant="outline" onClick={() => setDefault(c)} title="Usar como caja por defecto"><Star />Predeterminar</Button>
+                      <Button size="sm" variant="outline" onClick={() => setConfirmDelete(c)} aria-label="Eliminar caja" title="Eliminar caja"><Trash2 /></Button>
+                    </>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <Card><CardContent className="py-6 text-center text-muted-foreground">No hay cajas configuradas.</CardContent></Card>
+      )}
+
+      <Dialog open={formOpen} onOpenChange={setFormOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wallet className="size-4 text-primary" />{editingCaja ? 'Editar caja' : 'Nueva caja'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-2"><Label htmlFor="caja-nombre">Nombre</Label><Input id="caja-nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej: Caja mostrador, Caja online…" /></div>
+              <div className="grid gap-2"><Label htmlFor="caja-desc">Descripción</Label><Input id="caja-desc" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} /></div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="caja-pv">Punto de venta de ARCA</Label>
+              <Input
+                id="caja-pv" type="number" min={1} value={puntoVenta}
+                onChange={(e) => setPuntoVenta(e.target.value)}
+                placeholder="Vacío: usa el de la empresa"
+              />
+              <p className="text-xs text-muted-foreground">
+                Sólo hace falta si este mostrador factura con su propia numeración.
+                Dejarlo vacío es lo normal cuando hay un único punto de cobro.
+              </p>
+            </div>
+            <div className="grid gap-2">
+              <Label>Medios de pago habilitados</Label>
+              <div className="flex flex-wrap gap-3">
+                {TODOS_MEDIOS.map((m) => (
+                  <label key={m.id} className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={mediosPago.includes(m.id)} onChange={() => toggleMedio(m.id)} />
+                    {m.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+            {editingCaja !== null && (
+              <label className="flex w-fit items-center gap-2 text-sm">
+                <input type="checkbox" checked={activo} onChange={(e) => setActivo(e.target.checked)} />
+                Activa
+              </label>
+            )}
+          </div>
+          <DialogFooter>
+            <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
+            <Button disabled={saving || !nombre.trim()} onClick={guardar}><Check />{saving ? 'Guardando…' : editingCaja ? 'Guardar cambios' : 'Crear caja'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmDialog
+        open={!!confirmDelete}
+        onOpenChange={(o) => !o && setConfirmDelete(null)}
+        title={confirmDelete ? `¿Eliminar la caja «${confirmDelete.nombre}»?` : '¿Eliminar caja?'}
+        onConfirm={() => { if (confirmDelete) { eliminar(confirmDelete); setConfirmDelete(null) } }}
+      />
+    </div>
+  )
+}
