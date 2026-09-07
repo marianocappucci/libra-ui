@@ -1,7 +1,7 @@
 // El detalle de un presupuesto: datos, ítems con totales, el ciclo de estados
 // (enviar, aceptar, convertir a remito, rechazar, facturar) y el envío por email.
 //
-// Extraída de Contalibra y Restolibra (F6.2, 2026-09-07). Las dos copias eran
+// Extraída de Contalibra y Restolibra (el pase de comprobantes al kit, 2026-09-07). Las dos copias eran
 // idénticas salvo comentarios y el orden de los imports; lo que de verdad difería
 // entra por props. LibraDesk tiene sus propias pantallas de remitos y presupuestos,
 // que son otra implementación (13-40 % de similitud) y no se tocan.

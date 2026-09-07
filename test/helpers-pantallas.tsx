@@ -1,5 +1,5 @@
 // El harness que comparten los tests de pantalla del kit (nació con P9-M4, y desde
-// F6.2 lo usan también los de comprobantes): el `fetch`
+// el pase de comprobantes lo usan también los de comprobantes): el `fetch`
 // falso por tabla de rutas, el router de prueba y las lecturas de lo pedido.
 import { render, screen } from '@testing-library/react'
 import type userEvent from '@testing-library/user-event'
