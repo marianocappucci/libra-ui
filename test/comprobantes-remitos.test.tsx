@@ -1,4 +1,4 @@
-// Remitos: el listado, la ficha y el alta (F6.2, 2026-09-07), extraídas de
+// Remitos: el listado, la ficha y el alta (el pase de comprobantes al kit, 2026-09-07), extraídas de
 // Contalibra y Restolibra, donde las tres eran byte-idénticas.
 import { cleanup, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'

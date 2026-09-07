@@ -1,5 +1,5 @@
 // Presupuestos: el listado con pestañas, la ficha con su ciclo de estados y el
-// alta/edición (F6.2, 2026-09-07), extraídas de Contalibra y Restolibra.
+// alta/edición (el pase de comprobantes al kit, 2026-09-07), extraídas de Contalibra y Restolibra.
 //
 // 🔑 Las dos copias diferían en dos cosas de dominio, y acá entran por props:
 // el remito valorizado (`conRemitoValorizado`) y la cotización por lista de
