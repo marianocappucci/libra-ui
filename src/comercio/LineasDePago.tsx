@@ -43,6 +43,9 @@ export function LineasDePago({
     onChange(lineas.map((linea, i) => {
       if (i !== indice) return linea
       const siguiente = { ...linea, ...cambio }
+      // Escribir el importe —o pedir que se complete— es decidirlo: la línea
+      // deja de seguir al total.
+      if (cambio.monto !== undefined) siguiente.tocado = true
       if (cambio.medio !== undefined) {
         // Cambiar el medio APAGA lo que era del medio anterior. Si el
         // `cobrarConQr` quedara prendido, el backend rebota con 422 al guardar
@@ -102,7 +105,7 @@ export function LineasDePago({
                   id={`pago-monto-${i}`} type="number" step="0.01" min="0" inputMode="decimal"
                   value={linea.monto} disabled={deshabilitado}
                   onChange={(e) => actualizar(i, { monto: e.target.value })}
-                  placeholder="0,00"
+                  placeholder="Monto"
                 />
               </div>
 

@@ -183,6 +183,17 @@ export function Ventas({
 
   const subtotalCalc = items.reduce((acc, r) => acc + (Number(r.qty) || 0) * (Number(r.precio) || 0), 0)
   const totalCalc = Math.max(0, subtotalCalc - (Number(descuento) || 0))
+
+  // 🔑 Al elegir el medio el importe ya tiene que estar puesto: mientras haya una
+  // sola línea y nadie la haya tocado, sigue al total. El monto escrito a mano no
+  // se pisa (`tocado`), y con dos o más líneas el reparto es del cajero.
+  useEffect(() => {
+    setPagos((lineas) => {
+      if (lineas.length !== 1 || lineas[0].tocado) return lineas
+      const monto = totalCalc > 0 ? String(Math.round(totalCalc * 100) / 100) : ''
+      return lineas[0].monto === monto ? lineas : [{ ...lineas[0], monto }]
+    })
+  }, [totalCalc])
   // El vuelto sale de *Paga con*, línea por línea — no de restarle el total a
   // lo declarado: esa resta hacía pasar por vuelto plata que igual quedaba
   // registrada.
