@@ -123,7 +123,7 @@ export type BorradorDuplicado = {
   fch_vto_pago: string
 }
 
-// ── F6.2 (2026-09-07): remitos y presupuestos ────────────────────────────
+// ── Comprobantes (2026-09-07): remitos y presupuestos ────────────────────────────
 // Los tipos que Contalibra y Restolibra declaraban en su `api.ts`, iguales en los
 // dos. Van acá y no en `comercio/tipos.ts` porque son comprobantes: los sirve
 // LibraCore (`remitos_router`, `presupuestos_router`), como las facturas de arriba.
