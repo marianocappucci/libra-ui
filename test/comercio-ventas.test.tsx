@@ -353,6 +353,31 @@ describe('Ventas', () => {
     expect(await screen.findByText('/ventas/77')).toBeTruthy()
   })
 
+  it('la única línea de pago sigue al total hasta que el cajero la toca', async () => {
+    responder({ ...BASE, '/api/clientes': [], '/api/listas-precio': [], 'POST /api/ventas': { ...VENTA, id: 79 } })
+    const user = userEvent.setup()
+    montarVentas()
+    await screen.findByText('V-00007')
+    await user.click(screen.getByRole('button', { name: /Nueva venta/ }))
+    const dialogo = await screen.findByRole('dialog')
+    fireEvent.change(within(dialogo).getByLabelText('Ítem 1'), { target: { value: 'Gaseosa' } })
+    fireEvent.change(within(dialogo).getByLabelText('Precio 1'), { target: { value: '1500' } })
+    await waitFor(() => expect(within(dialogo).getByPlaceholderText('Monto')).toHaveValue(1500))
+    // Sube el total: el importe lo sigue.
+    fireEvent.change(within(dialogo).getByLabelText('Cantidad 1'), { target: { value: '2' } })
+    await waitFor(() => expect(within(dialogo).getByPlaceholderText('Monto')).toHaveValue(3000))
+    // Escrito a mano, no se pisa aunque cambie el total.
+    fireEvent.change(within(dialogo).getByPlaceholderText('Monto'), { target: { value: '500' } })
+    fireEvent.change(within(dialogo).getByLabelText('Precio 1'), { target: { value: '2000' } })
+    await waitFor(() => expect(within(dialogo).getByText(/Total:/).textContent).toMatch(/4\.000,00/))
+    expect(within(dialogo).getByPlaceholderText('Monto')).toHaveValue(500)
+    // Y lo que viaja es lo que se ve.
+    fireEvent.change(within(dialogo).getByPlaceholderText('Monto'), { target: { value: '4000' } })
+    await user.click(within(dialogo).getByRole('button', { name: /Registrar venta/ }))
+    await waitFor(() => expect(pedidas()).toContain('POST /api/ventas'))
+    expect(cuerpoDe('POST /api/ventas').pagos).toEqual([{ medio: 'efectivo', monto: 4000, referencia: '', cobrar_con_qr: false }])
+  })
+
   it('el cliente rápido se crea y queda elegido; el error del alta se muestra; cancelar cierra', async () => {
     let intentos = 0
     responder({
