@@ -51,3 +51,18 @@ export function fechaHora(valor: string | Date | null | undefined): string {
   const partes = CON_HORA.exec(p.replace(',', ''))
   return partes ? `${partes[3]}-${partes[2]}-${partes[1]} ${partes[4]}:${partes[5]}` : p
 }
+
+/** `HH:MM` de un `aaaa-mm-dd HH:MM[:SS]` (P9-M4, lo usa la consola de actividad). */
+export function hora(valor: string | Date | null | undefined): string {
+  if (typeof valor !== 'string') return ''
+  const m = /^\d{4}-\d{2}-\d{2}[ T](\d{2}):(\d{2})/.exec(valor)
+  return m ? `${m[1]}:${m[2]}` : ''
+}
+
+/** `HH:MM:SS` cuando viene con segundos, `HH:MM` si no. */
+export function horaConSegundos(valor: string | Date | null | undefined): string {
+  if (typeof valor !== 'string') return ''
+  const m = /^\d{4}-\d{2}-\d{2}[ T](\d{2}):(\d{2})(?::(\d{2}))?/.exec(valor)
+  if (!m) return ''
+  return m[3] ? `${m[1]}:${m[2]}:${m[3]}` : `${m[1]}:${m[2]}`
+}
