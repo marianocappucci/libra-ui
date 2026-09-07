@@ -10,7 +10,7 @@ import { Logs, aFechaLocal } from '../src/comercio/Logs'
 import { Reportes } from '../src/comercio/Reportes'
 import { CajaMedios } from '../src/comercio/CajaMedios'
 import type { CajaMediosData, LibrosIvaData, LogsData, ReportesData } from '../src/comercio/tipos'
-import { montar, pedidas, prepararFetch, responder, selectConOpcion } from './comercio-m4.helpers'
+import { montar, pedidas, prepararFetch, responder, selectConOpcion } from './helpers-pantallas'
 
 const LIBROS: LibrosIvaData = {
   desde: '2026-09-01', hasta: '2026-09-30', empresa_cuit: '30-1',

@@ -1,4 +1,5 @@
-// Lo que comparten los tests de las pantallas financieras (P9-M4): el `fetch`
+// El harness que comparten los tests de pantalla del kit (nació con P9-M4, y desde
+// F6.2 lo usan también los de comprobantes): el `fetch`
 // falso por tabla de rutas, el router de prueba y las lecturas de lo pedido.
 import { render, screen } from '@testing-library/react'
 import type userEvent from '@testing-library/user-event'
@@ -82,4 +83,14 @@ export function ventanaFalsa() {
   const ventana = { location: { href: '' }, close: vi.fn() }
   vi.stubGlobal('open', vi.fn(() => ventana))
   return ventana
+}
+
+/** El `<input>` que va junto a un `<Label>` sin `htmlFor` — mismo caso que
+ *  `selectConOpcion`, pero para los campos de texto. */
+export function campoJunto(texto: string): HTMLInputElement {
+  const etiqueta = Array.from(document.querySelectorAll('label')).find((l) => l.textContent === texto)
+  if (!etiqueta) throw new Error(`no hay una etiqueta "${texto}"`)
+  const campo = etiqueta.parentElement?.querySelector('input')
+  if (!campo) throw new Error(`la etiqueta "${texto}" no tiene un campo al lado`)
+  return campo
 }

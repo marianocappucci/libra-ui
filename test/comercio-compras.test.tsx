@@ -14,7 +14,7 @@ import type { Egreso, PagoEgreso, Proveedor } from '../src/comercio/tipos'
 import { IVA_CONDITIONS } from '../src/facturas'
 import {
   cuerpoDe, elegirEnBuscable, montar, pedidas, prepararFetch, responder, selectConOpcion,
-} from './comercio-m4.helpers'
+} from './helpers-pantallas'
 
 const ACME: Proveedor = { id: 1, nombre: 'ACME', cuit_dni: '30-11111111-1', email: 'acme@x.com', phone: '222', address: 'Ruta 8', iva_condition: IVA_CONDITIONS[0] }
 const PELADO: Proveedor = { id: 2, nombre: 'Pelado', cuit_dni: '', email: '', phone: '', address: '', iva_condition: '' }

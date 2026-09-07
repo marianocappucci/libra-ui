@@ -122,3 +122,58 @@ export type BorradorDuplicado = {
   fch_serv_hasta: string
   fch_vto_pago: string
 }
+
+// ── F6.2 (2026-09-07): remitos y presupuestos ────────────────────────────
+// Los tipos que Contalibra y Restolibra declaraban en su `api.ts`, iguales en los
+// dos. Van acá y no en `comercio/tipos.ts` porque son comprobantes: los sirve
+// LibraCore (`remitos_router`, `presupuestos_router`), como las facturas de arriba.
+
+export type RemitoItem = { description: string; qty: number }
+
+export type Remito = {
+  id: number
+  number: string
+  date: string
+  client_id: number | null
+  client_name: string
+  client_address: string
+  client_cuit: string
+  client_email: string
+  client_phone: string
+  items: RemitoItem[]
+  observations: string
+  total: number
+}
+
+export type PresupuestoItem = {
+  description: string
+  qty: number
+  unit_price: number
+  subtotal: number
+}
+
+export type Presupuesto = {
+  id: number
+  number: string
+  date: string
+  valid_until: string
+  /** `borrador | enviado | pendiente | aceptado | rechazado | vencido | facturado`.
+   *  Texto libre a propósito: el estado lo gobierna el motor y la pantalla lo
+   *  muestra tal cual si aparece uno que no conoce. */
+  status: string
+  client_id: number | null
+  client_name: string
+  client_address: string
+  client_cuit: string
+  client_email: string
+  client_phone: string
+  items: PresupuestoItem[]
+  subtotal: number
+  /** Fracción, no puntos: 0.21 es 21 %. */
+  tax_rate: number
+  tax_amount: number
+  total: number
+  observations: string
+  /** El remito al que se convirtió, si se convirtió. */
+  remito_id: number | null
+}

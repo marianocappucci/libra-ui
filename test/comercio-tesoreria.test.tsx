@@ -10,7 +10,7 @@ import { TesoreriaDetalle } from '../src/comercio/TesoreriaDetalle'
 import type { CuentaTesoreria, MovimientoTesoreria } from '../src/comercio/tipos'
 import {
   cuerpoDe, montar, pedidas, prepararFetch, responder, selectConOpcion,
-} from './comercio-m4.helpers'
+} from './helpers-pantallas'
 import { render } from '@testing-library/react'
 
 const BANCO: CuentaTesoreria = { id: 1, nombre: 'Banco Galicia', tipo: 'banco', banco: 'Galicia', numero: '1234', descripcion: 'Cuenta corriente', saldo_inicial: 1000, saldo: 1500, activa: 1 }
