@@ -15,7 +15,7 @@ import { IVA_CONDITIONS } from '../src/facturas'
 import type { Cliente } from '../src/mp'
 import {
   cuerpoDe, montar, pedidas, prepararFetch, responder, selectConOpcion, ventanaFalsa,
-} from './comercio-m4.helpers'
+} from './helpers-pantallas'
 
 const ANA: Cliente = { id: 1, name: 'Ana', address: 'Calle 1', cuit_dni: '20-12345678-9', email: 'ana@x.com', phone: '111', iva_condition: IVA_CONDITIONS[0], auto_facturar: 0, activo: 1 }
 const BETO: Cliente = { ...ANA, id: 2, name: 'Beto', cuit_dni: '', email: '', phone: '', address: '', iva_condition: '', activo: 0 }
