@@ -7,7 +7,7 @@ import { Link } from 'react-router-dom'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
-import { type ColumnDef } from '@tanstack/react-table'
+import type { ColumnDef } from '../data-table'
 import { Ban, Pencil, Plus, Tag, Trash2, Undo2 } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'

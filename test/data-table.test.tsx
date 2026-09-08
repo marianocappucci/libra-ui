@@ -8,7 +8,7 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type { ColumnDef } from '@tanstack/react-table'
+import type { ColumnDef } from '../src/data-table'
 import { DataTable, anchoColumnaAcciones, sortableHeader } from '../src/data-table'
 
 type Equipo = { id: number; tipo: string; marca: string; sector: string; clienteId: number }

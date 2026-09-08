@@ -5,7 +5,7 @@
 // queda la de Restolibra, que ya tenía los anchos de columna y el CAE como
 // columna opcional para que la tabla entre en 1280.
 import { useEffect, useMemo, useState } from 'react'
-import { type ColumnDef } from '@tanstack/react-table'
+import type { ColumnDef } from '../data-table'
 import { api, ApiError } from '../api-client'
 import { type LibrosIvaData, type LibroIvaFactura, type LibroIvaEgreso, type ResumenIva } from './tipos'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'

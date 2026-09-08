@@ -11,7 +11,7 @@
 //   `build_cuenta_corriente_router` del backend.
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { type ColumnDef } from '@tanstack/react-table'
+import type { ColumnDef } from '../data-table'
 import { api, ApiError } from '../api-client'
 import { type Caja } from '../facturas'
 import { type Cliente } from '../mp'

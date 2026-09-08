@@ -2,7 +2,7 @@
 // archivo era byte-idéntico -- ver
 // wiki/analyses/auditoria-duplicacion-familia-libra.md.
 import { useEffect, useMemo, useState } from 'react'
-import { type ColumnDef } from '@tanstack/react-table'
+import type { ColumnDef } from './data-table'
 import { KeyRound, Pencil, UserCheck, UserX } from 'lucide-react'
 import { api, ApiError, type User } from './api-client'
 import { Card, CardContent } from '@/components/ui/card'

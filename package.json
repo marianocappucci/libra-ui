@@ -71,6 +71,7 @@
     "./iconos-accion": "./src/iconos-accion.tsx",
     "./medios-pago": "./src/medios-pago.ts",
     "./mp": "./src/mp.ts",
+    "./tabla": "./src/tabla.ts",
     "./titulo-pantalla": "./src/titulo-pantalla.tsx",
     "./ui/alert-dialog": "./src/ui/alert-dialog.tsx",
     "./ui/avatar": "./src/ui/avatar.tsx",
@@ -93,25 +94,25 @@
     "./utils": "./src/utils.ts"
   },
   "peerDependencies": {
-    "@tanstack/react-table": "^8.21.3",
+    "@hookform/resolvers": "^5.4.0",
+    "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.26.0",
+    "radix-ui": "^1.6.5",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "react-hook-form": "^7.54.0",
     "react-router-dom": "^7.18.1",
     "tailwind-merge": "^3.6.0",
-    "radix-ui": "^1.6.5",
-    "class-variance-authority": "^0.7.1",
-    "react-hook-form": "^7.54.0",
-    "zod": "^4.4.3",
-    "@hookform/resolvers": "^5.4.0"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@hookform/resolvers": "^5.4.0",
     "@iconify-json/fluent": "^1.2.55",
     "@iconify-json/fluent-color": "^1.2.21",
     "@svgr/core": "^8.1.0",
     "@svgr/plugin-jsx": "^8.1.0",
-    "@tanstack/react-table": "^8.21.3",
+    "@tanstack/react-table": "^9.2.4",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
@@ -120,22 +121,21 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.7.0",
     "@vitest/coverage-v8": "^3.2.7",
+    "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "jsdom": "^25.0.1",
     "lucide-react": "^1.28.0",
     "oxlint": "^1.71.0",
+    "radix-ui": "^1.6.5",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "react-hook-form": "^7.54.0",
     "react-router-dom": "^7.18.2",
     "tailwind-merge": "^3.6.0",
     "typescript": "~6.0.2",
     "unplugin-icons": "^23.0.1",
     "vitest": "^3.2.7",
-    "radix-ui": "^1.6.5",
-    "class-variance-authority": "^0.7.1",
-    "react-hook-form": "^7.54.0",
-    "zod": "^4.4.3",
-    "@hookform/resolvers": "^5.4.0"
+    "zod": "^4.4.3"
   },
   "scripts": {
     "lint": "oxlint src",
@@ -143,5 +143,8 @@
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.check.json --noEmit"
+  },
+  "dependencies": {
+    "@tanstack/react-table": "^9.2.4"
   }
 }

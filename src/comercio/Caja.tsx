@@ -4,7 +4,7 @@
 // clases responsivas del resumen, que quedan las de Contalibra.
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { type ColumnDef } from '@tanstack/react-table'
+import type { ColumnDef } from '../data-table'
 import { api, ApiError } from '../api-client'
 import { formatoMoneda, type CajaConfig, type CajaMovimiento, type ResumenCaja } from './tipos'
 import { useMediosPago } from './medios-pago'

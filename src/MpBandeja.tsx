@@ -21,7 +21,7 @@
 // fechas, que es donde el estándar de la familia manda que viva el formateo.
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { type ColumnDef } from '@tanstack/react-table'
+import type { ColumnDef } from './data-table'
 import { api, ApiError } from './api-client'
 import { IVA_CONDITIONS } from './facturas'
 import type { Cliente, MpMovimiento, MpPago } from './mp'
