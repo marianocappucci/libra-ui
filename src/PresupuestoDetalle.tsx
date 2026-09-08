@@ -98,6 +98,12 @@ export function PresupuestoDetalle({
     try {
       await api.post(`/api/presupuestos/${presId}/enviar-email`, { email: emailTo })
       setEmailOpen(false)
+      // Mandarlo lo pasa de borrador a enviado (libracore v1.90.0), y eso
+      // cambia la insignia y qué botones del ciclo corresponden. Sin este
+      // recargar, la pantalla sigue mostrando «Borrador» hasta que alguien
+      // refresque a mano — igual que antes del fix, pero peor: ahora la
+      // pantalla contradice a la base.
+      await cargar()
     } catch (err) {
       setError(describeError(err))
     } finally {
