@@ -216,7 +216,14 @@ export function PresupuestoDetalle({
                     <tbody>
                       {p.items.map((it, i) => (
                         <tr key={i} className="border-b last:border-0">
-                          <td className="whitespace-pre-line p-3">{it.description}</td>
+                          <td className="whitespace-pre-line p-3">
+                            {it.description}
+                            {/* El detalle del renglón, con el mismo peso visual
+                                que tiene en el PDF: más chico y más claro. */}
+                            {it.detalle && (
+                              <span className="mt-0.5 block text-xs text-muted-foreground">{it.detalle}</span>
+                            )}
+                          </td>
                           <td className="p-3 text-right">{it.qty}</td>
                           <td className="p-3 text-right">{formatCurrency(it.unit_price)}</td>
                           <td className="p-3 text-right">{formatCurrency(it.subtotal)}</td>

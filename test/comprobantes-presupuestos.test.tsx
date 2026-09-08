@@ -617,3 +617,113 @@ describe('PresupuestoForm — el alta y la edición', () => {
     expect(cuerpoDe('POST /api/presupuestos')).toMatchObject({ tax_rate: 0.105 })
   })
 })
+
+// ── El detalle por ítem ──────────────────────────────────────────────────────
+// La aclaración corta que va DEBAJO del nombre de un ítem, opcional renglón por
+// renglón. No es `observations`: eso es una sola y describe el presupuesto
+// entero. Los dos conviven en la misma pantalla, y el caso de abajo los manda
+// juntos justamente para que no se pisen.
+
+const CON_DETALLE: Presupuesto = {
+  ...BASE,
+  items: [
+    { description: 'Café molido', qty: 2, unit_price: 100, subtotal: 200, detalle: 'tueste natural, molienda fina' },
+    { description: 'Filtros', qty: 1, unit_price: 50, subtotal: 50 },
+  ],
+}
+
+describe('El detalle por ítem', () => {
+  it('se escribe por renglón y viaja en el payload', async () => {
+    const user = userEvent.setup()
+    responder({ 'GET /api/clientes': [], 'POST /api/presupuestos': BASE })
+    montar('/presupuestos/nuevo', <PresupuestoForm />)
+
+    await user.type(screen.getByPlaceholderText('Descripción o producto…'), 'Café molido')
+    await user.type(screen.getByPlaceholderText('Detalle (opcional)…'), 'tueste natural')
+    await user.type(screen.getByPlaceholderText(/Aclaración general/), 'Retira el jueves')
+    await user.click(screen.getByRole('button', { name: /Crear presupuesto/ }))
+
+    await waitFor(() => expect(pedidas()).toContain('POST /api/presupuestos'))
+    expect(cuerpoDe('POST /api/presupuestos')).toMatchObject({
+      // 🔑 El detalle es del ítem y las observaciones son del presupuesto: van
+      // por caminos distintos del payload y no se mezclan.
+      items: [{ description: 'Café molido', detalle: 'tueste natural' }],
+      observations: 'Retira el jueves',
+    })
+  })
+
+  it('cada renglón tiene el suyo, y el que no se llena viaja vacío', async () => {
+    const user = userEvent.setup()
+    responder({ 'GET /api/clientes': [], 'POST /api/presupuestos': BASE })
+    montar('/presupuestos/nuevo', <PresupuestoForm />)
+
+    await user.click(screen.getByRole('button', { name: /Agregar ítem/ }))
+    const descripciones = screen.getAllByPlaceholderText('Descripción o producto…')
+    const detalles = screen.getAllByPlaceholderText('Detalle (opcional)…')
+    expect(detalles).toHaveLength(2)
+
+    await user.type(descripciones[0], 'Café molido')
+    await user.type(detalles[0], 'tueste natural')
+    await user.type(descripciones[1], 'Filtros')
+    await user.click(screen.getByRole('button', { name: /Crear presupuesto/ }))
+
+    await waitFor(() => expect(pedidas()).toContain('POST /api/presupuestos'))
+    expect(cuerpoDe('POST /api/presupuestos')).toMatchObject({
+      items: [
+        { description: 'Café molido', detalle: 'tueste natural' },
+        { description: 'Filtros', detalle: '' },
+      ],
+    })
+  })
+
+  it('editar precarga el detalle guardado, y el ítem que no lo tiene queda vacío', async () => {
+    // El motor no escribe la clave cuando el campo va vacío, así que los
+    // presupuestos anteriores a la feature llegan sin `detalle`. Precargarlos
+    // como `undefined` dejaría el input descontrolado y React lo avisa.
+    responder({ 'GET /api/clientes': [ANA], 'GET /api/presupuestos/8': CON_DETALLE, 'PUT /api/presupuestos/8': CON_DETALLE })
+    montar('/presupuestos/8/editar', <PresupuestoForm />)
+
+    await waitFor(() => expect(screen.getAllByPlaceholderText('Detalle (opcional)…')).toHaveLength(2))
+    const detalles = screen.getAllByPlaceholderText('Detalle (opcional)…')
+    expect(detalles[0]).toHaveValue('tueste natural, molienda fina')
+    expect(detalles[1]).toHaveValue('')
+  })
+
+  it('vaciar el detalle lo manda vacío, no lo deja como estaba', async () => {
+    const user = userEvent.setup()
+    responder({ 'GET /api/clientes': [ANA], 'GET /api/presupuestos/8': CON_DETALLE, 'PUT /api/presupuestos/8': CON_DETALLE })
+    montar('/presupuestos/8/editar', <PresupuestoForm />)
+
+    await waitFor(() => expect(screen.getAllByPlaceholderText('Detalle (opcional)…')[0]).toHaveValue('tueste natural, molienda fina'))
+    await user.clear(screen.getAllByPlaceholderText('Detalle (opcional)…')[0])
+    await user.click(screen.getByRole('button', { name: /Guardar cambios/ }))
+
+    await waitFor(() => expect(pedidas()).toContain('PUT /api/presupuestos/8'))
+    expect(cuerpoDe('PUT /api/presupuestos/8')).toMatchObject({
+      items: [{ description: 'Café molido', detalle: '' }, { description: 'Filtros', detalle: '' }],
+    })
+  })
+
+  it('en la ficha sale debajo del ítem, más chico y más claro', async () => {
+    responder({ 'GET /api/presupuestos/8': CON_DETALLE })
+    montar('/presupuestos/8', <PresupuestoDetalle />)
+
+    const detalle = await screen.findByText('tueste natural, molienda fina')
+    // Que aparezca no alcanza: tiene que verse distinto del nombre del ítem,
+    // que es lo que lo hace leerse como una aclaración y no como otro ítem.
+    expect(detalle).toHaveClass('text-xs', 'text-muted-foreground')
+    const celda = screen.getByText('Café molido').closest('td')
+    expect(celda).toContainElement(detalle)
+  })
+
+  it('🔴 el ítem sin detalle no dibuja ningún renglón secundario', async () => {
+    // Control del caso de arriba: sin esto, la ficha pasaría igual si pintara
+    // un `<span>` vacío bajo cada ítem y le metiera un renglón de aire a todos.
+    responder({ 'GET /api/presupuestos/8': CON_DETALLE })
+    montar('/presupuestos/8', <PresupuestoDetalle />)
+
+    const celdaSinDetalle = (await screen.findByText('Filtros')).closest('td')!
+    expect(within(celdaSinDetalle).queryByText(/./, { selector: 'span' })).toBeNull()
+    expect(celdaSinDetalle).toHaveTextContent(/^Filtros$/)
+  })
+})
