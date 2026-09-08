@@ -271,7 +271,10 @@ describe('PresupuestoDetalle — el ciclo de estados', () => {
     await user.click(await screen.findByRole('button', { name: /Enviar por email/ }))
     await user.click(screen.getByRole('button', { name: /^Enviar$/ }))
 
-    await waitFor(() => expect(screen.getByText('Enviado')).toBeInTheDocument())
+    // La insignia se dibuja dos veces (encabezado y bloque de datos), de ahi
+    // el getAll. Lo que importa es que ninguna siga diciendo «Borrador».
+    await waitFor(() => expect(screen.getAllByText('Enviado').length).toBeGreaterThan(0))
+    expect(screen.queryByText('Borrador')).not.toBeInTheDocument()
     // La ficha se volvio a pedir: es lo que trae el estado nuevo.
     expect(pedidas().filter((p) => p === 'GET /api/presupuestos/8')).toHaveLength(2)
   })
