@@ -32,7 +32,7 @@ import { libraFeatures, type ColumnDef, type LibraFeatures } from './tabla'
 // Re-exportado desde aca a proposito: es el mismo modulo del que un consumidor
 // ya importa `DataTable`, asi que declarar columnas no le agrega un import
 // nuevo. Es un `export type`, se borra al compilar y no afecta Fast Refresh.
-export type { ColumnDef, LibraFeatures } from './tabla'
+export type { ColumnDef, LibraFeatures, RowData } from './tabla'
 // `libraFeatures` NO se re-exporta como valor desde aca: un export de valor
 // en un archivo de componentes dispara `react(only-export-components)` y le
 // rompe el Fast Refresh a todo el modulo. Quien lo necesite lo importa de
