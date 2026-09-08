@@ -256,6 +256,26 @@ describe('PresupuestoDetalle — el ciclo de estados', () => {
     expect(pedidas().filter((p) => p.startsWith('POST'))).toHaveLength(0)
   })
 
+  it('🔴 tras mandarlo, la ficha se recarga y muestra el estado nuevo', async () => {
+    // El motor pasa el presupuesto a `enviado` al mandarlo (libracore v1.90.0).
+    // Si la pantalla no recargara, seguiria diciendo «Borrador» con la base
+    // diciendo otra cosa — y ofreciendo «Marcar como enviado», que ya no va.
+    const user = userEvent.setup()
+    let mandado = false
+    responder({
+      'GET /api/presupuestos/8': () => (mandado ? con('enviado') : BASE),
+      'POST /api/presupuestos/8/enviar-email': () => { mandado = true; return con('enviado') },
+    })
+    montar('/presupuestos/8', <PresupuestoDetalle />)
+
+    await user.click(await screen.findByRole('button', { name: /Enviar por email/ }))
+    await user.click(screen.getByRole('button', { name: /^Enviar$/ }))
+
+    await waitFor(() => expect(screen.getByText('Enviado')).toBeInTheDocument())
+    // La ficha se volvio a pedir: es lo que trae el estado nuevo.
+    expect(pedidas().filter((p) => p === 'GET /api/presupuestos/8')).toHaveLength(2)
+  })
+
   it('el email se manda al destinatario que se edita, precargado con el del cliente', async () => {
     const user = userEvent.setup()
     responder({ 'GET /api/presupuestos/8': BASE, 'POST /api/presupuestos/8/enviar-email': {} })
