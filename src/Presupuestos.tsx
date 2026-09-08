@@ -8,7 +8,7 @@
 // De paso: el «Limpiar» recargaba con el closure viejo, igual que en Remitos.
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { type ColumnDef } from '@tanstack/react-table'
+import type { ColumnDef } from './data-table'
 import { api, ApiError } from './api-client'
 import { type Presupuesto } from './facturas'
 import { Card, CardContent } from '@/components/ui/card'
