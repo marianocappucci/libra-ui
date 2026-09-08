@@ -34,8 +34,12 @@ function formatCurrency(value: number): string {
 
 // `producto_id` se guarda sólo en el front (el presupuesto no lo persiste): lo
 // necesita el re-precio por cantidad del add-on mayorista.
-type ItemRow = { description: string; qty: string; unit_price: string; producto_id: number | null }
-const EMPTY_ITEM: ItemRow = { description: '', qty: '1', unit_price: '0', producto_id: null }
+//
+// `detalle` sí se persiste: es la aclaración corta que se imprime debajo del
+// nombre del ítem, más chica y más clara. Es de ESE renglón y es opcional —
+// distinta de `observations`, que es una sola y describe el presupuesto entero.
+type ItemRow = { description: string; detalle: string; qty: string; unit_price: string; producto_id: number | null }
+const EMPTY_ITEM: ItemRow = { description: '', detalle: '', qty: '1', unit_price: '0', producto_id: null }
 
 // Misma pagina para alta y edicion, igual que el form.html viejo -- si hay
 // :id en la ruta (/presupuestos/:id/editar) precarga el presupuesto existente.
@@ -111,7 +115,9 @@ export function PresupuestoForm({ conSelectorDeLista = false, conQuiebres = fals
       setObservations(p.observations)
       // `producto_id: null`: el presupuesto guardado no lo tiene, así que un
       // renglón precargado no re-cotiza por cantidad hasta que se re-elige el producto.
-      setItems(p.items.map((it) => ({ description: it.description, qty: String(it.qty), unit_price: String(it.unit_price), producto_id: null })))
+      // `detalle` puede no venir: el motor no escribe la clave si está vacía,
+      // así que los presupuestos anteriores a la feature no la tienen.
+      setItems(p.items.map((it) => ({ description: it.description, detalle: it.detalle ?? '', qty: String(it.qty), unit_price: String(it.unit_price), producto_id: null })))
     }).catch((err) => setError(describeError(err))).finally(() => setLoadingPresupuesto(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingId])
@@ -126,7 +132,7 @@ export function PresupuestoForm({ conSelectorDeLista = false, conQuiebres = fals
     if (items.length <= 1) return
     setItems((rows) => rows.filter((_, idx) => idx !== i))
   }
-  function updateItem(i: number, field: 'description' | 'qty' | 'unit_price', value: string) {
+  function updateItem(i: number, field: 'description' | 'detalle' | 'qty' | 'unit_price', value: string) {
     setItems((rows) => rows.map((r, idx) => idx === i ? { ...r, [field]: value } : r))
   }
 
@@ -182,7 +188,8 @@ export function PresupuestoForm({ conSelectorDeLista = false, conQuiebres = fals
         date, valid_until: validUntil, client_id: clienteId ? Number(clienteId) : null,
         client_name: clienteId ? '' : clienteNombreLibre, tax_rate: Number(taxRate) || 0, observations,
         items: items.filter((r) => r.description.trim()).map((r) => ({
-          description: r.description, qty: Number(r.qty) || 0, unit_price: Number(r.unit_price) || 0,
+          description: r.description, detalle: r.detalle, qty: Number(r.qty) || 0,
+          unit_price: Number(r.unit_price) || 0,
         })),
       }
       const p = editingId
@@ -271,8 +278,18 @@ export function PresupuestoForm({ conSelectorDeLista = false, conQuiebres = fals
                 <tbody>
                   {items.map((row, i) => (
                     <tr key={i} className="border-b last:border-0">
-                      <td className="relative p-2">
+                      <td className="relative p-2 align-top">
                         <Input value={row.description} onChange={(e) => buscarProducto(i, e.target.value)} placeholder="Descripción o producto…" />
+                        {/* El detalle del renglón. Se dibuja debajo, más chico y
+                            más claro, igual que va a salir en el PDF: lo que se
+                            ve acá es lo que imprime `_draw_items_table`. */}
+                        <Input
+                          value={row.detalle}
+                          onChange={(e) => updateItem(i, 'detalle', e.target.value)}
+                          placeholder="Detalle (opcional)…"
+                          aria-label={`Detalle del ítem ${i + 1}`}
+                          className="mt-1 h-8 border-dashed text-xs text-muted-foreground placeholder:text-xs"
+                        />
                         {sugerencias?.index === i && sugerencias.items.length > 0 && (
                           <div className="absolute left-2 top-11 z-10 w-64 rounded-md border bg-popover shadow-md">
                             {sugerencias.items.map((p) => (
@@ -287,10 +304,10 @@ export function PresupuestoForm({ conSelectorDeLista = false, conQuiebres = fals
                           </div>
                         )}
                       </td>
-                      <td className="p-2"><Input type="number" step="0.01" value={row.qty} onChange={(e) => cambiarCantidad(i, e.target.value, row.producto_id)} /></td>
-                      <td className="p-2"><Input type="number" step="0.01" value={row.unit_price} onChange={(e) => updateItem(i, 'unit_price', e.target.value)} /></td>
-                      <td className="p-2 text-right font-medium">{formatCurrency((Number(row.qty) || 0) * (Number(row.unit_price) || 0))}</td>
-                      <td className="p-2 text-right">
+                      <td className="p-2 align-top"><Input type="number" step="0.01" value={row.qty} onChange={(e) => cambiarCantidad(i, e.target.value, row.producto_id)} /></td>
+                      <td className="p-2 align-top"><Input type="number" step="0.01" value={row.unit_price} onChange={(e) => updateItem(i, 'unit_price', e.target.value)} /></td>
+                      <td className="p-2 pt-4 text-right align-top font-medium">{formatCurrency((Number(row.qty) || 0) * (Number(row.unit_price) || 0))}</td>
+                      <td className="p-2 text-right align-top">
                         <Button size="icon" variant="ghost" onClick={() => removeItem(i)}><Trash2 /></Button>
                       </td>
                     </tr>
@@ -316,7 +333,9 @@ export function PresupuestoForm({ conSelectorDeLista = false, conQuiebres = fals
               </table>
             </div>
 
-            <div className="grid gap-2"><Label>Observaciones</Label><Input value={observations} onChange={(e) => setObservations(e.target.value)} /></div>
+            {/* Del presupuesto ENTERO, y una sola. La aclaración de un renglón
+                puntual va en el detalle de ese ítem, no acá. */}
+            <div className="grid gap-2"><Label>Observaciones</Label><Input value={observations} onChange={(e) => setObservations(e.target.value)} placeholder="Aclaración general del presupuesto…" /></div>
 
             <div className="flex flex-wrap items-end gap-2 border-t pt-4">
               <Button disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : editingId ? 'Guardar cambios' : 'Crear presupuesto'}</Button>

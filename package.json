@@ -1,6 +1,6 @@
 {
   "name": "libra-ui",
-  "version": "0.66.1",
+  "version": "0.67.0",
   "private": true,
   "type": "module",
   "description": "Paquete de frontend compartido para los verticales de la familia Libra sin backoffice server-rendered propio (Gestiolibra, MedLibra, VentaLibra).",
@@ -147,5 +147,8 @@
   },
   "dependencies": {
     "@tanstack/react-table": "^9.2.4"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }
