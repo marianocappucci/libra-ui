@@ -22,7 +22,7 @@ import { Link } from 'react-router-dom'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
-import { type ColumnDef } from '@tanstack/react-table'
+import type { ColumnDef } from '../data-table'
 import { ClipboardList, Package, Pencil, Plus, Search, Trash2, TrendingUp, X } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'

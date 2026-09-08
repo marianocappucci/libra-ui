@@ -7,7 +7,7 @@
 // queda la de Contalibra (botones de ícono con `aria-label`).
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
-import { type ColumnDef } from '@tanstack/react-table'
+import type { ColumnDef } from '../data-table'
 import { api, ApiError } from '../api-client'
 import { TIPOS_CUENTA_TESORERIA, type CuentaTesoreria, type MovimientoTesoreria } from './tipos'
 import { MovTipoBadge } from './Tesoreria'

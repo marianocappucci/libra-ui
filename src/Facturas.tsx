@@ -26,7 +26,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { type ColumnDef } from '@tanstack/react-table'
+import type { ColumnDef } from './data-table'
 import {
   CheckCircle2, ChevronLeft, ChevronRight, CircleDollarSign, Eye, FileDown,
   FileMinus, FilePlus, Hourglass, Receipt, Search, X,

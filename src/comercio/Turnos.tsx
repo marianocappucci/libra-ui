@@ -3,7 +3,7 @@
 // `user.role === 'admin'` pasa a ser la prop `esAdmin`.
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { type ColumnDef } from '@tanstack/react-table'
+import type { ColumnDef } from '../data-table'
 import { api, ApiError } from '../api-client'
 import { formatoMoneda, type Turno } from './tipos'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'

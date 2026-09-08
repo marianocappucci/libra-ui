@@ -9,7 +9,7 @@
 // Restolibra y el resto de Contalibra.
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { type ColumnDef } from '@tanstack/react-table'
+import type { ColumnDef } from '../data-table'
 import { ArrowLeft, Check, Download, Percent, Settings, Tag, Trash2 } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'

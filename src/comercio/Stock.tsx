@@ -19,7 +19,7 @@
 // cantidad mayor a cero en los modos relativos, factor mayor a cero.
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { type ColumnDef } from '@tanstack/react-table'
+import type { ColumnDef } from '../data-table'
 import {
   AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Boxes, Filter, History, Pencil,
   RefreshCw, RotateCcw, ShoppingCart, TriangleAlert, X,

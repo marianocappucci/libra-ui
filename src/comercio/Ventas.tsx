@@ -14,7 +14,7 @@
 //   kit no sabe de sesiones.
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { type ColumnDef } from '@tanstack/react-table'
+import type { ColumnDef } from '../data-table'
 import {
   Ban, CheckCircle2, Eye, FileCheck, ListChecks, Plus, Printer, ReceiptText, ShoppingCart, UserPlus, X,
 } from 'lucide-react'

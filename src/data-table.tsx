@@ -19,16 +19,25 @@
 // <Table> de antes, sin envoltorio ni row model de filtrado, asi que los
 // consumidores que no la usan renderizan igual que en v0.7.0.
 import {
-  type ColumnDef,
   type ColumnSizingState,
   type FilterFn,
-  flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getSortedRowModel,
-  useReactTable,
+  type RowData,
   type SortingState,
-} from '@tanstack/react-table'
+  type TableFeatures,
+} from '@tanstack/table-core'
+import { flexRender, useTable } from '@tanstack/react-table'
+
+import { libraFeatures, type ColumnDef, type LibraFeatures } from './tabla'
+
+// Re-exportado desde aca a proposito: es el mismo modulo del que un consumidor
+// ya importa `DataTable`, asi que declarar columnas no le agrega un import
+// nuevo. Es un `export type`, se borra al compilar y no afecta Fast Refresh.
+export type { ColumnDef, LibraFeatures } from './tabla'
+// `libraFeatures` NO se re-exporta como valor desde aca: un export de valor
+// en un archivo de componentes dispara `react(only-export-components)` y le
+// rompe el Fast Refresh a todo el modulo. Quien lo necesite lo importa de
+// `libra-ui/tabla`.
+
 import {
   useCallback, useEffect, useLayoutEffect, useRef, useState,
   type MouseEvent, type ReactNode,
@@ -42,8 +51,11 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
-declare module '@tanstack/react-table' {
-  interface ColumnMeta<TData, TValue> {
+declare module '@tanstack/table-core' {
+  // v9 declara `ColumnMeta<TFeatures, TData, TValue>` y en `table-core`:
+  // una augmentation con otra aridad --o sobre `react-table`-- no se
+  // fusiona con la original y el `meta` del kit deja de tipar.
+  interface ColumnMeta<TFeatures extends TableFeatures, TData extends RowData, TValue> {
     // Clase opcional para ocultar/priorizar columnas segun breakpoint,
     // ej. 'hidden md:table-cell' en columnas secundarias -- evita que
     // tablas con muchas columnas fuercen scroll horizontal en mobile.
@@ -135,8 +147,8 @@ export function sortableHeader(label: string) {
   )
 }
 
-type DataTableProps<TData, TValue> = {
-  columns: ColumnDef<TData, TValue>[]
+type DataTableProps<TData extends RowData> = {
+  columns: ColumnDef<TData>[]
   data: TData[]
   emptyMessage?: ReactNode
   // Clase opcional por fila -- restaura el atenuado que las tablas Bootstrap
@@ -151,10 +163,10 @@ type DataTableProps<TData, TValue> = {
   search?: DataTableSearch<TData>
 }
 
-export function DataTable<TData, TValue>({
+export function DataTable<TData extends RowData>({
   columns, data, emptyMessage = 'Sin resultados.', getRowClassName, onRowClick,
   search,
-}: DataTableProps<TData, TValue>) {
+}: DataTableProps<TData>) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({})
   const [consulta, setConsulta] = useState('')
@@ -167,7 +179,7 @@ export function DataTable<TData, TValue>({
   // campo: "hp admision" encuentra la impresora HP de Admision aunque marca y
   // sector sean columnas distintas. Con un solo `includes` de la frase
   // entera esa busqueda -- la natural -- no daria nada.
-  const filtrarFila: FilterFn<TData> = useCallback((row, _columnId, valor: string) => {
+  const filtrarFila: FilterFn<LibraFeatures, TData> = useCallback((row, _columnId, valor: string) => {
     //  vive en utils y lo comparte con SelectBuscable: los
     // dos buscadores del paquete filtran con el mismo criterio, asi que quien
     // aprende a buscar en una tabla busca igual en un select.
@@ -177,16 +189,16 @@ export function DataTable<TData, TValue>({
     return coincideBusqueda(texto, valor)
   }, [search])
 
-  const table = useReactTable({
+  const table = useTable<LibraFeatures, TData>({
+    features: libraFeatures,
     data,
     columns,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
     // Se filtra por fila y no por celda, asi que da igual que columna evalua
     // TanStack: `getColumnCanGlobalFilter` en true evita que el default
     // (mirar el tipo del valor de la celda) deje afuera una tabla entera
     // cuando ninguna columna expone un accessor de texto.
-    ...(search ? { getFilteredRowModel: getFilteredRowModel() } : {}),
+    // El row model de filtrado ya viene declarado en `libraFeatures`; lo que
+    // sigue siendo condicional es el filtro en si, via el estado de abajo.
     globalFilterFn: filtrarFila,
     getColumnCanGlobalFilter: () => true,
     onGlobalFilterChange: setConsulta,

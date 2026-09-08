@@ -5,7 +5,7 @@
 // de Radix quedaba no controlado con `undefined`); queda eso para los dos.
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { type ColumnDef } from '@tanstack/react-table'
+import type { ColumnDef } from '../data-table'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'

@@ -9,7 +9,7 @@
 // limpiarla—, el mismo defecto que ya habían tenido Ventas y TesoreriaDetalle.
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { type ColumnDef } from '@tanstack/react-table'
+import type { ColumnDef } from './data-table'
 import { api, ApiError } from './api-client'
 import { type Remito } from './facturas'
 import { Card, CardContent } from '@/components/ui/card'

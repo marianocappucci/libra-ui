@@ -3,7 +3,7 @@
 // historial adentro de `Stock` y puede adoptar esta página cuando quiera.
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { type ColumnDef } from '@tanstack/react-table'
+import type { ColumnDef } from '../data-table'
 import { ArrowLeft, Boxes, X } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
