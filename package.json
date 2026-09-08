@@ -147,5 +147,8 @@
   },
   "dependencies": {
     "@tanstack/react-table": "^9.2.4"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }
