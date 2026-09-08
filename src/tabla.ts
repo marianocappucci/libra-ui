@@ -48,6 +48,18 @@ export const libraFeatures = tableFeatures({
 export type LibraFeatures = typeof libraFeatures
 
 /**
+ * La restriccion que TanStack le pone a la fila (`any[] | Record<string, any>`).
+ *
+ * Se re-exporta porque un consumidor que escribe su **propio helper generico**
+ * sobre `ColumnDef` --por ejemplo una `columnaDeAcciones<T>()` compartida-- tiene
+ * que acotar su `T`, y desde que el kit se quedo con `@tanstack/react-table`
+ * como dependencia propia ya no puede importarla de ahi. Sin esto, el consumidor
+ * tendria que volver a declarar el motor solo para nombrar un tipo, que es
+ * exactamente el acoplamiento del que este cambio lo saca.
+ */
+export type { RowData }
+
+/**
  * El `ColumnDef` de la familia Libra.
  *
  * 🔴 **Los consumidores importan ESTE, no el de `@tanstack/react-table`.**
