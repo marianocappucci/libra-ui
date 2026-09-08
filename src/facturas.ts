@@ -128,7 +128,13 @@ export type BorradorDuplicado = {
 // dos. Van acá y no en `comercio/tipos.ts` porque son comprobantes: los sirve
 // LibraCore (`remitos_router`, `presupuestos_router`), como las facturas de arriba.
 
-export type RemitoItem = { description: string; qty: number }
+export type RemitoItem = {
+  description: string
+  qty: number
+  /** Ver `PresupuestoItem.detalle`. Al remito llega copiado del presupuesto que
+   *  lo origino: la conversion copia los items verbatim. */
+  detalle?: string
+}
 
 export type Remito = {
   id: number
@@ -150,6 +156,16 @@ export type PresupuestoItem = {
   qty: number
   unit_price: number
   subtotal: number
+  /** Aclaracion corta de ESTE renglon, opcional. Se muestra debajo del nombre
+   *  del item, mas chica y mas clara, y sale asi tambien en el PDF.
+   *
+   *  No es `observations`: eso describe el presupuesto entero y va una sola vez
+   *  al pie. Esto describe un item, y la mayoria de los items no lo necesita.
+   *
+   *  Opcional en el tipo porque lo es en el dato: el motor no escribe la clave
+   *  cuando el campo viene vacio, asi que los presupuestos anteriores a la
+   *  feature no la tienen. */
+  detalle?: string
 }
 
 export type Presupuesto = {
