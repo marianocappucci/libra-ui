@@ -14,9 +14,14 @@
  *  🔴 **Elegir el archivo NO dispara la restauración.** Es la acción que
  *  reemplaza todos los datos del cliente: elegirla y confirmarla son dos pasos,
  *  y el segundo es el modal.
+ *
+ *  La **copia externa** (add-on) se conecta desde acá desde el 2026-09-10: el
+ *  cliente elige Google Drive o Dropbox, da el permiso en el proveedor y vuelve.
+ *  El token queda en la instancia (`libracore.resguardo_enlace`) y la subida la
+ *  sigue haciendo el cron del host. Ver `ResguardoExternoCard`.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Database, Download, Upload } from 'lucide-react'
+import { Cloud, Database, Download, Unlink, Upload } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
 import { Button } from '@/components/ui/button'
@@ -60,21 +65,265 @@ function describirError(err: unknown): string {
   return 'Error de conexión.'
 }
 
-/** La tarjeta del resguardo externo, con sus tres estados. */
-export function ResguardoExternoCard({ basePath = '/api/config' }: { basePath?: string } = {}) {
-  const [estado, setEstado] = useState<ResguardoExterno | null>(null)
+/** Lo que contesta `GET …/resguardo-externo/enlace` (`libracore.resguardo_enlace`).
+ *
+ *  `proveedores` son sólo los que el servidor tiene habilitados —con client ID
+ *  cargado—: un botón que termina en un error de Google es peor que no tenerlo.
+ */
+export type EnlaceNube = {
+  proveedores: { clave: string; nombre: string }[]
+  enlace: {
+    proveedor: string
+    nombre: string
+    cuenta: string | null
+    carpeta: string
+    desde: string
+  } | null
+}
 
-  useEffect(() => {
-    // No bloquea la pantalla: si el endpoint no está —una instancia con un
-    // LibraCore anterior a v1.32.0— la tarjeta simplemente no aparece.
-    api.get<ResguardoExterno>(`${basePath}/resguardo-externo`)
-      .then(setEstado)
-      .catch(() => setEstado(null))
+/** `'sin-plan'` es un 403: la instancia no tiene el módulo `resguardo_externo`.
+ *  `null` es que el endpoint no está —un LibraCore anterior al enlace— o no se
+ *  pudo leer; en los dos casos la tarjeta se porta como antes de que existiera. */
+type RespuestaEnlace = EnlaceNube | 'sin-plan' | null
+
+type Retorno = { ok: boolean; detalle: string | null }
+
+/** Lo que dejó en la URL la vuelta del proveedor (`?resguardo=ok|error`).
+ *
+ *  Sólo lee. Limpiar la URL es un efecto y va en un `useEffect`: en StrictMode
+ *  el inicializador de `useState` corre dos veces, y si la primera limpiara, la
+ *  segunda ya no encontraría nada que mostrar. */
+function leerRetorno(): Retorno | null {
+  if (typeof window === 'undefined') return null
+  const params = new URLSearchParams(window.location.search)
+  const r = params.get('resguardo')
+  if (r !== 'ok' && r !== 'error') return null
+  return { ok: r === 'ok', detalle: params.get('detalle') }
+}
+
+/** Saca `resguardo` y `detalle` de la URL, dejando `seccion`. Sin esto, recargar
+ *  la página vuelve a mostrar "quedó conectada" — o el error de hace una hora. */
+function limpiarRetorno() {
+  const params = new URLSearchParams(window.location.search)
+  if (!params.has('resguardo')) return
+  params.delete('resguardo')
+  params.delete('detalle')
+  const q = params.toString()
+  window.history.replaceState(
+    window.history.state, '', `${window.location.pathname}${q ? `?${q}` : ''}${window.location.hash}`,
+  )
+}
+
+function irA(url: string) {
+  window.location.assign(url)
+}
+
+function UltimaCopia({ detalle }: { detalle: ResguardoExterno['detalle'] }) {
+  if (!detalle) return null
+  return (
+    <p className="text-xs text-muted-foreground">
+      Última copia: {detalle.cuando}
+      {detalle.archivo && <> — <span className="font-mono">{detalle.archivo}</span></>}
+      {detalle.en_destino != null && <> · {detalle.en_destino} copias guardadas afuera</>}
+    </p>
+  )
+}
+
+/** La tarjeta de la copia externa: ofrecerla, conectarla y mostrar cómo va.
+ *
+ *  Los estados, en el orden en que se deciden:
+ *
+ *  1. **Conectada desde esta pantalla** — a qué cuenta, cómo va la subida y el
+ *     botón de desconectar.
+ *  2. **Conectada a mano en el servidor** (`cliente.json`) — sólo el estado,
+ *     como antes: esa conexión no se toca desde acá.
+ *  3. **Con el plan y sin conectar** — los botones de los proveedores.
+ *  4. **Sin el plan** — la propuesta. No es una alarma.
+ *
+ *  🔴 La conexión la hace el navegador del cliente yendo a Google o Dropbox y
+ *  volviendo: el backend redirige de vuelta a Configuración con
+ *  `?resguardo=ok|error`, y es esta tarjeta la que lo cuenta.
+ */
+export function ResguardoExternoCard({ basePath = '/api/config', navegar = irA }: {
+  basePath?: string
+  /** A dónde mandar al navegador para el consentimiento. Por defecto
+   *  `window.location.assign`, que en jsdom no se puede espiar. */
+  navegar?: (url: string) => void
+} = {}) {
+  const [retorno] = useState(leerRetorno)
+  const [estado, setEstado] = useState<ResguardoExterno | null>(null)
+  const [enlace, setEnlace] = useState<RespuestaEnlace>(null)
+  const [cargado, setCargado] = useState(false)
+  const [ocupado, setOcupado] = useState(false)
+  const [confirmar, setConfirmar] = useState(false)
+  const [error, setError] = useState<string | null>(
+    retorno && !retorno.ok ? (retorno.detalle ?? 'No se pudo conectar la cuenta.') : null,
+  )
+  const [aviso, setAviso] = useState<string | null>(
+    retorno?.ok ? 'Listo: la copia externa quedó conectada. La primera se sube esta noche.' : null,
+  )
+
+  useEffect(() => { limpiarRetorno() }, [])
+
+  const cargar = useCallback(async () => {
+    // Ninguno de los dos pedidos bloquea la pantalla: si fallan, la tarjeta se
+    // achica o no aparece, y los backups locales se listan igual.
+    const [e, n] = await Promise.all([
+      api.get<ResguardoExterno>(`${basePath}/resguardo-externo`).catch(() => null),
+      api.get<EnlaceNube>(`${basePath}/resguardo-externo/enlace`).then(
+        (d): RespuestaEnlace => (d && Array.isArray(d.proveedores) ? d : null),
+        (err): RespuestaEnlace => (err instanceof ApiError && err.status === 403 ? 'sin-plan' : null),
+      ),
+    ])
+    setEstado(e)
+    setEnlace(n)
+    setCargado(true)
   }, [basePath])
 
-  if (!estado) return null
+  useEffect(() => { void cargar() }, [cargar])
 
-  if (!estado.contratado) {
+  async function conectar(clave: string) {
+    setOcupado(true)
+    setError(null)
+    setAviso(null)
+    try {
+      const r = await api.post<{ url: string }>(`${basePath}/resguardo-externo/enlace/${clave}`)
+      // Queda "ocupado" a propósito: el navegador se está yendo de la página.
+      navegar(r.url)
+    } catch (err) {
+      setError(describirError(err))
+      setOcupado(false)
+    }
+  }
+
+  async function desconectar(nombre: string) {
+    setOcupado(true)
+    setError(null)
+    setAviso(null)
+    try {
+      const r = await api.del<{ revocado?: boolean }>(`${basePath}/resguardo-externo/enlace`)
+      setAviso(r?.revocado
+        ? 'Copia externa desconectada.'
+        : `Copia externa desconectada. El permiso puede seguir figurando en tu cuenta de ${nombre}: si querés, quitalo desde ahí.`)
+      await cargar()
+    } catch (err) {
+      setError(describirError(err))
+    } finally {
+      setOcupado(false)
+    }
+  }
+
+  if (!cargado) return null
+
+  const conPlan = enlace && enlace !== 'sin-plan' ? enlace : null
+  const vinculo = conPlan?.enlace ?? null
+  const subida = estado?.contratado ? estado : null
+
+  const mensaje = (error || aviso) && (
+    <p className={`text-sm ${error ? 'text-destructive' : 'text-muted-foreground'}`}>{error ?? aviso}</p>
+  )
+
+  if (vinculo) {
+    const alDia = subida?.al_dia === true
+    return (
+      <Card className={`sm:col-span-2 ${!subida ? '' : alDia ? 'border-emerald-500/40' : 'border-amber-500/60'}`}>
+        <CardHeader>
+          <CardTitle className={`flex items-center gap-2 text-base ${subida && !alDia ? 'text-amber-600 dark:text-amber-400' : ''}`}>
+            <Cloud className="size-4" />
+            Copia externa {!subida ? 'conectada' : alDia ? 'al día' : 'con problemas'}
+          </CardTitle>
+          <CardDescription>
+            En tu {vinculo.nombre}
+            {vinculo.cuenta && <> (<span className="font-medium">{vinculo.cuenta}</span>)</>}, carpeta{' '}
+            <span className="font-mono">{vinculo.carpeta}</span>. Conectada el {fechaHora(vinculo.desde)}.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3">
+          {!subida ? (
+            <p className="text-xs text-muted-foreground">
+              Todavía no se subió ninguna copia: la primera sale esta noche, después del backup automático.
+            </p>
+          ) : alDia ? (
+            <UltimaCopia detalle={subida.detalle} />
+          ) : (
+            <p className="text-sm text-amber-600 dark:text-amber-400">{subida.motivo}</p>
+          )}
+          {mensaje}
+          <div>
+            <Button type="button" size="sm" variant="outline" disabled={ocupado} onClick={() => setConfirmar(true)}>
+              <Unlink />Desconectar
+            </Button>
+          </div>
+        </CardContent>
+        <ConfirmDialog
+          open={confirmar}
+          onOpenChange={setConfirmar}
+          title="¿Desconectar la copia externa?"
+          description={`Las copias dejan de subirse a ${vinculo.nombre}. Las que ya están allá no se borran.`}
+          confirmLabel="Desconectar"
+          onConfirm={() => void desconectar(vinculo.nombre)}
+        />
+      </Card>
+    )
+  }
+
+  if (subida) {
+    return (
+      <Card className={`sm:col-span-2 ${subida.al_dia ? 'border-emerald-500/40' : 'border-amber-500/60'}`}>
+        <CardHeader>
+          <CardTitle className={`flex items-center gap-2 text-base ${subida.al_dia ? '' : 'text-amber-600 dark:text-amber-400'}`}>
+            <Database className="size-4" />
+            Copia externa {subida.al_dia ? 'al día' : 'con problemas'}
+          </CardTitle>
+          <CardDescription>
+            {subida.al_dia
+              ? <>Tus copias también se guardan fuera de este servidor, en <span className="font-mono">{subida.detalle?.destino}</span>.</>
+              : subida.motivo}
+          </CardDescription>
+        </CardHeader>
+        {subida.al_dia && subida.detalle && (
+          <CardContent>
+            <UltimaCopia detalle={subida.detalle} />
+          </CardContent>
+        )}
+      </Card>
+    )
+  }
+
+  if (conPlan) {
+    return (
+      <Card className="sm:col-span-2">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Cloud className="size-4" />Copia externa
+          </CardTitle>
+          <CardDescription>
+            Conectá tu propia cuenta y todas las noches se guarda ahí una copia de tus
+            datos, así siguen estando aunque este servidor no esté. El sistema sólo ve
+            la carpeta que crea para las copias, no el resto de tu cuenta.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3">
+          {conPlan.proveedores.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              La conexión con la nube todavía no está habilitada en este servidor. Consultanos.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {conPlan.proveedores.map((p) => (
+                <Button key={p.clave} type="button" disabled={ocupado} onClick={() => void conectar(p.clave)}>
+                  <Cloud />Conectar {p.nombre}
+                </Button>
+              ))}
+            </div>
+          )}
+          {mensaje}
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (enlace === 'sin-plan' || estado) {
     return (
       <Card className="border-dashed sm:col-span-2">
         <CardHeader>
@@ -87,34 +336,12 @@ export function ResguardoExternoCard({ basePath = '/api/config' }: { basePath?: 
             siguen estando aunque el servidor no esté. Consultanos para activarlo.
           </CardDescription>
         </CardHeader>
+        {mensaje && <CardContent>{mensaje}</CardContent>}
       </Card>
     )
   }
 
-  return (
-    <Card className={`sm:col-span-2 ${estado.al_dia ? 'border-emerald-500/40' : 'border-amber-500/60'}`}>
-      <CardHeader>
-        <CardTitle className={`flex items-center gap-2 text-base ${estado.al_dia ? '' : 'text-amber-600 dark:text-amber-400'}`}>
-          <Database className="size-4" />
-          Copia externa {estado.al_dia ? 'al día' : 'con problemas'}
-        </CardTitle>
-        <CardDescription>
-          {estado.al_dia
-            ? <>Tus copias también se guardan fuera de este servidor, en <span className="font-mono">{estado.detalle?.destino}</span>.</>
-            : estado.motivo}
-        </CardDescription>
-      </CardHeader>
-      {estado.al_dia && estado.detalle && (
-        <CardContent>
-          <p className="text-xs text-muted-foreground">
-            Última copia: {estado.detalle.cuando}
-            {estado.detalle.archivo && <> — <span className="font-mono">{estado.detalle.archivo}</span></>}
-            {estado.detalle.en_destino != null && <> · {estado.detalle.en_destino} copias guardadas afuera</>}
-          </p>
-        </CardContent>
-      )}
-    </Card>
-  )
+  return null
 }
 
 export function DatosBackupCard({ basePath = '/api/config' }: { basePath?: string } = {}) {
