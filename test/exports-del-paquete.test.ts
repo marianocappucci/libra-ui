@@ -21,7 +21,12 @@ const exports = JSON.parse(readFileSync(resolve(raiz, 'package.json'), 'utf8')).
 // importables desde un producto. Si alguno pasa a ser publico, se saca de aca
 // y se agrega a `exports` — que es justo la decision que este guard obliga a
 // tomar a mano en vez de dejarla al olvido.
-const INTERNOS = new Set<string>([])
+//
+// Los tres del captcha (v0.69.0) los usan el login y «olvidé mi contraseña», y
+// nada más: un producto lo prende con `captchaPath`, no importando el widget.
+// `CaptchaAltcha.tsx` además se carga perezoso, y exportarlo invitaría a
+// importarlo directo y meter el widget en el bundle principal.
+const INTERNOS = new Set<string>(['captcha.ts', 'CampoCaptcha.tsx', 'CaptchaAltcha.tsx'])
 
 describe('el mapa de exports de package.json', () => {
   it('🔴 cada destino existe en disco', () => {

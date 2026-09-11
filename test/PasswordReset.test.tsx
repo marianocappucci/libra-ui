@@ -14,6 +14,13 @@ vi.mock('react-router-dom', async () => {
   return { ...real, useNavigate: () => navegar }
 })
 
+// Ver Login.test.tsx: el widget de verdad no corre en jsdom.
+vi.mock('../src/CaptchaAltcha', () => ({
+  default: ({ challengeUrl, onCambio }: { challengeUrl: string; onCambio: (p: string) => void }) => (
+    <button type="button" onClick={() => onCambio(`PAYLOAD:${challengeUrl}`)}>No soy un robot</button>
+  ),
+}))
+
 let fetchMock: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
@@ -43,6 +50,57 @@ async function pedirEnlace(valor = 'ana') {
   await user.type(screen.getByLabelText('Usuario o correo'), valor)
   await user.click(screen.getByRole('button', { name: 'Enviar enlace' }))
 }
+
+// Con `captcha=True`, libraauth exige el captcha también acá: sin él, este
+// endpoint manda correos a quien se quiera. Una pantalla que no lo resuelva
+// quedaría rota en cuanto el producto lo prende en el login.
+describe('ForgotPassword con captcha (v0.69.0)', () => {
+  const DESAFIO = { parameters: { algorithm: 'PBKDF2/SHA-256' }, signature: 'firma' }
+
+  function montarConCaptcha(post: () => Response) {
+    fetchMock.mockImplementation((url: string, init?: RequestInit) =>
+      Promise.resolve(init?.method === 'POST' ? post() : url === '/auth/captcha' ? json(DESAFIO) : json({}, 404)))
+    const ForgotPassword = createForgotPassword({
+      productName: 'MedLibra', productInitial: 'M', captchaPath: '/auth/captcha',
+    })
+    render(<MemoryRouter><ForgotPassword /></MemoryRouter>)
+  }
+
+  const cuerpoDelPost = () =>
+    fetchMock.mock.calls.find((c) => c[0] === '/auth/forgot-password')?.[1].body
+
+  it('el botón espera a que se tilde, y la solución viaja en el cuerpo', async () => {
+    montarConCaptcha(() => json({ ok: true }))
+    const robot = await screen.findByRole('button', { name: 'No soy un robot' })
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Usuario o correo'), 'ana')
+    const enviar = screen.getByRole('button', { name: 'Enviar enlace' })
+    expect(enviar).toBeDisabled()
+    await user.click(robot)
+    await user.click(enviar)
+    expect(cuerpoDelPost()).toBe('{"identificador":"ana","captcha":"PAYLOAD:/auth/captcha"}')
+    expect(await screen.findByText(/Si hay una cuenta con ese usuario o correo/)).toBeInTheDocument()
+  })
+
+  it('un 400 pide volver a tildar, y el widget arranca de nuevo', async () => {
+    montarConCaptcha(() => json({ detail: 'captcha' }, 400))
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Usuario o correo'), 'ana')
+    await user.click(await screen.findByRole('button', { name: 'No soy un robot' }))
+    await user.click(screen.getByRole('button', { name: 'Enviar enlace' }))
+    expect(await screen.findByText('La verificación «No soy un robot» venció. Volvé a tildarla.'))
+      .toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Enviar enlace' })).toBeDisabled()
+  })
+
+  it('sin captchaPath no pregunta: el pedido es el de siempre', async () => {
+    responde({ ok: true })
+    montarOlvide()
+    await pedirEnlace('ana')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0][1].body).toBe('{"identificador":"ana"}')
+  })
+})
 
 describe('ForgotPassword', () => {
   it('pide usuario o correo, no solo uno de los dos', () => {

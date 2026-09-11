@@ -146,7 +146,8 @@
     "typecheck": "tsc -p tsconfig.check.json --noEmit"
   },
   "dependencies": {
-    "@tanstack/react-table": "^9.2.4"
+    "@tanstack/react-table": "^9.2.4",
+    "altcha": "^3.2.2"
   },
   "engines": {
     "node": ">=22"
