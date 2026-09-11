@@ -13,6 +13,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { PasswordInput } from './PasswordInput'
 import type { ProductLogo } from './branding'
 import { cn } from './utils'
+import { useCaptcha } from './captcha'
+import { CampoCaptcha } from './CampoCaptcha'
 
 // Default = User (el tipo concreto de la instancia pre-configurada de
 // AuthContext.tsx) -- coincide con lo que devuelve el `useAuth` por
@@ -22,7 +24,7 @@ import { cn } from './utils'
 // `useAuth` juntos, consistentes entre si.
 export function createLogin<TUser = User>({
   productName, productInitial, redirectTo, onLoginSuccess, useAuth: useAuthOverride, formatError,
-  forgotPasswordPath, demoPath, totpPath, logo, wordmarkClassName,
+  forgotPasswordPath, demoPath, totpPath, captchaPath, logo, wordmarkClassName,
 }: {
   productName: string
   productInitial: string
@@ -77,6 +79,13 @@ export function createLogin<TUser = User>({
   // sonda se valida por la FORMA de la respuesta, no por el 200 — el catch-all
   // de la SPA devuelve 200 con HTML a cualquier ruta.
   totpPath?: string
+  // Ruta del desafío del captcha «No soy un robot» (v0.69.0, ALTCHA), ej.
+  // '/auth/captcha'. **Opt-in y condicionado en runtime**, por lo mismo que
+  // `totpPath`: el recuadro aparece sólo si esa ruta contesta con la forma de
+  // un desafío, y mientras no esté tildado el botón «Ingresar» queda
+  // deshabilitado. La solución viaja en `{ captcha }`, junto a las
+  // credenciales. Ver `captcha.tsx`.
+  captchaPath?: string
 }) {
   return function Login() {
     // Cast puntual: TS no puede unificar el tipo generico TUser (para
@@ -100,6 +109,7 @@ export function createLogin<TUser = User>({
     // Segundo factor: `true` sólo si la sonda de `totpPath` lo confirmó.
     const [totp, setTotp] = useState(false)
     const [codigo, setCodigo] = useState('')
+    const captcha = useCaptcha(captchaPath)
 
     useEffect(() => {
       if (!demoPath) return
@@ -163,14 +173,21 @@ export function createLogin<TUser = User>({
       setError(null)
       setSubmitting(true)
       try {
-        // Sin segundo factor la llamada es la de siempre, con dos argumentos:
-        // los seis productos no tienen por qué enterarse de que existe `extra`.
-        const user = totp
-          ? await login(username, password, { codigo: codigo.trim() })
+        // Sin segundo factor ni captcha la llamada es la de siempre, con dos
+        // argumentos: los productos que no los usan no tienen por qué
+        // enterarse de que existe `extra`.
+        const extra: Record<string, unknown> = {}
+        if (totp) extra.codigo = codigo.trim()
+        if (captcha.activo) extra.captcha = captcha.payload
+        const user = Object.keys(extra).length > 0
+          ? await login(username, password, extra)
           : await login(username, password)
         navigate(onLoginSuccess ? onLoginSuccess(user) : redirectTo, { replace: true })
       } catch (err) {
         setError(err instanceof ApiError ? (formatError ? formatError(err) : 'Usuario o contraseña incorrectos.') : 'Error de conexión.')
+        // El servidor ya gastó ese desafío —cada uno sirve una vez—, así que
+        // el próximo intento tiene que resolver otro.
+        captcha.reiniciar()
       } finally {
         setSubmitting(false)
       }
@@ -312,13 +329,20 @@ export function createLogin<TUser = User>({
                   />
                 </div>
               )}
+              <CampoCaptcha captcha={captcha} />
               {/* En una demo el error del código se muestra arriba, junto al
                   campo que lo produjo; acá abajo sólo el del login. */}
               {error && !demo && <p className="text-sm text-destructive">{error}</p>}
               {error && demo && mostrarLogin && (
                 <p className="text-sm text-destructive">{error}</p>
               )}
-              <Button type="submit" disabled={submitting} className="w-full">
+              <Button
+                type="submit"
+                // Como en el login de HSI: sin tildar «No soy un robot» no se
+                // puede ingresar. Sin captcha, `activo` es false y esto no cambia.
+                disabled={submitting || (captcha.activo && !captcha.payload)}
+                className="w-full"
+              >
                 {submitting ? 'Ingresando…' : 'Ingresar'}
               </Button>
               {forgotPasswordPath && (

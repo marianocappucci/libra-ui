@@ -14,6 +14,17 @@ vi.mock('react-router-dom', async () => {
   return { ...real, useNavigate: () => navegar }
 })
 
+// El widget de ALTCHA de verdad no corre en jsdom (workers, WebCrypto); lo que
+// importa acá es qué hace el LOGIN con él. El doble entrega una solución al
+// tocarlo, como el widget cuando termina la prueba de trabajo.
+vi.mock('../src/CaptchaAltcha', () => ({
+  default: ({ challengeUrl, onCambio }: { challengeUrl: string; onCambio: (p: string) => void }) => (
+    <button type="button" data-desafio={challengeUrl} onClick={() => onCambio(`PAYLOAD:${challengeUrl}`)}>
+      No soy un robot
+    </button>
+  ),
+}))
+
 type UsuarioDePrueba = { id: string; username: string; role: string }
 
 function montar({
@@ -24,6 +35,7 @@ function montar({
   forgotPasswordPath?: string
   demoPath?: string
   totpPath?: string
+  captchaPath?: string
   onLoginSuccess?: (u: UsuarioDePrueba) => string
   formatError?: (e: ApiError) => string
 } = {}) {
@@ -506,5 +518,107 @@ describe('el segundo factor', () => {
     montar({ totpPath: '/api/login/opciones' })
     await waitFor(() => expect(fetch).toHaveBeenCalled())
     expect(screen.queryByRole('textbox', CAMPO_CODIGO_TOTP)).not.toBeInTheDocument()
+  })
+})
+
+
+// ── El captcha «No soy un robot» (v0.69.0, ALTCHA) ──────────────────────────
+//
+// Opt-in por `captchaPath` y condicionado por la sonda, como el segundo
+// factor. Lo que fijan estos tests, en orden de lo que se rompe sin que se note:
+//
+// 1. 🔴 Que sin tildar no se pueda ingresar, y que la solución viaje.
+// 2. 🔴 Que después de un intento fallido haya que volver a tildar: el servidor
+//    ya gastó ese desafío, y reenviarlo sería un 400 seguro.
+// 3. Que el catch-all de la SPA (200 con HTML) no lo encienda.
+// 4. Que sin la prop la llamada a `login` siga siendo la de siempre.
+
+const DESAFIO = { parameters: { algorithm: 'PBKDF2/SHA-256' }, signature: 'firma' }
+const ROBOT = { name: 'No soy un robot' }
+
+function sondas(respuestas: Record<string, { cuerpo: unknown; json?: boolean; status?: number }>) {
+  vi.stubGlobal('fetch', vi.fn((url: string) => {
+    const r = respuestas[url] ?? { cuerpo: { detail: 'Not Found' }, status: 404 }
+    return Promise.resolve(new Response(
+      typeof r.cuerpo === 'string' ? r.cuerpo : JSON.stringify(r.cuerpo),
+      { status: r.status ?? 200, headers: { 'content-type': (r.json ?? true) ? 'application/json' : 'text/html' } },
+    ))
+  }))
+}
+
+async function tipearCredenciales() {
+  const usuario = userEvent.setup()
+  await usuario.type(screen.getByLabelText('Usuario'), 'ana')
+  await usuario.type(screen.getByLabelText('Contraseña'), 'clave')
+  return usuario
+}
+
+describe('el captcha', () => {
+  it('sin captchaPath ni pregunta ni lo dibuja, y la llamada es la de siempre', async () => {
+    sondas({ '/auth/captcha': { cuerpo: DESAFIO } })
+    const { login } = montar()
+    expect(fetch).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', ROBOT)).not.toBeInTheDocument()
+    await completarYEnviar()
+    expect(login).toHaveBeenCalledWith('ana', 'clave')
+  })
+
+  it('con un desafío aparece, e «Ingresar» espera a que se tilde', async () => {
+    sondas({ '/auth/captcha': { cuerpo: DESAFIO } })
+    const { login } = montar({ captchaPath: '/auth/captcha' })
+    const robot = await screen.findByRole('button', ROBOT)
+    expect(robot).toHaveAttribute('data-desafio', '/auth/captcha')
+    const usuario = await tipearCredenciales()
+    const ingresar = screen.getByRole('button', { name: 'Ingresar' })
+    expect(ingresar).toBeDisabled()
+    await usuario.click(robot)
+    expect(ingresar).toBeEnabled()
+    await usuario.click(ingresar)
+    expect(login).toHaveBeenCalledWith('ana', 'clave', { captcha: 'PAYLOAD:/auth/captcha' })
+    expect(navegar).toHaveBeenCalledWith('/dashboard', { replace: true })
+  })
+
+  it('con segundo factor y captcha viajan los dos', async () => {
+    sondas({
+      '/api/login/opciones': { cuerpo: { totp: true } },
+      '/api/login/captcha': { cuerpo: DESAFIO },
+    })
+    const { login } = montar({ totpPath: '/api/login/opciones', captchaPath: '/api/login/captcha' })
+    const campo = await screen.findByRole('textbox', CAMPO_CODIGO_TOTP)
+    const robot = await screen.findByRole('button', ROBOT)
+    const usuario = await tipearCredenciales()
+    await usuario.type(campo, '123456')
+    await usuario.click(robot)
+    await usuario.click(screen.getByRole('button', { name: 'Ingresar' }))
+    expect(login).toHaveBeenCalledWith('ana', 'clave', {
+      codigo: '123456', captcha: 'PAYLOAD:/api/login/captcha',
+    })
+  })
+
+  it('🔴 después de un intento fallido hay que volver a tildar', async () => {
+    sondas({ '/auth/captcha': { cuerpo: DESAFIO } })
+    const login = vi.fn().mockRejectedValue(new ApiError(401, 'Usuario o contraseña incorrectos'))
+    montar({ login, captchaPath: '/auth/captcha' })
+    const usuario = await tipearCredenciales()
+    await usuario.click(await screen.findByRole('button', ROBOT))
+    await usuario.click(screen.getByRole('button', { name: 'Ingresar' }))
+    expect(await screen.findByText('Usuario o contraseña incorrectos.')).toBeInTheDocument()
+    // El widget se remontó: no hay solución, y el botón vuelve a esperar.
+    expect(screen.getByRole('button', { name: 'Ingresar' })).toBeDisabled()
+    await usuario.click(await screen.findByRole('button', ROBOT))
+    expect(screen.getByRole('button', { name: 'Ingresar' })).toBeEnabled()
+  })
+
+  it.each([
+    ['🔴 un 200 que no es JSON (el catch-all de la SPA)', { cuerpo: '<!doctype html><html></html>', json: false }],
+    ['un JSON sin la forma de un desafío', { cuerpo: { totp: true } }],
+    ['un 404', { cuerpo: { detail: 'Not Found' }, status: 404 }],
+  ])('%s no lo enciende', async (_caso, respuesta) => {
+    sondas({ '/auth/captcha': respuesta })
+    const { login } = montar({ captchaPath: '/auth/captcha' })
+    await waitFor(() => expect(fetch).toHaveBeenCalled())
+    expect(screen.queryByRole('button', ROBOT)).not.toBeInTheDocument()
+    await completarYEnviar()
+    expect(login).toHaveBeenCalledWith('ana', 'clave')
   })
 })
