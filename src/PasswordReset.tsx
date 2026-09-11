@@ -10,6 +10,8 @@ import { useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, ApiError, type User } from './api-client'
 import { PasswordInput } from './PasswordInput'
+import { useCaptcha } from './captcha'
+import { CampoCaptcha } from './CampoCaptcha'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -49,20 +51,29 @@ function Shell({ productName, productInitial, title, description, children }: {
 }
 
 export function createForgotPassword({
-  productName, productInitial, basePath = '/auth', loginPath = '/login',
-}: Branding) {
+  productName, productInitial, basePath = '/auth', loginPath = '/login', captchaPath,
+}: Branding & {
+  // Ruta del desafío del captcha (v0.69.0), la misma que la del login. Con
+  // `captcha=True` libraauth lo exige también acá —sin él, este endpoint manda
+  // correos a quien se quiera—, así que un producto que lo prende en el login
+  // tiene que prenderlo en esta pantalla o la deja rota. Ver `captcha.tsx`.
+  captchaPath?: string
+}) {
   return function ForgotPassword() {
     const [identificador, setIdentificador] = useState('')
     const [enviado, setEnviado] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [submitting, setSubmitting] = useState(false)
+    const captcha = useCaptcha(captchaPath)
 
     async function handleSubmit(event: FormEvent) {
       event.preventDefault()
       setError(null)
       setSubmitting(true)
       try {
-        await api.post(`${basePath}/forgot-password`, { identificador })
+        await api.post(`${basePath}/forgot-password`, captcha.activo
+          ? { identificador, captcha: captcha.payload }
+          : { identificador })
         setEnviado(true)
       } catch (err) {
         // El 503 (instancia sin SMTP configurado) se muestra tal cual: no
@@ -71,7 +82,11 @@ export function createForgotPassword({
         // mandar.
         setError(err instanceof ApiError && err.status === 503
           ? 'El envío de correo no está configurado en este sistema. Avisale a quien lo administra.'
-          : 'No pudimos procesar el pedido. Probá de nuevo en un momento.')
+          : err instanceof ApiError && err.status === 400 && captcha.activo
+            ? 'La verificación «No soy un robot» venció. Volvé a tildarla.'
+            : 'No pudimos procesar el pedido. Probá de nuevo en un momento.')
+        // El desafío ya se gastó en el servidor: hay que resolver otro.
+        captcha.reiniciar()
       } finally {
         setSubmitting(false)
       }
@@ -116,8 +131,13 @@ export function createForgotPassword({
               Te mandamos un enlace al correo asociado a la cuenta.
             </p>
           </div>
+          <CampoCaptcha captcha={captcha} />
           {error && <p className="text-sm text-destructive">{error}</p>}
-          <Button type="submit" disabled={submitting} className="w-full">
+          <Button
+            type="submit"
+            disabled={submitting || (captcha.activo && !captcha.payload)}
+            className="w-full"
+          >
             {submitting ? 'Enviando…' : 'Enviar enlace'}
           </Button>
           <Button asChild variant="ghost" className="w-full">
