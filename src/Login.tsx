@@ -24,7 +24,7 @@ import { CampoCaptcha } from './CampoCaptcha'
 // `useAuth` juntos, consistentes entre si.
 export function createLogin<TUser = User>({
   productName, productInitial, redirectTo, onLoginSuccess, useAuth: useAuthOverride, formatError,
-  forgotPasswordPath, demoPath, totpPath, captchaPath, logo, wordmarkClassName,
+  forgotPasswordPath, forgotPasswordHint, demoPath, totpPath, captchaPath, logo, wordmarkClassName,
 }: {
   productName: string
   productInitial: string
@@ -55,6 +55,12 @@ export function createLogin<TUser = User>({
   // producto que no la tenga prendida sería un link a una pantalla que
   // termina en 404.
   forgotPasswordPath?: string
+  // Texto en el lugar del enlace, para cuando NO hay recuperación por correo
+  // (v0.69.1). El caso es el backoffice: las credenciales del superadmin salen
+  // del entorno del servidor, no hay a quién mandarle un correo, y sin nada
+  // escrito la pantalla no le dice a nadie qué hacer. Si también hay
+  // `forgotPasswordPath`, gana el enlace.
+  forgotPasswordHint?: string
   // Ruta del auto-login de la demo pública (ej. '/auth/demo', o '/api/demo'
   // en Contalibra/Restolibra). **Opt-in en la config, y además condicionado
   // en runtime**: aunque el producto la pase, el botón sólo aparece si la
@@ -345,14 +351,16 @@ export function createLogin<TUser = User>({
               >
                 {submitting ? 'Ingresando…' : 'Ingresar'}
               </Button>
-              {forgotPasswordPath && (
+              {forgotPasswordPath ? (
                 <Link
                   to={forgotPasswordPath}
                   className="text-center text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
                 >
                   ¿Olvidaste tu contraseña?
                 </Link>
-              )}
+              ) : forgotPasswordHint ? (
+                <p className="text-center text-sm text-muted-foreground">{forgotPasswordHint}</p>
+              ) : null}
             </form>
             )}
           </CardContent>
