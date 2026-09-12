@@ -24,3 +24,14 @@
 .dark {
   color-scheme: dark;
 }
+
+/*
+ * El ancho (v0.69.2). altcha limita su recuadro a `--altcha-max-width: 320px`
+ * (en `.altcha-main`), y en el login los campos y el botón ocupan todo el
+ * ancho de la tarjeta: el recuadro quedaba más angosto que el resto y corrido.
+ * Lo pidió el humano con una captura (2026-09-12). Con `100%` toma el ancho del
+ * formulario, igual que los otros elementos.
+ */
+altcha-widget {
+  --altcha-max-width: 100%;
+}
