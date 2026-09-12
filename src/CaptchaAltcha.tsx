@@ -13,9 +13,15 @@
 // (`script-src 'self'`, sin `worker-src`) no lo deja. Con `external` el worker
 // de PBKDF2 sale como un archivo más del bundle —mismo origen— y la CSP no se
 // toca. Los estilos, igual: `altcha.css` como archivo.
+//
+// 🔴 **Y `captcha-altcha.css` después (v0.69.1).** Declara el `color-scheme` que
+// `altcha.css` necesita para resolver sus colores: sin él, el minificador de
+// Vite deja inválidos los `light-dark()` y el checkbox sale sin borde. El
+// porqué completo está en ese archivo.
 import { useEffect, useRef } from 'react'
 import 'altcha/external'
 import 'altcha/altcha.css'
+import './captcha-altcha.css'
 import 'altcha/i18n/es-419'
 import type {} from 'altcha/types/react'
 import Pbkdf2Worker from 'altcha/workers/pbkdf2?worker'

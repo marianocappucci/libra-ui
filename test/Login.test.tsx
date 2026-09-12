@@ -33,6 +33,7 @@ function montar({
 }: {
   login?: ReturnType<typeof vi.fn>
   forgotPasswordPath?: string
+  forgotPasswordHint?: string
   demoPath?: string
   totpPath?: string
   captchaPath?: string
@@ -83,6 +84,20 @@ describe('el enlace de recuperación es opt-in', () => {
     montar({ forgotPasswordPath: '/forgot-password' })
     const enlace = screen.getByRole('link', { name: '¿Olvidaste tu contraseña?' })
     expect(enlace).toHaveAttribute('href', '/forgot-password')
+  })
+
+  it('sin ruta pero con forgotPasswordHint se muestra el texto, sin enlace', () => {
+    // El backoffice: no hay recuperación por correo, pero la pantalla tiene
+    // que decir qué hacer.
+    montar({ forgotPasswordHint: 'La cambia quien administra el servidor.' })
+    expect(screen.getByText('La cambia quien administra el servidor.')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /olvidaste/i })).not.toBeInTheDocument()
+  })
+
+  it('con las dos, gana el enlace', () => {
+    montar({ forgotPasswordPath: '/forgot-password', forgotPasswordHint: 'Texto que no va' })
+    expect(screen.getByRole('link', { name: '¿Olvidaste tu contraseña?' })).toBeInTheDocument()
+    expect(screen.queryByText('Texto que no va')).not.toBeInTheDocument()
   })
 })
 
