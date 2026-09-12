@@ -6,6 +6,7 @@
   "description": "Paquete de frontend compartido para los verticales de la familia Libra sin backoffice server-rendered propio (Gestiolibra, MedLibra, VentaLibra).",
   "exports": {
     "./AuthContext": "./src/AuthContext.tsx",
+    "./CampoCaptcha": "./src/CampoCaptcha.tsx",
     "./CambiarPassword": "./src/CambiarPassword.tsx",
     "./Configuracion": "./src/Configuracion.tsx",
     "./ConfiguracionSmtp": "./src/ConfiguracionSmtp.tsx",
@@ -32,6 +33,7 @@
     "./auditoria-de-titulos": "./src/auditoria-de-titulos.ts",
     "./badge-estado": "./src/badge-estado.tsx",
     "./branding": "./src/branding.ts",
+    "./captcha": "./src/captcha.ts",
     "./comercio/Caja": "./src/comercio/Caja.tsx",
     "./comercio/CajaMedios": "./src/comercio/CajaMedios.tsx",
     "./comercio/Cajas": "./src/comercio/Cajas.tsx",
