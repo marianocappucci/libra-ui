@@ -1,0 +1,26 @@
+/*
+ * Los colores del recuadro «No soy un robot» (v0.69.1).
+ *
+ * `altcha.css` declara sus colores en `:root` con `light-dark()`. Cuando el
+ * build del producto minifica con lightningcss (Vite 8) para navegadores que
+ * no lo soportan, reescribe cada uno como
+ * `var(--lightningcss-light, CLARO) var(--lightningcss-dark, OSCURO)`, y esas
+ * dos variables las define SOLO donde encuentra un `color-scheme` declarado.
+ * Ni altcha.css ni los productos lo declaraban: los dos colores quedaban
+ * pegados, el valor era inválido, y `border: 2px solid <inválido>` se
+ * descartaba entero — el checkbox salía sin borde, invisible (medido en
+ * admin.ventalibra.com.ar el 2026-09-12). También el fondo y el texto.
+ *
+ * Declarar `color-scheme` en `:root` —donde altcha resuelve sus variables—
+ * arregla los dos caminos: con la reescritura, lightningcss define ahí sus
+ * variables; sin ella, `light-dark()` resuelve solo. `.dark` es la clase del
+ * modo oscuro de los productos (`@custom-variant dark`), así el recuadro sigue
+ * el tema de la página y no el del sistema operativo.
+ */
+:root {
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
+}
