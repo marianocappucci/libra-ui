@@ -22,11 +22,16 @@ const exports = JSON.parse(readFileSync(resolve(raiz, 'package.json'), 'utf8')).
 // y se agrega a `exports` — que es justo la decision que este guard obliga a
 // tomar a mano en vez de dejarla al olvido.
 //
-// Los tres del captcha (v0.69.0) los usan el login y «olvidé mi contraseña», y
-// nada más: un producto lo prende con `captchaPath`, no importando el widget.
-// `CaptchaAltcha.tsx` además se carga perezoso, y exportarlo invitaría a
-// importarlo directo y meter el widget en el bundle principal.
-const INTERNOS = new Set<string>(['captcha.ts', 'CampoCaptcha.tsx', 'CaptchaAltcha.tsx'])
+// `CaptchaAltcha.tsx` es el widget ALTCHA (~34 kB) y se carga perezoso:
+// exportarlo invitaría a importarlo directo y meter el widget en el bundle
+// principal. Lo que se importa es `CampoCaptcha`, que lo trae con `lazy()`.
+//
+// 📌 Hasta v0.69.2 `captcha.ts` y `CampoCaptcha.tsx` también eran internos: un
+// producto prendía el captcha con `captchaPath` en `createLogin` y nada más.
+// Se exportan desde v0.69.3 porque el portal de jugadores de LibraClub tiene
+// un formulario propio —no es `createLogin`— y su backend también exige el
+// captcha. La razón de arriba sigue en pie: el widget sigue siendo perezoso.
+const INTERNOS = new Set<string>(['CaptchaAltcha.tsx'])
 
 describe('el mapa de exports de package.json', () => {
   it('🔴 cada destino existe en disco', () => {
