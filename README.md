@@ -80,11 +80,12 @@ para que el motor de Tailwind v4 escanee las clases usadas dentro de
 | Import | Contenido | Uso |
 |---|---|---|
 | `libra-ui/api-client` | `ApiError`, `api` (get/post/put/del), `type User` | Cliente HTTP base + tipo de usuario. Cada consumidor re-exporta esto desde su propio `src/api.ts` junto a sus tipos/endpoints propios. |
-| `libra-ui/AuthContext` | `AuthProvider`, `useAuth` | Contexto de sesión, 100% genérico. |
+| `libra-ui/AuthContext` | `AuthProvider`, `useAuth`, `createAuthContext`, `SegundoFactorRequerido` | Contexto de sesión, 100% genérico. Desde `v0.70.0` soporta el login en dos pasos — ver abajo. |
 | `libra-ui/data-table` | `DataTable`, `sortableHeader`, `anchoColumnaAcciones`, `type DataTableSearch` | Wrapper de TanStack Table + shadcn. Buscador opcional desde `v0.8.0`: pasando `search={{ campos }}` aparece un input que filtra la tabla; sin esa prop el render queda idéntico. `campos` lo declara la página porque el dato crudo no siempre es lo que se ve (`cliente_id: 3` se muestra como "Compulibra", y quien busca escribe lo segundo). |
 | `libra-ui/Usuarios` | `Usuarios({ basePath? })` | Página de gestión de usuarios, 100% genérica. `basePath` (default `/users`) es la ruta del router de usuarios en el backend del consumidor -- LibraDesk pasa `/api/usuarios`. |
 | `libra-ui/Layout` | `createLayout({ productName, productInitial, navItems })` | Factory: recibe la parte propia de cada producto (branding + items de navegación) y devuelve el componente `Layout`. Acepta `logo` y `wordmarkClassName` — ver abajo. |
-| `libra-ui/Login` | `createLogin({ productName, productInitial, redirectTo })` | Factory: recibe branding + ruta de redirect post-login. Acepta `logo` y `wordmarkClassName` — ver abajo. |
+| `libra-ui/Login` | `createLogin({ productName, productInitial, redirectTo })` | Factory: recibe branding + ruta de redirect post-login. Acepta `logo` y `wordmarkClassName` — ver abajo. Desde `v0.70.0` abre el modal del segundo factor en dos pasos si el `useAuth` que recibe trae `confirmarCodigo` — ver abajo. |
+| `libra-ui/CodigoPorDigitos` | `CodigoPorDigitos({ value, onChange, onComplete?, length?, disabled?, autoFocus? })` | El recuadro de 6 dígitos del segundo factor (`v0.70.0`), uno por casillero. Controlado: el que llama tiene el código en `value` y lo resetea poniéndolo en `''`. No es exclusivo del modal de `Login` — cualquier pantalla con un código de un solo uso lo puede usar. |
 | `libra-ui/branding` | `type ProductLogo` | El tipo del logo de producto. Módulo aparte para que `Login` no tenga que importar de `Layout` y arrastrarse la sidebar entera al bundle de la pantalla que carga sin sesión. |
 | `libra-ui/SelectBuscable` | `SelectBuscable`, `type OpcionSelect` | Select con **búsqueda por teclado** (`v0.9.0`). El `Select` de shadcn/Radix obliga a encontrar la opción a ojo en una lista ordenada; con los cientos de clientes que puede tener una empresa real, eso deja de ser viable. Filtra sin acentos y exige todos los términos, igual que el buscador de `data-table` — comparten `coincideBusqueda`. **No necesita `cmdk` ni el primitivo `popover`**: se construye con `input`, `button` y `cn`, que ya están en los 5 consumidores. Desde `v0.25.0` **anda solo adentro de un `<FormControl>`**: declara el `id`, el `aria-describedby` y el `aria-invalid` que el Slot le inyecta, así el `htmlFor` del `<FormLabel>` lo nombra — ver abajo. |
 | `libra-ui/Configuracion` | `createConfiguracion({ icono, producto, integraciones, propias })`, `EmpresaCard`, `MercadoPagoCard`, `ArcaCard`, `EmailCard`, `DatosBackupCard`, los `Tutorial*` | **La pantalla de Configuración de la familia, entera** (`v0.47.0`). Tutoriales incluidos. Exige tres primitivos más del consumidor — ver abajo. |
@@ -124,6 +125,63 @@ Tres cosas que no son obvias:
 
 Los cinco productos que no pasan nada de esto renderizan exactamente igual que
 antes — misma regla que rige desde `v0.3.0`.
+
+## El segundo factor en dos pasos: modal con un dígito por casillero (`v0.70.0`)
+
+Reemplaza al segundo factor de una sola pantalla de `v0.60.0` (F2): antes el
+campo «Código de verificación» aparecía **arriba**, desde el principio, si una
+sonda a `totpPath` confirmaba `{ totp: true }`, y el código viajaba en el mismo
+POST que usuario y contraseña. Ahora se pide **después**, en un modal aparte,
+una vez que el backend ya validó usuario y contraseña.
+
+**El contrato son dos POST, no uno:**
+
+1. `POST {loginPath}` con `{ captcha?, username, password }` — como siempre.
+   El backend contesta 200 con el usuario (sin 2FA, igual que hoy) **o** 200
+   con `{ requiere_codigo: true, desafio }` cuando hace falta el segundo paso.
+   Se distingue por la FORMA de la respuesta, no por el status — mismo criterio
+   que `esDesafio` del captcha y las sondas de `demoPath`/`totpPath` viejo.
+2. `POST {segundoFactorPath}` con `{ desafio, codigo }` → 200 con el usuario
+   (y ahí sí la cookie de sesión).
+
+Del lado de `createAuthContext`, el paso 1 lo sigue resolviendo `login()`:
+si la respuesta tiene la forma de arriba, lanza `SegundoFactorRequerido`
+(`.desafio`) **sin** hacer `setUser` — no hay sesión todavía. El paso 2 es el
+método nuevo del contexto, `confirmarCodigo(desafio, codigo)`, que postea a
+`segundoFactorPath` (opt-in en la config de `createAuthContext`) y recién ahí
+deja al usuario en el contexto.
+
+`Login.tsx` atrapa `SegundoFactorRequerido` en el `catch` del submit, ANTES de
+mirar `instanceof ApiError` — no es un error, el paso 1 salió bien — y abre un
+`Dialog` con `CodigoPorDigitos` (6 casilleros, uno por dígito, ver la tabla de
+arriba). El envío del paso 2 es automático al completar el sexto dígito
+(`onComplete`); el botón «Verificar» hace lo mismo a mano.
+
+Lo que decide cada rama del modal es el `detail` del 401, no una ruta ni un
+código propios:
+
+- **Código incorrecto**: se queda en el modal, limpia los 6 casilleros y
+  vuelve el foco al primero — el desafío sigue vivo, no hace falta un login
+  nuevo.
+- **Desafío vencido** (`detail` menciona "venció"): cierra el modal, muestra
+  el error en el formulario de siempre y **reinicia el captcha** — hay que
+  volver a arrancar desde usuario y contraseña.
+- **429** (bloqueo): igual que el código incorrecto pero sin limpiar — no fue
+  culpa de lo tipeado.
+- **Cancelar/Escape/click afuera**: los tres pasan por el mismo
+  `onOpenChange` del `Dialog`, así que cierran, reinician el captcha y
+  conservan usuario y contraseña ya tipeados — nadie tiene que volver a
+  escribirlos.
+
+🔴 **El captcha NO se reinicia al abrir el modal.** Ya cumplió su función en el
+paso 1, que salió con 200 — reiniciarlo ahí sería pedirle a la persona que
+vuelva a tildarlo sin necesidad. Sólo hace falta uno nuevo si el paso 2 no se
+completa (vencido o cancelado), porque ahí sí hace falta un login nuevo.
+
+**`totpPath` queda deprecado pero tipado.** El backoffice de superadmin
+todavía no migró a este contrato; mientras tanto sigue pudiendo pasarlo a
+`createLogin` sin dejar de compilar, pero la pantalla lo ignora por completo
+— ni pega la sonda vieja ni dibuja el campo de arriba.
 
 ## `SelectBuscable` adentro de un `<FormControl>` (`v0.25.0`)
 

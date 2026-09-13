@@ -3,7 +3,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createAuthContext } from '../src/AuthContext'
+import { createAuthContext, SegundoFactorRequerido } from '../src/AuthContext'
 
 type UsuarioDePrueba = { id: string; username: string; role: string }
 
@@ -159,5 +159,93 @@ describe('login con `extra` (v0.60.0, el código del segundo factor)', () => {
     expect(fetchMock.mock.calls[1][0]).toBe('/api/login')
     expect(JSON.parse(fetchMock.mock.calls[1][1].body))
       .toEqual({ codigo: '123456', username: 'ana', password: 'clave' })
+  })
+})
+
+// ── El login en dos pasos (v0.70.0) ─────────────────────────────────────────
+//
+// El backend contesta `{ requiere_codigo: true, desafio }` en vez de un
+// usuario cuando falta el segundo factor -- se distingue por la FORMA de la
+// respuesta, no por el status (los dos casos son 200). `login` tiene que
+// lanzar `SegundoFactorRequerido` SIN tocar `user`, y `confirmarCodigo` es
+// quien deja la sesión puesta una vez que el código es correcto.
+describe('el login en dos pasos (v0.70.0)', () => {
+  it('login lanza SegundoFactorRequerido y NO setea usuario', async () => {
+    const propio = createAuthContext<UsuarioDePrueba>({
+      mePath: '/auth/me', loginPath: '/auth/login', logoutPath: '/auth/logout',
+      segundoFactorPath: '/auth/verificar',
+    })
+    let capturado: unknown
+    function Pantalla2() {
+      const { user, login } = propio.useAuth()
+      return (
+        <div>
+          <p data-testid="quien">{user ? user.username : 'nadie'}</p>
+          <button onClick={() => login('ana', 'clave').catch((e) => { capturado = e })}>entrar</button>
+        </div>
+      )
+    }
+    const user = userEvent.setup()
+    fetchMock
+      .mockImplementationOnce(() => Promise.resolve(json({ detail: 'No autenticado' }, 401))) // /auth/me
+      .mockImplementationOnce(() => Promise.resolve(json({ requiere_codigo: true, desafio: 'desafio-abc' })))
+    render(<propio.AuthProvider><Pantalla2 /></propio.AuthProvider>)
+    await waitFor(() => expect(screen.getByTestId('quien')).toHaveTextContent('nadie'))
+
+    await user.click(screen.getByText('entrar'))
+
+    await waitFor(() => expect(capturado).toBeInstanceOf(SegundoFactorRequerido))
+    expect((capturado as SegundoFactorRequerido).desafio).toBe('desafio-abc')
+    // 🔴 Lo que rompería en silencio: si `login` igual hiciera `setUser` con
+    // la respuesta `{ requiere_codigo, desafio }`, la pantalla mostraría una
+    // sesión "logueada" con un usuario que no existe.
+    expect(screen.getByTestId('quien')).toHaveTextContent('nadie')
+  })
+
+  it('confirmarCodigo postea {desafio, codigo} a segundoFactorPath y setea el usuario', async () => {
+    const propio = createAuthContext<UsuarioDePrueba>({
+      mePath: '/auth/me', loginPath: '/auth/login', logoutPath: '/auth/logout',
+      segundoFactorPath: '/auth/verificar',
+    })
+    function Pantalla2() {
+      const { user, confirmarCodigo } = propio.useAuth()
+      return (
+        <div>
+          <p data-testid="quien">{user ? user.username : 'nadie'}</p>
+          <button onClick={() => confirmarCodigo('desafio-abc', '123456').catch(() => {})}>verificar</button>
+        </div>
+      )
+    }
+    const user = userEvent.setup()
+    fetchMock
+      .mockImplementationOnce(() => Promise.resolve(json({ detail: 'No autenticado' }, 401))) // /auth/me
+      .mockImplementationOnce(() => Promise.resolve(json({ id: '1', username: 'ana', role: 'admin' })))
+    render(<propio.AuthProvider><Pantalla2 /></propio.AuthProvider>)
+    await waitFor(() => expect(screen.getByTestId('quien')).toHaveTextContent('nadie'))
+
+    await user.click(screen.getByText('verificar'))
+
+    await waitFor(() => expect(screen.getByTestId('quien')).toHaveTextContent('ana'))
+    expect(fetchMock.mock.calls[1][0]).toBe('/auth/verificar')
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ desafio: 'desafio-abc', codigo: '123456' })
+  })
+
+  it('confirmarCodigo sin `segundoFactorPath` configurado tira un error claro', async () => {
+    // La instancia por defecto (`AuthProvider`/`useAuth`) no lo configura --
+    // es justo el caso de los seis productos sin 2FA.
+    let capturado: unknown
+    function Pantalla2() {
+      const { confirmarCodigo } = useAuth()
+      return <button onClick={() => confirmarCodigo('d', '123456').catch((e) => { capturado = e })}>verificar</button>
+    }
+    fetchMock.mockImplementation(() => Promise.resolve(json({ detail: 'x' }, 401)))
+    render(<AuthProvider><Pantalla2 /></AuthProvider>)
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+
+    const user = userEvent.setup()
+    await user.click(screen.getByText('verificar'))
+
+    await waitFor(() => expect(capturado).toBeInstanceOf(Error))
+    expect((capturado as Error).message).toMatch(/segundoFactorPath/)
   })
 })

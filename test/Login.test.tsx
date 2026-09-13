@@ -1,12 +1,13 @@
 // La pantalla de login de los 6 productos. Lo que importa acá es lo que
 // ve el usuario cuando algo falla, y el enlace de recuperación, que es
 // **opt-in** a propósito.
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createLogin } from '../src/Login'
 import { ApiError } from '../src/api-client'
+import { SegundoFactorRequerido } from '../src/AuthContext'
 
 const navegar = vi.fn()
 vi.mock('react-router-dom', async () => {
@@ -29,9 +30,14 @@ type UsuarioDePrueba = { id: string; username: string; role: string }
 
 function montar({
   login = vi.fn().mockResolvedValue({ id: '1', username: 'ana', role: 'admin' }),
+  // Sin default: la mayoría de los tests no pasa segundo factor, y un
+  // `useAuth` sin `confirmarCodigo` es justamente el caso "producto sin 2FA"
+  // que tiene que seguir andando igual que siempre.
+  confirmarCodigo,
   ...config
 }: {
   login?: ReturnType<typeof vi.fn>
+  confirmarCodigo?: ReturnType<typeof vi.fn>
   forgotPasswordPath?: string
   forgotPasswordHint?: string
   demoPath?: string
@@ -44,11 +50,11 @@ function montar({
     productName: 'Contalibra',
     productInitial: 'C',
     redirectTo: '/dashboard',
-    useAuth: () => ({ login }),
+    useAuth: () => ({ login, confirmarCodigo }),
     ...config,
   })
   render(<MemoryRouter><Login /></MemoryRouter>)
-  return { login }
+  return { login, confirmarCodigo }
 }
 
 async function completarYEnviar() {
@@ -470,69 +476,25 @@ describe('el botón de la demo', () => {
 })
 
 
-// ── El segundo factor del backoffice (v0.60.0, F2) ───────────────────────────
+// ── El viejo segundo factor de una pantalla (v0.60.0, F2) — deprecado ───────
 //
-// Opt-in por `totpPath` y condicionado por la sonda, igual que la demo. Las
-// dos mitades importan: que con `{ totp: true }` aparezca el campo y el código
-// viaje, y que sin la prop —los seis productos— la llamada a `login` siga
-// siendo la de siempre, con dos argumentos.
-
-const CAMPO_CODIGO_TOTP = { name: /código de verificación/i }
-
-function sondaTotp(cuerpo: unknown, { json = true, status = 200 } = {}) {
-  vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(
-    typeof cuerpo === 'string' ? cuerpo : JSON.stringify(cuerpo),
-    { status, headers: { 'content-type': json ? 'application/json' : 'text/html' } },
-  ))))
-}
-
-describe('el segundo factor', () => {
-  it('sin totpPath ni pregunta ni muestra el campo', async () => {
-    sondaTotp({ totp: true })
-    const { login } = montar()
-    expect(fetch).not.toHaveBeenCalled()
-    expect(screen.queryByRole('textbox', CAMPO_CODIGO_TOTP)).not.toBeInTheDocument()
-    await completarYEnviar()
-    // La llamada de siempre, con DOS argumentos: los productos no cambian.
-    expect(login).toHaveBeenCalledWith('ana', 'clave')
-  })
-
-  it('con { totp: true } aparece el campo y el código viaja en `extra`', async () => {
-    sondaTotp({ totp: true })
+// Hasta v0.69.3 `totpPath` prendía una sonda propia y un campo «Código de
+// verificación» arriba del formulario. v0.70.0 lo reemplaza por el login en
+// dos pasos (ver más abajo) y **deja `totpPath` tipado pero ignorado** — lo
+// sigue pasando el backoffice, que no tiene por qué dejar de compilar. Lo
+// único que hace falta fijar acá es que pasarlo no dibuje nada ni pegue a
+// ningún lado: si algo del campo viejo sobreviviera, esta prueba lo vería.
+describe('totpPath (deprecado desde v0.70.0)', () => {
+  it('se ignora: no pega la sonda ni dibuja el campo viejo', async () => {
+    const fetchEspiado = vi.fn()
+    vi.stubGlobal('fetch', fetchEspiado)
     const { login } = montar({ totpPath: '/api/login/opciones' })
-    const campo = await screen.findByRole('textbox', CAMPO_CODIGO_TOTP)
-    expect(campo).toHaveAttribute('autocomplete', 'one-time-code')
-    const usuario = userEvent.setup()
-    await usuario.type(screen.getByLabelText('Usuario'), 'ana')
-    await usuario.type(screen.getByLabelText('Contraseña'), 'clave')
-    await usuario.type(campo, '123456')
-    await usuario.click(screen.getByRole('button', { name: 'Ingresar' }))
-    expect(login).toHaveBeenCalledWith('ana', 'clave', { codigo: '123456' })
-    expect(navegar).toHaveBeenCalledWith('/dashboard', { replace: true })
-  })
-
-  it('con { totp: false } no hay campo y la llamada es la de siempre', async () => {
-    sondaTotp({ totp: false })
-    const { login } = montar({ totpPath: '/api/login/opciones' })
-    await waitFor(() => expect(fetch).toHaveBeenCalled())
-    expect(screen.queryByRole('textbox', CAMPO_CODIGO_TOTP)).not.toBeInTheDocument()
+    expect(fetchEspiado).not.toHaveBeenCalled()
+    expect(screen.queryByRole('textbox', { name: /código de verificación/i })).not.toBeInTheDocument()
     await completarYEnviar()
+    // La llamada de siempre, con DOS argumentos: pasar `totpPath` no cambia
+    // el cuerpo que ve `login`.
     expect(login).toHaveBeenCalledWith('ana', 'clave')
-  })
-
-  it('🔴 un 200 que no es JSON NO enciende el campo', async () => {
-    // El catch-all de la SPA: cualquier ruta devuelve 200 con el index.html.
-    sondaTotp('<!doctype html><html><body></body></html>', { json: false })
-    montar({ totpPath: '/api/login/opciones' })
-    await waitFor(() => expect(fetch).toHaveBeenCalled())
-    expect(screen.queryByRole('textbox', CAMPO_CODIGO_TOTP)).not.toBeInTheDocument()
-  })
-
-  it('un error de la sonda tampoco lo enciende', async () => {
-    sondaTotp({ detail: 'Not Found' }, { status: 404 })
-    montar({ totpPath: '/api/login/opciones' })
-    await waitFor(() => expect(fetch).toHaveBeenCalled())
-    expect(screen.queryByRole('textbox', CAMPO_CODIGO_TOTP)).not.toBeInTheDocument()
   })
 })
 
@@ -593,21 +555,26 @@ describe('el captcha', () => {
     expect(navegar).toHaveBeenCalledWith('/dashboard', { replace: true })
   })
 
-  it('con segundo factor y captcha viajan los dos', async () => {
-    sondas({
-      '/api/login/opciones': { cuerpo: { totp: true } },
-      '/api/login/captcha': { cuerpo: DESAFIO },
-    })
-    const { login } = montar({ totpPath: '/api/login/opciones', captchaPath: '/api/login/captcha' })
-    const campo = await screen.findByRole('textbox', CAMPO_CODIGO_TOTP)
+  it('con captcha y el login en dos pasos: el captcha viaja en el paso 1, y el modal no lo vuelve a pedir', async () => {
+    // Reemplaza al viejo test de `totpPath` + captcha (v0.69.x): ahora el
+    // segundo factor no es un campo del mismo formulario sino el modal de
+    // `CodigoPorDigitos`, así que lo que hay que fijar es que el captcha
+    // viaje en el POST de `login` y que el paso 2 no vuelva a pedirlo.
+    sondas({ '/auth/captcha': { cuerpo: DESAFIO } })
+    const login = vi.fn().mockRejectedValue(new SegundoFactorRequerido('desafio-abc'))
+    const confirmarCodigo = vi.fn().mockResolvedValue({ id: '1', username: 'ana', role: 'admin' })
+    montar({ login, confirmarCodigo, captchaPath: '/auth/captcha' })
     const robot = await screen.findByRole('button', ROBOT)
     const usuario = await tipearCredenciales()
-    await usuario.type(campo, '123456')
     await usuario.click(robot)
     await usuario.click(screen.getByRole('button', { name: 'Ingresar' }))
-    expect(login).toHaveBeenCalledWith('ana', 'clave', {
-      codigo: '123456', captcha: 'PAYLOAD:/api/login/captcha',
-    })
+    expect(login).toHaveBeenCalledWith('ana', 'clave', { captcha: 'PAYLOAD:/auth/captcha' })
+
+    const dialogo = await screen.findByRole('dialog')
+    await tipearCodigo(usuario, dialogo, '123456')
+
+    // El paso 2 sólo manda el desafío y el código -- el captcha ya cumplió.
+    await waitFor(() => expect(confirmarCodigo).toHaveBeenCalledWith('desafio-abc', '123456'))
   })
 
   it('🔴 después de un intento fallido hay que volver a tildar', async () => {
@@ -635,5 +602,142 @@ describe('el captcha', () => {
     expect(screen.queryByRole('button', ROBOT)).not.toBeInTheDocument()
     await completarYEnviar()
     expect(login).toHaveBeenCalledWith('ana', 'clave')
+  })
+})
+
+
+// ── El login en dos pasos (v0.70.0) ─────────────────────────────────────────
+//
+// `login` puede lanzar `SegundoFactorRequerido` en vez de resolver: ahí se
+// abre el modal con `CodigoPorDigitos`, y el segundo paso lo completa
+// `confirmarCodigo` mandando `{ desafio, codigo }`. Lo que fijan estos tests,
+// en el orden en que se rompe sin que se note:
+//
+// 1. 🔴 Que el modal se abra y NO se navegue todavía -- el usuario no está
+//    logueado hasta que el paso 2 confirme.
+// 2. 🔴 Que completar los 6 dígitos postee el `desafio` recibido, no cualquier
+//    cosa, y ahí sí navegue.
+// 3. Que un código incorrecto limpie los casilleros y deje el modal.
+// 4. 🔴 Que un desafío vencido cierre el modal Y reinicie el captcha -- hace
+//    falta un login nuevo desde cero.
+// 5. Que cancelar cierre el modal, reinicie el captcha y NO borre lo tipeado.
+// 6. Que sin `confirmarCodigo` en el `useAuth` del producto, se vea un error
+//    en vez de romper.
+
+async function tipearCodigo(usuario: ReturnType<typeof userEvent.setup>, dialogo: HTMLElement, codigo: string) {
+  for (let i = 0; i < codigo.length; i += 1) {
+    await usuario.type(within(dialogo).getByLabelText(`Dígito ${i + 1} de 6`), codigo[i])
+  }
+}
+
+describe('el login en dos pasos (v0.70.0)', () => {
+  it('🔴 si login pide el código, abre el modal y NO navega todavía', async () => {
+    const login = vi.fn().mockRejectedValue(new SegundoFactorRequerido('desafio-abc'))
+    montar({ login, confirmarCodigo: vi.fn() })
+    await completarYEnviar()
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByText('Código de verificación')).toBeInTheDocument()
+    expect(navegar).not.toHaveBeenCalled()
+    expect(login).toHaveBeenCalledWith('ana', 'clave')
+  })
+
+  it('🔴 completar los 6 dígitos postea {desafio, codigo} y navega', async () => {
+    const login = vi.fn().mockRejectedValue(new SegundoFactorRequerido('desafio-abc'))
+    const confirmarCodigo = vi.fn().mockResolvedValue({ id: '1', username: 'ana', role: 'admin' })
+    montar({ login, confirmarCodigo })
+    await completarYEnviar()
+    const dialogo = await screen.findByRole('dialog')
+    const usuario = userEvent.setup()
+
+    await tipearCodigo(usuario, dialogo, '123456')
+
+    await waitFor(() => expect(confirmarCodigo).toHaveBeenCalledWith('desafio-abc', '123456'))
+    await waitFor(() => expect(navegar).toHaveBeenCalledWith('/dashboard', { replace: true }))
+  })
+
+  it('el botón «Verificar» está deshabilitado hasta 6 dígitos, y mientras envía', async () => {
+    // Con 5 dígitos, deshabilitado por faltar uno. Al completar el sexto se
+    // envía SOLO (onComplete) -- y ahí el botón sigue deshabilitado, pero
+    // ahora por el envío en curso, no por dígitos faltantes.
+    const login = vi.fn().mockRejectedValue(new SegundoFactorRequerido('desafio-abc'))
+    const confirmarCodigo = vi.fn(() => new Promise<never>(() => {})) // nunca resuelve
+    montar({ login, confirmarCodigo })
+    await completarYEnviar()
+    const dialogo = await screen.findByRole('dialog')
+    const usuario = userEvent.setup()
+
+    await tipearCodigo(usuario, dialogo, '12345')
+    expect(within(dialogo).getByRole('button', { name: 'Verificar' })).toBeDisabled()
+
+    await usuario.type(within(dialogo).getByLabelText('Dígito 6 de 6'), '6')
+    await waitFor(() => expect(confirmarCodigo).toHaveBeenCalledWith('desafio-abc', '123456'))
+    expect(within(dialogo).getByRole('button', { name: 'Verificando…' })).toBeDisabled()
+  })
+
+  it('código incorrecto limpia los casilleros y deja el modal abierto', async () => {
+    const login = vi.fn().mockRejectedValue(new SegundoFactorRequerido('desafio-abc'))
+    const confirmarCodigo = vi.fn().mockRejectedValue(new ApiError(401, 'Código incorrecto.'))
+    montar({ login, confirmarCodigo })
+    await completarYEnviar()
+    const dialogo = await screen.findByRole('dialog')
+    const usuario = userEvent.setup()
+
+    await tipearCodigo(usuario, dialogo, '123456')
+
+    expect(await within(dialogo).findByText('Código incorrecto.')).toBeInTheDocument()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(navegar).not.toHaveBeenCalled()
+    expect(within(dialogo).getByLabelText('Dígito 1 de 6')).toHaveValue('')
+  })
+
+  it('🔴 un desafío vencido cierra el modal, muestra el error arriba y reinicia el captcha', async () => {
+    // Con captcha activo: es lo que hace falta para poder afirmar que se
+    // reinició -- el widget se remonta y el botón "No soy un robot" vuelve a
+    // pedir que lo tildes.
+    sondas({ '/auth/captcha': { cuerpo: DESAFIO } })
+    const login = vi.fn().mockRejectedValue(new SegundoFactorRequerido('desafio-abc'))
+    const confirmarCodigo = vi.fn().mockRejectedValue(new ApiError(401, 'El código venció: volvé a ingresar.'))
+    montar({ login, confirmarCodigo, captchaPath: '/auth/captcha' })
+    const usuario = await tipearCredenciales()
+    await usuario.click(await screen.findByRole('button', ROBOT))
+    await usuario.click(screen.getByRole('button', { name: 'Ingresar' }))
+    const dialogo = await screen.findByRole('dialog')
+
+    await tipearCodigo(usuario, dialogo, '123456')
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(await screen.findByText('El código venció: volvé a ingresar.')).toBeInTheDocument()
+    expect(navegar).not.toHaveBeenCalled()
+    // El captcha se remontó: hay que volver a tildarlo antes de reintentar.
+    expect(screen.getByRole('button', { name: 'Ingresar' })).toBeDisabled()
+  })
+
+  it('cancelar cierra el modal, reinicia el captcha y conserva usuario y contraseña', async () => {
+    sondas({ '/auth/captcha': { cuerpo: DESAFIO } })
+    const login = vi.fn().mockRejectedValue(new SegundoFactorRequerido('desafio-abc'))
+    montar({ login, confirmarCodigo: vi.fn(), captchaPath: '/auth/captcha' })
+    const usuario = await tipearCredenciales()
+    await usuario.click(await screen.findByRole('button', ROBOT))
+    await usuario.click(screen.getByRole('button', { name: 'Ingresar' }))
+    const dialogo = await screen.findByRole('dialog')
+
+    await usuario.click(within(dialogo).getByRole('button', { name: 'Cancelar' }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Usuario')).toHaveValue('ana')
+    expect(screen.getByLabelText('Contraseña')).toHaveValue('clave')
+    // El captcha se remontó (se perdió la solución tildada).
+    expect(screen.getByRole('button', { name: 'Ingresar' })).toBeDisabled()
+  })
+
+  it('sin `confirmarCodigo` en el useAuth del producto, se ve un error y no rompe', async () => {
+    const login = vi.fn().mockRejectedValue(new SegundoFactorRequerido('desafio-abc'))
+    montar({ login }) // sin confirmarCodigo
+    await completarYEnviar()
+
+    expect(await screen.findByText(/segundo factor.*no lo tiene configurado/i)).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(navegar).not.toHaveBeenCalled()
   })
 })
