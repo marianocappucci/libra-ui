@@ -203,7 +203,15 @@ export type User = {
   id: string
   username: string
   name: string
-  role: 'admin' | 'staff'
+  // Antes 'admin' | 'staff'. Se amplió a `string` (2026-09-13) para que
+  // `Usuarios.tsx` pueda ofrecer roles configurables por producto
+  // (Contalibra: admin/operador/cajero, Restolibra: + mozo) sin forzar la
+  // unión a un superset de todos los roles de todos los productos, que
+  // habría dejado pasar valores que un producto puntual no reconoce.
+  // Revisado: ningún consumidor hace narrowing exhaustivo sobre este campo
+  // (switch/`satisfies never`) -- las comparaciones que hay son todas
+  // `=== 'admin'`, que tipan igual con `string`.
+  role: string
   active: boolean
   // Opcional a proposito: la columna existe en `libraauth` desde v0.3.0, pero
   // no todos los productos la devuelven todavia en su listado. Con el campo

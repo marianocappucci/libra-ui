@@ -235,7 +235,10 @@ describe('🔴 el admin le puede cambiar la contraseña a otro usuario', () => {
 
     await user.click(screen.getByRole('button', { name: 'Cambiar contraseña de Mariano' }))
     const dialogo = await screen.findByRole('dialog')
-    await user.type(within(dialogo).getByLabelText('Contraseña nueva'), 'x')
+    // 6 caracteres a propósito (el mínimo, ver la sección de contraseña
+    // corta más abajo) -- este caso es sobre el basePath, no sobre la
+    // validación, así que la contraseña tiene que alcanzar para mandarse.
+    await user.type(within(dialogo).getByLabelText('Contraseña nueva'), 'x23456')
     await user.click(within(dialogo).getByRole('button', { name: 'Cambiar' }))
 
     // LibraDesk monta su router en `/api/usuarios`. Una ruta armada con el
@@ -423,5 +426,164 @@ describe('🔴 editar a un usuario desactivado no lo reactiva', () => {
     await waitFor(() => {
       expect(pedidos.find((p) => p.metodo === 'PUT')?.cuerpo).toMatchObject({ active: true })
     })
+  })
+})
+
+// Normalización de la pantalla de usuarios (decisión del humano, 2026-09-13):
+// roles configurables, borrado con confirmación y contraseña mínima -- para
+// que Contalibra/Restolibra puedan reemplazar su pantalla propia por esta sin
+// perder ninguna de sus funciones.
+describe('🔴 roles configurables por producto', () => {
+  it('sin la prop, el Select sigue ofreciendo Staff y Admin en ese orden', async () => {
+    const user = userEvent.setup({ delay: null })
+    render(<Usuarios icono={IconoFalso} />)
+    await screen.findByText('Mariano')
+
+    await user.click(screen.getByRole('button', { name: /Nuevo usuario/ }))
+    const dialogo = await screen.findByRole('dialog')
+    const select = within(dialogo).getByLabelText('Rol') as HTMLSelectElement
+    expect(Array.from(select.options).map((o) => o.textContent)).toEqual(['Staff', 'Admin'])
+  })
+
+  it('con cuatro roles propios, el Select los ofrece a los cuatro y el alta manda el elegido', async () => {
+    const user = userEvent.setup({ delay: null })
+    const ROLES = [
+      { value: 'admin', label: 'Admin' },
+      { value: 'operador', label: 'Operador' },
+      { value: 'cajero', label: 'Cajero' },
+      { value: 'mozo', label: 'Mozo' },
+    ]
+    render(<Usuarios icono={IconoFalso} roles={ROLES} />)
+    await screen.findByText('Mariano')
+
+    await user.click(screen.getByRole('button', { name: /Nuevo usuario/ }))
+    const dialogo = await screen.findByRole('dialog')
+    const select = within(dialogo).getByLabelText('Rol') as HTMLSelectElement
+    expect(Array.from(select.options).map((o) => o.textContent)).toEqual(['Admin', 'Operador', 'Cajero', 'Mozo'])
+
+    await user.selectOptions(select, 'mozo')
+    await user.type(within(dialogo).getByLabelText('Usuario'), 'nuevo')
+    await user.type(within(dialogo).getByLabelText('Nombre'), 'Persona Nueva')
+    await user.type(within(dialogo).getByLabelText('Contraseña'), 'secreta123')
+    await user.click(within(dialogo).getByRole('button', { name: 'Crear' }))
+
+    await waitFor(() => {
+      expect(pedidos.find((p) => p.metodo === 'POST')?.cuerpo).toMatchObject({ role: 'mozo' })
+    })
+  })
+})
+
+describe('🔴 eliminar usuarios', () => {
+  it('por defecto NO se ofrece: un consumidor que sube el pin no ve un botón nuevo', async () => {
+    render(<Usuarios icono={IconoFalso} />)
+    await screen.findByText('Mariano')
+    await screen.findByText('Juan Pérez')
+
+    expect(screen.queryByRole('button', { name: /^Eliminar / })).not.toBeInTheDocument()
+  })
+
+  it('pide confirmación y, al aceptar, manda el DELETE a la ruta del usuario', async () => {
+    const user = userEvent.setup({ delay: null })
+    render(<Usuarios icono={IconoFalso} permitirEliminar />)
+    await screen.findByText('Mariano')
+
+    // Control: sin confirmar todavía no salió ningún DELETE.
+    await user.click(screen.getByRole('button', { name: 'Eliminar Mariano' }))
+    expect(pedidos.filter((p) => p.metodo === 'DELETE')).toHaveLength(0)
+
+    const confirmacion = await screen.findByRole('alertdialog')
+    expect(within(confirmacion).getByText(/Mariano/)).toBeInTheDocument()
+    await user.click(within(confirmacion).getByRole('button', { name: 'Eliminar' }))
+
+    await waitFor(() => {
+      const del = pedidos.find((p) => p.metodo === 'DELETE')
+      expect(del?.url).toBe('/users/u1')
+    })
+  })
+
+  it('Cancelar no manda nada', async () => {
+    const user = userEvent.setup({ delay: null })
+    render(<Usuarios icono={IconoFalso} permitirEliminar />)
+    await screen.findByText('Mariano')
+
+    await user.click(screen.getByRole('button', { name: 'Eliminar Mariano' }))
+    const confirmacion = await screen.findByRole('alertdialog')
+    await user.click(within(confirmacion).getByRole('button', { name: 'Cancelar' }))
+
+    expect(pedidos.filter((p) => p.metodo === 'DELETE')).toHaveLength(0)
+  })
+
+  it('el error del servidor (ej. único admin) se lee arriba de la grilla', async () => {
+    vi.stubGlobal('fetch', vi.fn((_url: string, opciones?: RequestInit) => {
+      const metodo = opciones?.method ?? 'GET'
+      if (metodo === 'GET') return Promise.resolve(json(USUARIOS))
+      if (metodo === 'DELETE') {
+        return Promise.resolve(new Response(
+          JSON.stringify({ detail: 'no se puede borrar al único admin' }),
+          { status: 400, headers: { 'content-type': 'application/json' } },
+        ))
+      }
+      return Promise.resolve(json({ ok: true }))
+    }))
+    const user = userEvent.setup({ delay: null })
+    render(<Usuarios icono={IconoFalso} permitirEliminar />)
+    await screen.findByText('Mariano')
+
+    await user.click(screen.getByRole('button', { name: 'Eliminar Mariano' }))
+    const confirmacion = await screen.findByRole('alertdialog')
+    await user.click(within(confirmacion).getByRole('button', { name: 'Eliminar' }))
+
+    // Con el mismo mecanismo que ya usa `handleDeactivate`: el cartel de
+    // arriba de la grilla, no un cartel propio del diálogo de confirmación
+    // -- que para cuando la respuesta vuelve ya se cerró.
+    expect(await screen.findByText(/no se puede borrar al único admin/)).toBeInTheDocument()
+  })
+
+  it('permitirEliminar=false apaga el botón en todas las filas', async () => {
+    render(<Usuarios icono={IconoFalso} permitirEliminar={false} />)
+    await screen.findByText('Mariano')
+    await screen.findByText('Juan Pérez')
+
+    expect(screen.queryByRole('button', { name: /^Eliminar / })).not.toBeInTheDocument()
+  })
+
+  it('usuarioActualId oculta el botón sólo en la fila propia', async () => {
+    render(<Usuarios icono={IconoFalso} permitirEliminar usuarioActualId="u1" />)
+    await screen.findByText('Mariano')
+
+    expect(screen.queryByRole('button', { name: 'Eliminar Mariano' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Eliminar Juan Pérez' })).toBeInTheDocument()
+  })
+})
+
+describe('🔴 la contraseña tiene que tener al menos 6 caracteres', () => {
+  it('el alta no manda con menos de 6 y muestra el mensaje adentro del diálogo', async () => {
+    const user = userEvent.setup({ delay: null })
+    render(<Usuarios icono={IconoFalso} />)
+    await screen.findByText('Mariano')
+
+    await user.click(screen.getByRole('button', { name: /Nuevo usuario/ }))
+    const dialogo = await screen.findByRole('dialog')
+    await user.type(within(dialogo).getByLabelText('Usuario'), 'nuevo')
+    await user.type(within(dialogo).getByLabelText('Nombre'), 'Persona Nueva')
+    await user.type(within(dialogo).getByLabelText('Contraseña'), '12345')
+    await user.click(within(dialogo).getByRole('button', { name: 'Crear' }))
+
+    expect(await within(dialogo).findByText(/al menos 6 caracteres/)).toBeInTheDocument()
+    expect(pedidos.filter((p) => p.metodo === 'POST')).toHaveLength(0)
+  })
+
+  it('el cambio de contraseña ajena tampoco manda con menos de 6', async () => {
+    const user = userEvent.setup({ delay: null })
+    render(<Usuarios icono={IconoFalso} />)
+    await screen.findByText('Mariano')
+
+    await user.click(screen.getByRole('button', { name: 'Cambiar contraseña de Mariano' }))
+    const dialogo = await screen.findByRole('dialog')
+    await user.type(within(dialogo).getByLabelText('Contraseña nueva'), '12345')
+    await user.click(within(dialogo).getByRole('button', { name: 'Cambiar' }))
+
+    expect(await within(dialogo).findByText(/al menos 6 caracteres/)).toBeInTheDocument()
+    expect(pedidos.filter((p) => p.url.endsWith('/password'))).toHaveLength(0)
   })
 })
