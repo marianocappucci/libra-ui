@@ -9,14 +9,44 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { api, ApiError, type User } from './api-client'
 import { GateTerminos } from './Terminos'
 
+/** Lo que lanza `login()` cuando el backend contesta `{ requiere_codigo: true,
+ *  desafio }` en vez de un usuario (login en dos pasos, v0.70.0): todavía no
+ *  hay sesión, y `desafio` es lo que hay que mandar de vuelta junto al código
+ *  en `confirmarCodigo`. No es un `ApiError` — el paso 1 salió bien (200), lo
+ *  que falta es el paso 2 — así que `Login.tsx` lo distingue ANTES de mirar
+ *  `instanceof ApiError`. */
+export class SegundoFactorRequerido extends Error {
+  desafio: string
+  constructor(desafio: string) {
+    super('Hace falta el código del segundo factor.')
+    this.name = 'SegundoFactorRequerido'
+    this.desafio = desafio
+  }
+}
+
+function esRequiereCodigo(x: unknown): x is { requiere_codigo: true; desafio: string } {
+  return !!x && typeof x === 'object'
+    && (x as { requiere_codigo?: unknown }).requiere_codigo === true
+    && typeof (x as { desafio?: unknown }).desafio === 'string'
+}
+
 export type AuthContextValue<TUser> = {
   user: TUser | null
   loading: boolean
   /** `extra` viaja en el cuerpo del POST junto a usuario y contraseña
    *  (v0.60.0, F2): el backoffice manda ahí el código del segundo factor
    *  (`{ codigo }`). Es opcional y los seis productos no lo pasan: para ellos
-   *  el cuerpo sigue siendo `{ username, password }`, byte a byte. */
+   *  el cuerpo sigue siendo `{ username, password }`, byte a byte.
+   *
+   *  Desde v0.70.0 puede lanzar `SegundoFactorRequerido` en vez de resolver:
+   *  pasa cuando el backend contesta `{ requiere_codigo: true, desafio }`, y
+   *  ahí NO se hace `setUser` — la sesión arranca recién en `confirmarCodigo`. */
   login: (username: string, password: string, extra?: Record<string, unknown>) => Promise<TUser>
+  /** Paso 2 del login en dos pasos (v0.70.0): manda `{ desafio, codigo }` a
+   *  `segundoFactorPath` y, si el backend lo acepta, deja la sesión puesta
+   *  igual que `login`. Sin `segundoFactorPath` configurado en este contexto,
+   *  tira un error claro en vez de pegarle a una ruta que no existe. */
+  confirmarCodigo: (desafio: string, codigo: string) => Promise<TUser>
   logout: () => Promise<void>
 }
 
@@ -27,6 +57,13 @@ export function createAuthContext<TUser>(config: {
   /** Prefijo del router de Términos del backend (`libraauth.terminos`).
    *  Default `/terminos`; Contalibra y Restolibra sirven su API bajo `/api`. */
   terminosPath?: string
+  /** Ruta del paso 2 del login en dos pasos (v0.70.0), ej. '/auth/verificar'.
+   *  **Opt-in**: sin esto, `confirmarCodigo` tira un error claro en vez de
+   *  intentar pegarle a una ruta que el producto no montó. `login()` sigue
+   *  pudiendo lanzar `SegundoFactorRequerido` igual —eso lo decide el
+   *  backend, no esta config—, pero sin ruta configurada no hay forma de
+   *  completar el segundo paso. */
+  segundoFactorPath?: string
   /** Apaga el gate de Términos para este contexto.
    *
    *  🔴 Existe para el backoffice de superadmin, que administra instancias
@@ -51,7 +88,25 @@ export function createAuthContext<TUser>(config: {
     async function login(username: string, password: string, extra?: Record<string, unknown>) {
       // Usuario y contraseña van ÚLTIMOS: si `extra` trajera esas claves, las
       // pisan las que tipeó la persona, no al revés.
-      const loggedIn = await api.post<TUser>(config.loginPath, { ...extra, username, password })
+      const respuesta = await api.post<TUser | { requiere_codigo: true; desafio: string }>(
+        config.loginPath, { ...extra, username, password },
+      )
+      // El backend contesta 200 en los dos casos: con el usuario (como
+      // siempre) o con `{ requiere_codigo, desafio }` cuando falta el segundo
+      // paso. Se distingue por la FORMA, no por el status — igual que
+      // `esDesafio` del captcha y la sonda de `totpPath`/`demoPath`.
+      if (esRequiereCodigo(respuesta)) {
+        throw new SegundoFactorRequerido(respuesta.desafio)
+      }
+      setUser(respuesta)
+      return respuesta
+    }
+
+    async function confirmarCodigo(desafio: string, codigo: string): Promise<TUser> {
+      if (!config.segundoFactorPath) {
+        throw new Error('confirmarCodigo: este contexto no tiene `segundoFactorPath` configurado.')
+      }
+      const loggedIn = await api.post<TUser>(config.segundoFactorPath, { desafio, codigo })
       setUser(loggedIn)
       return loggedIn
     }
@@ -69,7 +124,7 @@ export function createAuthContext<TUser>(config: {
     // Va ADENTRO del Provider: la pantalla necesita `useAuth()` para poder
     // ofrecer "cerrar sesión" a quien no tiene facultades para aceptar.
     return (
-      <AuthContext.Provider value={{ user, loading, login, logout }}>
+      <AuthContext.Provider value={{ user, loading, login, confirmarCodigo, logout }}>
         {config.sinGateDeTerminos ? children : (
           <GateTerminos
             // Sólo con sesión: sin usuario, `GET /terminos` contesta 401 y no

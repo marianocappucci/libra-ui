@@ -4,17 +4,30 @@
 // recibe esa parte propia de cada producto como config.
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useAuth } from './AuthContext'
+import { useAuth, SegundoFactorRequerido } from './AuthContext'
 import { api, ApiError, type User } from './api-client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog'
 import { PasswordInput } from './PasswordInput'
+import { CodigoPorDigitos } from './CodigoPorDigitos'
 import type { ProductLogo } from './branding'
 import { cn } from './utils'
 import { useCaptcha } from './captcha'
 import { CampoCaptcha } from './CampoCaptcha'
+
+// `detail` del backend cuando el desafío del paso 2 venció ("El código
+// venció: volvé a ingresar."), a diferencia de un código incorrecto ("Código
+// incorrecto."). Se distingue por CONTENIDO y no por status -- los dos casos
+// son 401 -- así que un cambio menor de redacción ("Venció" con mayúscula,
+// por ejemplo) no lo rompe: sólo importa que siga hablando de vencimiento.
+function esDesafioVencido(err: ApiError): boolean {
+  return err.status === 401 && err.detail.toLowerCase().includes('venci')
+}
 
 // Default = User (el tipo concreto de la instancia pre-configurada de
 // AuthContext.tsx) -- coincide con lo que devuelve el `useAuth` por
@@ -24,7 +37,10 @@ import { CampoCaptcha } from './CampoCaptcha'
 // `useAuth` juntos, consistentes entre si.
 export function createLogin<TUser = User>({
   productName, productInitial, redirectTo, onLoginSuccess, useAuth: useAuthOverride, formatError,
-  forgotPasswordPath, forgotPasswordHint, demoPath, totpPath, captchaPath, logo, wordmarkClassName,
+  forgotPasswordPath, forgotPasswordHint, demoPath, captchaPath, logo, wordmarkClassName,
+  // `totpPath` NO se desestructura: sigue en el tipo de acá abajo (deprecado)
+  // para que el backoffice compile sin cambiar una línea, pero el cuerpo de
+  // esta función no lo usa para nada -- ver el comentario del prop.
 }: {
   productName: string
   productInitial: string
@@ -43,7 +59,14 @@ export function createLogin<TUser = User>({
   // Hook `useAuth` a usar -- por defecto el de la instancia pre-configurada
   // de este mismo modulo (Gestiolibra/MedLibra/VentaLibra). Productos con
   // su propia `createAuthContext` (Contalibra/Restolibra) pasan el suyo.
-  useAuth?: () => { login: (username: string, password: string, extra?: Record<string, unknown>) => Promise<TUser> }
+  useAuth?: () => {
+    login: (username: string, password: string, extra?: Record<string, unknown>) => Promise<TUser>
+    // Paso 2 del login en dos pasos (v0.70.0). Opcional: un `useAuth` que no
+    // lo trae simplemente no puede completar el segundo paso -- ver el
+    // manejo de `SegundoFactorRequerido` más abajo, que muestra un error en
+    // vez de romper.
+    confirmarCodigo?: (desafio: string, codigo: string) => Promise<TUser>
+  }
   // Mensaje de error a mostrar ante un ApiError -- por defecto un mensaje
   // generico ("Usuario o contraseña incorrectos."), igual que siempre.
   // Contalibra/Restolibra muestran el detalle real del backend
@@ -76,14 +99,17 @@ export function createLogin<TUser = User>({
   // `api.get` devuelve `undefined` cuando la respuesta no es JSON, y de ahí
   // sale el chequeo de forma de abajo.
   demoPath?: string
-  // Ruta de la sonda del segundo factor (v0.60.0, F2). La usa el backoffice
-  // de superadmin: `GET /api/login/opciones` contesta `{ totp: true }` cuando
-  // el backend tiene `ADMIN_PANEL_TOTP_SECRET`, y sólo entonces la pantalla
-  // agrega el campo «Código de verificación» y manda `{ codigo }` junto a las
-  // credenciales. **Opt-in y condicionado en runtime**, por lo mismo que
-  // `demoPath`: la misma imagen corre con y sin 2FA según su `.env`, y la
-  // sonda se valida por la FORMA de la respuesta, no por el 200 — el catch-all
-  // de la SPA devuelve 200 con HTML a cualquier ruta.
+  /** @deprecated Segundo factor de una sola pantalla (v0.60.0, F2): probaba
+   *  `GET {totpPath}` y, si contestaba `{ totp: true }`, agregaba el campo
+   *  «Código de verificación» arriba, desde el principio, mandando `{ codigo
+   *  }` junto a usuario y contraseña en el mismo POST.
+   *
+   *  Reemplazado en v0.70.0 por el login en dos pasos (ver
+   *  `SegundoFactorRequerido`/`confirmarCodigo` en `AuthContext.tsx`): ahora
+   *  el código se pide en un modal aparte, DESPUÉS de que el backend confirme
+   *  usuario y contraseña. **Este prop queda tipado y se ignora** -- lo sigue
+   *  pasando el backoffice de superadmin, que todavía no migró a la sonda
+   *  nueva, y no tiene por qué dejar de compilar mientras eso pase. */
   totpPath?: string
   // Ruta del desafío del captcha «No soy un robot» (v0.69.0, ALTCHA), ej.
   // '/auth/captcha'. **Opt-in y condicionado en runtime**, por lo mismo que
@@ -99,7 +125,10 @@ export function createLogin<TUser = User>({
     // instancia por defecto dentro del cuerpo de una funcion generica --
     // limitacion conocida de TS con defaults de tipo. Ambas ramas
     // devuelven la misma forma en runtime, el cast es seguro.
-    const { login } = (useAuthOverride ?? useAuth)() as { login: (username: string, password: string, extra?: Record<string, unknown>) => Promise<TUser> }
+    const { login, confirmarCodigo } = (useAuthOverride ?? useAuth)() as {
+      login: (username: string, password: string, extra?: Record<string, unknown>) => Promise<TUser>
+      confirmarCodigo?: (desafio: string, codigo: string) => Promise<TUser>
+    }
     const navigate = useNavigate()
     const [username, setUsername] = useState('')
     const [password, setPassword] = useState('')
@@ -112,9 +141,14 @@ export function createLogin<TUser = User>({
     // formulario se dibuja siempre.
     const [mostrarLogin, setMostrarLogin] = useState(false)
     const [entrandoALaDemo, setEntrandoALaDemo] = useState(false)
-    // Segundo factor: `true` sólo si la sonda de `totpPath` lo confirmó.
-    const [totp, setTotp] = useState(false)
+    // Segundo factor en dos pasos (v0.70.0): el modal se abre cuando `login`
+    // lanza `SegundoFactorRequerido`. `desafio` es lo que hay que devolverle
+    // al backend junto al código; sin él no hay modal que mostrar.
+    const [mostrarModalCodigo, setMostrarModalCodigo] = useState(false)
+    const [desafio, setDesafio] = useState<string | null>(null)
     const [codigo, setCodigo] = useState('')
+    const [errorCodigo, setErrorCodigo] = useState<string | null>(null)
+    const [verificandoCodigo, setVerificandoCodigo] = useState(false)
     const captcha = useCaptcha(captchaPath)
 
     useEffect(() => {
@@ -135,16 +169,54 @@ export function createLogin<TUser = User>({
       return () => { vivo = false }
     }, [])
 
-    useEffect(() => {
-      if (!totpPath) return
-      let vivo = true
-      api.get<{ totp?: boolean } | undefined>(totpPath)
-        // Misma regla que la sonda de la demo: se exige la forma. Un 200 con
-        // HTML llega como `undefined` y no enciende nada.
-        .then((info) => { if (vivo && info?.totp === true) setTotp(true) })
-        .catch(() => {})
-      return () => { vivo = false }
-    }, [])
+    // Cierra el modal de código, sin importar por qué (Cancelar, Escape, click
+    // afuera -- todo pasa por el `onOpenChange` del Dialog, ver más abajo).
+    // Reinicia el captcha porque un nuevo intento de login va a necesitar uno
+    // nuevo: el de este intento ya se gastó en el paso 1. Usuario y
+    // contraseña NO se tocan -- la persona no tiene por qué volver a tipearlos.
+    function cerrarModalCodigo() {
+      setMostrarModalCodigo(false)
+      setDesafio(null)
+      setCodigo('')
+      setErrorCodigo(null)
+      captcha.reiniciar()
+    }
+
+    async function confirmarCodigoIngresado(codigoIngresado: string) {
+      if (verificandoCodigo || !desafio) return
+      if (!confirmarCodigo) {
+        // No debería pasar en un producto bien configurado -- ver el
+        // comentario de `confirmarCodigo` más arriba -- pero si pasa, un error
+        // visible es mejor que un modal que nunca puede completarse.
+        setErrorCodigo('Esta pantalla no tiene el segundo factor configurado.')
+        return
+      }
+      setVerificandoCodigo(true)
+      setErrorCodigo(null)
+      try {
+        const user = await confirmarCodigo(desafio, codigoIngresado)
+        setMostrarModalCodigo(false)
+        navigate(onLoginSuccess ? onLoginSuccess(user) : redirectTo, { replace: true })
+      } catch (err) {
+        if (err instanceof ApiError && esDesafioVencido(err)) {
+          // El desafío ya no sirve: hay que volver a arrancar desde el
+          // usuario y contraseña, con un captcha nuevo.
+          cerrarModalCodigo()
+          setError(err.detail)
+        } else if (err instanceof ApiError) {
+          // Código incorrecto (401) o bloqueo (429): se queda en el modal.
+          // Sólo el código incorrecto limpia los casilleros -- un 429 no fue
+          // culpa de lo tipeado, y borrarlo obligaría a retipearlo de nuevo
+          // apenas se levante el bloqueo.
+          setErrorCodigo(err.detail)
+          if (err.status === 401) setCodigo('')
+        } else {
+          setErrorCodigo('Error de conexión.')
+        }
+      } finally {
+        setVerificandoCodigo(false)
+      }
+    }
 
     async function entrarALaDemo(event?: FormEvent) {
       event?.preventDefault()
@@ -179,21 +251,38 @@ export function createLogin<TUser = User>({
       setError(null)
       setSubmitting(true)
       try {
-        // Sin segundo factor ni captcha la llamada es la de siempre, con dos
-        // argumentos: los productos que no los usan no tienen por qué
-        // enterarse de que existe `extra`.
+        // Sin captcha la llamada es la de siempre, con dos argumentos: los
+        // productos que no lo usan no tienen por qué enterarse de que existe
+        // `extra`. El segundo factor ya NO viaja acá -- ver `confirmarCodigo`.
         const extra: Record<string, unknown> = {}
-        if (totp) extra.codigo = codigo.trim()
         if (captcha.activo) extra.captcha = captcha.payload
         const user = Object.keys(extra).length > 0
           ? await login(username, password, extra)
           : await login(username, password)
         navigate(onLoginSuccess ? onLoginSuccess(user) : redirectTo, { replace: true })
       } catch (err) {
-        setError(err instanceof ApiError ? (formatError ? formatError(err) : 'Usuario o contraseña incorrectos.') : 'Error de conexión.')
-        // El servidor ya gastó ese desafío —cada uno sirve una vez—, así que
-        // el próximo intento tiene que resolver otro.
-        captcha.reiniciar()
+        if (err instanceof SegundoFactorRequerido) {
+          if (confirmarCodigo) {
+            setDesafio(err.desafio)
+            setCodigo('')
+            setErrorCodigo(null)
+            setMostrarModalCodigo(true)
+            // El captcha NO se reinicia acá: ya cumplió su función en este
+            // paso 1 que salió bien (200). Sólo hace falta uno nuevo si el
+            // desafío del paso 2 vence o si se cancela -- ver
+            // `cerrarModalCodigo`.
+          } else {
+            // Ver el comentario del tipo de `useAuth` más arriba: sin
+            // `confirmarCodigo` no hay forma de completar el segundo paso.
+            setError('El servidor pidió un segundo factor, pero esta pantalla no lo tiene configurado.')
+            captcha.reiniciar()
+          }
+        } else {
+          setError(err instanceof ApiError ? (formatError ? formatError(err) : 'Usuario o contraseña incorrectos.') : 'Error de conexión.')
+          // El servidor ya gastó ese desafío —cada uno sirve una vez—, así que
+          // el próximo intento tiene que resolver otro.
+          captcha.reiniciar()
+        }
       } finally {
         setSubmitting(false)
       }
@@ -317,24 +406,6 @@ export function createLogin<TUser = User>({
                   required
                 />
               </div>
-              {totp && (
-                <div className="grid gap-2">
-                  <Label htmlFor="codigo">Código de verificación</Label>
-                  <Input
-                    id="codigo"
-                    value={codigo}
-                    onChange={(e) => setCodigo(e.target.value)}
-                    // Los 6 dígitos del autenticador: teclado numérico en el
-                    // teléfono, y `one-time-code` deja que el sistema lo
-                    // autocomplete desde la app o el SMS sin adivinar.
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    maxLength={6}
-                    placeholder="000000"
-                    required
-                  />
-                </div>
-              )}
               <CampoCaptcha captcha={captcha} />
               {/* En una demo el error del código se muestra arriba, junto al
                   campo que lo produjo; acá abajo sólo el del login. */}
@@ -365,6 +436,45 @@ export function createLogin<TUser = User>({
             )}
           </CardContent>
         </Card>
+
+        {/* Paso 2 del login en dos pasos (v0.70.0). `onOpenChange` es el
+            único lugar que cierra el modal por las buenas -- Cancelar, Escape
+            y click afuera del recuadro pasan los tres por acá (Radix lo
+            dispara con `false` en los tres casos), así que `cerrarModalCodigo`
+            corre una sola vez sin importar cuál de los tres fue. */}
+        <Dialog
+          open={mostrarModalCodigo}
+          onOpenChange={(open) => { if (!open) cerrarModalCodigo() }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Código de verificación</DialogTitle>
+              <DialogDescription>
+                Ingresá los 6 dígitos de tu app autenticadora.
+              </DialogDescription>
+            </DialogHeader>
+            <CodigoPorDigitos
+              value={codigo}
+              onChange={setCodigo}
+              onComplete={(c) => { void confirmarCodigoIngresado(c) }}
+              disabled={verificandoCodigo}
+              autoFocus
+            />
+            {errorCodigo && <p className="text-center text-sm text-destructive">{errorCodigo}</p>}
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button type="button" variant="outline">Cancelar</Button>
+              </DialogClose>
+              <Button
+                type="button"
+                onClick={() => { void confirmarCodigoIngresado(codigo) }}
+                disabled={codigo.length < 6 || verificandoCodigo}
+              >
+                {verificandoCodigo ? 'Verificando…' : 'Verificar'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     )
   }
