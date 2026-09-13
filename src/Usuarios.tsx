@@ -3,7 +3,7 @@
 // wiki/analyses/auditoria-duplicacion-familia-libra.md.
 import { useEffect, useMemo, useState } from 'react'
 import type { ColumnDef } from './data-table'
-import { KeyRound, Pencil, UserCheck, UserX } from 'lucide-react'
+import { KeyRound, Pencil, Trash2, UserCheck, UserX } from 'lucide-react'
 import { api, ApiError, type User } from './api-client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -16,6 +16,11 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+// Mismo `ConfirmDialog` que ya usan las otras ~15 pantallas de este paquete
+// (Cajas, Clientes, FacturaDetalle, etc.) -- envuelve el `AlertDialog` de
+// shadcn y vive en el producto consumidor (`@/components/confirm-dialog`),
+// no acá adentro, siguiendo la misma convención que `@/components/ui/*`.
+import { ConfirmDialog } from '@/components/confirm-dialog'
 import { DataTable, sortableHeader } from './data-table'
 import { PasswordInput } from './PasswordInput'
 import type { ComponentType } from 'react'
@@ -26,13 +31,31 @@ function describeError(err: unknown): string {
   return 'Error de conexión.'
 }
 
-const EMPTY = { username: '', name: '', password: '', email: '', role: 'staff', active: true }
+/** Un rol seleccionable en el formulario de alta/edición. */
+export type Rol = { value: string; label: string }
+
+// Default EXACTO al comportamiento previo a la prop `roles` (mismo orden:
+// Staff primero) -- un consumidor que no pase la prop no ve ningún cambio.
+const ROLES_POR_DEFECTO: Rol[] = [
+  { value: 'staff', label: 'Staff' },
+  { value: 'admin', label: 'Admin' },
+]
+
+const PASSWORD_MIN = 6
+const passwordCorta = (password: string) => password.length < PASSWORD_MIN
+const MSG_PASSWORD_CORTA = `La contraseña tiene que tener al menos ${PASSWORD_MIN} caracteres.`
+
+function formVacio(roles: Rol[]) {
+  return { username: '', name: '', password: '', email: '', role: roles[0]?.value ?? '', active: true }
+}
 
 // `basePath` es la ruta del router de usuarios en el backend -- default
 // '/users' preserva el comportamiento anterior a esta prop
 // (Gestiolibra/MedLibra/VentaLibra montan `users.router` en `/users`).
 // LibraDesk monta el suyo en `/api/usuarios` y pasa esa ruta explicita.
-export function Usuarios({ basePath = '/users', icono }: {
+export function Usuarios({
+  basePath = '/users', icono, roles = ROLES_POR_DEFECTO, permitirEliminar = false, usuarioActualId,
+}: {
   basePath?: string
   /** El icono que el sidebar del producto le da a esta pantalla.
    *  **Obligatorio y sin default**: VentaLibra usa `Building2` para
@@ -40,12 +63,31 @@ export function Usuarios({ basePath = '/users', icono }: {
    *  pondria a un producto el icono de otro. Que sea requerido hace que el
    *  compilador —y no un guard— obligue a cada consumidor a decir el suyo. */
   icono: ComponentType<{ className?: string }>
+  /** Roles que ofrece el Select de rol, en el orden en que se listan.
+   *  Default `[{value:'staff',...},{value:'admin',...}]` -- exactamente el
+   *  comportamiento de antes de esta prop, para no cambiarle nada a un
+   *  consumidor que no la pase. Contalibra/Restolibra pasarían
+   *  admin/operador/cajero(/mozo). */
+  roles?: Rol[]
+  /** Muestra el botón «Eliminar» de la grilla. Default `false`, a propósito:
+   *  subir el pin de libra-ui no le puede aparecer a nadie un botón que su
+   *  backend todavía no atiende (o atiende sin la guarda del único admin).
+   *  Cada producto lo prende cuando adopta el router de usuarios de
+   *  libraauth, que trae `DELETE ${basePath}/:id` con esas guardas. */
+  permitirEliminar?: boolean
+  /** Id del usuario logueado, si la pantalla lo sabe. Oculta el botón
+   *  «Eliminar» en su propia fila -- borrarse a uno mismo es un caso que el
+   *  backend rechaza igual, pero mejor no ofrecer el botón que ofrecerlo y
+   *  fallar. Sin esta prop (consumidor que no la pasa) el botón se muestra
+   *  igual en todas las filas: no hay forma de inventar quién es "uno mismo"
+   *  sin que el producto lo diga. */
+  usuarioActualId?: string
 }) {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [form, setForm] = useState(EMPTY)
+  const [form, setForm] = useState(() => formVacio(roles))
   const [saving, setSaving] = useState(false)
   // El cambio de contraseña ajena tiene su propio diálogo y su propio estado
   // de error -- ver el comentario del segundo `Dialog`, abajo.
@@ -53,6 +95,10 @@ export function Usuarios({ basePath = '/users', icono }: {
   const [newPassword, setNewPassword] = useState('')
   const [passwordError, setPasswordError] = useState<string | null>(null)
   const [savingPassword, setSavingPassword] = useState(false)
+  // Igual que el cambio de contraseña: confirmación con su propio diálogo,
+  // sin estado de error propio -- el error de un borrado que falla es una
+  // acción de grilla más y usa el mismo `error` de arriba (ver `handleDelete`).
+  const [deletingUser, setDeletingUser] = useState<User | null>(null)
 
   useEffect(() => {
     load()
@@ -71,7 +117,7 @@ export function Usuarios({ basePath = '/users', icono }: {
 
   function startCreate() {
     setEditingId('new')
-    setForm(EMPTY)
+    setForm(formVacio(roles))
   }
 
   function startEdit(user: User) {
@@ -91,12 +137,19 @@ export function Usuarios({ basePath = '/users', icono }: {
 
   function cancelEdit() {
     setEditingId(null)
-    setForm(EMPTY)
+    setForm(formVacio(roles))
   }
 
   async function handleSave() {
     if (!form.name.trim() || (editingId === 'new' && (!form.username.trim() || !form.password))) {
       setError('Completá los campos obligatorios.')
+      return
+    }
+    // Sólo en el alta: la edición no toca la contraseña (tiene su propio
+    // diálogo, ver `handlePasswordSave` más abajo), así que acá `form.password`
+    // ni se manda.
+    if (editingId === 'new' && passwordCorta(form.password)) {
+      setError(MSG_PASSWORD_CORTA)
       return
     }
     setSaving(true)
@@ -136,6 +189,20 @@ export function Usuarios({ basePath = '/users', icono }: {
     }
   }
 
+  // El error del backend (ej. "no se puede borrar al único admin") se lee
+  // arriba de la grilla -- el mismo mecanismo que ya usa `handleDeactivate`
+  // para sus propios errores, y no un cartel propio del diálogo de
+  // confirmación, que ya se cerró para cuando la respuesta vuelve.
+  async function handleDelete(user: User) {
+    setError(null)
+    try {
+      await api.del(`${basePath}/${user.id}`)
+      await load()
+    } catch (err) {
+      setError(describeError(err))
+    }
+  }
+
   function startPasswordChange(user: User) {
     setPasswordUser(user)
     setNewPassword('')
@@ -146,6 +213,10 @@ export function Usuarios({ basePath = '/users', icono }: {
     if (!passwordUser) return
     if (!newPassword.trim()) {
       setPasswordError('Escribí la contraseña nueva.')
+      return
+    }
+    if (passwordCorta(newPassword)) {
+      setPasswordError(MSG_PASSWORD_CORTA)
       return
     }
     setSavingPassword(true)
@@ -164,6 +235,9 @@ export function Usuarios({ basePath = '/users', icono }: {
   const columns = useMemo<ColumnDef<User>[]>(() => [
     { accessorKey: 'username', header: sortableHeader('Usuario') },
     { accessorKey: 'name', header: 'Nombre' },
+    // Contalibra/Restolibra ya la mostraban en su grilla propia (es el correo
+    // de "olvidé mi contraseña", editable desde 2026-08-15) -- acá faltaba.
+    { accessorKey: 'email', header: 'Correo', cell: ({ row }) => row.original.email || '—' },
     { accessorKey: 'role', header: 'Rol', cell: ({ row }) => <span className="capitalize">{row.original.role}</span> },
     {
       accessorKey: 'active',
@@ -187,6 +261,10 @@ export function Usuarios({ basePath = '/users', icono }: {
       cell: ({ row }) => {
         const u = row.original
         const alterna = u.active ? 'Desactivar' : 'Activar'
+        // Ni con `permitirEliminar` en false ni en la propia fila del
+        // usuario logueado (cuando la pantalla sabe quién es) se ofrece el
+        // botón -- ver los comentarios de las dos props, arriba.
+        const puedeEliminar = permitirEliminar && u.id !== usuarioActualId
         return (
           <div className="flex justify-end gap-2">
             <Button size="icon" variant="outline" className="size-8"
@@ -208,12 +286,19 @@ export function Usuarios({ basePath = '/users', icono }: {
                     onClick={() => handleDeactivate(u)}>
               {u.active ? <UserX /> : <UserCheck />}
             </Button>
+            {puedeEliminar && (
+              <Button size="icon" variant="outline" className="size-8"
+                      title="Eliminar" aria-label={`Eliminar ${u.name}`}
+                      onClick={() => setDeletingUser(u)}>
+                <Trash2 />
+              </Button>
+            )}
           </div>
         )
       },
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [])
+  ], [permitirEliminar, usuarioActualId])
 
   return (
     <div className="grid gap-4">
@@ -267,6 +352,7 @@ export function Usuarios({ basePath = '/users', icono }: {
               <div className="grid gap-2">
                 <Label htmlFor="usr-password">Contraseña</Label>
                 <PasswordInput id="usr-password" value={form.password}
+                               placeholder={`Mínimo ${PASSWORD_MIN} caracteres`}
                                onChange={(e) => setForm({ ...form, password: e.target.value })} />
               </div>
             )}
@@ -275,8 +361,7 @@ export function Usuarios({ basePath = '/users', icono }: {
               <Select value={form.role} onValueChange={(role) => setForm({ ...form, role })}>
                 <SelectTrigger id="usr-role" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="staff">Staff</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
+                  {roles.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -309,6 +394,7 @@ export function Usuarios({ basePath = '/users', icono }: {
             <div className="grid gap-2">
               <Label htmlFor="usr-nueva-password">Contraseña nueva</Label>
               <PasswordInput id="usr-nueva-password" value={newPassword} autoFocus
+                             placeholder={`Mínimo ${PASSWORD_MIN} caracteres`}
                              onChange={(e) => setNewPassword(e.target.value)} />
             </div>
             {/* Se dice en la pantalla y no sólo en el código: quien la escribe
@@ -342,13 +428,26 @@ export function Usuarios({ basePath = '/users', icono }: {
               search={{
                 // El rol se busca por como se ve en la tabla ('admin' /
                 // 'staff'), que es tambien como se guarda.
-                campos: (u) => [u.username, u.name, u.role],
+                campos: (u) => [u.username, u.name, u.role, u.email],
                 placeholder: 'Buscar por usuario, nombre o rol',
               }}
             />
           )}
         </CardContent>
       </Card>
+
+      {/* Confirmación antes del borrado -- mismo `ConfirmDialog` que ya usan
+          las otras pantallas de este paquete (ver el import, arriba). El
+          error del backend NO se lee acá adentro: para cuando la respuesta
+          vuelve el diálogo ya se cerró, y `handleDelete` lo manda al cartel de
+          arriba de la grilla, igual que el toggle de activo/inactivo. */}
+      <ConfirmDialog
+        open={deletingUser !== null}
+        onOpenChange={(o) => { if (!o) setDeletingUser(null) }}
+        title={`¿Eliminar a ${deletingUser?.name ?? ''}?`}
+        description="Esta acción no se puede deshacer."
+        onConfirm={() => { if (deletingUser) { void handleDelete(deletingUser); setDeletingUser(null) } }}
+      />
     </div>
   )
 }
