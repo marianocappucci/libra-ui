@@ -145,7 +145,14 @@ export type ProductoBusqueda = {
 // la venta y Restolibra `punto_venta` en la caja; el backend devuelve todo a
 // los dos.
 
-export type VentaItem = { nombre: string; qty: number; precio: number; subtotal: number; producto_id: number | null }
+export type VentaItem = {
+  nombre: string; qty: number; precio: number; subtotal: number; producto_id: number | null
+  /** El id de `sale_items` (F4, 2026-09-15): opcional porque el alta y los
+   *  fixtures de test arman el ítem sin él. Lo devuelve `obtener_venta` desde
+   *  que existe `POST /{vid}/devolver` — sin esto ningún consumidor puede
+   *  armar ese payload (pide `sale_item_id`) sin leer la base directamente. */
+  id?: number
+}
 export type VentaPago = { id?: number; medio: string; monto: number; referencia: string; estado?: string }
 
 export type Venta = {

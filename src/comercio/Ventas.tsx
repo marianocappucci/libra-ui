@@ -55,12 +55,17 @@ export type VentasProps = {
   puedeAnular?: boolean
   rutaDeDetalle?: (id: number) => string
   rutaDeFactura?: (id: number) => string
+  /** `false` oculta el alta manual —botón «Nueva venta» y su diálogo— sin
+   *  tocar el listado (F4, 2026-09-15): VentaLibra carga las ventas desde su
+   *  propio POS y no quiere ofrecer este formulario en su historial. */
+  permitirAlta?: boolean
 }
 
 export function Ventas({
   puedeAnular = false,
   rutaDeDetalle = (id) => `/ventas/${id}`,
   rutaDeFactura = (id) => `/facturas/${id}`,
+  permitirAlta = true,
 }: VentasProps = {}) {
   const { medios, etiquetaCorta: etiquetaCortaDeMedio } = useMediosPago()
   const navigate = useNavigate()
@@ -327,6 +332,7 @@ export function Ventas({
     <div className="grid gap-4">
       <div className="flex items-center justify-between">
         <TituloPantalla icono={ShoppingCart}>Ventas</TituloPantalla>
+        {permitirAlta && (
         <Dialog open={showNueva} onOpenChange={setShowNueva}>
           <DialogTrigger asChild>
             <Button onClick={abrirNueva}><Plus />Nueva venta</Button>
@@ -448,6 +454,7 @@ export function Ventas({
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>

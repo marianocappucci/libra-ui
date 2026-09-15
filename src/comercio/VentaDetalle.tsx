@@ -11,7 +11,7 @@
 // - Contalibra pegaba a `/ventas/{id}/mp-qr` (router legado) y Restolibra a
 //   `/api/ventas/{id}/mp-qr`. Queda `/api/ventas`, que es donde
 //   `libracore.ventas_cobro_router` lo monta en los dos.
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   ArrowLeft, Ban, CheckCircle2, FileCheck, Loader2, PackageCheck, Printer, QrCode, ReceiptText, ShoppingCart,
@@ -23,6 +23,9 @@ import { esElectronico } from '../medios-pago'
 import { TituloPantalla } from '../titulo-pantalla'
 import { useEtiquetaDeMedio } from './medios-pago'
 import { ESTADO_VENTA_TONO, etiquetaDeEstadoDeVenta, formatoMoneda, type Venta } from './tipos'
+// Re-exportado para quien escriba `accionesExtra`: es el tipo de `ctx.detalle`
+// sin tener que importar aparte desde `libra-ui/comercio/tipos`.
+export type { Venta }
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -75,6 +78,14 @@ export const POLL_MS = 3000
 // acredita igual.
 export const ESPERA_MAXIMA_MS = 5 * 60 * 1000
 
+/** Lo que recibe `accionesExtra`: la venta ya cargada (con los `items` y su
+ *  `id` de línea, cuando el backend lo manda) y una forma de volver a pedirla
+ *  después de una acción propia del producto (p. ej. una devolución). */
+export type VentaDetalleAccionesExtraCtx = {
+  detalle: Venta
+  recargar: () => void
+}
+
 export type VentaDetalleProps = {
   /** Si la sesión puede anular ventas (los productos: rol admin). */
   puedeAnular?: boolean
@@ -85,6 +96,16 @@ export type VentaDetalleProps = {
   /** Si se da, además del botón que emite directo se ofrece un link al
    *  formulario de factura precargado con la venta (Restolibra). */
   rutaDeFacturaManual?: (ventaId: number) => string
+  /** A dónde imprimir el ticket (F4, 2026-09-15). `null` oculta el link
+   *  —VentaLibra lo sirve por otra ruta—; sin la prop, la de siempre. */
+  rutaDeTicket?: ((id: number) => string) | null
+  /** Igual que `rutaDeTicket`, para el recibo. `null` oculta el link
+   *  —VentaLibra no tiene recibo—. */
+  rutaDeRecibo?: ((id: number) => string) | null
+  /** Un espacio para acciones propias del producto (F4, 2026-09-15) —p. ej.
+   *  la devolución parcial de VentaLibra—, renderizado junto a las acciones
+   *  existentes (anular/QR/facturar). Sin la prop no se renderiza nada nuevo. */
+  accionesExtra?: (ctx: VentaDetalleAccionesExtraCtx) => ReactNode
 }
 
 export function VentaDetalle({
@@ -94,6 +115,9 @@ export function VentaDetalle({
   rutaDeRemito = (id) => `/remitos/${id}`,
   rutaDeRemitoNuevo = '/remitos/nuevo',
   rutaDeFacturaManual,
+  rutaDeTicket = (id) => `/ventas/${id}/ticket`,
+  rutaDeRecibo = (id) => `/ventas/${id}/recibo`,
+  accionesExtra,
 }: VentaDetalleProps = {}) {
   const etiquetaDeMedio = useEtiquetaDeMedio()
   const { id } = useParams<{ id: string }>()
@@ -234,9 +258,11 @@ export function VentaDetalle({
         <TituloPantalla icono={ShoppingCart}>{detalle ? <>Venta {detalle.numero} <BadgeEstado tono={ESTADO_VENTA_TONO[detalle.estado] ?? 'neutro'}>{etiquetaDeEstadoDeVenta(detalle.estado)}</BadgeEstado></> : 'Venta'}</TituloPantalla>
         {detalle && (
           <div className="flex flex-wrap gap-2">
-            <Button asChild size="sm" variant="outline"><a href={`/ventas/${detalle.id}/ticket`} target="_blank" rel="noreferrer"><Printer />Ticket</a></Button>
-            {detalle.pagos.length > 0 && (
-              <Button asChild size="sm" variant="outline"><a href={`/ventas/${detalle.id}/recibo`} target="_blank" rel="noreferrer"><FileCheck />Recibo</a></Button>
+            {rutaDeTicket && (
+              <Button asChild size="sm" variant="outline"><a href={rutaDeTicket(detalle.id)} target="_blank" rel="noreferrer"><Printer />Ticket</a></Button>
+            )}
+            {rutaDeRecibo && detalle.pagos.length > 0 && (
+              <Button asChild size="sm" variant="outline"><a href={rutaDeRecibo(detalle.id)} target="_blank" rel="noreferrer"><FileCheck />Recibo</a></Button>
             )}
             <Button asChild size="sm" variant="outline"><Link to={rutaDeVentas}><ArrowLeft />Volver</Link></Button>
           </div>
@@ -369,6 +395,7 @@ export function VentaDetalle({
               {puedeAnular && (
                 <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => setConfirmAnular(true)}><Ban />Anular venta</Button>
               )}
+              {accionesExtra?.({ detalle, recargar: cargar })}
             </div>
           )}
         </>
