@@ -90,9 +90,15 @@ export type VentaDetalleProps = {
   /** Si la sesión puede anular ventas (los productos: rol admin). */
   puedeAnular?: boolean
   rutaDeVentas?: string
-  rutaDeFactura?: (id: number) => string
-  rutaDeRemito?: (id: number) => string
-  rutaDeRemitoNuevo?: string
+  /** `null` oculta el link a la factura —el dato (`factura_display`) se sigue
+   *  mostrando como texto—; sin la prop, la ruta de siempre (F4, 2026-09-15:
+   *  VentaLibra no tiene pantalla de factura). */
+  rutaDeFactura?: ((id: number) => string) | null
+  /** `null` oculta el bloque «Remito generado» con su link; sin la prop, la
+   *  ruta de siempre (VentaLibra no tiene pantalla de remito). */
+  rutaDeRemito?: ((id: number) => string) | null
+  /** `null` oculta el botón «Generar remito»; sin la prop, la ruta de siempre. */
+  rutaDeRemitoNuevo?: string | null
   /** Si se da, además del botón que emite directo se ofrece un link al
    *  formulario de factura precargado con la venta (Restolibra). */
   rutaDeFacturaManual?: (ventaId: number) => string
@@ -338,9 +344,13 @@ export function VentaDetalle({
           {(detalle.factura_display || detalle.remito_id) && (
             <div className="grid gap-2 sm:grid-cols-2">
               {detalle.factura_display && (
-                <p className="flex items-center gap-2 rounded-md border bg-muted/50 p-3 text-sm"><ReceiptText className="size-4 text-emerald-600" />Factura generada: <Link to={rutaDeFactura(detalle.factura_id as number)} className="font-semibold text-emerald-600 hover:underline dark:text-emerald-400">{detalle.factura_display}</Link></p>
+                <p className="flex items-center gap-2 rounded-md border bg-muted/50 p-3 text-sm">
+                  <ReceiptText className="size-4 text-emerald-600" />Factura generada: {rutaDeFactura
+                    ? <Link to={rutaDeFactura(detalle.factura_id as number)} className="font-semibold text-emerald-600 hover:underline dark:text-emerald-400">{detalle.factura_display}</Link>
+                    : <span className="font-semibold">{detalle.factura_display}</span>}
+                </p>
               )}
-              {detalle.remito_id && (
+              {detalle.remito_id && rutaDeRemito && (
                 <p className="flex items-center gap-2 rounded-md border bg-muted/50 p-3 text-sm"><PackageCheck className="size-4 text-primary" />Remito generado: <Link to={rutaDeRemito(detalle.remito_id)} className="font-semibold text-primary hover:underline">ver remito</Link></p>
               )}
             </div>
@@ -391,7 +401,7 @@ export function VentaDetalle({
                   )}
                 </>
               )}
-              {!detalle.remito_id && <Button asChild size="sm" variant="outline"><Link to={rutaDeRemitoNuevo}><PackageCheck />Generar remito</Link></Button>}
+              {!detalle.remito_id && rutaDeRemitoNuevo && <Button asChild size="sm" variant="outline"><Link to={rutaDeRemitoNuevo}><PackageCheck />Generar remito</Link></Button>}
               {puedeAnular && (
                 <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => setConfirmAnular(true)}><Ban />Anular venta</Button>
               )}

@@ -54,7 +54,13 @@ export type VentasProps = {
   /** Si la sesión puede anular ventas (los productos: rol admin). */
   puedeAnular?: boolean
   rutaDeDetalle?: (id: number) => string
-  rutaDeFactura?: (id: number) => string
+  /** `null` oculta el link a la factura en la columna «Factura» —el dato
+   *  (`factura_display`) se sigue mostrando como texto—; sin la prop, la ruta
+   *  de siempre (F4, 2026-09-15: VentaLibra no tiene pantalla de factura). */
+  rutaDeFactura?: ((id: number) => string) | null
+  /** A dónde ver el recibo desde el listado. `null` oculta el botón —
+   *  VentaLibra no tiene recibo—; sin la prop, la ruta de siempre. */
+  rutaDeRecibo?: ((id: number) => string) | null
   /** `false` oculta el alta manual —botón «Nueva venta» y su diálogo— sin
    *  tocar el listado (F4, 2026-09-15): VentaLibra carga las ventas desde su
    *  propio POS y no quiere ofrecer este formulario en su historial. */
@@ -65,6 +71,7 @@ export function Ventas({
   puedeAnular = false,
   rutaDeDetalle = (id) => `/ventas/${id}`,
   rutaDeFactura = (id) => `/facturas/${id}`,
+  rutaDeRecibo = (id) => `/ventas/${id}/recibo`,
   permitirAlta = true,
 }: VentasProps = {}) {
   const { medios, etiquetaCorta: etiquetaCortaDeMedio } = useMediosPago()
@@ -296,7 +303,9 @@ export function Ventas({
       size: 140,
       minSize: 100,
       cell: ({ row }) => row.original.factura_display
-        ? <Link to={rutaDeFactura(row.original.factura_id as number)} onClick={(e) => e.stopPropagation()} className="inline-flex w-full items-center gap-1 truncate text-sm font-medium text-emerald-600 hover:underline dark:text-emerald-400" title={row.original.factura_display}><ReceiptText className="size-3.5 shrink-0" /><span className="truncate">{row.original.factura_display}</span></Link>
+        ? rutaDeFactura
+          ? <Link to={rutaDeFactura(row.original.factura_id as number)} onClick={(e) => e.stopPropagation()} className="inline-flex w-full items-center gap-1 truncate text-sm font-medium text-emerald-600 hover:underline dark:text-emerald-400" title={row.original.factura_display}><ReceiptText className="size-3.5 shrink-0" /><span className="truncate">{row.original.factura_display}</span></Link>
+          : <span className="inline-flex w-full items-center gap-1 truncate text-sm font-medium" title={row.original.factura_display}><ReceiptText className="size-3.5 shrink-0" /><span className="truncate">{row.original.factura_display}</span></span>
         : row.original.estado !== 'anulada'
           ? <BadgeEstado tono="atencion">Sin facturar</BadgeEstado>
           : <span className="text-muted-foreground">—</span>,
@@ -310,8 +319,8 @@ export function Ventas({
         <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
           <Button asChild size="icon" variant="outline" title="Ver venta"><Link to={rutaDeDetalle(row.original.id)} aria-label="Ver venta"><Eye /></Link></Button>
           <Button asChild size="icon" variant="outline" title="Imprimir ticket"><a href={`/ventas/${row.original.id}/ticket`} target="_blank" rel="noreferrer" aria-label="Imprimir ticket"><Printer /></a></Button>
-          {row.original.pagos.length > 0 && (
-            <Button asChild size="icon" variant="outline" title="Ver recibo"><a href={`/ventas/${row.original.id}/recibo`} target="_blank" rel="noreferrer" aria-label="Ver recibo"><FileCheck /></a></Button>
+          {row.original.pagos.length > 0 && rutaDeRecibo && (
+            <Button asChild size="icon" variant="outline" title="Ver recibo"><a href={rutaDeRecibo(row.original.id)} target="_blank" rel="noreferrer" aria-label="Ver recibo"><FileCheck /></a></Button>
           )}
           {puedeAnular && row.original.estado !== 'anulada' && (
             <Button size="icon" variant="outline" title="Anular" aria-label="Anular" onClick={() => anular(row.original)}><Ban /></Button>

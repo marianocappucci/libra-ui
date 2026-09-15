@@ -300,6 +300,21 @@ describe('Ventas', () => {
     expect(screen.getAllByLabelText('Ver venta')).toHaveLength(3)
   })
 
+  it('rutaDeRecibo: por defecto es la ruta de siempre', async () => {
+    responder(BASE)
+    montarVentas()
+    expect(await screen.findByText('V-00007')).toBeTruthy()
+    expect(screen.getAllByLabelText('Ver recibo')[0].getAttribute('href')).toBe('/ventas/7/recibo')
+  })
+
+  it('rutaDeFactura=null deja el texto de la factura sin link; rutaDeRecibo=null oculta el botón (v0.72.1)', async () => {
+    responder(BASE)
+    montarVentas({ rutaDeFactura: null, rutaDeRecibo: null })
+    expect(await screen.findByText('FACTURA C 0005-00000011')).toBeTruthy()
+    expect(screen.getByText('FACTURA C 0005-00000011').closest('a')).toBeNull()
+    expect(screen.queryByLabelText('Ver recibo')).toBeNull()
+  })
+
   it('click en la fila navega al detalle', async () => {
     responder(BASE)
     const user = userEvent.setup()
@@ -619,6 +634,31 @@ describe('VentaDetalle', () => {
     await screen.findByText(/Venta V-00007/)
     expect(screen.queryByText('Ticket')).toBeNull()
     expect(screen.queryByText('Recibo')).toBeNull()
+  })
+
+  // ── v0.72.1: rutaDeFactura/rutaDeRemito/rutaDeRemitoNuevo nullables ──────
+
+  it('rutaDeFactura=null deja el texto de la factura sin link; el remito sigue con su prop (v0.72.1)', async () => {
+    responder({ ...BASE, '/api/ventas/9': FACTURADA })
+    montarDetalle(9, { rutaDeFactura: null, rutaDeRemito: (id) => `/r/${id}` })
+    expect(await screen.findByText(/Venta V-00009/)).toBeTruthy()
+    expect(screen.getByText('FACTURA C 0005-00000011').closest('a')).toBeNull()
+    expect(screen.getByText('ver remito').getAttribute('href')).toBe('/r/4')
+  })
+
+  it('rutaDeRemito=null oculta el bloque «Remito generado» sin tocar el de factura (v0.72.1)', async () => {
+    responder({ ...BASE, '/api/ventas/9': FACTURADA })
+    montarDetalle(9, { rutaDeRemito: null })
+    await screen.findByText(/Venta V-00009/)
+    expect(screen.queryByText('ver remito')).toBeNull()
+    expect(screen.getByText('FACTURA C 0005-00000011')).toBeTruthy()
+  })
+
+  it('rutaDeRemitoNuevo=null oculta «Generar remito» (v0.72.1)', async () => {
+    responder({ ...BASE, '/api/ventas/7': VENTA })
+    montarDetalle(7, { rutaDeRemitoNuevo: null })
+    await screen.findByText(/Venta V-00007/)
+    expect(screen.queryByText(/Generar remito/)).toBeNull()
   })
 
   it('sin accionesExtra no se renderiza nada nuevo', async () => {
