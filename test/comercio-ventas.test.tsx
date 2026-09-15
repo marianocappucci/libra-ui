@@ -9,7 +9,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { LineasDePago } from '../src/comercio/LineasDePago'
 import { Ventas } from '../src/comercio/Ventas'
-import { VentaDetalle, ESPERA_MAXIMA_MS, POLL_MS } from '../src/comercio/VentaDetalle'
+import {
+  VentaDetalle, ESPERA_MAXIMA_MS, POLL_MS, type VentaDetalleAccionesExtraCtx,
+} from '../src/comercio/VentaDetalle'
 import { _resetCacheDeMedios, useEtiquetaDeMedio, useMediosPago } from '../src/comercio/medios-pago'
 import {
   MEDIO_DEL_QR, lineaVacia, numero, pagosPayload, redondear, totalDeclarado, vueltoDe, type LineaDePago,
@@ -288,6 +290,14 @@ describe('Ventas', () => {
     await waitFor(() => expect(pedidas()).toContain('POST /api/ventas/7/anular'))
     await user.click(screen.getAllByLabelText('Anular')[1])
     expect(await screen.findByText('ya cobrada')).toBeTruthy()
+  })
+
+  it('permitirAlta=false oculta el botón y el diálogo de alta sin tocar el listado', async () => {
+    responder(BASE)
+    montarVentas({ permitirAlta: false })
+    expect(await screen.findByText('V-00007')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Nueva venta/ })).toBeNull()
+    expect(screen.getAllByLabelText('Ver venta')).toHaveLength(3)
   })
 
   it('click en la fila navega al detalle', async () => {
@@ -583,5 +593,67 @@ describe('VentaDetalle', () => {
     await screen.findByText(/Venta V-00008/)
     await user.click(screen.getByRole('button', { name: /Cobrar con QR/ }))
     expect(await screen.findByText(/Esperando el pago/)).toBeTruthy()
+  })
+
+  // ── F4 (2026-09-15): rutaDeTicket/rutaDeRecibo, accionesExtra ────────────
+
+  it('rutaDeTicket/rutaDeRecibo: por defecto son las de siempre', async () => {
+    responder({ ...BASE, '/api/ventas/7': VENTA })
+    montarDetalle(7)
+    await screen.findByText(/Venta V-00007/)
+    expect(screen.getByText('Ticket').closest('a')?.getAttribute('href')).toBe('/ventas/7/ticket')
+    expect(screen.getByText('Recibo').closest('a')?.getAttribute('href')).toBe('/ventas/7/recibo')
+  })
+
+  it('rutaDeTicket/rutaDeRecibo: una función propia cambia el href', async () => {
+    responder({ ...BASE, '/api/ventas/7': VENTA })
+    montarDetalle(7, { rutaDeTicket: (id) => `/pos/${id}/ticket`, rutaDeRecibo: (id) => `/pos/${id}/recibo` })
+    await screen.findByText(/Venta V-00007/)
+    expect(screen.getByText('Ticket').closest('a')?.getAttribute('href')).toBe('/pos/7/ticket')
+    expect(screen.getByText('Recibo').closest('a')?.getAttribute('href')).toBe('/pos/7/recibo')
+  })
+
+  it('rutaDeTicket/rutaDeRecibo: null oculta el link (VentaLibra: sin recibo, ticket por otra ruta)', async () => {
+    responder({ ...BASE, '/api/ventas/7': VENTA })
+    montarDetalle(7, { rutaDeTicket: null, rutaDeRecibo: null })
+    await screen.findByText(/Venta V-00007/)
+    expect(screen.queryByText('Ticket')).toBeNull()
+    expect(screen.queryByText('Recibo')).toBeNull()
+  })
+
+  it('sin accionesExtra no se renderiza nada nuevo', async () => {
+    responder({ ...BASE, '/api/ventas/7': VENTA })
+    montarDetalle(7)
+    await screen.findByText(/Venta V-00007/)
+    expect(screen.queryByRole('button', { name: 'Devolver' })).toBeNull()
+  })
+
+  it('accionesExtra se renderiza junto a las acciones, recibe el detalle con los ids de línea, y recargar vuelve a pedir el detalle', async () => {
+    let pedidosDetalle = 0
+    responder({
+      ...BASE,
+      '/api/ventas/7': () => {
+        pedidosDetalle += 1
+        return { ...VENTA, items: [{ ...VENTA.items[0], id: 55 }] }
+      },
+    })
+    const user = userEvent.setup()
+    const capturas: VentaDetalleAccionesExtraCtx[] = []
+    montarDetalle(7, {
+      puedeAnular: true,
+      accionesExtra: (ctx) => {
+        capturas.push(ctx)
+        return <button onClick={() => ctx.recargar()}>Devolver</button>
+      },
+    })
+    await screen.findByText(/Venta V-00007/)
+    // Junto a las acciones existentes: en el mismo bloque que «Anular venta».
+    const devolver = screen.getByRole('button', { name: 'Devolver' })
+    expect(devolver).toBeTruthy()
+    expect(devolver.closest('div')).toBe(screen.getByRole('button', { name: /Anular venta/ }).closest('div'))
+    expect(capturas[0]?.detalle.items[0].id).toBe(55)
+    expect(pedidosDetalle).toBe(1)
+    await user.click(devolver)
+    await waitFor(() => expect(pedidosDetalle).toBe(2))
   })
 })
