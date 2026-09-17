@@ -25,6 +25,7 @@ import { BadgeEstado } from '../badge-estado'
 import { TituloPantalla } from '../titulo-pantalla'
 import { SelectBuscable } from '../SelectBuscable'
 import { IVA_CONDITIONS } from '../facturas'
+import { fecha } from '@/lib/fechas'
 import { hoyISO } from '../fechas'
 import { useMediosPago } from './medios-pago'
 import { useImprimirTicket } from './useImprimirTicket'
@@ -267,7 +268,7 @@ export function Ventas({
 
   const columns = useMemo<ColumnDef<Venta>[]>(() => [
     { accessorKey: 'numero', header: sortableHeader('N°'), size: 100, minSize: 90, cell: ({ row }) => <span className="block truncate font-mono text-sm font-semibold text-primary" title={row.original.numero}>{row.original.numero}</span> },
-    { accessorKey: 'fecha', header: 'Fecha', size: 100, minSize: 90 },
+    { accessorKey: 'fecha', header: 'Fecha', size: 100, minSize: 90, cell: ({ row }) => fecha(row.original.fecha) },
     {
       accessorKey: 'cliente_nombre',
       header: 'Cliente',

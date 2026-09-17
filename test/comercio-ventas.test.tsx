@@ -241,6 +241,10 @@ describe('Ventas', () => {
     responder(BASE)
     montarVentas()
     expect(await screen.findByText('V-00007')).toBeTruthy()
+    // Columna Fecha en `dd-mm-aaaa`, no el `2026-09-06` crudo que manda la API
+    // (las tres ventas de prueba comparten la misma fecha).
+    expect(screen.getAllByText('06-09-2026')).toHaveLength(3)
+    expect(screen.queryByText('2026-09-06')).toBeNull()
     expect(screen.getByText('FACTURA C 0005-00000011').closest('a')?.getAttribute('href')).toBe('/facturas/55')
     // La pestaña más las dos ventas sin comprobante.
     expect(screen.getAllByText('Sin facturar')).toHaveLength(3)

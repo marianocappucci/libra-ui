@@ -36,6 +36,8 @@ import {
   ShoppingCart, Receipt, ReceiptText, User,
 } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
+// Alias: `fecha` ya es el estado del campo de fecha del formulario de pago.
+import { fecha as formatearFecha } from '@/lib/fechas'
 import { hoyISO } from '../fechas'
 
 function formatCurrency(value: number): string {
@@ -170,7 +172,7 @@ export function CuentaCorrienteDetalle({ esAdmin = false, conRecibos = false }: 
   }, [movimientos])
 
   const movColumns = useMemo<ColumnDef<MovimientoCC>[]>(() => [
-    { accessorKey: 'fecha', header: 'Fecha' },
+    { accessorKey: 'fecha', header: 'Fecha', cell: ({ row }) => formatearFecha(row.original.fecha) },
     {
       accessorKey: 'tipo',
       header: 'Tipo',

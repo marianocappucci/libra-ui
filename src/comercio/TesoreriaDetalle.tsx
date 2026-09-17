@@ -28,6 +28,7 @@ import {
   ArrowLeft, ArrowLeftRight, Archive, Check, Landmark, Pencil, Plus, Trash2,
 } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
+import { fecha } from '@/lib/fechas'
 import { hoyISO } from '../fechas'
 
 function formatCurrency(value: number): string {
@@ -204,7 +205,7 @@ export function TesoreriaDetalle() {
   }
 
   const movColumns = useMemo<ColumnDef<MovimientoTesoreria>[]>(() => [
-    { accessorKey: 'fecha', header: 'Fecha' },
+    { accessorKey: 'fecha', header: 'Fecha', cell: ({ row }) => fecha(row.original.fecha) },
     { accessorKey: 'tipo', header: 'Tipo', cell: ({ row }) => <MovTipoBadge m={row.original} /> },
     { accessorKey: 'concepto', header: 'Concepto' },
     { accessorKey: 'usuario_nombre', header: 'Usuario', cell: ({ row }) => row.original.usuario_nombre || '—' },
