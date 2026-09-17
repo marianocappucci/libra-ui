@@ -17,6 +17,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { DataTable, sortableHeader } from '../data-table'
 import { BookText, ArrowUpRight, ArrowDownLeft, Download, Info } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
+import { fecha } from '@/lib/fechas'
 import { hoyISO, primerDiaDelMesISO } from '../fechas'
 
 function formatCurrency(value: number): string {
@@ -112,7 +113,7 @@ export function LibrosIva() {
   }
 
   const columnasVentas = useMemo<ColumnDef<LibroIvaFactura>[]>(() => [
-    { accessorKey: 'fecha', header: sortableHeader('Fecha'), size: 95, minSize: 85 },
+    { accessorKey: 'fecha', header: sortableHeader('Fecha'), size: 95, minSize: 85, cell: ({ row }) => fecha(row.original.fecha) },
     { accessorKey: 'tipo', header: 'Tipo', size: 80, minSize: 70, cell: ({ row }) => <Badge variant="outline">{TIPO_LABELS[row.original.tipo] ?? row.original.tipo}</Badge> },
     {
       id: 'pv_nro', header: 'PV-Nro',
@@ -145,7 +146,7 @@ export function LibrosIva() {
   ], [])
 
   const columnasCompras = useMemo<ColumnDef<LibroIvaEgreso>[]>(() => [
-    { accessorKey: 'fecha', header: sortableHeader('Fecha'), size: 95, minSize: 85 },
+    { accessorKey: 'fecha', header: sortableHeader('Fecha'), size: 95, minSize: 85, cell: ({ row }) => fecha(row.original.fecha) },
     { accessorKey: 'numero', header: 'Número', size: 110, minSize: 95, cell: ({ row }) => <span className="block truncate font-mono text-xs">{row.original.numero || '—'}</span> },
     { accessorKey: 'proveedor_nombre', header: 'Proveedor', size: 150, minSize: 90, meta: { stretch: true }, cell: ({ row }) => <span className="block truncate" title={row.original.proveedor_nombre ?? undefined}>{row.original.proveedor_nombre || '—'}</span> },
     { accessorKey: 'proveedor_cuit', header: 'CUIT', size: 110, minSize: 95, cell: ({ row }) => <span className="block truncate font-mono text-xs text-muted-foreground">{formatCuit(row.original.proveedor_cuit)}</span> },

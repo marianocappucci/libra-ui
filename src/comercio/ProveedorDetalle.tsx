@@ -29,6 +29,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog'
 import { DataTable, sortableHeader } from '../data-table'
 import { Truck, Pencil, ArrowLeft, Plus, Inbox, Trash2 } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
+import { fecha } from '@/lib/fechas'
 import { hoyISO } from '../fechas'
 
 function formatCurrency(value: number): string {
@@ -179,7 +180,7 @@ export function ProveedorDetalle() {
   }
 
   const egresoColumns = useMemo<ColumnDef<Egreso>[]>(() => [
-    { accessorKey: 'fecha', header: sortableHeader('Fecha') },
+    { accessorKey: 'fecha', header: sortableHeader('Fecha'), cell: ({ row }) => fecha(row.original.fecha) },
     { accessorKey: 'concepto', header: 'Concepto', cell: ({ row }) => <span className="font-medium">{row.original.concepto}</span> },
     { accessorKey: 'categoria', header: 'Categoría', cell: ({ row }) => row.original.categoria || '—' },
     {
