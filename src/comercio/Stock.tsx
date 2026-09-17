@@ -30,6 +30,8 @@ import { anchoColumnaAcciones, DataTable, sortableHeader } from '../data-table'
 import { BadgeEstado, type TonoEstado } from '../badge-estado'
 import { TituloPantalla } from '../titulo-pantalla'
 import { SelectBuscable } from '../SelectBuscable'
+// Alias: `fecha` ya es el estado del campo de fecha del ajuste de stock.
+import { fecha as formatearFecha } from '@/lib/fechas'
 import { hoyISO } from '../fechas'
 import {
   opcionesProducto, TIPO_MOVIMIENTO_LABELS, type MovimientoStock, type StockItem, type StockListado,
@@ -299,7 +301,7 @@ export function Stock({ rutaDeMovimientos, conConversionDeUnidad = false, rutaDe
   ], [rutaDeMovimientos])
 
   const movColumns = useMemo<ColumnDef<MovimientoStock>[]>(() => [
-    { accessorKey: 'fecha', header: 'Fecha' },
+    { accessorKey: 'fecha', header: 'Fecha', cell: ({ row }) => formatearFecha(row.original.fecha) },
     {
       accessorKey: 'producto_nombre',
       header: 'Producto',

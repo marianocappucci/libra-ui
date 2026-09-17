@@ -30,6 +30,7 @@ import { anchoColumnaAcciones, DataTable, sortableHeader } from '../data-table'
 import { SelectBuscable } from '../SelectBuscable'
 import { ArrowUpCircle, CheckCircle2, Eye, Filter, Hourglass, Plus, ShoppingBag, X } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
+import { fecha } from '@/lib/fechas'
 import { hoyISO, primerDiaDelMesISO } from '../fechas'
 
 function formatCurrency(value: number): string {
@@ -153,7 +154,7 @@ export function Egresos() {
   }
 
   const columns = useMemo<ColumnDef<Egreso>[]>(() => [
-    { accessorKey: 'fecha', header: sortableHeader('Fecha'), size: 95, minSize: 88 },
+    { accessorKey: 'fecha', header: sortableHeader('Fecha'), size: 95, minSize: 88, cell: ({ row }) => fecha(row.original.fecha) },
     { accessorKey: 'proveedor_nombre', header: 'Proveedor', size: 130, minSize: 88, cell: ({ row }) => <span className="block truncate" title={row.original.proveedor_nombre ?? undefined}>{row.original.proveedor_nombre || '—'}</span> },
     { accessorKey: 'concepto', header: 'Concepto', size: 110, minSize: 88, meta: { stretch: true }, cell: ({ row }) => <span className="block truncate font-medium" title={row.original.concepto}>{row.original.concepto}</span> },
     { accessorKey: 'categoria', header: 'Categoría', size: 96, minSize: 84, cell: ({ row }) => <span className="block truncate" title={row.original.categoria ?? undefined}>{row.original.categoria || '—'}</span> },

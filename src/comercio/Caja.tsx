@@ -24,6 +24,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog'
 import { anchoColumnaAcciones, DataTable, sortableHeader } from '../data-table'
 import { ArrowDownCircle, ArrowUpCircle, Check, Filter, PiggyBank, Plus, Receipt, SquareStack, Ban, Wallet, X } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
+import { fecha } from '@/lib/fechas'
 import { hoyISO, primerDiaDelMesISO } from '../fechas'
 
 export function Caja() {
@@ -155,7 +156,7 @@ export function Caja() {
 
   const columns = useMemo<ColumnDef<CajaMovimiento>[]>(() => {
     const cols: ColumnDef<CajaMovimiento>[] = [
-      { accessorKey: 'fecha', header: sortableHeader('Fecha') },
+      { accessorKey: 'fecha', header: sortableHeader('Fecha'), cell: ({ row }) => fecha(row.original.fecha) },
       {
         accessorKey: 'tipo',
         header: 'Tipo',
