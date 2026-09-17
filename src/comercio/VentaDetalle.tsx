@@ -22,6 +22,7 @@ import { BadgeEstado } from '../badge-estado'
 import { esElectronico } from '../medios-pago'
 import { TituloPantalla } from '../titulo-pantalla'
 import { useEtiquetaDeMedio } from './medios-pago'
+import { useImprimirTicket } from './useImprimirTicket'
 import { ESTADO_VENTA_TONO, etiquetaDeEstadoDeVenta, formatoMoneda, type Venta } from './tipos'
 // Re-exportado para quien escriba `accionesExtra`: es el tipo de `ctx.detalle`
 // sin tener que importar aparte desde `libra-ui/comercio/tipos`.
@@ -126,6 +127,7 @@ export function VentaDetalle({
   accionesExtra,
 }: VentaDetalleProps = {}) {
   const etiquetaDeMedio = useEtiquetaDeMedio()
+  const { imprimir, dialogo: dialogoTicket } = useImprimirTicket()
   const { id } = useParams<{ id: string }>()
   const ventaId = Number(id)
 
@@ -265,7 +267,7 @@ export function VentaDetalle({
         {detalle && (
           <div className="flex flex-wrap gap-2">
             {rutaDeTicket && (
-              <Button asChild size="sm" variant="outline"><a href={rutaDeTicket(detalle.id)} target="_blank" rel="noreferrer"><Printer />Ticket</a></Button>
+              <Button size="sm" variant="outline" onClick={() => imprimir(rutaDeTicket(detalle.id))}><Printer />Ticket</Button>
             )}
             {rutaDeRecibo && detalle.pagos.length > 0 && (
               <Button asChild size="sm" variant="outline"><a href={rutaDeRecibo(detalle.id)} target="_blank" rel="noreferrer"><FileCheck />Recibo</a></Button>
@@ -419,6 +421,8 @@ export function VentaDetalle({
         confirmLabel="Anular"
         onConfirm={() => { anular(); setConfirmAnular(false) }}
       />
+
+      {dialogoTicket}
     </div>
   )
 }
