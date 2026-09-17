@@ -27,6 +27,7 @@ import { SelectBuscable } from '../SelectBuscable'
 import { IVA_CONDITIONS } from '../facturas'
 import { hoyISO } from '../fechas'
 import { useMediosPago } from './medios-pago'
+import { useImprimirTicket } from './useImprimirTicket'
 import { LineasDePago } from './LineasDePago'
 import { lineaVacia, pagosPayload, totalDeclarado, vueltoDe, type LineaDePago } from './pagos'
 import {
@@ -75,6 +76,7 @@ export function Ventas({
   permitirAlta = true,
 }: VentasProps = {}) {
   const { medios, etiquetaCorta: etiquetaCortaDeMedio } = useMediosPago()
+  const { imprimir, dialogo: dialogoTicket } = useImprimirTicket()
   const navigate = useNavigate()
   const [ventas, setVentas] = useState<Venta[]>([])
   const [loading, setLoading] = useState(true)
@@ -318,7 +320,7 @@ export function Ventas({
       cell: ({ row }) => (
         <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
           <Button asChild size="icon" variant="outline" title="Ver venta"><Link to={rutaDeDetalle(row.original.id)} aria-label="Ver venta"><Eye /></Link></Button>
-          <Button asChild size="icon" variant="outline" title="Imprimir ticket"><a href={`/ventas/${row.original.id}/ticket`} target="_blank" rel="noreferrer" aria-label="Imprimir ticket"><Printer /></a></Button>
+          <Button size="icon" variant="outline" title="Imprimir ticket" aria-label="Imprimir ticket" onClick={() => imprimir(`/ventas/${row.original.id}/ticket`)}><Printer /></Button>
           {row.original.pagos.length > 0 && rutaDeRecibo && (
             <Button asChild size="icon" variant="outline" title="Ver recibo"><a href={rutaDeRecibo(row.original.id)} target="_blank" rel="noreferrer" aria-label="Ver recibo"><FileCheck /></a></Button>
           )}
@@ -498,6 +500,8 @@ export function Ventas({
           )}
         </CardContent>
       </Card>
+
+      {dialogoTicket}
     </div>
   )
 }

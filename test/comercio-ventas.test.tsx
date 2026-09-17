@@ -612,20 +612,24 @@ describe('VentaDetalle', () => {
 
   // ── F4 (2026-09-15): rutaDeTicket/rutaDeRecibo, accionesExtra ────────────
 
-  it('rutaDeTicket/rutaDeRecibo: por defecto son las de siempre', async () => {
-    responder({ ...BASE, '/api/ventas/7': VENTA })
+  it('rutaDeTicket/rutaDeRecibo: por defecto son las de siempre (el ticket es un botón, no un link)', async () => {
+    responder({ ...BASE, '/api/ventas/7': VENTA, '/ventas/7/ticket': { status: 500, detail: '' } })
+    const user = userEvent.setup()
     montarDetalle(7)
     await screen.findByText(/Venta V-00007/)
-    expect(screen.getByText('Ticket').closest('a')?.getAttribute('href')).toBe('/ventas/7/ticket')
     expect(screen.getByText('Recibo').closest('a')?.getAttribute('href')).toBe('/ventas/7/recibo')
+    await user.click(screen.getByRole('button', { name: 'Ticket' }))
+    await waitFor(() => expect(pedidas()).toContain('GET /ventas/7/ticket'))
   })
 
-  it('rutaDeTicket/rutaDeRecibo: una función propia cambia el href', async () => {
-    responder({ ...BASE, '/api/ventas/7': VENTA })
+  it('rutaDeTicket/rutaDeRecibo: una función propia cambia a dónde pega el botón y el href del recibo', async () => {
+    responder({ ...BASE, '/api/ventas/7': VENTA, '/pos/7/ticket': { status: 500, detail: '' } })
+    const user = userEvent.setup()
     montarDetalle(7, { rutaDeTicket: (id) => `/pos/${id}/ticket`, rutaDeRecibo: (id) => `/pos/${id}/recibo` })
     await screen.findByText(/Venta V-00007/)
-    expect(screen.getByText('Ticket').closest('a')?.getAttribute('href')).toBe('/pos/7/ticket')
     expect(screen.getByText('Recibo').closest('a')?.getAttribute('href')).toBe('/pos/7/recibo')
+    await user.click(screen.getByRole('button', { name: 'Ticket' }))
+    await waitFor(() => expect(pedidas()).toContain('GET /pos/7/ticket'))
   })
 
   it('rutaDeTicket/rutaDeRecibo: null oculta el link (VentaLibra: sin recibo, ticket por otra ruta)', async () => {
@@ -666,6 +670,115 @@ describe('VentaDetalle', () => {
     montarDetalle(7)
     await screen.findByText(/Venta V-00007/)
     expect(screen.queryByRole('button', { name: 'Devolver' })).toBeNull()
+  })
+
+  // ── useImprimirTicket ────────────────────────────────────────────────────
+
+  it('imprimir ticket: un 409 con detail muestra el diálogo, capitalizado y con punto', async () => {
+    const abrir = vi.spyOn(window, 'open').mockImplementation(() => null)
+    responder({
+      ...BASE,
+      '/api/ventas/7': VENTA,
+      '/ventas/7/ticket': { status: 409, detail: 'solo se imprime el ticket de una venta confirmada' },
+    })
+    const user = userEvent.setup()
+    montarDetalle(7)
+    await screen.findByText(/Venta V-00007/)
+    await user.click(screen.getByRole('button', { name: 'Ticket' }))
+    expect(await screen.findByRole('dialog')).toBeTruthy()
+    expect(screen.getByText('No se puede imprimir el ticket')).toBeTruthy()
+    expect(screen.getByText('Solo se imprime el ticket de una venta confirmada.')).toBeTruthy()
+    expect(abrir).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Entendido' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('imprimir ticket: un 404 no muestra el texto en inglés del backend', async () => {
+    responder({ ...BASE, '/api/ventas/7': VENTA, '/ventas/7/ticket': { status: 404, detail: 'sale not found' } })
+    const user = userEvent.setup()
+    montarDetalle(7)
+    await screen.findByText(/Venta V-00007/)
+    await user.click(screen.getByRole('button', { name: 'Ticket' }))
+    expect(await screen.findByText('No se encontró la venta.')).toBeTruthy()
+    expect(screen.queryByText(/sale not found/i)).toBeNull()
+  })
+
+  it('imprimir ticket: con la ventana bloqueada por el navegador, avisa en vez de no hacer nada', async () => {
+    vi.spyOn(window, 'open').mockImplementation(() => null)
+    Object.defineProperty(URL, 'createObjectURL', { value: vi.fn(() => 'blob:falso'), configurable: true })
+    const revocar = vi.fn()
+    Object.defineProperty(URL, 'revokeObjectURL', { value: revocar, configurable: true })
+    fetchMock.mockImplementation((entrada: RequestInfo | URL) => {
+      const url = String(entrada)
+      if (url === '/ventas/7/ticket') {
+        return Promise.resolve(new Response('%PDF-1.4', {
+          status: 200, headers: { 'content-type': 'application/pdf' },
+        }))
+      }
+      if (url.startsWith('/api/ventas/7')) return Promise.resolve(json(VENTA))
+      if (url.startsWith('/api/cajas/medios-disponibles')) return Promise.resolve(json(MEDIOS))
+      return Promise.resolve(json({ detail: 'sin respuesta' }, 404))
+    })
+    const user = userEvent.setup()
+    montarDetalle(7)
+    await screen.findByText(/Venta V-00007/)
+    await user.click(screen.getByRole('button', { name: 'Ticket' }))
+    expect(await screen.findByText(/El navegador bloqueó la ventana del ticket/)).toBeTruthy()
+    expect(revocar).toHaveBeenCalledWith('blob:falso')
+  })
+
+  it('imprimir ticket: un PDF se abre en una pestaña nueva, sin diálogo', async () => {
+    const abrir = vi.spyOn(window, 'open').mockImplementation(() => ({}) as Window)
+    const crearObjectURL = vi.fn(() => 'blob:falso')
+    Object.defineProperty(URL, 'createObjectURL', { value: crearObjectURL, configurable: true })
+    Object.defineProperty(URL, 'revokeObjectURL', { value: vi.fn(), configurable: true })
+    fetchMock.mockImplementation((entrada: RequestInfo | URL) => {
+      const url = String(entrada)
+      if (url === '/ventas/7/ticket') {
+        // Un `Blob` como body: jsdom (el `Blob` del entorno de test) no es
+        // compatible con el `Response`/`undici` de Node -- `new Response`
+        // tira "object.stream is not a function". Un string alcanza: lo que
+        // importa acá es que `response.blob()` funcione, no el contenido.
+        return Promise.resolve(new Response('%PDF-1.4', {
+          status: 200, headers: { 'content-type': 'application/pdf' },
+        }))
+      }
+      if (url.startsWith('/api/ventas/7')) return Promise.resolve(json(VENTA))
+      if (url.startsWith('/api/cajas/medios-disponibles')) return Promise.resolve(json(MEDIOS))
+      return Promise.resolve(json({ detail: 'sin respuesta' }, 404))
+    })
+    const user = userEvent.setup()
+    montarDetalle(7)
+    await screen.findByText(/Venta V-00007/)
+    await user.click(screen.getByRole('button', { name: 'Ticket' }))
+    await waitFor(() => expect(abrir).toHaveBeenCalledWith('blob:falso', '_blank'))
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('imprimir ticket: sin detail legible o con error de red, el diálogo dice "No se pudo abrir el ticket."', async () => {
+    responder({ ...BASE, '/api/ventas/7': VENTA, '/ventas/7/ticket': { status: 500, detail: '' } })
+    const user = userEvent.setup()
+    montarDetalle(7)
+    await screen.findByText(/Venta V-00007/)
+    await user.click(screen.getByRole('button', { name: 'Ticket' }))
+    expect(await screen.findByText('No se pudo abrir el ticket.')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Entendido' }))
+
+    responder({ ...BASE, '/api/ventas/7': VENTA, '/ventas/7/ticket': '!caida' })
+    await user.click(screen.getByRole('button', { name: 'Ticket' }))
+    expect(await screen.findByText('No se pudo abrir el ticket.')).toBeTruthy()
+  })
+
+  it('el listado también usa el diálogo (mismo hook, sin repetir la lógica) y no navega la fila', async () => {
+    responder({ ...BASE, '/ventas/7/ticket': { status: 409, detail: 'no imprimible' } })
+    const user = userEvent.setup()
+    montarVentas()
+    await screen.findByText('V-00007')
+    await user.click(screen.getAllByLabelText('Imprimir ticket')[0])
+    expect(await screen.findByText('No imprimible.')).toBeTruthy()
+    // El click del botón no navegó a la fila (el contenedor ya frena la
+    // propagación para «Ver venta»/«Anular»; el ticket usa el mismo).
+    expect(screen.getByTestId('ubicacion').textContent).toBe('/ventas')
   })
 
   it('accionesExtra se renderiza junto a las acciones, recibe el detalle con los ids de línea, y recargar vuelve a pedir el detalle', async () => {
