@@ -197,6 +197,9 @@ it('conectada y sin subidas todavía: dice a qué cuenta y que la primera sale e
   expect(screen.getByText('Resguardo Contalibra')).toBeInTheDocument()
   expect(screen.getByText(/10-09-2026 15:04/)).toBeInTheDocument()
   expect(screen.getByText(/la primera sale esta noche/)).toBeInTheDocument()
+  // Quien lo tiene contratado tiene que ver que la copia de su nube va cifrada:
+  // la primera version de este texto quedo solo en la rama de "sin plan".
+  expect(screen.getByText(/viaja y se guarda cifrada/)).toBeInTheDocument()
   // Conectada no es "sin contratar": ni la propuesta, ni los botones de conectar.
   expect(screen.queryByText(/Consultanos/)).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: /Conectar/ })).not.toBeInTheDocument()
@@ -210,6 +213,7 @@ it('conectada y al día muestra la cuenta y la última copia', async () => {
   await waitFor(() => expect(screen.getByText(/Copia externa al día/)).toBeInTheDocument())
   expect(screen.getByText('cliente@gmail.com')).toBeInTheDocument()
   expect(screen.getByText(/10 copias guardadas afuera/)).toBeInTheDocument()
+  expect(screen.getByText(/viaja y se guarda cifrada/)).toBeInTheDocument()
 })
 
 it('conectada con problemas muestra el motivo', async () => {
