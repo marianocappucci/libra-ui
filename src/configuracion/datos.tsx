@@ -118,6 +118,13 @@ function irA(url: string) {
   window.location.assign(url)
 }
 
+/** Desde el 2026-09-17 la copia externa sale cifrada (`rclone crypt`) y la clave
+ *  vive en el servidor: el cliente no la puede abrir por su cuenta. Va en todas
+ *  las ramas de la tarjeta donde hay, o puede haber, una copia en su nube — si
+ *  quedara sólo en la de "sin plan", quien lo tiene contratado no la vería. */
+const NOTA_CIFRADO =
+  'La copia en tu nube viaja y se guarda cifrada: ni Google ni Dropbox pueden leerla. Para restaurar desde ahí, pedíselo a soporte.'
+
 function UltimaCopia({ detalle }: { detalle: ResguardoExterno['detalle'] }) {
   if (!detalle) return null
   return (
@@ -248,6 +255,7 @@ export function ResguardoExternoCard({ basePath = '/api/config', navegar = irA }
           ) : (
             <p className="text-sm text-amber-600 dark:text-amber-400">{subida.motivo}</p>
           )}
+          <p className="text-xs text-muted-foreground">{NOTA_CIFRADO}</p>
           {mensaje}
           <div>
             <Button type="button" size="sm" variant="outline" disabled={ocupado} onClick={() => setConfirmar(true)}>
@@ -281,11 +289,10 @@ export function ResguardoExternoCard({ basePath = '/api/config', navegar = irA }
               : subida.motivo}
           </CardDescription>
         </CardHeader>
-        {subida.al_dia && subida.detalle && (
-          <CardContent>
-            <UltimaCopia detalle={subida.detalle} />
-          </CardContent>
-        )}
+        <CardContent className="grid gap-3">
+          {subida.al_dia && subida.detalle && <UltimaCopia detalle={subida.detalle} />}
+          <p className="text-xs text-muted-foreground">{NOTA_CIFRADO}</p>
+        </CardContent>
       </Card>
     )
   }
@@ -300,7 +307,8 @@ export function ResguardoExternoCard({ basePath = '/api/config', navegar = irA }
           <CardDescription>
             Conectá tu propia cuenta y todas las noches se guarda ahí una copia de tus
             datos, así siguen estando aunque este servidor no esté. El sistema sólo ve
-            la carpeta que crea para las copias, no el resto de tu cuenta.
+            la carpeta que crea para las copias, no el resto de tu cuenta.{' '}
+            {NOTA_CIFRADO}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3">
@@ -333,7 +341,9 @@ export function ResguardoExternoCard({ basePath = '/api/config', navegar = irA }
           <CardDescription>
             Tus copias viven en este servidor. Con el resguardo externo se guardan
             todas las noches en tu propia cuenta de Google Drive o Dropbox, así
-            siguen estando aunque el servidor no esté. Consultanos para activarlo.
+            siguen estando aunque el servidor no esté.{' '}
+            {NOTA_CIFRADO}{' '}
+            Consultanos para activarlo.
           </CardDescription>
         </CardHeader>
         {mensaje && <CardContent>{mensaje}</CardContent>}
@@ -425,8 +435,10 @@ export function DatosBackupCard({ basePath = '/api/config' }: { basePath?: strin
             {ocupado ? 'Trabajando…' : 'Guardar copia en el servidor'}
           </Button>
           <p className="text-xs text-muted-foreground">
-            El .zip contiene todos tus datos más tus archivos —el logo y, si facturás,
-            los certificados de ARCA—.
+            El .zip contiene todos tus datos y tus archivos: el logo y, si facturás,
+            tu certificado y tu <strong>clave privada de ARCA</strong>, que permite
+            facturar en tu nombre. Guardalo como tu clave fiscal: no lo mandes por
+            mail ni lo compartas.
           </p>
         </CardContent>
       </Card>
