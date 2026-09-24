@@ -53,8 +53,8 @@ const REPORTES: ReportesData = {
 const CAJA_MEDIOS: CajaMediosData = {
   desde: '2026-09-01', hasta: '2026-09-30',
   cajas_config: [
-    { id: 1, nombre: 'Principal', descripcion: '', medios_pago: [], es_default: 1, activo: 1, punto_venta: null },
-    { id: 2, nombre: 'POS 2', descripcion: '', medios_pago: [], es_default: 0, activo: 1, punto_venta: null },
+    { id: 1, nombre: 'Principal', descripcion: '', medios_pago: [], es_default: 1, activo: 1, punto_venta: null, mp_pos_id: null },
+    { id: 2, nombre: 'POS 2', descripcion: '', medios_pago: [], es_default: 0, activo: 1, punto_venta: null, mp_pos_id: null },
   ],
   cajas: [
     { id: 1, nombre: 'Principal', medios: { efectivo: { ingresos: 300, ingresos_ops: 2, egresos: 30, egresos_ops: 1 }, transferencia: { ingresos: 0, ingresos_ops: 0, egresos: 20, egresos_ops: 1 } }, total_ingresos: 300, total_egresos: 50, saldo: 250 },

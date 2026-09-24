@@ -15,8 +15,9 @@ import { _resetCacheDeMedios } from '../src/comercio/medios-pago'
 import type { CajaConfig, CajaMovimiento, ResumenTurno, Turno } from '../src/comercio/tipos'
 
 const MEDIOS = [{ id: 'efectivo', label: 'Efectivo' }, { id: 'transferencia', label: 'Transferencia' }, { id: 'mercadopago', label: 'MercadoPago' }]
-const PRINCIPAL: CajaConfig = { id: 1, nombre: 'Caja Principal', descripcion: 'Caja por defecto', medios_pago: ['efectivo'], es_default: 1, activo: 1, punto_venta: null }
-const POS2: CajaConfig = { id: 2, nombre: 'POS 2', descripcion: '', medios_pago: [], es_default: 0, activo: 0, punto_venta: 4 }
+const PRINCIPAL: CajaConfig = { id: 1, nombre: 'Caja Principal', descripcion: 'Caja por defecto', medios_pago: ['efectivo'], es_default: 1, activo: 1, punto_venta: null, mp_pos_id: null }
+const POS2: CajaConfig = { id: 2, nombre: 'POS 2', descripcion: '', medios_pago: [], es_default: 0, activo: 0, punto_venta: 4, mp_pos_id: null }
+const POSQR: CajaConfig = { id: 3, nombre: 'Caja QR', descripcion: '', medios_pago: ['mercadopago'], es_default: 0, activo: 1, punto_venta: null, mp_pos_id: 'BIOKOCAJA01' }
 const INGRESO: CajaMovimiento = { id: 10, fecha: '2026-09-06', tipo: 'ingreso', concepto: 'Venta V-00001 — Efectivo', monto: 200, referencia: '', factura_id: 55, caja_id: 1, caja_nombre: 'Caja Principal', usuario_nombre: 'Cajero', medio_pago: 'efectivo' }
 const EGRESO: CajaMovimiento = { id: 11, fecha: '2026-09-06', tipo: 'egreso', concepto: 'Hielo', monto: 30, referencia: 'tk 1', factura_id: null, caja_id: 1, caja_nombre: null, usuario_nombre: null, medio_pago: 'efectivo', anulado: 1 }
 const RESUMEN = { ingresos: 200, egresos: 30, saldo_periodo: 170, saldo_total: -5 }
@@ -199,7 +200,7 @@ describe('Cajas', () => {
     await user.click(within(dialogo).getByLabelText('Transferencia'))
     await user.click(within(dialogo).getByRole('button', { name: /Crear caja/ }))
     expect(await screen.findByText('El punto de venta 4 ya lo tiene POS 2')).toBeTruthy()
-    expect(cuerpoDe('POST /api/cajas')).toEqual({ nombre: 'POS 3', descripcion: 'barra', medios_pago: ['efectivo'], activo: true, punto_venta: 4 })
+    expect(cuerpoDe('POST /api/cajas')).toEqual({ nombre: 'POS 3', descripcion: 'barra', medios_pago: ['efectivo'], activo: true, punto_venta: 4, mp_pos_id: null })
   })
 
   it('editar manda PUT con el punto de venta vacío como null; predeterminar y borrar', async () => {
@@ -214,13 +215,29 @@ describe('Cajas', () => {
     await user.click(within(dialogo).getByLabelText('Activa'))
     await user.click(within(dialogo).getByRole('button', { name: /Guardar cambios/ }))
     await waitFor(() => expect(pedidas()).toContain('PUT /api/cajas/2'))
-    expect(cuerpoDe('PUT /api/cajas/2')).toEqual({ nombre: 'POS 2', descripcion: '', medios_pago: [], activo: true, punto_venta: null })
+    expect(cuerpoDe('PUT /api/cajas/2')).toEqual({ nombre: 'POS 2', descripcion: '', medios_pago: [], activo: true, punto_venta: null, mp_pos_id: null })
     await user.click(screen.getByRole('button', { name: /Predeterminar/ }))
     await waitFor(() => expect(pedidas()).toContain('POST /api/cajas/2/set-default'))
     const botones = screen.getAllByRole('button')
     await user.click(botones[botones.length - 1])
     await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Eliminar' }))
     await waitFor(() => expect(pedidas()).toContain('DELETE /api/cajas/2'))
+  })
+
+  it('muestra el POS de MercadoPago en la tarjeta y lo guarda alfanumérico', async () => {
+    responder({ ...BASE, '/api/cajas': [PRINCIPAL, POSQR], 'PUT /api/cajas/3': POSQR })
+    const user = userEvent.setup()
+    montar('/cajas', <Cajas />)
+    expect(await screen.findByText('Caja QR')).toBeTruthy()
+    expect(screen.getByText(/QR:/)).toBeTruthy()
+    expect(screen.getByText('BIOKOCAJA01')).toBeTruthy()
+
+    await user.click(screen.getAllByRole('button', { name: /Editar/ })[1])
+    const dialogo = await screen.findByRole('dialog')
+    fireEvent.change(within(dialogo).getByLabelText('POS ID de MercadoPago (QR)'), { target: { value: 'BIOKOCAJA02' } })
+    await user.click(within(dialogo).getByRole('button', { name: /Guardar cambios/ }))
+    await waitFor(() => expect(pedidas()).toContain('PUT /api/cajas/3'))
+    expect(cuerpoDe('PUT /api/cajas/3')).toEqual({ nombre: 'Caja QR', descripcion: '', medios_pago: ['mercadopago'], activo: true, punto_venta: null, mp_pos_id: 'BIOKOCAJA02' })
   })
 
   it('los errores de predeterminar, borrar y cargar se muestran; sin cajas lo dice', async () => {
