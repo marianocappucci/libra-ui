@@ -43,6 +43,7 @@ export function Cajas() {
   const [mediosPago, setMediosPago] = useState<string[]>([])
   const [activo, setActivo] = useState(true)
   const [puntoVenta, setPuntoVenta] = useState('')
+  const [mpPosId, setMpPosId] = useState('')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => { load() }, [])
@@ -91,6 +92,7 @@ export function Cajas() {
     setMediosPago([])
     setActivo(true)
     setPuntoVenta('')
+    setMpPosId('')
     setFormOpen(true)
   }
 
@@ -99,6 +101,7 @@ export function Cajas() {
     setNombre(c.nombre)
     setDescripcion(c.descripcion ?? '')
     setPuntoVenta(c.punto_venta == null ? '' : String(c.punto_venta))
+    setMpPosId(c.mp_pos_id ?? '')
     setMediosPago(c.medios_pago)
     setActivo(!!c.activo)
     setFormOpen(true)
@@ -119,6 +122,7 @@ export function Cajas() {
       const payload = {
         nombre, descripcion, medios_pago: mediosPago, activo,
         punto_venta: puntoVenta.trim() === '' ? null : Number(puntoVenta),
+        mp_pos_id: mpPosId.trim() === '' ? null : mpPosId.trim(),
       }
       if (editingCaja) {
         await api.put(`/api/cajas/${editingCaja.id}`, payload)
@@ -159,6 +163,11 @@ export function Cajas() {
                 </div>
 
                 {c.descripcion && <p className="text-sm text-muted-foreground">{c.descripcion}</p>}
+                {c.mp_pos_id && (
+                  <p className="text-xs text-muted-foreground">
+                    QR: <span className="font-mono">{c.mp_pos_id}</span>
+                  </p>
+                )}
 
                 <div>
                   <p className="mb-1 text-sm text-muted-foreground">Medios de pago:</p>
@@ -211,6 +220,19 @@ export function Cajas() {
               <p className="text-xs text-muted-foreground">
                 Sólo hace falta si este mostrador factura con su propia numeración.
                 Dejarlo vacío es lo normal cuando hay un único punto de cobro.
+              </p>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="caja-mp-pos">POS ID de MercadoPago (QR)</Label>
+              <Input
+                id="caja-mp-pos" value={mpPosId}
+                onChange={(e) => setMpPosId(e.target.value)}
+                placeholder="Ej: BIOKOCAJA01"
+              />
+              <p className="text-xs text-muted-foreground">
+                El <code>external_id</code> del POS en MercadoPago. Cada caja con
+                QR necesita el suyo propio; dejarlo vacío desactiva el QR en esta
+                caja. Sólo letras y números, sin guiones ni espacios.
               </p>
             </div>
             <div className="grid gap-2">

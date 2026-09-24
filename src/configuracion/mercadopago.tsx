@@ -342,7 +342,14 @@ export function MercadoPagoCard({
         <Campo
           id="mp-pos-id" label="POS ID (QR)" value={cfg.mp_pos_id}
           onChange={(v) => setCfg({ ...cfg, mp_pos_id: v })}
-          ayuda={<>El <strong>identificador externo</strong> de la caja, no su nombre.</>}
+          ayuda={(
+            <>
+              El <strong>identificador externo</strong> de la caja, no su nombre.
+              {' '}
+              <strong className="text-amber-600">Desde P9-M3 este valor vive en cada caja</strong>:
+              se mantiene acá sólo como respaldo para instancias de una única caja.
+            </>
+          )}
         />
 
         {autoFacturar && (

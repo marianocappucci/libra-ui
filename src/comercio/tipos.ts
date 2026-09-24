@@ -207,6 +207,9 @@ export type CajaConfig = {
   /** El punto de venta de ARCA de este mostrador. `null` = usa el de la
    *  empresa, que es el caso de toda instancia con un solo POS. */
   punto_venta: number | null
+  /** El `external_id` del POS de MercadoPago de este mostrador. Cada caja
+   *  con QR necesita el suyo propio; `null` o vacío deja la caja sin QR. */
+  mp_pos_id: string | null
 }
 
 export type CajaMovimiento = {
