@@ -366,3 +366,157 @@ describe('TurnoCerrar', () => {
     expect(await screen.findByText('Error de conexión.')).toBeTruthy()
   })
 })
+
+// ── Variantes de un producto con sucursales (0.77.0) ─────────────────────
+
+const SUCURSALES = [
+  { id: 1, nombre: 'Salón', admiteCajas: true },
+  { id: 2, nombre: 'Depósito Norte', admiteCajas: false },
+  { id: 3, nombre: 'Centro', admiteCajas: true },
+]
+const CAJA_SALON: CajaConfig = { ...PRINCIPAL, id: 10, nombre: 'Caja 1', sucursal_id: 1, sucursal_nombre: 'Salón', tiene_turno_abierto: true }
+const CAJA_CENTRO: CajaConfig = { ...POS2, id: 11, nombre: 'Caja Centro', sucursal_id: 3, activo: 1, es_default: 1, tiene_turno_abierto: false, mp_pos_id: 'QR1' }
+const CAJA_VIEJA: CajaConfig = { ...POS2, id: 12, nombre: 'Caja vieja', sucursal_id: 2, activo: 0, es_default: 0, tiene_turno_abierto: false }
+const CON_SEDES = { ...BASE, '/api/cajas': [CAJA_SALON, CAJA_CENTRO, CAJA_VIEJA] }
+
+describe('Cajas con sucursales', () => {
+  it('sin las props es la pantalla de siempre: sin sucursal, sin botón de baja, con movimientos', async () => {
+    responder({ ...BASE, '/api/cajas': [CAJA_SALON, CAJA_CENTRO] })
+    montar('/cajas', <Cajas />)
+    await screen.findByText('Caja 1')
+    expect(screen.queryByText(/Sucursal:/)).toBeNull()
+    expect(screen.queryByRole('button', { name: /Desactivar/ })).toBeNull()
+    expect(screen.getAllByText('Ver movimientos').length).toBe(2)
+    expect(screen.queryByRole('combobox', { name: 'Filtrar por sucursal' })).toBeNull()
+  })
+
+  it('muestra la sucursal y el turno abierto de cada caja, y filtra por sucursal', async () => {
+    responder(CON_SEDES)
+    const user = userEvent.setup()
+    montar('/cajas', <Cajas sucursales={SUCURSALES} verMovimientos={false} />)
+    await screen.findByText('Caja 1')
+    expect(screen.getByText('Sucursal: Salón')).toBeTruthy()
+    // La caja vieja de un depósito conserva el nombre aunque el depósito no admita cajas nuevas.
+    expect(screen.getByText('Sucursal: Depósito Norte')).toBeTruthy()
+    expect(screen.getAllByText('Turno abierto')).toHaveLength(1)
+    expect(screen.queryByText('Ver movimientos')).toBeNull()
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Filtrar por sucursal' }), '3')
+    expect(screen.queryByText('Caja 1')).toBeNull()
+    expect(screen.getByText('Caja Centro')).toBeTruthy()
+  })
+
+  it('el alta pide la sucursal (sólo las que admiten cajas) y la manda', async () => {
+    responder({ ...CON_SEDES, 'POST /api/cajas': CAJA_CENTRO })
+    const user = userEvent.setup()
+    montar('/cajas', <Cajas sucursales={SUCURSALES} />)
+    await screen.findByText('Caja 1')
+    await user.click(screen.getByRole('button', { name: /Nueva caja/ }))
+    const dialogo = await screen.findByRole('dialog')
+    const selector = within(dialogo).getByRole('combobox', { name: 'Sucursal' })
+    expect(Array.from(selector.querySelectorAll('option')).map((o) => o.textContent)).toEqual(['Salón', 'Centro'])
+    await user.selectOptions(selector, '3')
+    fireEvent.change(within(dialogo).getByLabelText('Nombre'), { target: { value: 'Caja 2' } })
+    await user.click(within(dialogo).getByRole('button', { name: /Crear caja/ }))
+    await waitFor(() => expect(pedidas()).toContain('POST /api/cajas'))
+    expect(cuerpoDe('POST /api/cajas')).toMatchObject({ nombre: 'Caja 2', sucursal_id: 3 })
+    // Al editar no se cambia de sucursal.
+    cleanup()
+    responder(CON_SEDES)
+    montar('/cajas', <Cajas sucursales={SUCURSALES} />)
+    await screen.findByText('Caja 1')
+    await user.click(screen.getAllByRole('button', { name: /Editar/ })[0])
+    expect(within(await screen.findByRole('dialog')).queryByRole('combobox', { name: 'Sucursal' })).toBeNull()
+  })
+
+  it('sin sucursales que admitan cajas no se puede crear una', async () => {
+    responder(CON_SEDES)
+    montar('/cajas', <Cajas sucursales={[{ id: 2, nombre: 'Depósito Norte', admiteCajas: false }]} />)
+    await screen.findByText('Caja 1')
+    expect(screen.getByRole('button', { name: /Nueva caja/ })).toBeDisabled()
+  })
+
+  it('desactivar/activar manda todos los campos (no borra el POS de MercadoPago) y el 409 se muestra', async () => {
+    responder({ ...CON_SEDES, 'PUT /api/cajas/11': { status: 409, detail: 'La sucursal necesita al menos una caja activa' } })
+    const user = userEvent.setup()
+    montar('/cajas', <Cajas sucursales={SUCURSALES} conActivarDesactivar />)
+    await screen.findByText('Caja Centro')
+    await user.click(screen.getByRole('button', { name: 'Desactivar Caja Centro' }))
+    expect(await screen.findByText('La sucursal necesita al menos una caja activa')).toBeTruthy()
+    expect(cuerpoDe('PUT /api/cajas/11')).toEqual({
+      nombre: 'Caja Centro', descripcion: '', medios_pago: [], punto_venta: 4, mp_pos_id: 'QR1', activo: false,
+    })
+    // Una inactiva se ofrece para activar.
+    responder({ ...CON_SEDES, 'PUT /api/cajas/12': CAJA_VIEJA })
+    await user.click(screen.getByRole('button', { name: 'Activar Caja vieja' }))
+    await waitFor(() => expect(pedidas()).toContain('PUT /api/cajas/12'))
+    expect(cuerpoDe('PUT /api/cajas/12')).toMatchObject({ activo: true })
+  })
+})
+
+describe('Turnos con caja', () => {
+  const LIBRE: CajaConfig = { ...CAJA_CENTRO, id: 11 }
+  const TURNO_CON_CAJA: Turno = {
+    ...ABIERTO, id: 5, caja_id: 10, caja: { id: 10, nombre: 'Caja 1', punto_venta: null }, sucursal: { id: 1, nombre: 'Salón' },
+  }
+
+  it('sin la prop el turno se abre suelto y no se pide caja', async () => {
+    responder({ ...BASE, '/api/turnos': { turnos: [], turno_activo: null }, 'POST /api/turnos/abrir': ABIERTO })
+    const user = userEvent.setup()
+    montar('/turnos', <Turnos />)
+    await screen.findByText('No hay turnos registrados.')
+    await user.click(screen.getByRole('button', { name: /Abrir turno/ }))
+    const dialogo = await screen.findByRole('dialog')
+    expect(within(dialogo).queryByRole('combobox', { name: 'Caja' })).toBeNull()
+    await user.click(within(dialogo).getByRole('button', { name: /Abrir turno ahora/ }))
+    expect(cuerpoDe('POST /api/turnos/abrir')).toEqual({ monto_inicial: 0, notas: '' })
+  })
+
+  it('con conCaja ofrece sólo las cajas activas y libres, la predeterminada preseleccionada, y manda caja_id', async () => {
+    responder({
+      ...BASE, '/api/turnos': { turnos: [], turno_activo: null }, 'POST /api/turnos/abrir': TURNO_CON_CAJA,
+      '/api/cajas': [CAJA_SALON, LIBRE, CAJA_VIEJA],
+    })
+    const user = userEvent.setup()
+    montar('/turnos', <Turnos conCaja />)
+    await screen.findByText('No hay turnos registrados.')
+    await user.click(screen.getByRole('button', { name: /Abrir turno/ }))
+    const dialogo = await screen.findByRole('dialog')
+    const selector = await within(dialogo).findByRole('combobox', { name: 'Caja' })
+    // Caja 1 tiene turno abierto y Caja vieja está inactiva.
+    await waitFor(() => expect(Array.from(selector.querySelectorAll('option')).map((o) => o.textContent)).toEqual(['Caja Centro']))
+    expect(selector).toHaveValue('11')
+    await user.click(within(dialogo).getByRole('button', { name: /Abrir turno ahora/ }))
+    await waitFor(() => expect(pedidas()).toContain('POST /api/turnos/abrir'))
+    expect(cuerpoDe('POST /api/turnos/abrir')).toEqual({ monto_inicial: 0, notas: '', caja_id: 11 })
+  })
+
+  it('sin una caja libre no deja abrir', async () => {
+    responder({ ...BASE, '/api/turnos': { turnos: [], turno_activo: null }, '/api/cajas': [CAJA_SALON] })
+    const user = userEvent.setup()
+    montar('/turnos', <Turnos conCaja />)
+    await screen.findByText('No hay turnos registrados.')
+    await user.click(screen.getByRole('button', { name: /Abrir turno/ }))
+    const dialogo = await screen.findByRole('dialog')
+    await waitFor(() => expect(pedidas()).toContain('GET /api/cajas'))
+    expect(within(dialogo).getByRole('button', { name: /Abrir turno ahora/ })).toBeDisabled()
+  })
+
+  it('el listado, el detalle y el cierre dicen en qué caja y sucursal es el turno, si lo traen', async () => {
+    responder({ ...BASE, '/api/turnos': { turnos: [TURNO_CON_CAJA, CERRADO], turno_activo: null } })
+    montar('/turnos', <Turnos esAdmin />)
+    expect(await screen.findByText('Todos los turnos')).toBeTruthy()
+    expect(screen.getByText('Caja 1')).toBeTruthy()
+    cleanup()
+    responder({ ...BASE, '/api/turnos': { turnos: [CERRADO], turno_activo: null } })
+    montar('/turnos', <Turnos esAdmin />)
+    await screen.findByText('Todos los turnos')
+    expect(screen.queryByText('Caja')).toBeNull()
+    cleanup()
+    responder({ ...BASE, '/api/turnos/5': { turno: TURNO_CON_CAJA, resumen: RESUMEN_TURNO } })
+    montar('/turnos/5', <TurnoDetalle />)
+    expect(await screen.findByText('Caja 1 — Salón')).toBeTruthy()
+    cleanup()
+    montar('/turnos/5/cerrar', <TurnoCerrar />)
+    expect(await screen.findByText('Caja 1 — Salón')).toBeTruthy()
+  })
+})

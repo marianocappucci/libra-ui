@@ -17,7 +17,10 @@ import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogClose,
 } from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/confirm-dialog'
-import { SquareStack, Plus, Eye, Pencil, Trash2, Star, Wallet, Check } from 'lucide-react'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
+import { SquareStack, Plus, Eye, Pencil, Trash2, Star, Wallet, Check, Power, PowerOff } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
 
 // 🔴 Aca habia un `TODOS_MEDIOS = Object.keys(MEDIOS_PAGO_LABELS)`, o sea la
@@ -27,7 +30,24 @@ import { TituloPantalla } from '../titulo-pantalla'
 // caja del mundo, y uno que tuviera de mas --`cheque`-- se podia habilitar y
 // despues el backend lo rechazaba al cobrar.
 
-export function Cajas() {
+/** Una sucursal de un producto con sedes. `admiteCajas: false` la deja fuera del
+ *  alta (un depósito no vende) sin esconderla del nombre de las cajas que ya tenía. */
+export type SucursalDeCaja = { id: number; nombre: string; admiteCajas?: boolean }
+
+export type CajasProps = {
+  /** Las sucursales del producto. Con ellas la caja se crea en una sucursal, la
+   *  lista se filtra por sucursal y cada tarjeta dice a cuál pertenece. Sin
+   *  ellas, la pantalla es la de Contalibra y Restolibra. */
+  sucursales?: SucursalDeCaja[]
+  /** Un botón por tarjeta para activar/desactivar la caja sin abrir el
+   *  formulario. Una caja con movimientos no se puede eliminar: se desactiva. */
+  conActivarDesactivar?: boolean
+  /** El enlace «Ver movimientos» (`/caja?caja_id=`); un producto sin esa
+   *  pantalla lo apaga. */
+  verMovimientos?: boolean
+}
+
+export function Cajas({ sucursales, conActivarDesactivar = false, verMovimientos = true }: CajasProps = {}) {
   const { medios: TODOS_MEDIOS, etiqueta: etiquetaDeMedio } = useMediosPago()
   const [cajas, setCajas] = useState<CajaConfig[]>([])
   const [loading, setLoading] = useState(true)
@@ -44,7 +64,14 @@ export function Cajas() {
   const [activo, setActivo] = useState(true)
   const [puntoVenta, setPuntoVenta] = useState('')
   const [mpPosId, setMpPosId] = useState('')
+  const [sucursalId, setSucursalId] = useState('')
+  const [sucursalFiltro, setSucursalFiltro] = useState('')
   const [saving, setSaving] = useState(false)
+
+  const sucursalesDeAlta = (sucursales ?? []).filter((s) => s.admiteCajas !== false)
+  const cajasVisibles = sucursalFiltro ? cajas.filter((c) => String(c.sucursal_id) === sucursalFiltro) : cajas
+  const nombreDeSucursal = (c: CajaConfig) =>
+    c.sucursal_nombre ?? sucursales?.find((s) => s.id === c.sucursal_id)?.nombre ?? null
 
   useEffect(() => { load() }, [])
 
@@ -93,6 +120,7 @@ export function Cajas() {
     setActivo(true)
     setPuntoVenta('')
     setMpPosId('')
+    setSucursalId(sucursalFiltro || String(sucursalesDeAlta[0]?.id ?? ''))
     setFormOpen(true)
   }
 
@@ -111,6 +139,22 @@ export function Cajas() {
     setMediosPago((m) => m.includes(medio) ? m.filter((x) => x !== medio) : [...m, medio])
   }
 
+  // Desactivar y no borrar: una caja con movimientos no se elimina, y una
+  // inactiva deja de ofrecerse al abrir turno sin perder su historial. El PUT
+  // manda TODOS los campos: el motor pisa el POS de MercadoPago con `null`.
+  async function alternarActiva(c: CajaConfig) {
+    setError(null)
+    try {
+      await api.put(`/api/cajas/${c.id}`, {
+        nombre: c.nombre, descripcion: c.descripcion ?? '', medios_pago: c.medios_pago,
+        punto_venta: c.punto_venta, mp_pos_id: c.mp_pos_id, activo: !c.activo,
+      })
+      await load()
+    } catch (err) {
+      setError(describeError(err))
+    }
+  }
+
   async function guardar() {
     if (!nombre.trim()) return
     setSaving(true)
@@ -127,7 +171,7 @@ export function Cajas() {
       if (editingCaja) {
         await api.put(`/api/cajas/${editingCaja.id}`, payload)
       } else {
-        await api.post('/api/cajas', payload)
+        await api.post('/api/cajas', sucursales ? { ...payload, sucursal_id: Number(sucursalId) } : payload)
       }
       setFormOpen(false)
       await load()
@@ -142,16 +186,27 @@ export function Cajas() {
     <div className="grid gap-4">
       <div className="flex items-center justify-between">
         <TituloPantalla icono={SquareStack}>Cajas</TituloPantalla>
-        <Button onClick={abrirNueva}><Plus />Nueva caja</Button>
+        <div className="flex items-center gap-2">
+          {sucursales && sucursales.length > 1 && (
+            <Select value={sucursalFiltro || 'todas'} onValueChange={(v) => setSucursalFiltro(v === 'todas' ? '' : v)}>
+              <SelectTrigger className="h-9 w-56" aria-label="Filtrar por sucursal"><SelectValue placeholder="Todas las sucursales" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todas">Todas las sucursales</SelectItem>
+                {sucursales.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.nombre}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
+          <Button onClick={abrirNueva} disabled={!!sucursales && sucursalesDeAlta.length === 0}><Plus />Nueva caja</Button>
+        </div>
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       {loading ? (
         <p className="py-6 text-center text-sm text-muted-foreground">Cargando…</p>
-      ) : cajas.length > 0 ? (
+      ) : cajasVisibles.length > 0 ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {cajas.map((c) => (
+          {cajasVisibles.map((c) => (
             <Card key={c.id} className={c.activo ? undefined : 'opacity-50'}>
               <CardContent className="grid gap-2 pt-6">
                 <div className="flex items-start justify-between gap-2">
@@ -159,8 +214,13 @@ export function Cajas() {
                   <div className="flex gap-1">
                     {!!c.es_default && <BadgeEstado tono="ok">Por defecto</BadgeEstado>}
                     {!c.activo && <BadgeEstado tono="neutro">Inactiva</BadgeEstado>}
+                    {!!c.tiene_turno_abierto && <BadgeEstado tono="ok">Turno abierto</BadgeEstado>}
                   </div>
                 </div>
+
+                {sucursales && nombreDeSucursal(c) && (
+                  <p className="text-xs text-muted-foreground">Sucursal: {nombreDeSucursal(c)}</p>
+                )}
 
                 {c.descripcion && <p className="text-sm text-muted-foreground">{c.descripcion}</p>}
                 {c.mp_pos_id && (
@@ -181,8 +241,17 @@ export function Cajas() {
                 </div>
 
                 <div className="flex flex-wrap gap-2 pt-1">
-                  <Button size="sm" variant="outline" asChild><Link to={`/caja?caja_id=${c.id}`}><Eye />Ver movimientos</Link></Button>
+                  {verMovimientos && (
+                    <Button size="sm" variant="outline" asChild><Link to={`/caja?caja_id=${c.id}`}><Eye />Ver movimientos</Link></Button>
+                  )}
                   <Button size="sm" variant="outline" onClick={() => abrirEditar(c)}><Pencil />Editar</Button>
+                  {conActivarDesactivar && (
+                    <Button size="sm" variant="outline" onClick={() => alternarActiva(c)}
+                            title={c.activo ? 'Desactivar' : 'Activar'}
+                            aria-label={`${c.activo ? 'Desactivar' : 'Activar'} ${c.nombre}`}>
+                      {c.activo ? <PowerOff /> : <Power />}{c.activo ? 'Desactivar' : 'Activar'}
+                    </Button>
+                  )}
                   {!c.es_default && (
                     <>
                       <Button size="sm" variant="outline" onClick={() => setDefault(c)} title="Usar como caja por defecto"><Star />Predeterminar</Button>
@@ -206,6 +275,17 @@ export function Cajas() {
             </DialogTitle>
           </DialogHeader>
           <div className="grid gap-3">
+            {sucursales && !editingCaja && (
+              <div className="grid gap-2">
+                <Label htmlFor="caja-sucursal">Sucursal</Label>
+                <Select value={sucursalId} onValueChange={(v) => v && setSucursalId(v)}>
+                  <SelectTrigger id="caja-sucursal"><SelectValue placeholder="Elegí una sucursal…" /></SelectTrigger>
+                  <SelectContent>
+                    {sucursalesDeAlta.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.nombre}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-2"><Label htmlFor="caja-nombre">Nombre</Label><Input id="caja-nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej: Caja mostrador, Caja online…" /></div>
               <div className="grid gap-2"><Label htmlFor="caja-desc">Descripción</Label><Input id="caja-desc" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} /></div>
@@ -255,7 +335,7 @@ export function Cajas() {
           </div>
           <DialogFooter>
             <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
-            <Button disabled={saving || !nombre.trim()} onClick={guardar}><Check />{saving ? 'Guardando…' : editingCaja ? 'Guardar cambios' : 'Crear caja'}</Button>
+            <Button disabled={saving || !nombre.trim() || (!!sucursales && !editingCaja && !sucursalId)} onClick={guardar}><Check />{saving ? 'Guardando…' : editingCaja ? 'Guardar cambios' : 'Crear caja'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
