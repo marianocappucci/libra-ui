@@ -67,7 +67,10 @@ const EMPTY_VALUES: ProveedorFormValues = {
 // El botón "Editar" abre el modal de edición inline (antes navegaba a
 // /proveedores/:id/editar, página ProveedorForm.tsx ahora eliminada)
 // precargado con los datos del proveedor ya cargados en esta página.
-export function ProveedorDetalle() {
+/** Variantes de la ficha: `conEgresos` (default `true`, lo que hacen Contalibra y Restolibra) carga y
+ *  muestra los egresos del proveedor (`/api/egresos?proveedor_id=`) y ofrece «Nuevo egreso». Un producto
+ *  sin el módulo de egresos lo apaga y la ficha no ofrece lo que no puede atender. */
+export function ProveedorDetalle({ conEgresos = true }: { conEgresos?: boolean } = {}) {
   const { id } = useParams<{ id: string }>()
   const proveedorId = Number(id)
   const navigate = useNavigate()
@@ -109,7 +112,7 @@ export function ProveedorDetalle() {
         return
       }
       setProveedor(encontrado)
-      cargarEgresos()
+      if (conEgresos) cargarEgresos()
     } catch (err) {
       setError(describeError(err))
     } finally {
@@ -332,28 +335,30 @@ export function ProveedorDetalle() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="flex items-center justify-between space-y-0">
-              <CardTitle className="text-base">Egresos registrados</CardTitle>
-              <div className="flex items-center gap-3">
-                {egresos.length > 0 && (
-                  <span className="text-sm text-muted-foreground">Total: <span className="font-semibold text-destructive">{formatCurrency(totalEgresos)}</span></span>
+          {conEgresos && (
+            <Card>
+              <CardHeader className="flex items-center justify-between space-y-0">
+                <CardTitle className="text-base">Egresos registrados</CardTitle>
+                <div className="flex items-center gap-3">
+                  {egresos.length > 0 && (
+                    <span className="text-sm text-muted-foreground">Total: <span className="font-semibold text-destructive">{formatCurrency(totalEgresos)}</span></span>
+                  )}
+                  <Button asChild size="sm" variant="outline"><Link to="/egresos"><Plus />Nuevo egreso</Link></Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {egresosLoading ? (
+                  <p className="py-6 text-center text-sm text-muted-foreground">Cargando…</p>
+                ) : egresos.length === 0 ? (
+                  <p className="flex flex-col items-center gap-2 py-6 text-center text-sm text-muted-foreground">
+                    <Inbox className="size-6" />No hay egresos registrados para este proveedor.
+                  </p>
+                ) : (
+                  <DataTable columns={egresoColumns} data={egresos} emptyMessage="Sin egresos." />
                 )}
-                <Button asChild size="sm" variant="outline"><Link to="/egresos"><Plus />Nuevo egreso</Link></Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {egresosLoading ? (
-                <p className="py-6 text-center text-sm text-muted-foreground">Cargando…</p>
-              ) : egresos.length === 0 ? (
-                <p className="flex flex-col items-center gap-2 py-6 text-center text-sm text-muted-foreground">
-                  <Inbox className="size-6" />No hay egresos registrados para este proveedor.
-                </p>
-              ) : (
-                <DataTable columns={egresoColumns} data={egresos} emptyMessage="Sin egresos." />
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
 
           {/* "Eliminar proveedor" -- en la página vieja vivía al pie del
               detalle, no en la fila de la lista. */}
@@ -369,7 +374,7 @@ export function ProveedorDetalle() {
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
         title="¿Eliminar este proveedor?"
-        description="Solo es posible si no tiene egresos asociados."
+        description={conEgresos ? 'Solo es posible si no tiene egresos asociados.' : 'Esta acción no se puede deshacer.'}
         onConfirm={() => {
           eliminar()
           setConfirmDelete(false)
