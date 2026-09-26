@@ -37,6 +37,8 @@ export type Deposito = {
   es_default: number
   activo: number
   total_productos?: number
+  /** `locations.location_type`, en un producto con sucursales y depósitos (VentaLibra: `store`/`warehouse`). */
+  tipo?: string | null
 }
 
 export type StockItem = {
@@ -48,9 +50,14 @@ export type StockItem = {
   stock_minimo: number
   activo: number
   stock_actual: number
+  /** Stock en cada depósito (`{depositoId: cantidad}`), en un producto con varios (`OpcionesStock.por_deposito`). */
+  por_deposito?: Record<string, number>
 }
 
-export type StockListado = { productos: StockItem[]; alertas: StockItem[] }
+/** Un depósito como columna del stock, en un producto con varios. */
+export type DepositoColumna = { id: number; nombre: string; tipo?: string | null; es_default?: number }
+
+export type StockListado = { productos: StockItem[]; alertas: StockItem[]; depositos?: DepositoColumna[] }
 
 export type TipoDeMovimiento = 'entrada' | 'salida' | 'ajuste' | 'venta' | 'merma' | 'produccion'
 
@@ -66,6 +73,23 @@ export type MovimientoStock = {
   usuario_id?: number | null
   venta_id?: number | null
   created_at?: string
+  deposito_id?: number | null
+}
+
+/** Una transferencia del historial (`GET /api/depositos/transferencias`). */
+export type TransferenciaDeStock = {
+  id: number
+  producto_id: number
+  producto: string
+  variant_id: number | null
+  cantidad: number
+  origen_id: number
+  origen: string
+  destino_id: number
+  destino: string
+  fecha: string
+  observaciones: string
+  usuario_id: number | null
 }
 
 export type StockPorDeposito = { id: number; nombre: string; es_default: number; stock_actual: number }

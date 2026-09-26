@@ -8,7 +8,8 @@ import { api, ApiError } from '../api-client'
 import { SelectBuscable } from '../SelectBuscable'
 import { TituloPantalla } from '../titulo-pantalla'
 import { hoyISO } from '../fechas'
-import { opcionesProducto, type Deposito, type Producto, type StockPorDeposito } from './tipos'
+import { opcionesProducto, type Deposito, type Producto, type StockPorDeposito, type TransferenciaDeStock } from './tipos'
+import { fecha as formatearFecha } from '@/lib/fechas'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,9 +20,14 @@ import {
 
 export type DepositoTransferenciaProps = {
   rutaDeDepositos?: string
+  /** Debajo del formulario, el historial de transferencias (`GET /api/depositos/transferencias`): qué se movió, de
+   *  dónde a dónde y cuándo. Sin esto, la pantalla es la de Contalibra y Restolibra. */
+  conHistorial?: boolean
 }
 
-export function DepositoTransferencia({ rutaDeDepositos = '/depositos' }: DepositoTransferenciaProps) {
+type LadoTransferido = { id: number; nombre: string; stock: number }
+
+export function DepositoTransferencia({ rutaDeDepositos = '/depositos', conHistorial = false }: DepositoTransferenciaProps) {
   const [depositos, setDepositos] = useState<Deposito[]>([])
   const [productos, setProductos] = useState<Producto[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -35,6 +41,18 @@ export function DepositoTransferencia({ rutaDeDepositos = '/depositos' }: Deposi
   const [stockOrigen, setStockOrigen] = useState<StockPorDeposito[]>([])
   const [transfiriendo, setTransfiriendo] = useState(false)
   const [ok, setOk] = useState(false)
+  // Cómo quedó cada lado, si el backend lo dice (los campos de más de `POST /transferir`).
+  const [resultado, setResultado] = useState<{ origen: LadoTransferido; destino: LadoTransferido } | null>(null)
+  const [historial, setHistorial] = useState<TransferenciaDeStock[]>([])
+
+  function cargarHistorial() {
+    if (conHistorial) api.get<TransferenciaDeStock[]>('/api/depositos/transferencias').then(setHistorial).catch(() => {})
+  }
+
+  useEffect(() => {
+    cargarHistorial()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     api.get<Deposito[]>('/api/depositos').then(setDepositos).catch(() => {})
@@ -59,13 +77,15 @@ export function DepositoTransferencia({ rutaDeDepositos = '/depositos' }: Deposi
     setError(null)
     setOk(false)
     try {
-      await api.post('/api/depositos/transferir', {
+      const r = await api.post<{ origen?: LadoTransferido; destino?: LadoTransferido }>('/api/depositos/transferir', {
         producto_id: Number(productoId), origen_id: Number(origenId), destino_id: Number(destinoId),
         cantidad: Number(cantidad), fecha, observaciones,
       })
       setCantidad('')
       setObservaciones('')
       setOk(true)
+      setResultado(r?.origen && r?.destino ? { origen: r.origen, destino: r.destino } : null)
+      cargarHistorial()
       if (productoId) api.get<StockPorDeposito[]>(`/api/depositos/stock-producto/${productoId}`).then(setStockOrigen)
     } catch (err) {
       setError(describeError(err))
@@ -82,7 +102,12 @@ export function DepositoTransferencia({ rutaDeDepositos = '/depositos' }: Deposi
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
-      {ok && <p className="text-sm text-emerald-600 dark:text-emerald-400">Transferencia realizada correctamente.</p>}
+      {ok && (
+        <p className="text-sm text-emerald-600 dark:text-emerald-400">
+          Transferencia realizada correctamente.
+          {resultado && <> Quedó: {resultado.origen.nombre} {resultado.origen.stock}, {resultado.destino.nombre} {resultado.destino.stock}.</>}
+        </p>
+      )}
 
       <div className="flex justify-center">
         <Card className="w-full max-w-2xl">
@@ -144,6 +169,42 @@ export function DepositoTransferencia({ rutaDeDepositos = '/depositos' }: Deposi
           </CardContent>
         </Card>
       </div>
+
+      {conHistorial && (
+        <Card>
+          <CardHeader><CardTitle className="text-base">Transferencias realizadas</CardTitle></CardHeader>
+          <CardContent className="p-0">
+            {historial.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">Todavía no se transfirió nada.</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="border-b text-muted-foreground">
+                  <tr>
+                    <th className="p-3 text-left font-medium">Fecha</th>
+                    <th className="p-3 text-left font-medium">Producto</th>
+                    <th className="p-3 text-right font-medium">Cantidad</th>
+                    <th className="p-3 text-left font-medium">Origen</th>
+                    <th className="p-3 text-left font-medium">Destino</th>
+                    <th className="p-3 text-left font-medium">Observaciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {historial.map((t) => (
+                    <tr key={t.id} className="border-b last:border-0">
+                      <td className="p-3 text-muted-foreground">{formatearFecha(t.fecha.slice(0, 10))}</td>
+                      <td className="p-3 font-medium">{t.producto}</td>
+                      <td className="p-3 text-right font-semibold">{t.cantidad}</td>
+                      <td className="p-3">{t.origen}</td>
+                      <td className="p-3">{t.destino}</td>
+                      <td className="p-3 text-muted-foreground">{t.observaciones || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
