@@ -117,6 +117,16 @@ describe('Clientes', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   })
 
+  it('sin `conConsultaCuit` el alta no ofrece consultar el CUIT en ARCA', async () => {
+    responder({ '/api/clientes': [ANA] })
+    const user = userEvent.setup()
+    montar('/clientes', <Clientes conConsultaCuit={false} />)
+    await screen.findByText('Ana')
+    await user.click(screen.getByRole('button', { name: /Nuevo cliente/ }))
+    await screen.findByRole('dialog')
+    expect(screen.queryByTitle('Consultar datos en ARCA')).toBeNull()
+  })
+
   it('muestra el detalle del error de la API al crear, y el de conexión al cargar', async () => {
     responder({ '/api/clientes': [ANA], 'POST /api/clientes': { status: 400, detail: 'Ya existe' } })
     const user = userEvent.setup()
@@ -158,6 +168,34 @@ describe('ClienteDetalle', () => {
     // Sin lista de precio no se pide nada del mayorista.
     expect(pedidas().some((p) => p.includes('lista-precio'))).toBe(false)
     expect(screen.queryByText('Lista de precios (mayorista)')).toBeNull()
+  })
+
+  it('con las variantes apagadas (un producto sin esos módulos) no ofrece lo que no puede atender', async () => {
+    responder({ '/api/clientes/1': FICHA })
+    montar('/clientes/1', <ClienteDetalle conMercadoPago={false} conComprobantes={false} conConsultaCuit={false} />)
+    expect(await screen.findByText('Datos del cliente')).toBeTruthy()
+    expect(screen.getByText('20-12345678-9')).toBeTruthy()
+    // MercadoPago: ni el auto-facturar ni los alias de facturación.
+    expect(screen.queryByText('Auto-factura MP:')).toBeNull()
+    expect(screen.queryByText(/Alias de facturación/)).toBeNull()
+    // Comprobantes: ni resumen, ni tablas, ni «Nuevo…», ni el estado vacío.
+    expect(screen.queryByText('Resumen')).toBeNull()
+    expect(screen.queryByText('Total facturado')).toBeNull()
+    expect(screen.queryByText('R-0004')).toBeNull()
+    expect(document.querySelector('a[href="/presupuestos/8"]')).toBeNull()
+    expect(document.querySelector('a[href="/facturas/nueva"]')).toBeNull()
+    // Lo propio de la ficha sigue: editar y eliminar.
+    expect(screen.getByRole('button', { name: /Eliminar cliente/ })).toBeTruthy()
+  })
+
+  it('la edición inline no ofrece la consulta de CUIT si el producto no la tiene', async () => {
+    responder({ '/api/clientes/1': FICHA })
+    const user = userEvent.setup()
+    montar('/clientes/1', <ClienteDetalle conConsultaCuit={false} />)
+    await screen.findByText('Datos del cliente')
+    await user.click(screen.getByRole('button', { name: /Editar/ }))
+    await screen.findByRole('dialog')
+    expect(screen.queryByTitle('Consultar datos en ARCA')).toBeNull()
   })
 
   it('los alias: agrega, quita con confirmación, y muestra el error', async () => {
