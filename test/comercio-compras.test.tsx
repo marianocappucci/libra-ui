@@ -136,6 +136,22 @@ describe('ProveedorDetalle', () => {
     await waitFor(() => expect(screen.getByTestId('ubicacion').textContent).toBe('/proveedores'))
   })
 
+  it('sin `conEgresos` (un producto sin ese módulo) no pide ni muestra egresos, y la baja no los menciona', async () => {
+    responder({ '/api/proveedores': [ACME, PELADO], 'DELETE /api/proveedores/1': {} })
+    const user = userEvent.setup()
+    montar('/proveedores/1', <ProveedorDetalle conEgresos={false} />)
+    expect(await screen.findByText('Datos del proveedor')).toBeTruthy()
+    expect(screen.getByText('30-11111111-1')).toBeTruthy()
+    expect(pedidas().some((p) => p.includes('/api/egresos'))).toBe(false)
+    expect(screen.queryByText('Egresos registrados')).toBeNull()
+    expect(screen.queryByText('Nuevo egreso')).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: 'Eliminar proveedor' }))
+    expect(screen.getByRole('alertdialog').textContent).not.toContain('egresos')
+    await user.click(screen.getByRole('button', { name: 'Eliminar' }))
+    await waitFor(() => expect(pedidas()).toContain('DELETE /api/proveedores/1'))
+  })
+
   it('sin datos ni egresos lo dice; el que no existe, la baja rechazada y la caída avisan', async () => {
     responder({ '/api/proveedores': [ACME, PELADO], '/api/egresos': { items: [] }, 'DELETE /api/proveedores/2': { status: 409, detail: 'Tiene egresos' }, 'PUT /api/proveedores/2': { status: 400, detail: 'Nombre repetido' } })
     const user = userEvent.setup()
