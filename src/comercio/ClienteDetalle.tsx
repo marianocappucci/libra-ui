@@ -84,7 +84,23 @@ const EMPTY_VALUES: ClienteFormValues = {
 // /clientes/:id/editar, página ClienteForm.tsx ahora eliminada) precargado
 // con los datos del cliente ya cargados en esta página -- no hace falta un
 // segundo fetch.
-export function ClienteDetalle({ conListaDePrecio = false }: { conListaDePrecio?: boolean } = {}) {
+/** Las variantes de la ficha: qué módulos de la familia tiene el producto que la monta. Todas
+ *  son `true` por defecto (lo que hacen Contalibra y Restolibra); un producto que no tiene el
+ *  módulo las apaga y la ficha no muestra lo que no puede atender. */
+export type VariantesClienteDetalle = {
+  /** Lista de precios del add-on mayorista (se ofrece sólo si está). Default `false`. */
+  conListaDePrecio?: boolean
+  /** Auto-facturar de MercadoPago y alias de facturación (bandeja de MercadoPago). */
+  conMercadoPago?: boolean
+  /** Resumen y tablas de facturas, presupuestos y remitos, y sus botones «Nuevo…». */
+  conComprobantes?: boolean
+  /** El botón de consulta del CUIT en ARCA (`/api/consultar-cuit/:cuit`). */
+  conConsultaCuit?: boolean
+}
+
+export function ClienteDetalle(
+  { conListaDePrecio = false, conMercadoPago = true, conComprobantes = true, conConsultaCuit = true }: VariantesClienteDetalle = {},
+) {
   const { id } = useParams<{ id: string }>()
   const clienteId = Number(id)
   const navigate = useNavigate()
@@ -341,12 +357,14 @@ export function ClienteDetalle({ conListaDePrecio = false }: { conListaDePrecio?
                             <FormControl>
                               <Input {...field} className="w-36" placeholder="20-12345678-9" />
                             </FormControl>
-                            <Button
-                              type="button" size="sm" variant="outline" disabled={consultando}
-                              onClick={consultarCuit} title="Consultar datos en ARCA"
-                            >
-                              {consultando ? <Loader2 className="animate-spin" /> : <Search />}
-                            </Button>
+                            {conConsultaCuit && (
+                              <Button
+                                type="button" size="sm" variant="outline" disabled={consultando}
+                                onClick={consultarCuit} title="Consultar datos en ARCA"
+                              >
+                                {consultando ? <Loader2 className="animate-spin" /> : <Search />}
+                              </Button>
+                            )}
                           </div>
                           <FormMessage />
                         </FormItem>
@@ -469,43 +487,47 @@ export function ClienteDetalle({ conListaDePrecio = false }: { conListaDePrecio?
                 {cliente.address && <p><span className="text-muted-foreground">Domicilio:</span> {cliente.address}</p>}
                 {cliente.phone && <p><span className="text-muted-foreground">Teléfono:</span> {cliente.phone}</p>}
                 {cliente.email && <p><span className="text-muted-foreground">Email:</span> <a className="underline" href={`mailto:${cliente.email}`}>{cliente.email}</a></p>}
-                <div className="flex items-center gap-2 pt-1">
-                  <span className="text-muted-foreground">Auto-factura MP:</span>
-                  <Switch checked={Boolean(cliente.auto_facturar)} disabled={toggling} onCheckedChange={toggleAutoFacturar} />
-                  <span className="text-xs text-muted-foreground">{cliente.auto_facturar ? 'Activa' : 'Inactiva'}</span>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base"><BarChart3 className="size-4" />Resumen</CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-3">
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div>
-                    <p className="text-2xl font-bold text-primary">{cliente.facturas.length}</p>
-                    <p className="text-xs text-muted-foreground">Facturas</p>
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{cliente.presupuestos.length}</p>
-                    <p className="text-xs text-muted-foreground">Presupuestos</p>
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{cliente.remitos.length}</p>
-                    <p className="text-xs text-muted-foreground">Remitos</p>
-                  </div>
-                </div>
-                {cliente.facturas.length > 0 && (
-                  <div className="border-t pt-3 text-center">
-                    <p className="text-xs text-muted-foreground">Total facturado</p>
-                    <p className="text-lg font-bold text-primary">
-                      {formatCurrency(cliente.facturas.reduce((sum, f) => sum + f.total, 0))}
-                    </p>
+                {conMercadoPago && (
+                  <div className="flex items-center gap-2 pt-1">
+                    <span className="text-muted-foreground">Auto-factura MP:</span>
+                    <Switch checked={Boolean(cliente.auto_facturar)} disabled={toggling} onCheckedChange={toggleAutoFacturar} />
+                    <span className="text-xs text-muted-foreground">{cliente.auto_facturar ? 'Activa' : 'Inactiva'}</span>
                   </div>
                 )}
               </CardContent>
             </Card>
+
+            {conComprobantes && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base"><BarChart3 className="size-4" />Resumen</CardTitle>
+                </CardHeader>
+                <CardContent className="grid gap-3">
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div>
+                      <p className="text-2xl font-bold text-primary">{cliente.facturas.length}</p>
+                      <p className="text-xs text-muted-foreground">Facturas</p>
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">{cliente.presupuestos.length}</p>
+                      <p className="text-xs text-muted-foreground">Presupuestos</p>
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">{cliente.remitos.length}</p>
+                      <p className="text-xs text-muted-foreground">Remitos</p>
+                    </div>
+                  </div>
+                  {cliente.facturas.length > 0 && (
+                    <div className="border-t pt-3 text-center">
+                      <p className="text-xs text-muted-foreground">Total facturado</p>
+                      <p className="text-lg font-bold text-primary">
+                        {formatCurrency(cliente.facturas.reduce((sum, f) => sum + f.total, 0))}
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {conListaDePrecio && (
@@ -537,183 +559,189 @@ export function ClienteDetalle({ conListaDePrecio = false }: { conListaDePrecio?
             </Card>
           )}
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base"><ArrowLeftRight className="size-4" />Alias de facturación (Mercado Pago)</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-3">
-              <p className="text-xs text-muted-foreground">
-                Si un pago de MP llega con un CUIT o email distinto al de este cliente (por ejemplo, paga con otra
-                cuenta), agregá ese CUIT o email acá para que se facture igual a <strong>{cliente.name}</strong> en
-                vez de crear un cliente nuevo.
-              </p>
+          {conMercadoPago && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base"><ArrowLeftRight className="size-4" />Alias de facturación (Mercado Pago)</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-3">
+                <p className="text-xs text-muted-foreground">
+                  Si un pago de MP llega con un CUIT o email distinto al de este cliente (por ejemplo, paga con otra
+                  cuenta), agregá ese CUIT o email acá para que se facture igual a <strong>{cliente.name}</strong> en
+                  vez de crear un cliente nuevo.
+                </p>
 
-              {aliasError && <p className="text-sm text-destructive">{aliasError}</p>}
+                {aliasError && <p className="text-sm text-destructive">{aliasError}</p>}
 
-              {cliente.alias_facturacion.length > 0 ? (
-                <ul className="divide-y">
-                  {cliente.alias_facturacion.map((a) => (
-                    <li key={a.id} className="flex items-center justify-between gap-2 py-2 text-sm">
-                      <span className="flex items-center gap-2">
-                        <Badge variant="secondary">{a.tipo === 'cuit' ? 'CUIT' : 'Email'}</Badge>
-                        <span className="font-mono">{a.valor}</span>
-                      </span>
-                      <Button size="icon" variant="outline" onClick={() => setConfirmDeleteAlias(a)}><Trash2 /></Button>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-muted-foreground">Todavía no hay alias configurados para este cliente.</p>
+                {cliente.alias_facturacion.length > 0 ? (
+                  <ul className="divide-y">
+                    {cliente.alias_facturacion.map((a) => (
+                      <li key={a.id} className="flex items-center justify-between gap-2 py-2 text-sm">
+                        <span className="flex items-center gap-2">
+                          <Badge variant="secondary">{a.tipo === 'cuit' ? 'CUIT' : 'Email'}</Badge>
+                          <span className="font-mono">{a.valor}</span>
+                        </span>
+                        <Button size="icon" variant="outline" onClick={() => setConfirmDeleteAlias(a)}><Trash2 /></Button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Todavía no hay alias configurados para este cliente.</p>
+                )}
+
+                <div className="flex flex-wrap items-end gap-2 border-t pt-3">
+                  <div className="grid gap-2">
+                    <Label>Tipo</Label>
+                    <Select value={aliasTipo} onValueChange={(v) => setAliasTipo(v as 'cuit' | 'email')}>
+                      <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="cuit">CUIT</SelectItem>
+                        <SelectItem value="email">Email</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Valor</Label>
+                    <Input value={aliasValor} onChange={(e) => setAliasValor(e.target.value)} placeholder="20-12345678-9 o correo@ejemplo.com" className="w-56" />
+                  </div>
+                  <Button size="sm" variant="outline" disabled={savingAlias || !aliasValor.trim()} onClick={agregarAlias}>
+                    <Plus />{savingAlias ? 'Agregando…' : 'Agregar alias'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {conComprobantes && (
+            <>
+              {cliente.facturas.length > 0 && (
+                <Card>
+                  <CardHeader className="flex items-center justify-between space-y-0">
+                    <CardTitle className="flex items-center gap-2 text-base"><Receipt className="size-4" />Facturas y comprobantes</CardTitle>
+                    <Button asChild size="sm" variant="outline"><Link to="/facturas/nueva"><Plus />Nueva factura</Link></Button>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <table className="w-full text-sm">
+                      <thead className="border-b text-muted-foreground">
+                        <tr>
+                          <th className="p-3 text-left font-medium">Tipo</th>
+                          <th className="p-3 text-left font-medium">Número</th>
+                          <th className="p-3 text-left font-medium">Fecha</th>
+                          <th className="p-3 text-right font-medium">Total</th>
+                          <th className="p-3 text-center font-medium">CAE</th>
+                          <th className="p-3"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cliente.facturas.map((f) => (
+                          <tr key={f.id} className="border-b last:border-0">
+                            <td className="p-3"><Badge variant="secondary">{TIPO_LABELS[f.tipo] ?? 'Cbte.'}</Badge></td>
+                            <td className="p-3 font-mono text-xs">{String(f.punto_venta).padStart(4, '0')}-{String(f.numero).padStart(8, '0')}</td>
+                            <td className="p-3 text-muted-foreground">{fecha(f.fecha)}</td>
+                            <td className="p-3 text-right font-medium">{formatCurrency(f.total)}</td>
+                            <td className="p-3 text-center">
+                              {f.cae && f.cae !== 'PENDIENTE' ? (
+                                <BadgeEstado tono="ok">Autorizada</BadgeEstado>
+                              ) : (
+                                <BadgeEstado tono="atencion">Pendiente</BadgeEstado>
+                              )}
+                            </td>
+                            <td className="p-3 text-right">
+                              <Button asChild size="icon" variant="outline"><Link to={`/facturas/${f.id}`}><Eye /></Link></Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </CardContent>
+                </Card>
               )}
 
-              <div className="flex flex-wrap items-end gap-2 border-t pt-3">
-                <div className="grid gap-2">
-                  <Label>Tipo</Label>
-                  <Select value={aliasTipo} onValueChange={(v) => setAliasTipo(v as 'cuit' | 'email')}>
-                    <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="cuit">CUIT</SelectItem>
-                      <SelectItem value="email">Email</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-2">
-                  <Label>Valor</Label>
-                  <Input value={aliasValor} onChange={(e) => setAliasValor(e.target.value)} placeholder="20-12345678-9 o correo@ejemplo.com" className="w-56" />
-                </div>
-                <Button size="sm" variant="outline" disabled={savingAlias || !aliasValor.trim()} onClick={agregarAlias}>
-                  <Plus />{savingAlias ? 'Agregando…' : 'Agregar alias'}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+              {cliente.presupuestos.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-base"><FileText className="size-4" />Presupuestos</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <table className="w-full text-sm">
+                      <thead className="border-b text-muted-foreground">
+                        <tr>
+                          <th className="p-3 text-left font-medium">N°</th>
+                          <th className="p-3 text-left font-medium">Fecha</th>
+                          <th className="p-3 text-left font-medium">Válido hasta</th>
+                          <th className="p-3 text-right font-medium">Total</th>
+                          <th className="p-3 text-center font-medium">Estado</th>
+                          <th className="p-3"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cliente.presupuestos.map((p) => (
+                          <tr key={p.id} className="border-b last:border-0">
+                            <td className="p-3 font-mono text-xs">{p.number}</td>
+                            <td className="p-3 text-muted-foreground">{fecha(p.date)}</td>
+                            <td className="p-3 text-muted-foreground">{fecha(p.valid_until) || '—'}</td>
+                            <td className="p-3 text-right font-medium">{formatCurrency(p.total)}</td>
+                            <td className="p-3 text-center">
+                              <BadgeEstado tono={ESTADO_PRESUPUESTO_TONO[p.status] ?? 'neutro'}>
+                                {ESTADO_PRESUPUESTO_LABEL[p.status] ?? p.status ?? 'Borrador'}
+                              </BadgeEstado>
+                            </td>
+                            <td className="p-3 text-right">
+                              <Button asChild size="icon" variant="outline"><Link to={`/presupuestos/${p.id}`}><Eye /></Link></Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </CardContent>
+                </Card>
+              )}
 
-          {cliente.facturas.length > 0 && (
-            <Card>
-              <CardHeader className="flex items-center justify-between space-y-0">
-                <CardTitle className="flex items-center gap-2 text-base"><Receipt className="size-4" />Facturas y comprobantes</CardTitle>
-                <Button asChild size="sm" variant="outline"><Link to="/facturas/nueva"><Plus />Nueva factura</Link></Button>
-              </CardHeader>
-              <CardContent className="p-0">
-                <table className="w-full text-sm">
-                  <thead className="border-b text-muted-foreground">
-                    <tr>
-                      <th className="p-3 text-left font-medium">Tipo</th>
-                      <th className="p-3 text-left font-medium">Número</th>
-                      <th className="p-3 text-left font-medium">Fecha</th>
-                      <th className="p-3 text-right font-medium">Total</th>
-                      <th className="p-3 text-center font-medium">CAE</th>
-                      <th className="p-3"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cliente.facturas.map((f) => (
-                      <tr key={f.id} className="border-b last:border-0">
-                        <td className="p-3"><Badge variant="secondary">{TIPO_LABELS[f.tipo] ?? 'Cbte.'}</Badge></td>
-                        <td className="p-3 font-mono text-xs">{String(f.punto_venta).padStart(4, '0')}-{String(f.numero).padStart(8, '0')}</td>
-                        <td className="p-3 text-muted-foreground">{fecha(f.fecha)}</td>
-                        <td className="p-3 text-right font-medium">{formatCurrency(f.total)}</td>
-                        <td className="p-3 text-center">
-                          {f.cae && f.cae !== 'PENDIENTE' ? (
-                            <BadgeEstado tono="ok">Autorizada</BadgeEstado>
-                          ) : (
-                            <BadgeEstado tono="atencion">Pendiente</BadgeEstado>
-                          )}
-                        </td>
-                        <td className="p-3 text-right">
-                          <Button asChild size="icon" variant="outline"><Link to={`/facturas/${f.id}`}><Eye /></Link></Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </CardContent>
-            </Card>
-          )}
+              {cliente.remitos.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-base"><Truck className="size-4" />Remitos</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <table className="w-full text-sm">
+                      <thead className="border-b text-muted-foreground">
+                        <tr>
+                          <th className="p-3 text-left font-medium">N°</th>
+                          <th className="p-3 text-left font-medium">Fecha</th>
+                          <th className="p-3 text-right font-medium">Total</th>
+                          <th className="p-3"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cliente.remitos.map((r) => (
+                          <tr key={r.id} className="border-b last:border-0">
+                            <td className="p-3 font-mono text-xs">{r.number}</td>
+                            <td className="p-3 text-muted-foreground">{fecha(r.date)}</td>
+                            <td className="p-3 text-right font-medium">{formatCurrency(r.total)}</td>
+                            <td className="p-3 text-right">
+                              <Button asChild size="icon" variant="outline"><Link to={`/remitos/${r.id}`}><Eye /></Link></Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </CardContent>
+                </Card>
+              )}
 
-          {cliente.presupuestos.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base"><FileText className="size-4" />Presupuestos</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <table className="w-full text-sm">
-                  <thead className="border-b text-muted-foreground">
-                    <tr>
-                      <th className="p-3 text-left font-medium">N°</th>
-                      <th className="p-3 text-left font-medium">Fecha</th>
-                      <th className="p-3 text-left font-medium">Válido hasta</th>
-                      <th className="p-3 text-right font-medium">Total</th>
-                      <th className="p-3 text-center font-medium">Estado</th>
-                      <th className="p-3"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cliente.presupuestos.map((p) => (
-                      <tr key={p.id} className="border-b last:border-0">
-                        <td className="p-3 font-mono text-xs">{p.number}</td>
-                        <td className="p-3 text-muted-foreground">{fecha(p.date)}</td>
-                        <td className="p-3 text-muted-foreground">{fecha(p.valid_until) || '—'}</td>
-                        <td className="p-3 text-right font-medium">{formatCurrency(p.total)}</td>
-                        <td className="p-3 text-center">
-                          <BadgeEstado tono={ESTADO_PRESUPUESTO_TONO[p.status] ?? 'neutro'}>
-                            {ESTADO_PRESUPUESTO_LABEL[p.status] ?? p.status ?? 'Borrador'}
-                          </BadgeEstado>
-                        </td>
-                        <td className="p-3 text-right">
-                          <Button asChild size="icon" variant="outline"><Link to={`/presupuestos/${p.id}`}><Eye /></Link></Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </CardContent>
-            </Card>
-          )}
-
-          {cliente.remitos.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base"><Truck className="size-4" />Remitos</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <table className="w-full text-sm">
-                  <thead className="border-b text-muted-foreground">
-                    <tr>
-                      <th className="p-3 text-left font-medium">N°</th>
-                      <th className="p-3 text-left font-medium">Fecha</th>
-                      <th className="p-3 text-right font-medium">Total</th>
-                      <th className="p-3"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cliente.remitos.map((r) => (
-                      <tr key={r.id} className="border-b last:border-0">
-                        <td className="p-3 font-mono text-xs">{r.number}</td>
-                        <td className="p-3 text-muted-foreground">{fecha(r.date)}</td>
-                        <td className="p-3 text-right font-medium">{formatCurrency(r.total)}</td>
-                        <td className="p-3 text-right">
-                          <Button asChild size="icon" variant="outline"><Link to={`/remitos/${r.id}`}><Eye /></Link></Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </CardContent>
-            </Card>
-          )}
-
-          {cliente.facturas.length === 0 && cliente.presupuestos.length === 0 && cliente.remitos.length === 0 && (
-            <Card>
-              <CardContent className="flex flex-col items-center gap-3 py-10 text-center text-sm text-muted-foreground">
-                <Inbox className="size-8 opacity-50" />
-                <p>Este cliente no tiene comprobantes asociados todavía.</p>
-                <div className="flex gap-2">
-                  <Button asChild size="sm" variant="outline"><Link to="/facturas/nueva"><Receipt />Nueva factura</Link></Button>
-                  <Button asChild size="sm" variant="outline"><Link to="/presupuestos/nuevo"><FileText />Nuevo presupuesto</Link></Button>
-                </div>
-              </CardContent>
-            </Card>
+              {cliente.facturas.length === 0 && cliente.presupuestos.length === 0 && cliente.remitos.length === 0 && (
+                <Card>
+                  <CardContent className="flex flex-col items-center gap-3 py-10 text-center text-sm text-muted-foreground">
+                    <Inbox className="size-8 opacity-50" />
+                    <p>Este cliente no tiene comprobantes asociados todavía.</p>
+                    <div className="flex gap-2">
+                      <Button asChild size="sm" variant="outline"><Link to="/facturas/nueva"><Receipt />Nueva factura</Link></Button>
+                      <Button asChild size="sm" variant="outline"><Link to="/presupuestos/nuevo"><FileText />Nuevo presupuesto</Link></Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </>
           )}
 
           {cliente.activo && (

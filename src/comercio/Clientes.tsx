@@ -48,7 +48,9 @@ const EMPTY_VALUES: ClienteFormValues = {
   name: '', address: '', cuit_dni: '', email: '', phone: '', iva_condition: '', auto_facturar: false,
 }
 
-export function Clientes() {
+/** Variantes del listado: `conConsultaCuit` (default `true`) muestra el botón que consulta el CUIT
+ *  en ARCA (`/api/consultar-cuit/:cuit`); un producto sin ese endpoint lo apaga. */
+export function Clientes({ conConsultaCuit = true }: { conConsultaCuit?: boolean } = {}) {
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -248,12 +250,14 @@ export function Clientes() {
                         <FormControl>
                           <Input {...field} className="w-36" placeholder="20-12345678-9" />
                         </FormControl>
-                        <Button
-                          type="button" size="sm" variant="outline" disabled={consultando}
-                          onClick={consultarCuit} title="Consultar datos en ARCA"
-                        >
-                          {consultando ? <Loader2 className="animate-spin" /> : <Search />}
-                        </Button>
+                        {conConsultaCuit && (
+                          <Button
+                            type="button" size="sm" variant="outline" disabled={consultando}
+                            onClick={consultarCuit} title="Consultar datos en ARCA"
+                          >
+                            {consultando ? <Loader2 className="animate-spin" /> : <Search />}
+                          </Button>
+                        )}
                       </div>
                       <FormMessage />
                     </FormItem>
