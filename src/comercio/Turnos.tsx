@@ -5,11 +5,14 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import type { ColumnDef } from '../data-table'
 import { api, ApiError } from '../api-client'
-import { formatoMoneda, type Turno } from './tipos'
+import { formatoMoneda, type CajaConfig, type Turno } from './tipos'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
 import { BadgeEstado } from '../badge-estado'
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose,
@@ -41,9 +44,13 @@ function DiferenciaBadge({ esperado, declarado }: { esperado: number | null; dec
 export type TurnosProps = {
   /** Si la sesión ve los turnos de todos los cajeros (los productos: rol admin). */
   esAdmin?: boolean
+  /** Un producto con varias cajas por sucursal: al abrir el turno se elige sobre
+   *  qué caja (las activas y libres de `/api/cajas`). Sin esto el turno se abre
+   *  suelto, como en Contalibra y Restolibra. */
+  conCaja?: boolean
 }
 
-export function Turnos({ esAdmin = false }: TurnosProps = {}) {
+export function Turnos({ esAdmin = false, conCaja = false }: TurnosProps = {}) {
   const navigate = useNavigate()
   const [turnos, setTurnos] = useState<Turno[]>([])
   const [turnoActivo, setTurnoActivo] = useState<Turno | null>(null)
@@ -55,6 +62,8 @@ export function Turnos({ esAdmin = false }: TurnosProps = {}) {
   const [montoInicial, setMontoInicial] = useState('0')
   const [notas, setNotas] = useState('')
   const [abriendo, setAbriendo] = useState(false)
+  const [cajas, setCajas] = useState<CajaConfig[]>([])
+  const [cajaId, setCajaId] = useState('')
 
   useEffect(() => { load() }, [])
 
@@ -77,17 +86,28 @@ export function Turnos({ esAdmin = false }: TurnosProps = {}) {
     }
   }
 
-  function abrirDialogoTurno() {
+  async function abrirDialogoTurno() {
     setMontoInicial('0')
     setNotas('')
     setAbrirOpen(true)
+    if (!conCaja) return
+    try {
+      const todas = await api.get<CajaConfig[]>('/api/cajas')
+      const libres = todas.filter((c) => !!c.activo && !c.tiene_turno_abierto)
+      setCajas(libres)
+      setCajaId(String((libres.find((c) => !!c.es_default) ?? libres[0])?.id ?? ''))
+    } catch (err) {
+      setError(describeError(err))
+    }
   }
 
   async function abrirTurno() {
     setAbriendo(true)
     setError(null)
     try {
-      const turno = await api.post<Turno>('/api/turnos/abrir', { monto_inicial: Number(montoInicial) || 0, notas })
+      const turno = await api.post<Turno>('/api/turnos/abrir', {
+        monto_inicial: Number(montoInicial) || 0, notas, ...(conCaja ? { caja_id: Number(cajaId) } : {}),
+      })
       setAbrirOpen(false)
       navigate(`/turnos/${turno.id}`)
     } catch (err) {
@@ -103,6 +123,16 @@ export function Turnos({ esAdmin = false }: TurnosProps = {}) {
     ]
     if (esAdmin) {
       cols.push({ accessorKey: 'usuario_nombre', header: sortableHeader('Cajero'), size: 85, minSize: 80, meta: { stretch: true }, cell: ({ row }) => <span className="block truncate font-medium" title={row.original.usuario_nombre ?? undefined}>{row.original.usuario_nombre}</span> })
+    }
+    if (turnos.some((t) => t.caja)) {
+      cols.push({
+        id: 'caja', header: sortableHeader('Caja'), size: 110, minSize: 90,
+        accessorFn: (t) => t.caja?.nombre ?? '',
+        cell: ({ row }) => {
+          const { caja, sucursal } = row.original
+          return <span className="block truncate" title={sucursal ? `${caja?.nombre} — ${sucursal.nombre}` : caja?.nombre}>{caja?.nombre ?? '—'}</span>
+        },
+      })
     }
     cols.push(
       { accessorKey: 'apertura', header: 'Apertura', size: 126, minSize: 110, cell: ({ row }) => <span className="block truncate" title={row.original.apertura ?? undefined}>{sinSegundos(row.original.apertura)}</span> },
@@ -153,7 +183,7 @@ export function Turnos({ esAdmin = false }: TurnosProps = {}) {
       },
     )
     return cols
-  }, [esAdmin])
+  }, [esAdmin, turnos])
 
   return (
     <div className="grid gap-4">
@@ -170,12 +200,25 @@ export function Turnos({ esAdmin = false }: TurnosProps = {}) {
               </DialogHeader>
               <div className="grid gap-3">
                 <p className="text-sm text-muted-foreground">Registrá el efectivo en caja al inicio del turno. Se usa para calcular la diferencia al cierre.</p>
+                {conCaja && (
+                  <div className="grid gap-2">
+                    <Label htmlFor="turno-caja">Caja</Label>
+                    <Select value={cajaId} onValueChange={(v) => v && setCajaId(v)}>
+                      <SelectTrigger id="turno-caja"><SelectValue placeholder="No hay una caja libre" /></SelectTrigger>
+                      <SelectContent>
+                        {cajas.map((c) => (
+                          <SelectItem key={c.id} value={String(c.id)}>{c.nombre}{c.sucursal_nombre ? ` — ${c.sucursal_nombre}` : ''}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="grid gap-2"><Label htmlFor="turno-fondo">Fondo inicial</Label><Input id="turno-fondo" type="number" step="0.01" value={montoInicial} onChange={(e) => setMontoInicial(e.target.value)} /></div>
                 <div className="grid gap-2"><Label htmlFor="turno-notas">Notas</Label><Input id="turno-notas" value={notas} onChange={(e) => setNotas(e.target.value)} placeholder="Ej: Turno mañana, cajero Juan…" /></div>
               </div>
               <DialogFooter>
                 <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
-                <Button disabled={abriendo} onClick={abrirTurno}><PlayCircle />{abriendo ? 'Abriendo…' : 'Abrir turno ahora'}</Button>
+                <Button disabled={abriendo || (conCaja && !cajaId)} onClick={abrirTurno}><PlayCircle />{abriendo ? 'Abriendo…' : 'Abrir turno ahora'}</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>

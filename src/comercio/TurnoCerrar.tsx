@@ -99,6 +99,7 @@ export function TurnoCerrar() {
               <CardHeader><CardTitle className="text-base">Resumen del turno</CardTitle></CardHeader>
               <CardContent className="grid gap-2 text-sm">
                 <p><span className="text-muted-foreground">Cajero:</span> {turno.usuario_nombre}</p>
+                {turno.caja && <p><span className="text-muted-foreground">Caja:</span> {turno.caja.nombre}{turno.sucursal ? ` — ${turno.sucursal.nombre}` : ''}</p>}
                 <p><span className="text-muted-foreground">Apertura:</span> {fechaHora(turno.apertura)}</p>
                 <p><span className="text-muted-foreground">Fondo inicial:</span> {formatoMoneda(turno.monto_inicial)}</p>
                 <p><span className="text-muted-foreground">Ventas realizadas:</span> {resumen.ventas.length}</p>

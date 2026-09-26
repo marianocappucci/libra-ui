@@ -188,6 +188,10 @@ export type Turno = {
   estado: 'abierto' | 'cerrado'
   notas: string
   caja_id?: number | null
+  /** La caja y la sucursal donde está abierto, cuando el producto las trae
+   *  (VentaLibra: `enriquecer` de `build_turnos_router`). Sin ellas no se muestra nada. */
+  caja?: { id: number; nombre: string; punto_venta?: number | null } | null
+  sucursal?: { id: number; nombre: string } | null
 }
 
 export type ResumenTurno = {
@@ -210,6 +214,12 @@ export type CajaConfig = {
   /** El `external_id` del POS de MercadoPago de este mostrador. Cada caja
    *  con QR necesita el suyo propio; `null` o vacío deja la caja sin QR. */
   mp_pos_id: string | null
+  /** Sólo en un producto con sucursales (`CajaPayload.sucursal_id`). */
+  sucursal_id?: number | null
+  /** El nombre de la sucursal, si el producto lo agrega (`OpcionesCajas.enriquecer`). */
+  sucursal_nombre?: string | null
+  /** Si hay un turno abierto en esta caja, de cualquier cajero: no se ofrece para abrir otro. */
+  tiene_turno_abierto?: boolean
 }
 
 export type CajaMovimiento = {
