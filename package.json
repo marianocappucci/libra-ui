@@ -1,6 +1,6 @@
 {
   "name": "libra-ui",
-  "version": "0.79.0",
+  "version": "0.80.0",
   "private": true,
   "type": "module",
   "description": "Paquete de frontend compartido para los verticales de la familia Libra sin backoffice server-rendered propio (Gestiolibra, MedLibra, VentaLibra).",
@@ -40,6 +40,8 @@
     "./comercio/Cajas": "./src/comercio/Cajas.tsx",
     "./comercio/ClienteDetalle": "./src/comercio/ClienteDetalle.tsx",
     "./comercio/Clientes": "./src/comercio/Clientes.tsx",
+    "./comercio/CompraDetalle": "./src/comercio/CompraDetalle.tsx",
+    "./comercio/Compras": "./src/comercio/Compras.tsx",
     "./comercio/CuentaCorriente": "./src/comercio/CuentaCorriente.tsx",
     "./comercio/CuentaCorrienteDetalle": "./src/comercio/CuentaCorrienteDetalle.tsx",
     "./comercio/DepositoDetalle": "./src/comercio/DepositoDetalle.tsx",
