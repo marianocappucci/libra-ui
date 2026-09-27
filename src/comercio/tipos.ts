@@ -397,6 +397,75 @@ export function opcionesCategoriaPorNombre(categorias: { id: number; nombre: str
   return categorias.map((c) => ({ value: c.nombre, label: c.nombre }))
 }
 
+// ── Compras (F9, 2026-09-27) ──────────────────────────────────────────────
+// El contrato de `libracommerce.web.compras_router` (v0.21.0), extraído de
+// VentaLibra: el único producto de la familia que compra con seguimiento de
+// pedido/recibido y movimiento de stock (Contalibra/Restolibra resuelven
+// "comprarle a un proveedor" con Egresos, sin eso). Los campos hablan el
+// vocabulario del dominio, salvo `proveedor_id`: lo único que un producto
+// puede traducir a su propio esquema de ids (`OpcionesCompras`).
+
+export type PurchaseOrderStatus = 'draft' | 'sent' | 'partial' | 'received' | 'cancelled'
+
+export const PURCHASE_ORDER_STATUS_LABELS: Record<PurchaseOrderStatus, string> = {
+  draft: 'Borrador', sent: 'Enviada', partial: 'Recibida parcial',
+  received: 'Recibida', cancelled: 'Cancelada',
+}
+
+export const PURCHASE_ORDER_STATUS_TONO: Record<PurchaseOrderStatus, TonoEstado> = {
+  draft: 'neutro', sent: 'curso', partial: 'atencion',
+  received: 'ok', cancelled: 'negativo',
+}
+
+export type PurchaseOrderItem = {
+  item_id: number
+  quantity_ordered: string
+  quantity_received: string
+  pending_quantity: string
+  unit_cost: string
+  tax_rate: string
+  subtotal: string
+}
+
+export type PurchaseOrder = {
+  id: number
+  number: string
+  /** El `proveedor_id` del producto: con el que se pide y se nombra al proveedor. Nunca `supplier_party_id`
+   *  (el motor lo traduce puertas adentro, ver `OpcionesCompras.resolver_proveedor`/`proveedor_de`). */
+  proveedor_id: number
+  status: PurchaseOrderStatus
+  items: PurchaseOrderItem[]
+  is_fully_received: boolean
+}
+
+export type PurchaseReceiptStatus = 'draft' | 'confirmed'
+
+export const PURCHASE_RECEIPT_STATUS_LABELS: Record<PurchaseReceiptStatus, string> = {
+  draft: 'Borrador', confirmed: 'Confirmada',
+}
+
+export const PURCHASE_RECEIPT_STATUS_TONO: Record<PurchaseReceiptStatus, TonoEstado> = {
+  draft: 'neutro', confirmed: 'ok',
+}
+
+export type PurchaseReceiptItem = {
+  item_id: number
+  quantity: string
+  unit_cost: string
+  lot_code: string | null
+  expires_at: string | null
+}
+
+export type PurchaseReceipt = {
+  id: number
+  proveedor_id: number
+  purchase_order_id: number | null
+  status: PurchaseReceiptStatus
+  items: PurchaseReceiptItem[]
+  received_at: string | null
+  document_reference: string | null
+}
+
 export type ClienteConSaldoCC = { id: number; name: string; cuit_dni: string; saldo: number }
 
 export type MovimientoCC = {
