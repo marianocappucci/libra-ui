@@ -596,3 +596,55 @@ export type LogsData = {
   usuarios: { id: number; nombre: string; role: string }[]
   auth_log: LogAuth[]
 }
+
+// ── Dashboard (fase 13, 2026-09-27) ───────────────────────────────────────
+// El contrato de `libracore.dashboard_router.build_dashboard_router`.
+// Extraído de `pages/Dashboard.tsx` de Contalibra (F9, el único de los tres
+// productos con pantalla propia: Restolibra lo redirige a `/salon` sin
+// llegar a renderizarlo).
+
+export type FacturaSinCobrar = {
+  id: number
+  tipo: number
+  punto_venta: number
+  numero: number
+  fecha: string
+  cliente_razon: string
+  total: number
+  letra: string
+  label_numero: string
+}
+
+export type PresupuestoPendiente = {
+  id: number
+  number: string
+  date: string
+  client_name: string
+  total: number
+}
+
+/** Un movimiento crudo de `caja_movimientos` (`SELECT *`, sin el `JOIN` a cajas/usuarios que sí trae
+ *  `CajaMovimiento`): lo que devuelve el tablero en `ultimos_movimientos`. */
+export type MovimientoDashboard = {
+  id: number
+  fecha: string
+  tipo: string
+  concepto: string
+  monto: number
+  referencia: string
+  factura_id: number | null
+  medio_pago: string
+}
+
+export type DashboardData = {
+  mes_desde: string
+  mes_hasta: string
+  facturado_mes: number
+  cobrado_mes: number
+  egresos_mes: number
+  saldo_total: number
+  cant_facturas_mes: number
+  facturas_sin_cobrar: FacturaSinCobrar[]
+  presupuestos_pendientes: PresupuestoPendiente[]
+  ultimos_movimientos: MovimientoDashboard[]
+}
