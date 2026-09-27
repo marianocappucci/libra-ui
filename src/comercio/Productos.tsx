@@ -23,13 +23,15 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import type { ColumnDef } from '../data-table'
-import { ClipboardList, Package, Pencil, Plus, Search, Trash2, TrendingUp, X } from 'lucide-react'
+import { Barcode, ClipboardList, Package, Pencil, Plus, Search, Trash2, TrendingUp, X } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
 import { anchoColumnaAcciones, DataTable, sortableHeader } from '../data-table'
 import { BadgeEstado } from '../badge-estado'
 import { TituloPantalla } from '../titulo-pantalla'
 import { UNIDADES, type CategoriaProducto, type Estacion, type Producto } from './tipos'
+import { ProductoCodigosVariantes } from './ProductoCodigosVariantes'
+import { formatEntero } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -99,6 +101,13 @@ export type ProductosProps = {
   rutaDeReceta?: (id: number) => string
   /** Controles extra del encabezado, a la derecha del alta. */
   acciones?: ReactNode
+  /** Un botón por fila que abre los **códigos** (barras, SKU, balanza) y las **variantes** del producto. Es lo de
+   *  VentaLibra: un producto con varios códigos y con talle/color. */
+  conDetalle?: boolean
+  /** Una columna «Stock total» (la suma de todos los depósitos, de `GET /api/stock`). */
+  conStockTotal?: boolean
+  /** El botón de eliminar. Un producto con historial no se elimina sino que se desactiva: quien lo aplica lo apaga. */
+  conEliminar?: boolean
 }
 
 export function Productos({
@@ -108,12 +117,20 @@ export function Productos({
   codigoAutogenerado = false,
   rutaDeReceta,
   acciones,
+  conDetalle = false,
+  conStockTotal = false,
+  conEliminar = true,
 }: ProductosProps) {
   const [productos, setProductos] = useState<Producto[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [q, setQ] = useState('')
   const [categorias, setCategorias] = useState<CategoriaProducto[]>([])
+  // Las unidades las dice el backend (`OpcionesCatalogo.unidades`; VentaLibra las administra en su base); la lista de
+  // siempre es el respaldo si no contesta.
+  const [unidades, setUnidades] = useState<string[]>([...UNIDADES])
+  const [detalle, setDetalle] = useState<Producto | null>(null)
+  const [stockTotal, setStockTotal] = useState<Record<number, number>>({})
   const [confirmDelete, setConfirmDelete] = useState<Producto | null>(null)
 
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -138,6 +155,12 @@ export function Productos({
   useEffect(() => {
     loadProductos()
     api.get<CategoriaProducto[]>('/api/productos/categorias').then(setCategorias).catch(() => {})
+    api.get<string[]>('/api/productos/unidades').then((u) => { if (Array.isArray(u) && u.length > 0) setUnidades(u) }).catch(() => {})
+    if (conStockTotal) {
+      api.get<{ productos: { id: number; stock_actual: number }[] }>('/api/stock')
+        .then((d) => setStockTotal(Object.fromEntries((d?.productos ?? []).map((p) => [p.id, p.stock_actual]))))
+        .catch(() => setStockTotal({}))
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -284,6 +307,20 @@ export function Productos({
       { accessorKey: 'unidad', header: 'Unidad', size: 70, minSize: 64, cell: ({ row }) => <span className="block truncate">{row.original.unidad}</span> },
       { accessorKey: 'precio_venta', header: () => <div className="text-right">Precio venta</div>, size: 114, minSize: 100, cell: ({ row }) => <div className="truncate text-right">{formatCurrency(row.original.precio_venta)}</div> },
       { accessorKey: 'precio_costo', header: () => <div className="text-right">Precio costo</div>, size: 114, minSize: 100, cell: ({ row }) => <div className="truncate text-right text-muted-foreground">{formatCurrency(row.original.precio_costo)}</div> },
+      ...(conStockTotal ? [{
+        // 🔑 «Stock total» y no «Stock»: es la suma de TODOS los depósitos; con varias sucursales un «Stock: 10» se lee
+        // como «hay 10 acá». El reparto está en la pantalla de Stock.
+        id: 'stock_total',
+        header: sortableHeader('Stock total'),
+        size: 110,
+        minSize: 90,
+        accessorFn: (p: Producto) => stockTotal[p.id] ?? 0,
+        cell: ({ row }: { row: { original: Producto } }) => {
+          const n = stockTotal[row.original.id]
+          if (n === undefined) return <span className="text-muted-foreground">—</span>
+          return <span className={`tabular-nums ${n < 0 ? 'font-medium text-destructive' : n === 0 ? 'text-muted-foreground' : ''}`}>{formatEntero(n)}</span>
+        },
+      } as ColumnDef<Producto>] : []),
       {
         accessorKey: 'activo',
         header: () => <div className="text-center">Estado</div>,
@@ -300,8 +337,8 @@ export function Productos({
       {
         id: 'actions',
         header: () => <div className="text-right">Acciones</div>,
-        size: anchoColumnaAcciones(rutaDeReceta ? 3 : 2),
-        minSize: anchoColumnaAcciones(rutaDeReceta ? 3 : 2),
+        size: anchoColumnaAcciones(1 + (rutaDeReceta ? 1 : 0) + (conDetalle ? 1 : 0) + (conEliminar ? 1 : 0)),
+        minSize: anchoColumnaAcciones(1 + (rutaDeReceta ? 1 : 0) + (conDetalle ? 1 : 0) + (conEliminar ? 1 : 0)),
         cell: ({ row }) => (
           <div className="flex justify-end gap-1">
             {rutaDeReceta && (
@@ -310,14 +347,19 @@ export function Productos({
               </Button>
             )}
             <Button size="icon" variant="outline" title="Editar producto" aria-label="Editar producto" onClick={() => abrirEditar(row.original)}><Pencil /></Button>
-            <Button size="icon" variant="outline" title="Eliminar producto" aria-label="Eliminar producto" onClick={() => setConfirmDelete(row.original)}><Trash2 /></Button>
+            {conDetalle && (
+              <Button size="icon" variant="outline" title="Gestionar códigos y variantes" aria-label="Gestionar códigos y variantes" onClick={() => setDetalle(row.original)}><Barcode /></Button>
+            )}
+            {conEliminar && (
+              <Button size="icon" variant="outline" title="Eliminar producto" aria-label="Eliminar producto" onClick={() => setConfirmDelete(row.original)}><Trash2 /></Button>
+            )}
           </div>
         ),
       },
     )
     return cols
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conTipo, conEstacion, conVendible, rutaDeReceta])
+  }, [conTipo, conEstacion, conVendible, rutaDeReceta, conDetalle, conStockTotal, conEliminar, stockTotal])
 
   return (
     <div className="grid gap-4">
@@ -393,7 +435,7 @@ export function Productos({
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {UNIDADES.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                            {(unidades.includes(form.watch('unidad')) ? unidades : [...unidades, form.watch('unidad')]).map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
                           </SelectContent>
                         </Select>
                         <FormMessage />
@@ -589,6 +631,8 @@ export function Productos({
           )}
         </CardContent>
       </Card>
+
+      {detalle && <ProductoCodigosVariantes producto={detalle} onClose={() => setDetalle(null)} />}
 
       <ConfirmDialog
         open={!!confirmDelete}
