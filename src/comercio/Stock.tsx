@@ -13,6 +13,9 @@
 // - Dónde vive el **historial**: Contalibra lo despliega en la misma pantalla;
 //   Restolibra tiene una página propia. Con `rutaDeMovimientos` el botón
 //   navega; sin ella, el historial se abre acá abajo.
+// - Los **depósitos** (VentaLibra, con varias sucursales): si el backend devuelve `depositos` (y `por_deposito` en
+//   cada producto) hay una columna por depósito, el ajuste elige en qué depósito va y el historial dice cuál. Es
+//   dato, no prop: sin `depositos` la pantalla es la de siempre.
 //
 // El formulario de ajuste toma la forma de Contalibra (estado simple, sin
 // react-hook-form) con las validaciones que Restolibra tenía en su schema:
@@ -34,7 +37,8 @@ import { SelectBuscable } from '../SelectBuscable'
 import { fecha as formatearFecha } from '@/lib/fechas'
 import { hoyISO } from '../fechas'
 import {
-  opcionesProducto, TIPO_MOVIMIENTO_LABELS, type MovimientoStock, type StockItem, type StockListado,
+  opcionesProducto, TIPO_MOVIMIENTO_LABELS, type DepositoColumna, type MovimientoStock, type StockItem,
+  type StockListado,
 } from './tipos'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -88,12 +92,21 @@ export type StockProps = {
   conConversionDeUnidad?: boolean
   /** A dónde lleva el link «Crear un producto» de la lista vacía. */
   rutaDeProductos?: string
+  /** Un buscador por nombre y un «sólo los que tienen stock» sobre la lista: con muchos productos y varios
+   *  depósitos la pregunta es «¿de dónde saco esto?». Sin esto, la lista es la de siempre. */
+  conFiltros?: boolean
 }
 
-export function Stock({ rutaDeMovimientos, conConversionDeUnidad = false, rutaDeProductos = '/productos' }: StockProps) {
+export function Stock({
+  rutaDeMovimientos, conConversionDeUnidad = false, rutaDeProductos = '/productos', conFiltros = false,
+}: StockProps) {
   const [productos, setProductos] = useState<StockItem[]>([])
   const [alertas, setAlertas] = useState<StockItem[]>([])
   const [motivosMerma, setMotivosMerma] = useState<string[]>([])
+  const [busqueda, setBusqueda] = useState('')
+  const [soloConStock, setSoloConStock] = useState(false)
+  const [depositos, setDepositos] = useState<DepositoColumna[]>([])
+  const [depositoAjuste, setDepositoAjuste] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -115,6 +128,12 @@ export function Stock({ rutaDeMovimientos, conConversionDeUnidad = false, rutaDe
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
+  const conDepositos = depositos.length > 0
+  const visibles = useMemo(() => {
+    if (!conFiltros) return productos
+    const q = busqueda.trim().toLowerCase()
+    return productos.filter((p) => (!soloConStock || p.stock_actual !== 0) && (!q || p.nombre.toLowerCase().includes(q)))
+  }, [productos, conFiltros, busqueda, soloConStock])
   const conMerma = motivosMerma.length > 0
   const modos = MODOS.filter((m) => m.value !== 'merma' || conMerma)
 
@@ -136,6 +155,7 @@ export function Stock({ rutaDeMovimientos, conConversionDeUnidad = false, rutaDe
       const data = await api.get<StockListado>('/api/stock')
       setProductos(data.productos)
       setAlertas(data.alertas)
+      setDepositos(data.depositos ?? [])
     } catch (err) {
       setError(describeError(err))
     } finally {
@@ -181,9 +201,11 @@ export function Stock({ rutaDeMovimientos, conConversionDeUnidad = false, rutaDe
   }
 
   function abrirAjuste(p: StockItem) {
+    const dep = String((depositos.find((d) => d.es_default) ?? depositos[0])?.id ?? '')
+    setDepositoAjuste(dep)
     setEditing(p)
     setModo('absoluto')
-    setCantidad(String(p.stock_actual))
+    setCantidad(String(dep ? (p.por_deposito?.[dep] ?? 0) : p.stock_actual))
     setUnidadCompra('')
     setFactor('1')
     setMotivo('Otro')
@@ -192,9 +214,17 @@ export function Stock({ rutaDeMovimientos, conConversionDeUnidad = false, rutaDe
     setFormError(null)
   }
 
+  // El stock sobre el que se ajusta: el del depósito elegido, o el total si el producto no tiene depósitos.
+  const stockBase = !editing ? 0 : conDepositos ? (editing.por_deposito?.[depositoAjuste] ?? 0) : editing.stock_actual
+
   function cambiarModo(nuevo: Modo) {
     setModo(nuevo)
-    setCantidad(nuevo === 'absoluto' ? String(editing?.stock_actual ?? 0) : '')
+    setCantidad(nuevo === 'absoluto' ? String(stockBase) : '')
+  }
+
+  function cambiarDeposito(id: string) {
+    setDepositoAjuste(id)
+    if (modo === 'absoluto' && editing) setCantidad(String(editing.por_deposito?.[id] ?? 0))
   }
 
   function validar(): string | null {
@@ -221,6 +251,7 @@ export function Stock({ rutaDeMovimientos, conConversionDeUnidad = false, rutaDe
         unidad_compra: modo === 'entrada' && conConversionDeUnidad ? unidadCompra : '',
         factor: modo === 'entrada' && conConversionDeUnidad ? (Number(factor) || 1) : 1,
         motivo: modo === 'merma' ? (motivo || 'Otro') : 'Otro',
+        ...(conDepositos ? { deposito_id: Number(depositoAjuste) } : {}),
       })
       setEditing(null)
       await load()
@@ -237,9 +268,9 @@ export function Stock({ rutaDeMovimientos, conConversionDeUnidad = false, rutaDe
     const val = Number(cantidad) || 0
     const f = modo === 'entrada' && conConversionDeUnidad ? (Number(factor) || 1) : 1
     if (modo === 'absoluto') return val
-    if (modo === 'entrada') return editing.stock_actual + val * f
-    return editing.stock_actual - val
-  }, [editing, modo, cantidad, factor, conConversionDeUnidad])
+    if (modo === 'entrada') return stockBase + val * f
+    return stockBase - val
+  }, [editing, modo, cantidad, factor, conConversionDeUnidad, stockBase])
 
   const columns = useMemo<ColumnDef<StockItem>[]>(() => [
     {
@@ -258,9 +289,21 @@ export function Stock({ rutaDeMovimientos, conConversionDeUnidad = false, rutaDe
     { accessorKey: 'categoria', header: 'Categoría', size: 120, minSize: 90, cell: ({ row }) => <span className="block truncate text-muted-foreground" title={row.original.categoria ?? undefined}>{row.original.categoria || '—'}</span> },
     { accessorKey: 'unidad', header: () => <div className="text-center">Unidad</div>, size: 85, minSize: 70, cell: ({ row }) => <div className="truncate text-center text-muted-foreground">{row.original.unidad}</div> },
     { accessorKey: 'stock_minimo', header: () => <div className="text-center">Mínimo</div>, size: 100, minSize: 85, cell: ({ row }) => <div className="truncate text-center text-muted-foreground">{row.original.stock_minimo > 0 ? formatEntero(row.original.stock_minimo) : '—'}</div> },
+    ...depositos.map((d): ColumnDef<StockItem> => ({
+      id: `deposito-${d.id}`,
+      header: sortableHeader(d.nombre),
+      size: 110,
+      minSize: 80,
+      // El NÚMERO y no el texto, para que ordenar por un depósito ordene por cantidad.
+      accessorFn: (p) => p.por_deposito?.[String(d.id)] ?? 0,
+      cell: ({ row }) => {
+        const n = row.original.por_deposito?.[String(d.id)] ?? 0
+        return <div className={`truncate text-center tabular-nums ${n < 0 ? 'font-medium text-destructive' : n === 0 ? 'text-muted-foreground' : ''}`}>{formatEntero(n)}</div>
+      },
+    })),
     {
       accessorKey: 'stock_actual',
-      header: () => <div className="text-center">Stock actual</div>,
+      header: () => <div className="text-center">{conDepositos ? 'Total' : 'Stock actual'}</div>,
       size: 115,
       minSize: 95,
       cell: ({ row }) => {
@@ -298,7 +341,7 @@ export function Stock({ rutaDeMovimientos, conConversionDeUnidad = false, rutaDe
       ),
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [rutaDeMovimientos])
+  ], [rutaDeMovimientos, depositos])
 
   const movColumns = useMemo<ColumnDef<MovimientoStock>[]>(() => [
     { accessorKey: 'fecha', header: 'Fecha', cell: ({ row }) => formatearFecha(row.original.fecha) },
@@ -321,9 +364,15 @@ export function Stock({ rutaDeMovimientos, conConversionDeUnidad = false, rutaDe
         </span>
       ),
     },
+    ...(conDepositos ? [{
+      id: 'deposito', header: 'Depósito',
+      cell: ({ row }: { row: { original: MovimientoStock } }) => (
+        <span className="text-muted-foreground">{depositos.find((d) => d.id === row.original.deposito_id)?.nombre ?? '—'}</span>
+      ),
+    } as ColumnDef<MovimientoStock>] : []),
     { accessorKey: 'referencia', header: 'Referencia', cell: ({ row }) => <span className="text-muted-foreground">{row.original.referencia || '—'}</span> },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [])
+  ], [depositos])
 
   const etiquetaCantidad = modo === 'absoluto'
     ? `Stock nuevo (${editing?.unidad ?? ''})`
@@ -357,13 +406,25 @@ export function Stock({ rutaDeMovimientos, conConversionDeUnidad = false, rutaDe
       )}
 
       <Card>
-        <CardContent>
+        <CardContent className="grid gap-4">
+          {conFiltros && (
+            <div className="flex flex-wrap items-end gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="stock-buscar">Buscar producto</Label>
+                <Input id="stock-buscar" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} className="w-64" />
+              </div>
+              <label className="flex items-center gap-2 pb-2 text-sm">
+                <input type="checkbox" checked={soloConStock} onChange={(e) => setSoloConStock(e.target.checked)} className="size-4" />
+                Sólo los que tienen stock
+              </label>
+            </div>
+          )}
           {loading ? (
             <p className="py-6 text-center text-sm text-muted-foreground">Cargando…</p>
           ) : (
             <DataTable
               columns={columns}
-              data={productos}
+              data={visibles}
               emptyMessage={<>No hay productos activos. <Link to={rutaDeProductos} className="text-primary hover:underline">Crear un producto</Link>.</>}
             />
           )}
@@ -378,8 +439,8 @@ export function Stock({ rutaDeMovimientos, conConversionDeUnidad = false, rutaDe
           <div className="grid gap-4">
             <div className="flex gap-4">
               <div className="text-center">
-                <div className={`text-3xl font-bold ${(editing?.stock_actual ?? 0) <= 0 ? 'text-destructive' : (editing?.stock_minimo ?? 0) > 0 && (editing?.stock_actual ?? 0) <= (editing?.stock_minimo ?? 0) ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                  {formatEntero(editing?.stock_actual ?? 0)}
+                <div className={`text-3xl font-bold ${stockBase <= 0 ? 'text-destructive' : (editing?.stock_minimo ?? 0) > 0 && stockBase <= (editing?.stock_minimo ?? 0) ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                  {formatEntero(stockBase)}
                 </div>
                 <div className="text-sm text-muted-foreground">Stock actual ({editing?.unidad})</div>
               </div>
@@ -390,6 +451,18 @@ export function Stock({ rutaDeMovimientos, conConversionDeUnidad = false, rutaDe
                 </div>
               )}
             </div>
+
+            {conDepositos && (
+              <div className="grid gap-2">
+                <Label htmlFor="ajuste-deposito">Depósito</Label>
+                <Select value={depositoAjuste} onValueChange={(v) => v && cambiarDeposito(v)}>
+                  <SelectTrigger id="ajuste-deposito" className="w-64"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {depositos.map((d) => <SelectItem key={d.id} value={String(d.id)}>{d.nombre}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             <div className="grid gap-2">
               <Label>Tipo de ajuste</Label>

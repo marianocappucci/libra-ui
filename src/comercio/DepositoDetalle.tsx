@@ -28,11 +28,14 @@ function estadoStock(s: StockItem): { label: string; tono: TonoEstado } {
 export type DepositoDetalleProps = {
   rutaDeDepositos?: string
   rutaDeTransferencia?: string
+  /** Un usuario que sólo mira: sin «Editar» (el backend igual lo rechaza). */
+  soloLectura?: boolean
 }
 
 export function DepositoDetalle({
   rutaDeDepositos = '/depositos',
   rutaDeTransferencia = '/depositos/transferencia',
+  soloLectura = false,
 }: DepositoDetalleProps) {
   const { id } = useParams<{ id: string }>()
   const depositoId = Number(id)
@@ -110,9 +113,11 @@ export function DepositoDetalle({
           {deposito && (
             <div className="flex flex-wrap gap-2">
               <Button asChild size="sm" variant="outline"><Link to={rutaDeTransferencia}><ArrowLeftRight />Transferir</Link></Button>
-              <DialogTrigger asChild>
-                <Button size="sm" variant="outline" onClick={abrirEditar}><Pencil />Editar</Button>
-              </DialogTrigger>
+              {!soloLectura && (
+                <DialogTrigger asChild>
+                  <Button size="sm" variant="outline" onClick={abrirEditar}><Pencil />Editar</Button>
+                </DialogTrigger>
+              )}
               <Button asChild size="sm" variant="outline"><Link to={rutaDeDepositos}><ArrowLeft />Volver</Link></Button>
             </div>
           )}
