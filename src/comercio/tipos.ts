@@ -26,6 +26,16 @@ export type Producto = {
   vendible: number
   activo: number
   tipo: 'producto' | 'servicio'
+  /** Sólo si el backend lo trae (v0.19.0): el `id` de la categoría, para quien la filtra por id. */
+  categoria_id?: number | null
+}
+
+/** Un código de un producto (`GET /api/productos/{id}/codigos`): barras, SKU, balanza… El principal es el de `Producto.codigo`. */
+export type CodigoProducto = { id: number; producto_id: number; tipo: string; codigo: string; es_principal: boolean }
+
+/** Una variante de un producto (`GET /api/productos/{id}/variantes`): talle/color, presentaciones. */
+export type VarianteProducto = {
+  id: number; producto_id: number; sku: string; nombre: string; atributos: Record<string, string>; activa: boolean
 }
 
 export type CategoriaProducto = { id: number; nombre: string }
