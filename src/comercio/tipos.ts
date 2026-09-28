@@ -160,6 +160,20 @@ export type ItemListaPrecio = {
 /** Un quiebre por cantidad: desde `min_quantity` unidades, `amount`. */
 export type Quiebre = { min_quantity: number; amount: number }
 
+/** Una fila de `item_prices` con vigencia y/o sucursal real (no el flat ni un
+ *  quiebre): `GET/DELETE /api/listas-precio/items/{producto_id}/vigencias`. */
+export type PrecioVigente = {
+  id: number
+  producto_id: number
+  lista_id: number
+  monto: number
+  moneda: string
+  desde: string
+  hasta: string | null
+  cantidad_minima: number | null
+  sucursal_id: number | null
+}
+
 /** Lo que devuelve `GET /productos/buscar`, el autocompletado del punto de venta:
  *  `precio_venta` ya resuelto por la lista pedida, `precio_base` el del producto. */
 export type ProductoBusqueda = {

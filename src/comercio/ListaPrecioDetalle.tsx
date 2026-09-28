@@ -1,6 +1,7 @@
 // El detalle de una lista de precios: edición de precios por producto, ajuste en
 // lote, importación, configuración y —con el add-on— los quiebres por cantidad
-// (P9-M2, 2026-09-06).
+// (P9-M2, 2026-09-06). `conVigencias` (roadmap de producto, 2026-09-28) suma
+// promociones con ventana de fecha/hora y opcionalmente por sucursal.
 //
 // Estaba escrita dos veces y las copias diferían en 163 líneas, casi todas de
 // una sola cosa de dominio: los quiebres por cantidad, que sólo Contalibra tiene
@@ -10,13 +11,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import type { ColumnDef } from '../data-table'
-import { ArrowLeft, Check, Download, Percent, Settings, Tag, Trash2 } from 'lucide-react'
+import { ArrowLeft, CalendarClock, Check, Download, Percent, Settings, Tag, Trash2 } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
 import { DataTable } from '../data-table'
 import { BadgeEstado } from '../badge-estado'
 import { TituloPantalla } from '../titulo-pantalla'
-import type { CategoriaProducto, ItemListaPrecio, ListaPrecio, Quiebre } from './tipos'
+import type { CategoriaProducto, ItemListaPrecio, ListaPrecio, PrecioVigente, Quiebre } from './tipos'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -46,11 +47,29 @@ export type ListaPrecioDetalleProps = {
    *  Es el add-on mayorista de Contalibra; sin él la lista es flat. El backend
    *  correspondiente (`build_quiebres_router`) tiene que estar montado. */
   conQuiebres?: boolean
+  /** Habilita promociones con vigencia (fecha y hora de inicio/fin, cantidad
+   *  mínima y sucursal opcionales). El backend correspondiente
+   *  (`build_precios_vigentes_router`) tiene que estar montado. */
+  conVigencias?: boolean
   /** A dónde vuelve «Volver» y a dónde va después de borrar la lista. */
   rutaDeListas?: string
 }
 
-export function ListaPrecioDetalle({ conQuiebres = false, rutaDeListas = '/listas-precio' }: ListaPrecioDetalleProps) {
+//: Lo que escribe `set_quiebres`/el flat de la lista en `item_prices.valid_from`
+//: cuando el producto no tiene vigencia real (`libracommerce.erp.listas_precio.
+//: _SIN_VIGENCIA`) -- una fila de `vigencias` con este `desde`, sin `hasta` ni
+//: `sucursal_id`, es el flat o un quiebre, no una promoción con vigencia real.
+const _SIN_VIGENCIA = '2000-01-01T00:00:00'
+
+function esVigenciaReal(v: PrecioVigente): boolean {
+  return v.desde !== _SIN_VIGENCIA || !!v.hasta || v.sucursal_id !== null
+}
+
+function formatFechaHora(iso: string): string {
+  return new Date(iso).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })
+}
+
+export function ListaPrecioDetalle({ conQuiebres = false, conVigencias = false, rutaDeListas = '/listas-precio' }: ListaPrecioDetalleProps) {
   const { id } = useParams<{ id: string }>()
   const listaId = Number(id)
   const navigate = useNavigate()
@@ -89,6 +108,12 @@ export function ListaPrecioDetalle({ conQuiebres = false, rutaDeListas = '/lista
   const [quiebres, setQuiebres] = useState<{ min_quantity: string; amount: string }[]>([])
   const [quiebresSaving, setQuiebresSaving] = useState(false)
   const [quiebresError, setQuiebresError] = useState<string | null>(null)
+
+  const [vigenciasProducto, setVigenciasProducto] = useState<ItemListaPrecio | null>(null)
+  const [vigencias, setVigencias] = useState<PrecioVigente[]>([])
+  const [vigenciasError, setVigenciasError] = useState<string | null>(null)
+  const [nuevaVigencia, setNuevaVigencia] = useState({ monto: '', desde: '', hasta: '', cantidad_minima: '' })
+  const [vigenciaSaving, setVigenciaSaving] = useState(false)
 
   useEffect(() => {
     cargarLista()
@@ -295,6 +320,58 @@ export function ListaPrecioDetalle({ conQuiebres = false, rutaDeListas = '/lista
     }
   }
 
+  async function abrirVigencias(producto: ItemListaPrecio) {
+    setVigenciasProducto(producto)
+    setVigenciasError(null)
+    setNuevaVigencia({ monto: '', desde: '', hasta: '', cantidad_minima: '' })
+    await cargarVigencias(producto.id)
+  }
+
+  async function cargarVigencias(productoId: number) {
+    try {
+      const filas = await api.get<PrecioVigente[]>(`/api/listas-precio/items/${productoId}/vigencias?lista_id=${listaId}`)
+      setVigencias(filas.filter(esVigenciaReal))
+    } catch (err) {
+      setVigenciasError(describeError(err))
+    }
+  }
+
+  async function agregarVigencia() {
+    if (!vigenciasProducto) return
+    const monto = Number(nuevaVigencia.monto.replace(',', '.'))
+    if (!nuevaVigencia.monto || Number.isNaN(monto) || monto <= 0) {
+      setVigenciasError('Ingresá un precio promocional válido.')
+      return
+    }
+    setVigenciaSaving(true)
+    setVigenciasError(null)
+    try {
+      await api.post(`/api/listas-precio/${listaId}/items/${vigenciasProducto.id}/precio-vigente`, {
+        monto,
+        desde: nuevaVigencia.desde || undefined,
+        hasta: nuevaVigencia.hasta || undefined,
+        cantidad_minima: nuevaVigencia.cantidad_minima ? Number(nuevaVigencia.cantidad_minima) : undefined,
+      })
+      setNuevaVigencia({ monto: '', desde: '', hasta: '', cantidad_minima: '' })
+      await cargarVigencias(vigenciasProducto.id)
+    } catch (err) {
+      setVigenciasError(describeError(err))
+    } finally {
+      setVigenciaSaving(false)
+    }
+  }
+
+  async function quitarVigencia(v: PrecioVigente) {
+    if (!vigenciasProducto) return
+    setVigenciasError(null)
+    try {
+      await api.del(`/api/listas-precio/items/${v.producto_id}/vigencias/${v.id}`)
+      await cargarVigencias(vigenciasProducto.id)
+    } catch (err) {
+      setVigenciasError(describeError(err))
+    }
+  }
+
   const itemColumns = useMemo<ColumnDef<ItemListaPrecio>[]>(() => [
     { accessorKey: 'codigo', header: 'Código', size: 90, minSize: 78, cell: ({ row }) => <span className="block truncate font-mono text-xs" title={row.original.codigo ?? undefined}>{row.original.codigo || '—'}</span> },
     { accessorKey: 'nombre', header: 'Producto', size: 160, minSize: 100, meta: { stretch: true }, cell: ({ row }) => <span className="block truncate font-medium" title={row.original.nombre}>{row.original.nombre}</span> },
@@ -337,8 +414,17 @@ export function ListaPrecioDetalle({ conQuiebres = false, rutaDeListas = '/lista
         <Button size="sm" variant="outline" onClick={() => abrirQuiebres(row.original)}>Quiebres</Button>
       ),
     }] : []),
+    ...(conVigencias ? [{
+      id: 'vigencias',
+      header: 'Promociones',
+      size: 130,
+      minSize: 110,
+      cell: ({ row }: { row: { original: ItemListaPrecio } }) => (
+        <Button size="sm" variant="outline" onClick={() => abrirVigencias(row.original)}><CalendarClock />Promociones</Button>
+      ),
+    }] : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [precios, conQuiebres])
+  ], [precios, conQuiebres, conVigencias])
 
   return (
     <div className="grid gap-4">
@@ -558,6 +644,66 @@ export function ListaPrecioDetalle({ conQuiebres = false, rutaDeListas = '/lista
           <DialogFooter>
             <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
             <Button disabled={quiebresSaving} onClick={guardarQuiebres}>{quiebresSaving ? 'Guardando…' : 'Guardar quiebres'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={vigenciasProducto !== null} onOpenChange={(o) => { if (!o) setVigenciasProducto(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><CalendarClock className="size-4" />Promociones con vigencia</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <p className="text-sm text-muted-foreground">
+              Precios promocionales para <strong>{vigenciasProducto?.nombre}</strong>, con ventana de fecha y hora
+              (y opcionalmente cantidad mínima o sucursal). Fuera de la ventana rige el precio de la lista.
+            </p>
+            {vigenciasError && <p className="text-sm text-destructive">{vigenciasError}</p>}
+            <div className="grid gap-2">
+              {vigencias.length === 0 && (
+                <p className="text-sm text-muted-foreground">Sin promociones cargadas todavía.</p>
+              )}
+              {vigencias.map((v) => (
+                <div key={v.id} className="flex flex-wrap items-center gap-2 rounded-md border p-2 text-sm">
+                  <span className="font-semibold">{formatCurrency(v.monto)}</span>
+                  <span className="text-muted-foreground">
+                    {formatFechaHora(v.desde)} → {v.hasta ? formatFechaHora(v.hasta) : 'sin fin'}
+                    {v.cantidad_minima ? ` · desde ${v.cantidad_minima} u.` : ''}
+                    {v.sucursal_id ? ` · sucursal #${v.sucursal_id}` : ''}
+                  </span>
+                  <Button size="icon" variant="ghost" className="ml-auto" aria-label="Quitar promoción" onClick={() => quitarVigencia(v)}><Trash2 /></Button>
+                </div>
+              ))}
+            </div>
+            <div className="grid gap-2 border-t pt-3">
+              <p className="text-sm font-medium">Nueva promoción</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="grid gap-1">
+                  <Label>Precio promocional</Label>
+                  <Input type="number" step="0.01" placeholder="Precio" aria-label="Precio promocional"
+                    value={nuevaVigencia.monto} onChange={(e) => setNuevaVigencia((v) => ({ ...v, monto: e.target.value }))} />
+                </div>
+                <div className="grid gap-1">
+                  <Label>Cantidad mínima <span className="font-normal text-muted-foreground">(opcional)</span></Label>
+                  <Input type="number" step="1" min="1" placeholder="Cualquiera" aria-label="Cantidad mínima"
+                    value={nuevaVigencia.cantidad_minima} onChange={(e) => setNuevaVigencia((v) => ({ ...v, cantidad_minima: e.target.value }))} />
+                </div>
+                <div className="grid gap-1">
+                  <Label>Desde <span className="font-normal text-muted-foreground">(vacío = ahora)</span></Label>
+                  <Input type="datetime-local" aria-label="Vigente desde"
+                    value={nuevaVigencia.desde} onChange={(e) => setNuevaVigencia((v) => ({ ...v, desde: e.target.value }))} />
+                </div>
+                <div className="grid gap-1">
+                  <Label>Hasta <span className="font-normal text-muted-foreground">(vacío = sin fin)</span></Label>
+                  <Input type="datetime-local" aria-label="Vigente hasta"
+                    value={nuevaVigencia.hasta} onChange={(e) => setNuevaVigencia((v) => ({ ...v, hasta: e.target.value }))} />
+                </div>
+              </div>
+              <div><Button size="sm" variant="outline" disabled={vigenciaSaving} onClick={agregarVigencia}>+ Agregar promoción</Button></div>
+            </div>
+          </div>
+          <DialogFooter>
+            <DialogClose asChild><Button variant="outline">Cerrar</Button></DialogClose>
           </DialogFooter>
         </DialogContent>
       </Dialog>
