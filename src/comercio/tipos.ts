@@ -160,6 +160,27 @@ export type ItemListaPrecio = {
 /** Un quiebre por cantidad: desde `min_quantity` unidades, `amount`. */
 export type Quiebre = { min_quantity: number; amount: number }
 
+/** Una promoción (`GET /api/promociones`): "llevá N pagá M" o un combo fijo.
+ *  `nxm`: un solo ítem, `cantidad` = las que se llevan y `paga` = las que se pagan.
+ *  `combo`: dos o más ítems y un `precio` cerrado para el paquete entero. */
+export type ItemPromocion = { producto_id: number; cantidad: number; nombre?: string }
+export type Promocion = {
+  id: number
+  nombre: string
+  tipo: 'nxm' | 'combo'
+  paga: number | null
+  precio: number | null
+  desde: string | null
+  hasta: string | null
+  activa: number
+  items: ItemPromocion[]
+}
+
+/** Qué promoción se aplicó a un carrito y cuánto ahorró (`POST /api/promociones/calcular`,
+ *  y `promociones` en el detalle de una venta). `promocion_id` es `null` si se borró después. */
+export type PromocionAplicada = { promocion_id: number | null; nombre: string; veces: number; ahorro: number }
+export type CalculoPromociones = { aplicadas: PromocionAplicada[]; ahorro: number }
+
 /** Una fila de `item_prices` con vigencia y/o sucursal real (no el flat ni un
  *  quiebre): `GET/DELETE /api/listas-precio/items/{producto_id}/vigencias`. */
 export type PrecioVigente = {
