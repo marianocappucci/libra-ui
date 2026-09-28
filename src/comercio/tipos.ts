@@ -648,3 +648,17 @@ export type DashboardData = {
   presupuestos_pendientes: PresupuestoPendiente[]
   ultimos_movimientos: MovimientoDashboard[]
 }
+
+// ── Actualización masiva de precios (roadmap de producto, 2026-09-28) ───────
+export type LineaActualizada = {
+  producto_id: number
+  codigo: string
+  nombre: string
+  costo_actual: number
+  costo_nuevo: number
+  venta_actual: number
+  venta_nueva: number
+  margen_calculado: boolean
+}
+export type LineaNoEncontrada = { codigo: string; motivo: string }
+export type ResultadoPlanilla = { actualizaciones: LineaActualizada[]; no_encontrados: LineaNoEncontrada[] }
