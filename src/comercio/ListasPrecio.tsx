@@ -8,7 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import type { ColumnDef } from '../data-table'
-import { Ban, Pencil, Plus, Tag, Trash2, Undo2 } from 'lucide-react'
+import { Ban, Pencil, Plus, Star, Tag, Trash2, Undo2 } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
 import { DataTable, sortableHeader } from '../data-table'
@@ -92,6 +92,16 @@ export function ListasPrecio({ rutaDelDetalle = (id) => `/listas-precio/${id}` }
     }
   }
 
+  async function predeterminar(lista: ListaPrecio) {
+    setError(null)
+    try {
+      await api.post(`/api/listas-precio/${lista.id}/set-default`)
+      await loadListas()
+    } catch (err) {
+      setError(describeError(err))
+    }
+  }
+
   async function eliminar(lista: ListaPrecio) {
     setError(null)
     try {
@@ -164,6 +174,15 @@ export function ListasPrecio({ rutaDelDetalle = (id) => `/listas-precio/${id}` }
           >
             {row.original.activa ? <Ban /> : <Undo2 />}
           </Button>
+          {!row.original.es_default && (
+            <Button
+              size="icon" variant="outline" title="Marcar como predeterminada"
+              aria-label={`Marcar ${row.original.nombre} como predeterminada`}
+              onClick={() => predeterminar(row.original)}
+            >
+              <Star />
+            </Button>
+          )}
           <Button size="icon" variant="outline" title="Eliminar lista" aria-label="Eliminar lista" onClick={() => setConfirmDelete(row.original)}><Trash2 /></Button>
         </div>
       ),

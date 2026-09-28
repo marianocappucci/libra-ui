@@ -89,6 +89,17 @@ describe('ListasPrecio', () => {
     expect(cuerpoDe('POST /api/listas-precio/3/importar')).toEqual({ fuente: 'lista', fuente_lista_id: 1 })
   })
 
+  it('predeterminar aparece sólo en la que no lo es, y manda el POST', async () => {
+    responder({ '/api/listas-precio': [MAYORISTA, MINORISTA], 'POST /api/listas-precio/1/set-default': { ...MAYORISTA, es_default: 1 } })
+    const user = userEvent.setup()
+    render(<MemoryRouter><ListasPrecio /></MemoryRouter>)
+    await screen.findByText('Mayorista')
+    // MINORISTA ya es default: no tiene botón. MAYORISTA no lo es: sí lo tiene.
+    expect(screen.getAllByLabelText(/Marcar .* como predeterminada/)).toHaveLength(1)
+    await user.click(screen.getByLabelText('Marcar Mayorista como predeterminada'))
+    await waitFor(() => expect(pedidas()).toContain('POST /api/listas-precio/1/set-default'))
+  })
+
   it('desactivar manda PUT con activa invertida; borrar confirma; sin red avisa', async () => {
     responder({ '/api/listas-precio': [MAYORISTA], 'PUT /api/listas-precio/1': MAYORISTA, 'DELETE /api/listas-precio/1': { ok: true } })
     const user = userEvent.setup()
@@ -140,6 +151,36 @@ describe('ListaPrecioDetalle', () => {
     await user.click(screen.getAllByRole('button', { name: 'Quiebres' })[1])
     await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancelar' }))
     expect(pedidas().filter((p) => p.startsWith('PUT')).length).toBe(1)
+  })
+
+  it('sin conVigencias no hay columna Promociones; con ella el editor filtra el flat/quiebres, agrega y borra', async () => {
+    const FLAT = { id: 100, producto_id: 9, lista_id: 1, monto: 90, moneda: 'ARS', desde: '2000-01-01T00:00:00', hasta: null, cantidad_minima: null, sucursal_id: null }
+    const QUIEBRE = { id: 101, producto_id: 9, lista_id: 1, monto: 80, moneda: 'ARS', desde: '2000-01-01T00:00:00', hasta: null, cantidad_minima: 10, sucursal_id: null }
+    const PROMO = { id: 102, producto_id: 9, lista_id: 1, monto: 70, moneda: 'ARS', desde: '2026-10-01T18:00:00', hasta: '2026-10-01T19:00:00', cantidad_minima: null, sucursal_id: null }
+    responder({ ...base, '/api/listas-precio/items/9/vigencias': [FLAT, QUIEBRE, PROMO] })
+    montarDetalle()
+    await screen.findByText('Fideos')
+    expect(screen.queryAllByRole('button', { name: /Promociones/ })).toHaveLength(0)
+    cleanup()
+    const user = userEvent.setup()
+    responder({ ...base, '/api/listas-precio/items/9/vigencias': [FLAT, QUIEBRE, PROMO], 'POST /api/listas-precio/1/items/9/precio-vigente': PROMO, 'DELETE /api/listas-precio/items/9/vigencias/102': { ok: true } })
+    montarDetalle({ conVigencias: true })
+    await screen.findByText('Fideos')
+    expect(screen.getAllByRole('button', { name: /Promociones/ })).toHaveLength(2)
+    await user.click(screen.getAllByRole('button', { name: /Promociones/ })[0])
+    const dialogo = await screen.findByRole('dialog')
+    // El flat y el quiebre no aparecen -- sólo la promoción con vigencia real.
+    expect(dialogo.textContent).toMatch(/\$\s?70,00/)
+    expect(dialogo.textContent).not.toMatch(/\$\s?90,00/)
+    expect(dialogo.textContent).not.toMatch(/\$\s?80,00/)
+
+    await user.type(within(dialogo).getByLabelText('Precio promocional'), '65')
+    await user.click(within(dialogo).getByRole('button', { name: /Agregar promoción/ }))
+    await waitFor(() => expect(pedidas()).toContain('POST /api/listas-precio/1/items/9/precio-vigente'))
+    expect(cuerpoDe('POST /api/listas-precio/1/items/9/precio-vigente')).toEqual({ monto: 65 })
+
+    await user.click(within(dialogo).getByLabelText('Quitar promoción'))
+    await waitFor(() => expect(pedidas()).toContain('DELETE /api/listas-precio/items/9/vigencias/102'))
   })
 
   it('guardar precios manda sólo los cargados; el filtro por categoría pide con el parámetro', async () => {
