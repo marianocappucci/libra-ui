@@ -47,7 +47,7 @@ function cuerpoDe(clave: string): Record<string, unknown> {
   return JSON.parse(String((fetchMock.mock.calls[i][1] as RequestInit).body))
 }
 
-function montarDetalle(props: { conQuiebres?: boolean } = {}) {
+function montarDetalle(props: { conQuiebres?: boolean; conVigencias?: boolean } = {}) {
   return render(
     <MemoryRouter initialEntries={['/listas-precio/1']}>
       <Routes><Route path="/listas-precio/:id" element={<ListaPrecioDetalle {...props} />} /></Routes>
