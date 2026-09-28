@@ -49,6 +49,23 @@ export type Deposito = {
   total_productos?: number
   /** `locations.location_type`, en un producto con sucursales y depósitos (VentaLibra: `store`/`warehouse`). */
   tipo?: string | null
+  /** La sucursal a la que pertenece, en el modelo jerárquico sucursal → depósitos (`/api/sucursales`). */
+  branch_id?: number | null
+}
+
+/** Una sucursal del modelo jerárquico (`GET /api/sucursales`): agrupa depósitos, y el stock vive sólo en éstos. */
+export type Sucursal = {
+  id: number
+  nombre: string
+  codigo: string | null
+  direccion: string | null
+  activa: number | boolean
+  /** La sucursal predeterminada de la instancia. */
+  es_default: number | boolean
+  /** El depósito de venta de la sucursal (el predeterminado de la sucursal). */
+  deposito_predeterminado_id: number | null
+  /** La cantidad de depósitos activos de la sucursal. */
+  depositos: number
 }
 
 export type StockItem = {
