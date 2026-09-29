@@ -15,7 +15,7 @@ import type { ColumnDef } from '../data-table'
 import { api, ApiError } from '../api-client'
 import { type Caja } from '../facturas'
 import { type Cliente } from '../mp'
-import { type MovimientoCC } from './tipos'
+import { type FacturaPendienteCC, type MovimientoCC } from './tipos'
 import { useMediosPago } from './medios-pago'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -52,6 +52,8 @@ export function CuentaCorrienteDetalle({ esAdmin = false, conRecibos = false }: 
   const [cliente, setCliente] = useState<Cliente | null>(null)
   const [movimientos, setMovimientos] = useState<MovimientoCC[]>([])
   const [saldo, setSaldo] = useState(0)
+  const [pendientes, setPendientes] = useState<FacturaPendienteCC[]>([])
+  const [facturasSel, setFacturasSel] = useState<number[]>([])
   const [cajas, setCajas] = useState<Caja[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -84,10 +86,11 @@ export function CuentaCorrienteDetalle({ esAdmin = false, conRecibos = false }: 
     setLoading(true)
     setError(null)
     try {
-      const data = await api.get<{ cliente: Cliente; movimientos: MovimientoCC[]; saldo: number }>(`/api/cuenta-corriente/${clienteId}`)
+      const data = await api.get<{ cliente: Cliente; movimientos: MovimientoCC[]; saldo: number; facturas_pendientes?: FacturaPendienteCC[] }>(`/api/cuenta-corriente/${clienteId}`)
       setCliente(data.cliente)
       setMovimientos(data.movimientos)
       setSaldo(data.saldo)
+      setPendientes(data.facturas_pendientes ?? [])
     } catch (err) {
       setError(describeError(err))
     } finally {
@@ -95,7 +98,22 @@ export function CuentaCorrienteDetalle({ esAdmin = false, conRecibos = false }: 
     }
   }
 
+  // Las facturas más viejas que el monto alcanza a cubrir: es lo que casi siempre
+  // se quiere, y evita que el pago quede suelto por no haber tildado nada.
+  function facturasQueCubre(monto: number): number[] {
+    const ids: number[] = []
+    let resto = monto
+    for (const f of pendientes) {
+      if (resto <= 0) break
+      ids.push(f.id)
+      resto -= f.pendiente
+    }
+    return ids
+  }
+
   function abrirPago() {
+    const sugerido = saldo > 0 ? saldo : 0
+    setFacturasSel(facturasQueCubre(sugerido))
     setMonto(saldo > 0 ? String(saldo) : '')
     setReferencia('')
     setFecha(hoyISO())
@@ -115,12 +133,14 @@ export function CuentaCorrienteDetalle({ esAdmin = false, conRecibos = false }: 
     // la bloquearía. Se abre en blanco y después se le pone la URL.
     const ventana = conRecibos ? window.open('', '_blank') : null
     try {
-      const data = await api.post<{ movimientos: MovimientoCC[]; saldo: number; recibo_id: number | null }>(`/api/cuenta-corriente/${clienteId}/pagar`, {
+      const data = await api.post<{ movimientos: MovimientoCC[]; saldo: number; recibo_id: number | null; facturas_pendientes?: FacturaPendienteCC[] }>(`/api/cuenta-corriente/${clienteId}/pagar`, {
         monto: Number(monto), fecha, concepto: concepto || 'Pago a cuenta', referencia,
         medio_pago: medioPago, caja_id: cajaId ? Number(cajaId) : null,
+        facturas: facturasSel,
       })
       setMovimientos(data.movimientos)
       setSaldo(data.saldo)
+      setPendientes(data.facturas_pendientes ?? [])
       setPagoOpen(false)
       // El cobro ya está registrado aunque el recibo no haya salido (el backend
       // no revierte por eso). Si no vino id, se cierra la ventana en vez de
@@ -275,6 +295,27 @@ export function CuentaCorrienteDetalle({ esAdmin = false, conRecibos = false }: 
                     <div className="grid gap-2"><Label>Monto <span className="text-destructive">*</span></Label><Input type="number" step="0.01" min="0.01" value={monto} onChange={(e) => setMonto(e.target.value)} /></div>
                     <div className="grid gap-2"><Label>Fecha <span className="text-destructive">*</span></Label><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></div>
                   </div>
+                  {pendientes.length > 0 && (
+                    <fieldset className="grid gap-2 rounded-md border p-3">
+                      <legend className="px-1 text-sm font-medium">Facturas que cancela este pago</legend>
+                      {pendientes.map((f) => (
+                        <label key={f.id} className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={facturasSel.includes(f.id)}
+                            onChange={(e) => setFacturasSel(e.target.checked ? [...facturasSel, f.id] : facturasSel.filter((x) => x !== f.id))}
+                          />
+                          <span className="flex-1">{f.concepto} <span className="text-muted-foreground">({formatearFecha(f.fecha)})</span></span>
+                          <span className="tabular-nums">{formatCurrency(f.pendiente)}</span>
+                        </label>
+                      ))}
+                      {facturasSel.length === 0 && (
+                        <p role="alert" className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm dark:border-amber-900 dark:bg-amber-950/40">
+                          Este pago va a bajar el saldo, pero <strong>no va a marcar ninguna factura como cobrada</strong>: seguirán figurando «Sin cobrar». Tildá las que paga.
+                        </p>
+                      )}
+                    </fieldset>
+                  )}
                   <div className="grid gap-2"><Label>Concepto</Label><Input value={concepto} onChange={(e) => setConcepto(e.target.value)} /></div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="grid gap-2">
