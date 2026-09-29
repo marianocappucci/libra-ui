@@ -612,6 +612,36 @@ export type ReportesData = {
   medio_label: Record<string, string>
 }
 
+// ── Margen y rotación (`GET /api/reportes/margen`, `libracommerce.erp.margen`) ──
+
+/** Lo que comparten el resumen, cada producto y cada período. `costo_estimado`: alguna línea usó el costo
+ *  de HOY porque la venta no guardó el suyo. `sin_costo`: alguna línea no tiene costo de ningún lado, y su
+ *  margen figura como si fuera todo ganancia. */
+export type MargenCifras = {
+  unidades: number; ingreso: number; costo: number; margen: number
+  /** `null` cuando no hubo ingreso: dividir por cero no es un 0 %. */
+  margen_pct: number | null
+  costo_estimado: boolean; sin_costo: boolean
+}
+export type MargenProducto = MargenCifras & {
+  producto_id: number; nombre: string
+  /** `null` cuando el rango no está cerrado (falta `desde` o `hasta`). */
+  unidades_por_dia: number | null
+}
+export type MargenPeriodo = MargenCifras & { periodo: string }
+export type MargenResumen = MargenCifras & {
+  productos: number; productos_costo_estimado: number; productos_sin_costo: number; dias: number | null
+}
+export type MargenOrden = 'margen' | 'margen_pct' | 'ingreso' | 'costo' | 'unidades' | 'unidades_por_dia' | 'nombre'
+export type MargenSentido = 'asc' | 'desc'
+export type MargenAgrupacion = 'dia' | 'semana' | 'mes'
+
+export type MargenData = {
+  desde: string; hasta: string; agrupacion: MargenAgrupacion
+  producto_id: number | null; orden: MargenOrden; sentido: MargenSentido
+  resumen: MargenResumen; productos: MargenProducto[]; periodos: MargenPeriodo[]
+}
+
 export type CajaMedioVals = { ingresos: number; ingresos_ops: number; egresos: number; egresos_ops: number }
 
 export type CajaMedioPivot = {
