@@ -257,6 +257,9 @@ export type Venta = {
   factura_id: number | null
   factura_display: string | null
   remito_id: number | null
+  /** Las promociones que se aplicaron a la venta (`sale_promotions`). Sólo las trae un producto que las
+   *  monta (VentaLibra); su ahorro ya está dentro de `descuento`. */
+  promociones?: PromocionAplicada[]
   /** Los devuelve `obtener_venta` desde siempre. Vacíos si no hubo QR. */
   mp_order_id: string
   mp_payment_id: string

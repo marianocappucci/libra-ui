@@ -491,6 +491,31 @@ describe('VentaDetalle', () => {
     expect(screen.getByText('Volver').getAttribute('href')).toBe('/ventas')
   })
 
+  it('las promociones aplicadas salen una por fila y «Descuento» sólo muestra lo que no es promoción', async () => {
+    const PROMO = { promocion_id: 7, nombre: '2x1 yerba', veces: 2, ahorro: 200 }
+    // Sólo promoción: el descuento de la venta ES el ahorro, no se repite como «Descuento».
+    responder({ ...BASE, '/api/ventas/11': { ...VENTA, id: 11, numero: 'V-00011', descuento: 200, total: 0, promociones: [PROMO] } })
+    montarDetalle(11)
+    expect(await screen.findByText(/Venta V-00011/)).toBeTruthy()
+    expect(screen.getByText('Promoción 2x1 yerba × 2')).toBeTruthy()
+    expect(screen.queryByText('Descuento')).toBeNull()
+    cleanup()
+    // Promoción más un descuento manual: «Descuento» muestra el resto.
+    responder({ ...BASE, '/api/ventas/12': { ...VENTA, id: 12, numero: 'V-00012', descuento: 250, total: 0, promociones: [{ ...PROMO, veces: 1 }] } })
+    montarDetalle(12)
+    expect(await screen.findByText(/Venta V-00012/)).toBeTruthy()
+    expect(screen.getByText('Promoción 2x1 yerba')).toBeTruthy()
+    expect(screen.getByText('Descuento').nextElementSibling?.textContent).toMatch(/−\s?\$\s?50,00/)
+  })
+
+  it('sin promociones el detalle no cambia: sólo «Descuento» si lo hay', async () => {
+    responder({ ...BASE, '/api/ventas/9': FACTURADA })
+    montarDetalle(9)
+    expect(await screen.findByText(/Venta V-00009/)).toBeTruthy()
+    expect(screen.queryByText(/^Promoción/)).toBeNull()
+    expect(screen.getByText('Descuento').nextElementSibling?.textContent).toMatch(/−\s?\$\s?20,00/)
+  })
+
   it('factura por el endpoint y ofrece el formulario si el producto lo pide; anular confirma', async () => {
     let actual = VENTA
     responder({
