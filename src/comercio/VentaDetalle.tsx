@@ -260,6 +260,13 @@ export function VentaDetalle({
     && !detalle.mp_payment_id
     && detalle.pagos.some((p) => esElectronico(p.medio))
 
+  // Lo que queda de `descuento` una vez descontadas las promociones (que ya lo incluyen): sin
+  // promociones es el descuento entero, igual que siempre. Redondeado a centavos para no mostrar
+  // polvo de punto flotante como si fuera un descuento.
+  const ahorroDePromociones = (detalle?.promociones ?? []).reduce((suma, p) => suma + p.ahorro, 0)
+  const descuentoRestante = !detalle ? 0
+    : (detalle.promociones?.length ? Math.round((detalle.descuento - ahorroDePromociones) * 100) / 100 : detalle.descuento)
+
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -382,8 +389,18 @@ export function VentaDetalle({
                 </tbody>
                 <tfoot className="font-medium">
                   <tr><td colSpan={3} className="p-3 text-right text-muted-foreground">Subtotal</td><td className="p-3 text-right">{formatoMoneda(detalle.subtotal)}</td></tr>
-                  {detalle.descuento > 0 && (
-                    <tr><td colSpan={3} className="p-3 text-right text-muted-foreground">Descuento</td><td className="p-3 text-right text-destructive">− {formatoMoneda(detalle.descuento)}</td></tr>
+                  {/* Las promociones aplicadas van una por fila. El `descuento` de la venta YA las incluye,
+                      así que «Descuento» muestra sólo lo que quede (uno manual): no se cuenta dos veces. */}
+                  {(detalle.promociones ?? []).map((promo, i) => (
+                    <tr key={`promo-${i}`}>
+                      <td colSpan={3} className="p-3 text-right text-muted-foreground">
+                        Promoción {promo.nombre}{promo.veces > 1 ? ` × ${promo.veces}` : ''}
+                      </td>
+                      <td className="p-3 text-right text-emerald-700 dark:text-emerald-400">− {formatoMoneda(promo.ahorro)}</td>
+                    </tr>
+                  ))}
+                  {descuentoRestante > 0 && (
+                    <tr><td colSpan={3} className="p-3 text-right text-muted-foreground">Descuento</td><td className="p-3 text-right text-destructive">− {formatoMoneda(descuentoRestante)}</td></tr>
                   )}
                   <tr className="text-base"><td colSpan={3} className="p-3 text-right font-semibold">TOTAL</td><td className="p-3 text-right font-semibold text-primary">{formatoMoneda(detalle.total)}</td></tr>
                 </tfoot>
