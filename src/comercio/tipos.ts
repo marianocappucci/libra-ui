@@ -536,6 +536,15 @@ export type MovimientoCC = {
   factura_id: number | null
 }
 
+/** Una factura a cuenta corriente sin cobro: a estas se le puede aplicar un pago. */
+export type FacturaPendienteCC = {
+  id: number
+  concepto: string
+  fecha: string
+  total: number
+  pendiente: number
+}
+
 export type CuentaTesoreria = {
   id: number
   nombre: string
