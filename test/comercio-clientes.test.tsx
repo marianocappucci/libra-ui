@@ -364,6 +364,41 @@ describe('CuentaCorrienteDetalle', () => {
     expect(screen.getByText('Saldo $0')).toBeTruthy()
   })
 
+  it('con facturas pendientes propone las que el monto cubre y las manda al pagar', async () => {
+    const F74 = { id: 87, concepto: 'FACTURA C 0005-00000074', fecha: '2026-08-28', total: 920000, pendiente: 920000 }
+    const F75 = { id: 88, concepto: 'FACTURA C 0005-00000075', fecha: '2026-08-28', total: 573750, pendiente: 573750 }
+    responder({
+      ...BASE,
+      '/api/cuenta-corriente/1': { cliente: ANA, movimientos: MOVS, saldo: 920000, facturas_pendientes: [F74, F75] },
+      'POST /api/cuenta-corriente/1/pagar': { movimientos: MOVS, saldo: 0, recibo_id: null, facturas_pendientes: [F75] },
+    })
+    const user = userEvent.setup()
+    montar('/cuenta-corriente/1', <CuentaCorrienteDetalle />)
+    await screen.findByText('Historial de movimientos')
+    await user.click(screen.getByRole('button', { name: 'Registrar pago' }))
+    const dialogo = screen.getByRole('dialog')
+    const [c74, c75] = within(dialogo).getAllByRole('checkbox') as HTMLInputElement[]
+    expect(c74.checked).toBe(true)       // el saldo alcanza justo para la 74
+    expect(c75.checked).toBe(false)
+    expect(within(dialogo).queryByRole('alert')).toBeNull()
+    await user.click(within(dialogo).getByRole('button', { name: 'Registrar pago' }))
+    await waitFor(() => expect(cuerpoDe('POST /api/cuenta-corriente/1/pagar')).toMatchObject({ monto: 920000, facturas: [87] }))
+  })
+
+  it('avisa cuando el pago no cancela ninguna de las facturas pendientes', async () => {
+    const F74 = { id: 87, concepto: 'FACTURA C 0005-00000074', fecha: '2026-08-28', total: 920000, pendiente: 920000 }
+    responder({ ...BASE, '/api/cuenta-corriente/1': { cliente: ANA, movimientos: MOVS, saldo: 920000, facturas_pendientes: [F74] } })
+    const user = userEvent.setup()
+    montar('/cuenta-corriente/1', <CuentaCorrienteDetalle />)
+    await screen.findByText('Historial de movimientos')
+    await user.click(screen.getByRole('button', { name: 'Registrar pago' }))
+    const dialogo = screen.getByRole('dialog')
+    await user.click(within(dialogo).getByRole('checkbox'))   // la destilda
+    expect(within(dialogo).getByRole('alert').textContent).toMatch(/no va a marcar ninguna factura como cobrada/)
+    await user.click(within(dialogo).getByRole('checkbox'))
+    expect(within(dialogo).queryByRole('alert')).toBeNull()
+  })
+
   it('con recibos abre el PDF al pagar y por movimiento; el error cierra la ventana', async () => {
     const ventana = ventanaFalsa()
     responder({
