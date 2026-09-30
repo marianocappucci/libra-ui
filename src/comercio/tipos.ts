@@ -651,6 +651,51 @@ export type MargenData = {
   resumen: MargenResumen; productos: MargenProducto[]; periodos: MargenPeriodo[]
 }
 
+// ── Reposición sugerida (`GET /api/reportes/reposicion`, `libracommerce.erp.reposicion`, ADR-017) ──
+
+/** Por qué se sugiere pedir: `bajo_minimo` (lo que hay más lo que viene no llega al stock mínimo), `por_rotacion`
+ *  (no alcanza para lo que se vende en el horizonte) o `ambos`. `null` cuando no hay nada que pedir (sólo con
+ *  `solo_a_pedir=false`). */
+export type ReposicionMotivo = 'bajo_minimo' | 'por_rotacion' | 'ambos'
+
+/** Las cantidades vienen ya redondeadas a la escala de la unidad del producto (entero, o con decimales si la
+ *  unidad admite fracciones): la pantalla las muestra tal cual. */
+export type ReposicionProducto = {
+  producto_id: number
+  codigo: string | null
+  nombre: string
+  unidad: string
+  /** `''` si el producto no tiene categoría. */
+  categoria: string
+  stock: number
+  /** Lo pedido a proveedores que todavía no llegó (órdenes abiertas, `draft` incluido). */
+  en_camino: number
+  /** La parte de `en_camino` que sale de órdenes sin sucursal: con una sucursal elegida se cuenta igual. */
+  en_camino_sin_sucursal: number
+  stock_minimo: number
+  unidades_vendidas: number
+  dias_con_stock: number
+  rotacion_diaria: number
+  /** `null` sin ventas en la ventana: no hay rotación con qué calcularla. */
+  cobertura_dias: number | null
+  sugerido: number
+  motivo: ReposicionMotivo | null
+  sin_ventas: boolean
+  /** Stock <= 0 o algún día sin stock en la ventana: la rotación es una estimación, posiblemente baja. */
+  posible_quiebre: boolean
+  variantes: number
+}
+
+export type ReposicionResumen = { productos: number; a_pedir: number; posible_quiebre: number; sin_ventas: number }
+
+export type ReposicionData = {
+  dias_rotacion: number; dias_cobertura: number; plazo_entrega_dias: number
+  sucursal_id: number | null; categoria: string | null; producto_id: number | null; solo_a_pedir: boolean
+  resumen: ReposicionResumen
+  /** En orden de urgencia: menor cobertura primero, después mayor `sugerido`; sin rotación al final. */
+  productos: ReposicionProducto[]
+}
+
 export type CajaMedioVals = { ingresos: number; ingresos_ops: number; egresos: number; egresos_ops: number }
 
 export type CajaMedioPivot = {

@@ -1,0 +1,399 @@
+// Reposición sugerida (0.90.0, B-2 del roadmap de VentaLibra): la pantalla sobre
+// `GET /api/reportes/reposicion`. La cuenta es del motor; lo que se prueba acá es lo que la pantalla decide:
+// qué pide (parámetros, sucursal, categoría, «sólo a pedir»), qué valida antes de pedir, cómo ordena, qué avisa
+// de cada fila y a dónde apunta el CSV.
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { beforeEach, describe, expect, it } from 'vitest'
+
+import { Reposicion } from '../src/comercio/Reposicion'
+import type { ReposicionData, ReposicionProducto } from '../src/comercio/tipos'
+import { fetchMock, json, montar, pedidas, prepararFetch, responder } from './helpers-pantallas'
+
+const base: ReposicionProducto = {
+  producto_id: 0, codigo: null, nombre: '', unidad: 'u', categoria: '', stock: 0, en_camino: 0, en_camino_sin_sucursal: 0,
+  stock_minimo: 0, unidades_vendidas: 0, dias_con_stock: 30, rotacion_diaria: 0, cobertura_dias: null, sugerido: 0,
+  motivo: null, sin_ventas: false, posible_quiebre: false, variantes: 0,
+}
+
+// En el orden de urgencia del motor: menor cobertura primero, sin rotación al final.
+const YERBA: ReposicionProducto = {
+  ...base, producto_id: 1, codigo: 'Y-1', nombre: 'Yerba', categoria: 'Almacén', stock: 2, en_camino: 10, en_camino_sin_sucursal: 4,
+  stock_minimo: 5, unidades_vendidas: 60, rotacion_diaria: 2, cobertura_dias: 1, sugerido: 38, motivo: 'ambos', posible_quiebre: true,
+}
+const HARINA: ReposicionProducto = {
+  ...base, producto_id: 2, codigo: 'H-9', nombre: 'Harina', unidad: 'kg', categoria: 'Almacén', stock: 1.5, stock_minimo: 0.25,
+  unidades_vendidas: 1234.5, rotacion_diaria: 41.15, cobertura_dias: 3.5, sugerido: 12.5, motivo: 'por_rotacion',
+}
+const SAL: ReposicionProducto = {
+  ...base, producto_id: 3, codigo: null, nombre: 'Sal', categoria: '', stock: 3, stock_minimo: 10, sugerido: 7, motivo: 'bajo_minimo',
+  sin_ventas: true,
+}
+
+const DATA: ReposicionData = {
+  dias_rotacion: 30, dias_cobertura: 15, plazo_entrega_dias: 3, sucursal_id: null, categoria: null, producto_id: null, solo_a_pedir: true,
+  resumen: { productos: 3, a_pedir: 3, posible_quiebre: 1, sin_ventas: 1 },
+  productos: [YERBA, HARINA, SAL],
+}
+
+const RUTA = '/api/reportes/reposicion'
+const SUCURSALES = [
+  { id: 1, nombre: 'Centro', codigo: null, direccion: null, activa: 1, es_default: 1, deposito_predeterminado_id: 1, depositos: 1 },
+  { id: 2, nombre: 'Norte', codigo: null, direccion: null, activa: 1, es_default: 0, deposito_predeterminado_id: 2, depositos: 1 },
+]
+const CATEGORIAS = [{ id: 1, nombre: 'Almacén' }, { id: 2, nombre: 'Bebidas' }]
+const TODO = { [RUTA]: DATA, '/api/sucursales': SUCURSALES, '/api/productos/categorias': CATEGORIAS }
+
+/** La consulta con los defaults del motor; `extra` va al final (`&sucursal_id=2`). */
+const consulta = (extra = '', p = 'dias_rotacion=30&dias_cobertura=15&plazo_entrega_dias=3&solo_a_pedir=true') => `${p}${extra}`
+const pide = (extra = '', p?: string) => `GET ${RUTA}?${consulta(extra, p)}`
+/** Sólo los pedidos al reporte (la pantalla también pide sucursales y categorías). */
+const pedidasAlReporte = () => pedidas().filter((p) => p.startsWith(`GET ${RUTA}?`))
+const ultimaConsulta = () => pedidasAlReporte().at(-1)
+
+/** Sin espacios raros ni saltos: el texto de una fila con sus avisos. */
+const texto = (el: HTMLElement | null) => (el?.textContent ?? '').replace(/\s+/g, ' ')
+const fila = (nombre: string) => screen.getByText(nombre).closest('tr')!
+/** Los nombres de producto en el orden en que están en la tabla. */
+const nombresEnTabla = () => within(screen.getByRole('table')).getAllByRole('row').slice(1)
+  .map((tr) => tr.querySelector('td span.font-medium')?.textContent)
+
+async function abrir(tabla: Record<string, unknown> = TODO) {
+  responder(tabla)
+  montar('/reposicion', <Reposicion />)
+  await screen.findByText('3 productos')
+}
+
+beforeEach(() => {
+  cleanup()
+  prepararFetch()
+})
+
+describe('Reposición: lo que muestra', () => {
+  it('pide con los defaults del motor y muestra las filas con sus números en es-AR, tal como los manda el motor', async () => {
+    await abrir()
+    expect(pedidasAlReporte()).toEqual([pide()])
+
+    expect(screen.getByRole('heading', { name: /Reposición sugerida/ })).toBeTruthy()
+    expect(texto(screen.getByText('3 productos').closest('div'))).toContain('3 a pedir · 1 con posible quiebre · 1 sin ventas')
+
+    const yerba = texto(fila('Yerba'))
+    expect(yerba).toContain('Y-1')
+    expect(yerba).toContain('Almacén')
+    // Stock, en camino, mínimo, vendido, rotación diaria y cobertura, en ese orden.
+    expect(within(fila('Yerba')).getAllByRole('cell').slice(2, 8).map((c) => c.textContent)).toEqual(['2', '10', '5', '60', '2', '1'])
+    expect(texto(fila('Yerba'))).toContain('38 u')
+    expect(texto(fila('Yerba'))).toContain('Bajo el mínimo y por rotación')
+
+    // Fraccionables: los decimales del motor, con coma y separador de miles.
+    const harina = texto(fila('Harina'))
+    expect(harina).toContain('1,5')
+    expect(harina).toContain('0,25')
+    expect(harina).toContain('1.234,5')
+    expect(harina).toContain('41,15')
+    expect(harina).toContain('3,5')
+    expect(harina).toContain('12,5 kg')
+    expect(harina).toContain('Por rotación')
+
+    // Sin código ni rotación el motor manda `null`: un guion, no un cero.
+    const sal = within(fila('Sal')).getAllByRole('cell')
+    expect(sal[1].textContent).toBe('—')
+    expect(sal[7].textContent).toBe('—')
+    expect(sal[9].textContent).toBe('Bajo el mínimo')
+  })
+
+  it('explica la fórmula en lenguaje llano, con el horizonte de lo que se pidió', async () => {
+    await abrir()
+    const ayuda = texto(screen.getByText(/proyecta a los días de cobertura/))
+    expect(ayuda).toContain('últimos 30 días')
+    expect(ayuda).toContain('(18 días)')
+    expect(ayuda).toContain('menos lo que hay y lo que ya viene en camino')
+    expect(ayuda).toContain('stock mínimo')
+    expect(ayuda).toContain('no genera ninguna orden de compra')
+  })
+
+  it('cada aviso sale de su bandera: sin ventas, posible quiebre, y nada en la fila que no los tiene', async () => {
+    await abrir()
+    expect(texto(fila('Yerba'))).toContain('Posible quiebre: la rotación puede estar subestimada')
+    expect(texto(fila('Yerba'))).not.toContain('Sin ventas en la ventana')
+    expect(texto(fila('Sal'))).toContain('Sin ventas en la ventana')
+    expect(texto(fila('Sal'))).not.toContain('Posible quiebre')
+    expect(texto(fila('Harina'))).not.toMatch(/Posible quiebre|Sin ventas/)
+    // El icono del aviso es decorativo: el texto lo dice todo.
+    expect(fila('Yerba').querySelector('svg[aria-hidden="true"]')).toBeTruthy()
+  })
+
+  it('lo en camino sin sucursal se avisa sólo con una sucursal elegida, donde se está contando', async () => {
+    const user = userEvent.setup()
+    await abrir()
+    // Toda la instancia: no hay nada que aclarar, es todo lo pedido.
+    expect(texto(fila('Yerba'))).not.toContain('sin sucursal')
+
+    responder({ ...TODO, [RUTA]: { ...DATA, sucursal_id: 2, productos: [YERBA, HARINA] } })
+    await user.selectOptions(await screen.findByLabelText('Sucursal'), '2')
+    await waitFor(() => expect(texto(fila('Yerba'))).toContain('incluye 4 de órdenes sin sucursal, contadas en esta sucursal'))
+    // Harina no tiene nada en camino sin sucursal: no hay aviso.
+    expect(texto(fila('Harina'))).not.toContain('sin sucursal')
+  })
+})
+
+describe('Reposición: lo que pide', () => {
+  it('«Toda la instancia» no manda sucursal, y elegir una manda su id (y volver a la instancia la saca)', async () => {
+    const user = userEvent.setup()
+    await abrir()
+    const selector = await screen.findByLabelText('Sucursal')
+    expect(within(selector).getAllByRole('option').map((o) => o.textContent)).toEqual(['Toda la instancia', 'Centro', 'Norte'])
+    expect(pedidasAlReporte()).toEqual([pide()])
+
+    await user.selectOptions(selector, '2')
+    await waitFor(() => expect(ultimaConsulta()).toBe(pide('&sucursal_id=2')))
+    await user.selectOptions(selector, '1')
+    await waitFor(() => expect(ultimaConsulta()).toBe(pide('&sucursal_id=1')))
+    await user.selectOptions(selector, 'Toda la instancia')
+    await waitFor(() => expect(ultimaConsulta()).toBe(pide()))
+  })
+
+  it('sin sucursales o sin categorías (producto sin ellas, o sin permiso) la pantalla sigue y sólo pierde ese filtro', async () => {
+    responder({ [RUTA]: DATA, '/api/sucursales': { status: 403, detail: 'Sin permiso' } })
+    montar('/reposicion', <Reposicion />)
+    expect(await screen.findByText('3 productos')).toBeTruthy()
+    expect(screen.queryByLabelText('Sucursal')).toBeNull()
+    expect(screen.queryByLabelText('Categoría')).toBeNull()
+    expect(screen.queryByText('Sin permiso')).toBeNull()
+  })
+
+  it('la categoría elegida viaja por nombre, y «Todas las categorías» la saca', async () => {
+    const user = userEvent.setup()
+    await abrir()
+    const selector = await screen.findByLabelText('Categoría')
+    expect(within(selector).getAllByRole('option').map((o) => o.textContent)).toEqual(['Todas las categorías', 'Almacén', 'Bebidas'])
+    await user.selectOptions(selector, 'Bebidas')
+    await waitFor(() => expect(ultimaConsulta()).toBe(pide('&categoria=Bebidas')))
+    await user.selectOptions(selector, 'Todas las categorías')
+    await waitFor(() => expect(ultimaConsulta()).toBe(pide()))
+  })
+
+  it('los tres parámetros son editables y cada uno viaja con su nombre (los topes del motor son válidos)', async () => {
+    await abrir()
+    fireEvent.change(screen.getByLabelText('Días de rotación'), { target: { value: '365' } })
+    await waitFor(() => expect(ultimaConsulta()).toBe(pide('', 'dias_rotacion=365&dias_cobertura=15&plazo_entrega_dias=3&solo_a_pedir=true')))
+    fireEvent.change(screen.getByLabelText('Días de cobertura'), { target: { value: '365' } })
+    await waitFor(() => expect(ultimaConsulta()).toBe(pide('', 'dias_rotacion=365&dias_cobertura=365&plazo_entrega_dias=3&solo_a_pedir=true')))
+    fireEvent.change(screen.getByLabelText('Plazo de entrega (días)'), { target: { value: '180' } })
+    await waitFor(() => expect(ultimaConsulta()).toBe(pide('', 'dias_rotacion=365&dias_cobertura=365&plazo_entrega_dias=180&solo_a_pedir=true')))
+    fireEvent.change(screen.getByLabelText('Días de rotación'), { target: { value: '1' } })
+    await waitFor(() => expect(ultimaConsulta()).toBe(pide('', 'dias_rotacion=1&dias_cobertura=365&plazo_entrega_dias=180&solo_a_pedir=true')))
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('«Sólo lo que hay que pedir» viene marcado, y al desmarcarlo se pide todo (y el vacío lo dice distinto)', async () => {
+    const user = userEvent.setup()
+    await abrir()
+    const check = screen.getByLabelText('Sólo lo que hay que pedir') as HTMLInputElement
+    expect(check.checked).toBe(true)
+
+    responder({ ...TODO, [RUTA]: { ...DATA, solo_a_pedir: false, resumen: { productos: 4, a_pedir: 3, posible_quiebre: 1, sin_ventas: 1 },
+      productos: [...DATA.productos, { ...base, producto_id: 4, nombre: 'Aceite', stock: 20, cobertura_dias: 60, rotacion_diaria: 0.3 }] } })
+    await user.click(check)
+    await waitFor(() => expect(ultimaConsulta()).toBe(pide('', 'dias_rotacion=30&dias_cobertura=15&plazo_entrega_dias=3&solo_a_pedir=false')))
+    expect(await screen.findByText('Aceite')).toBeTruthy()
+    // Sin nada que pedir para ese producto: no tiene motivo.
+    expect(within(fila('Aceite')).getAllByRole('cell')[9].textContent).toBe('—')
+
+    responder({ ...TODO, [RUTA]: { ...DATA, solo_a_pedir: false, resumen: { productos: 0, a_pedir: 0, posible_quiebre: 0, sin_ventas: 0 }, productos: [] } })
+    fireEvent.change(screen.getByLabelText('Días de cobertura'), { target: { value: '16' } })
+    expect(await screen.findByText('No hay productos con estos parámetros')).toBeTruthy()
+    await user.click(check)
+    await waitFor(() => expect(ultimaConsulta()).toContain('solo_a_pedir=true'))
+  })
+})
+
+describe('Reposición: validación de los parámetros', () => {
+  it.each([
+    ['Días de rotación', '0'], ['Días de rotación', '366'], ['Días de cobertura', '0'], ['Días de cobertura', '366'],
+    ['Plazo de entrega (días)', '0'], ['Plazo de entrega (días)', '181'], ['Días de rotación', ''], ['Días de rotación', '1.5'],
+    ['Plazo de entrega (días)', '-3'],
+  ])('%s = "%s" no se manda: se avisa el rango, no se muestra una lista que no corresponde y no hay CSV', async (campo, valor) => {
+    await abrir()
+    const pedidosAntes = pedidasAlReporte().length
+    fireEvent.change(screen.getByLabelText(campo), { target: { value: valor } })
+
+    const tope = campo === 'Plazo de entrega (días)' ? 180 : 365
+    expect((await screen.findByRole('alert')).textContent).toBe(`Tiene que ser un entero entre 1 y ${tope}.`)
+    expect(screen.getByLabelText(campo).getAttribute('aria-invalid')).toBe('true')
+    expect(screen.getByLabelText(campo).getAttribute('aria-describedby')).toBe(screen.getByRole('alert').id)
+    expect(screen.getByText('Corregí los parámetros para ver la sugerencia.')).toBeTruthy()
+    expect(screen.queryByRole('table')).toBeNull()
+    expect(screen.queryByRole('link', { name: /CSV/ })).toBeNull()
+    expect(pedidasAlReporte()).toHaveLength(pedidosAntes)
+  })
+
+  it('al corregir el valor vuelve a pedir y la lista reaparece', async () => {
+    await abrir()
+    fireEvent.change(screen.getByLabelText('Días de rotación'), { target: { value: '0' } })
+    await screen.findByRole('alert')
+    fireEvent.change(screen.getByLabelText('Días de rotación'), { target: { value: '7' } })
+    expect(await screen.findByText('Yerba')).toBeTruthy()
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(ultimaConsulta()).toBe(pide('', 'dias_rotacion=7&dias_cobertura=15&plazo_entrega_dias=3&solo_a_pedir=true'))
+  })
+})
+
+describe('Reposición: orden', () => {
+  it('por defecto es el de urgencia del motor, y ordenar por una columna es de la pantalla (no pide de nuevo)', async () => {
+    const user = userEvent.setup()
+    await abrir()
+    expect(nombresEnTabla()).toEqual(['Yerba', 'Harina', 'Sal'])
+    for (const th of screen.getAllByRole('columnheader')) expect(th.getAttribute('aria-sort')).toBe('none')
+    expect(screen.queryByRole('button', { name: 'Orden por urgencia' })).toBeNull()
+    const pedidos = pedidasAlReporte().length
+
+    // Las cifras arrancan de mayor a menor; un segundo click invierte.
+    await user.click(screen.getByRole('button', { name: 'Sugerido' }))
+    expect(nombresEnTabla()).toEqual(['Yerba', 'Harina', 'Sal'])
+    expect(screen.getByRole('columnheader', { name: /Sugerido ▼/ }).getAttribute('aria-sort')).toBe('descending')
+    await user.click(screen.getByRole('button', { name: /Sugerido/ }))
+    expect(nombresEnTabla()).toEqual(['Sal', 'Harina', 'Yerba'])
+    expect(screen.getByRole('columnheader', { name: /Sugerido ▲/ }).getAttribute('aria-sort')).toBe('ascending')
+
+    // Por nombre arranca ascendente.
+    await user.click(screen.getByRole('button', { name: 'Producto' }))
+    expect(nombresEnTabla()).toEqual(['Harina', 'Sal', 'Yerba'])
+    await user.click(screen.getByRole('button', { name: /Producto/ }))
+    expect(nombresEnTabla()).toEqual(['Yerba', 'Sal', 'Harina'])
+
+    expect(pedidasAlReporte()).toHaveLength(pedidos)
+
+    await user.click(screen.getByRole('button', { name: 'Orden por urgencia' }))
+    expect(nombresEnTabla()).toEqual(['Yerba', 'Harina', 'Sal'])
+    expect(screen.queryByRole('button', { name: 'Orden por urgencia' })).toBeNull()
+  })
+
+  it('cada columna ordena por su valor: numéricas como números y texto por su etiqueta', async () => {
+    const user = userEvent.setup()
+    await abrir()
+    // [columna, orden que da al primer click]. Las numéricas van de mayor a menor.
+    const casos: [string, string[]][] = [
+      ['Stock', ['Sal', 'Yerba', 'Harina']],
+      ['En camino', ['Yerba', 'Harina', 'Sal']],
+      ['Mínimo', ['Sal', 'Yerba', 'Harina']],
+      ['Vendido en la ventana', ['Harina', 'Yerba', 'Sal']],
+      ['Rotación diaria', ['Harina', 'Yerba', 'Sal']],
+      ['Cobertura (días)', ['Harina', 'Yerba', 'Sal']],
+      // Código y motivo, en texto y ascendente; sin código o sin motivo, al final.
+      ['Código', ['Harina', 'Yerba', 'Sal']],
+      ['Motivo', ['Sal', 'Yerba', 'Harina']],
+    ]
+    for (const [columna, esperado] of casos) {
+      await user.click(screen.getByRole('button', { name: new RegExp(`^${columna.replace(/[()]/g, '\\$&')}`) }))
+      expect(nombresEnTabla(), columna).toEqual(esperado)
+    }
+  })
+
+  it('lo que no tiene valor (cobertura sin rotación) va al final en los dos sentidos', async () => {
+    const user = userEvent.setup()
+    await abrir()
+    await user.click(screen.getByRole('button', { name: 'Cobertura (días)' }))
+    expect(nombresEnTabla()).toEqual(['Harina', 'Yerba', 'Sal'])
+    await user.click(screen.getByRole('button', { name: /Cobertura/ }))
+    expect(nombresEnTabla()).toEqual(['Yerba', 'Harina', 'Sal'])
+  })
+
+  it('un parámetro nuevo no pierde el orden elegido', async () => {
+    const user = userEvent.setup()
+    await abrir()
+    await user.click(screen.getByRole('button', { name: 'Producto' }))
+    fireEvent.change(screen.getByLabelText('Días de cobertura'), { target: { value: '20' } })
+    await waitFor(() => expect(ultimaConsulta()).toContain('dias_cobertura=20'))
+    await waitFor(() => expect(screen.getByRole('columnheader', { name: /Producto ▲/ })).toBeTruthy())
+    expect(nombresEnTabla()).toEqual(['Harina', 'Sal', 'Yerba'])
+  })
+})
+
+describe('Reposición: CSV', () => {
+  it('apunta al export del motor con los mismos parámetros que la lista que se ve', async () => {
+    const user = userEvent.setup()
+    await abrir()
+    expect(screen.getByRole('link', { name: /CSV/ }).getAttribute('href')).toBe(`${RUTA}/export?${consulta()}`)
+
+    await user.selectOptions(await screen.findByLabelText('Sucursal'), '2')
+    await user.selectOptions(screen.getByLabelText('Categoría'), 'Bebidas')
+    fireEvent.change(screen.getByLabelText('Días de rotación'), { target: { value: '60' } })
+    await user.click(screen.getByLabelText('Sólo lo que hay que pedir'))
+    await waitFor(() => expect(screen.getByRole('link', { name: /CSV/ }).getAttribute('href')).toBe(
+      `${RUTA}/export?dias_rotacion=60&dias_cobertura=15&plazo_entrega_dias=3&solo_a_pedir=false&sucursal_id=2&categoria=Bebidas`))
+    // El JSON pidió exactamente lo mismo: una sola forma de armar la consulta.
+    expect(ultimaConsulta()).toBe(
+      'GET /api/reportes/reposicion?dias_rotacion=60&dias_cobertura=15&plazo_entrega_dias=3&solo_a_pedir=false&sucursal_id=2&categoria=Bebidas')
+  })
+
+  it('reordenar la tabla no cambia el CSV: el motor lo entrega en su orden de urgencia', async () => {
+    const user = userEvent.setup()
+    await abrir()
+    const antes = screen.getByRole('link', { name: /CSV/ }).getAttribute('href')
+    await user.click(screen.getByRole('button', { name: 'Producto' }))
+    expect(screen.getByRole('link', { name: /CSV/ }).getAttribute('href')).toBe(antes)
+  })
+})
+
+describe('Reposición: cargando, vacío y errores', () => {
+  it('mientras carga dice que carga', async () => {
+    fetchMock.mockImplementation(() => new Promise(() => {}))
+    montar('/reposicion', <Reposicion />)
+    expect(await screen.findByText('Cargando…')).toBeTruthy()
+    expect(screen.queryByRole('table')).toBeNull()
+  })
+
+  it('sin nada que pedir lo dice claro y no hay tabla', async () => {
+    responder({ ...TODO, [RUTA]: { ...DATA, resumen: { productos: 0, a_pedir: 0, posible_quiebre: 0, sin_ventas: 0 }, productos: [] } })
+    montar('/reposicion', <Reposicion />)
+    expect(await screen.findByText('Nada que pedir con estos parámetros')).toBeTruthy()
+    expect(screen.getByText('0 productos')).toBeTruthy()
+    expect(screen.queryByRole('table')).toBeNull()
+  })
+
+  it('el error de la API (422 incluido) o de la red se muestra, y sin datos no queda la lista vieja', async () => {
+    responder({ ...TODO, [RUTA]: { status: 422, detail: 'la sucursal 9 no existe' } })
+    montar('/reposicion', <Reposicion />)
+    expect((await screen.findByText('la sucursal 9 no existe')).getAttribute('role')).toBe('alert')
+    expect(screen.queryByRole('table')).toBeNull()
+
+    cleanup()
+    responder({ ...TODO, [RUTA]: '!caida' })
+    montar('/reposicion', <Reposicion />)
+    expect(await screen.findByText('Error de conexión.')).toBeTruthy()
+  })
+
+  it('un error tras una lista buena saca la lista, y el siguiente pedido bueno la trae de nuevo', async () => {
+    await abrir()
+    responder({ ...TODO, [RUTA]: { status: 403, detail: 'Solo admin' } })
+    fireEvent.change(screen.getByLabelText('Días de cobertura'), { target: { value: '20' } })
+    expect(await screen.findByText('Solo admin')).toBeTruthy()
+    expect(screen.queryByText('Yerba')).toBeNull()
+    responder(TODO)
+    fireEvent.change(screen.getByLabelText('Días de cobertura'), { target: { value: '21' } })
+    expect(await screen.findByText('Yerba')).toBeTruthy()
+    expect(screen.queryByText('Solo admin')).toBeNull()
+  })
+
+  it('una respuesta lenta de parámetros viejos no pisa a la de los nuevos', async () => {
+    let soltarLaVieja!: () => void
+    const vieja = new Promise<Response>((resolve) => {
+      soltarLaVieja = () => resolve(json({ ...DATA, productos: [{ ...YERBA, nombre: 'Vieja' }] }))
+    })
+    fetchMock.mockImplementation((entrada: RequestInfo | URL) => {
+      const url = String(entrada)
+      if (url.startsWith(`${RUTA}?dias_rotacion=30`)) return vieja
+      if (url.startsWith(RUTA)) return Promise.resolve(json({ ...DATA, productos: [{ ...YERBA, nombre: 'Nueva' }] }))
+      return Promise.resolve(json([]))
+    })
+    montar('/reposicion', <Reposicion />)
+    await waitFor(() => expect(pedidasAlReporte()).toHaveLength(1))
+    fireEvent.change(screen.getByLabelText('Días de rotación'), { target: { value: '60' } })
+    expect(await screen.findByText('Nueva')).toBeTruthy()
+    soltarLaVieja()
+    await new Promise((r) => setTimeout(r, 20))
+    expect(screen.queryByText('Vieja')).toBeNull()
+    expect(screen.getByText('Nueva')).toBeTruthy()
+  })
+})
