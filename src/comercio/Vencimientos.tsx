@@ -18,7 +18,11 @@
 // - 🔑 **Idempotencia de las escrituras.** `asignar` y `merma` exigen `clave_operacion`. Cada diálogo genera UNA clave
 //   por intento del usuario y la REUSA mientras los datos que se van a enviar no cambien (un error de red, un timeout o
 //   volver a apretar «Confirmar»: el motor devuelve `repetida: true` en vez de escribir dos veces). Se regenera cuando el
-//   usuario cambia algún dato o abre el diálogo de nuevo (el diálogo se monta de cero en cada apertura).
+//   usuario cambia algún dato. 🔴 **Un resultado INCIERTO (error de red, timeout, 5xx salvo el 503) sobrevive al diálogo**:
+//   el servidor pudo haber escrito y perderse la respuesta, así que cerrar y reabrir con el MISMO cuerpo reenvía la misma
+//   clave (guardada en la pantalla, `pendientes`: firma del cuerpo → clave) y el motor contesta `repetida: true` en vez de
+//   escribir dos veces. La entrada se borra con un resultado definitivo (éxito, `repetida`, 404/409/422/503, cualquier 4xx).
+//   Límite: `pendientes` vive en la pantalla; si se la desmonta (navegar a otra) se pierde.
 // - **«Productos que vencen» es por producto**: el motor no tiene un listado de los productos marcados (sólo se ven en el
 //   reporte los que tienen stock con lote o sin lote), así que se elige un producto, se ve si vence
 //   (`GET /api/vencimientos/productos/{id}/lotes`) y se marca o desmarca (`PUT /api/vencimientos/productos/{id}`).
@@ -150,41 +154,74 @@ const SITUACION: Record<VencimientoSituacion, { etiqueta: string; explicacion: s
 
 // ── Escrituras: una clave por intento, reusada al reintentar ─────────────────────────────────────────────────────
 
+/** Las operaciones con resultado INCIERTO: firma del cuerpo (operación y datos) → `clave_operacion` con la que se mandó.
+ *  Vive en la pantalla y no en el diálogo, para que cerrar y reabrir no descarte la clave (ver el encabezado). */
+type Pendientes = Map<string, string>
+
+/** ¿No se sabe si el motor escribió? Sin respuesta (red, timeout) o con un 5xx que no sea el 503 (que dice que falta la
+ *  revisión: no se escribió nada). Un 4xx (404, 409, 422, 403…) es una respuesta definitiva de que no se escribió. */
+function esResultadoIncierto(err: unknown): boolean {
+  return !(err instanceof ApiError) || (err.status >= 500 && err.status !== 503)
+}
+
+const AVISO_INCIERTO =
+  'No se sabe si se llegó a registrar: podés volver a apretar «Confirmar», que se reenvía con la misma clave y no se duplica.'
+
 /** El envío de un diálogo de escritura: sin doble envío (una guarda síncrona, porque dos clics pueden entrar antes de
  *  que el estado deshabilite el botón), el error a la vista y la `clave_operacion` del intento.
  *
- *  🔑 `claveDe(firma)` devuelve la misma clave mientras la `firma` (los datos que se van a enviar) sea la misma, y una
- *  nueva cuando cambia. El diálogo se monta de cero en cada apertura, así que abrir de nuevo también da una clave nueva. */
-function useEscritura() {
+ *  🔑 `claveDe(firma)` devuelve la clave de un intento incierto anterior con esa misma `firma` si la hay; si no, la misma
+ *  clave mientras la `firma` (los datos que se van a enviar) sea la misma, y una nueva cuando cambia. */
+function useEscritura(pendientes: Pendientes) {
   const [enVuelo, setEnVuelo] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const guarda = useRef(false)
   const clave = useRef<{ firma: string; valor: string } | null>(null)
 
   function claveDe(firma: string): string {
+    const pendiente = pendientes.get(firma)
+    if (pendiente) return pendiente
     if (clave.current?.firma !== firma) clave.current = { firma, valor: nuevaClaveDeOperacion() }
     return clave.current.valor
   }
 
-  async function enviar<T>(pedir: () => Promise<T>, alExito: (respuesta: T) => void) {
+  async function enviar<T>(firma: string, pedir: (claveOperacion: string) => Promise<T>, alExito: (respuesta: T) => void) {
     if (guarda.current) return
     guarda.current = true
     setEnVuelo(true)
     setError(null)
+    const claveUsada = claveDe(firma)
     try {
-      alExito(await pedir())
+      const respuesta = await pedir(claveUsada)
+      pendientes.delete(firma)
+      alExito(respuesta)
     } catch (err) {
-      // Sin respuesta (red, timeout) no se sabe si el motor llegó a escribir: la clave queda, y volver a apretar
-      // «Confirmar» reenvía la misma.
-      setError(err instanceof ApiError ? mensajeDeError(err)
-        : 'Error de conexión. No se sabe si se llegó a registrar: podés volver a apretar «Confirmar», que no se duplica.')
+      if (esResultadoIncierto(err)) {
+        // No se sabe si el motor llegó a escribir: la clave queda guardada, y volver a apretar «Confirmar» (en este
+        // diálogo o en uno reabierto con los mismos datos) reenvía la misma.
+        pendientes.set(firma, claveUsada)
+        setError(`${err instanceof ApiError ? mensajeDeError(err) : 'Error de conexión.'} ${AVISO_INCIERTO}`)
+      } else {
+        // Respuesta definitiva de que no se escribió (y no gasta la clave): no queda nada pendiente.
+        pendientes.delete(firma)
+        setError(mensajeDeError(err))
+      }
     } finally {
       guarda.current = false
       setEnVuelo(false)
     }
   }
 
-  return { enVuelo, error, claveDe, enviar }
+  return { enVuelo, error, enviar }
+}
+
+/** Al reabrir un diálogo con los mismos datos de un intento incierto: se dice que el reenvío es el mismo. */
+function AvisoIntentoPendiente() {
+  return (
+    <p role="status" className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">
+      Hay un intento anterior sin confirmar para esta misma operación; al confirmar se reenvía con la misma clave, así que no se duplica.
+    </p>
+  )
 }
 
 function Campo({ id, etiqueta, error, children }: { id: string; etiqueta: string; error?: string | null; children: React.ReactNode }) {
@@ -197,8 +234,9 @@ function Campo({ id, etiqueta, error, children }: { id: string; etiqueta: string
   )
 }
 
-function DialogoMerma({ fila, onCerrar, onListo }: {
+function DialogoMerma({ fila, pendientes, onCerrar, onListo }: {
   fila: VencimientoLote
+  pendientes: Pendientes
   onCerrar: () => void
   onListo: (respuesta: VencimientoMermaRespuesta) => void
 }) {
@@ -206,18 +244,23 @@ function DialogoMerma({ fila, onCerrar, onListo }: {
   const [motivo, setMotivo] = useState('vencimiento')
   const [nota, setNota] = useState('')
   const [intentado, setIntentado] = useState(false)
-  const { enVuelo, error, claveDe, enviar } = useEscritura()
+  const { enVuelo, error, enviar } = useEscritura(pendientes)
   const errorDeLaCantidad = errorDeCantidad(cantidad, fila.saldo)
+  // Lo que se enviaría ahora (`null` si no vale) y su firma: la misma cuenta para enviar y para saber si hay un intento pendiente.
+  const datos = errorDeLaCantidad ? null : {
+    producto_id: fila.producto_id, deposito_id: fila.deposito_id, variante_id: fila.variante_id, lote: fila.lote,
+    vence: fila.vence, cantidad: Number(cantidad), motivo: motivo.trim(), nota: nota.trim(),
+  }
+  const firma = datos && `merma:${JSON.stringify(datos)}`
+  const hayPendiente = firma !== null && pendientes.has(firma)
 
   function confirmar() {
     setIntentado(true)
-    if (errorDeLaCantidad) return
-    const datos = {
-      producto_id: fila.producto_id, deposito_id: fila.deposito_id, variante_id: fila.variante_id, lote: fila.lote,
-      vence: fila.vence, cantidad: Number(cantidad), motivo: motivo.trim(), nota: nota.trim(),
-    }
-    const cuerpo: VencimientoMermaPayload = { ...datos, clave_operacion: claveDe(JSON.stringify(datos)) }
-    void enviar(() => api.post<VencimientoMermaRespuesta>(`${RUTA}/merma`, cuerpo), onListo)
+    if (!datos || !firma) return
+    void enviar(firma, (clave_operacion) => {
+      const cuerpo: VencimientoMermaPayload = { ...datos, clave_operacion }
+      return api.post<VencimientoMermaRespuesta>(`${RUTA}/merma`, cuerpo)
+    }, onListo)
   }
 
   return (
@@ -231,6 +274,7 @@ function DialogoMerma({ fila, onCerrar, onListo }: {
           </DialogDescription>
         </DialogHeader>
         <AvisoSaldoSobreestimado />
+        {hayPendiente && !error && <AvisoIntentoPendiente />}
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         <div className="grid gap-4">
           <Campo id="merma-cantidad" etiqueta="Cantidad a dar de baja" error={intentado || cantidad !== '' ? errorDeLaCantidad : null}>
@@ -257,8 +301,9 @@ function DialogoMerma({ fila, onCerrar, onListo }: {
   )
 }
 
-function DialogoAsignar({ fila, onCerrar, onListo }: {
+function DialogoAsignar({ fila, pendientes, onCerrar, onListo }: {
   fila: VencimientoSinLote
+  pendientes: Pendientes
   onCerrar: () => void
   onListo: (respuesta: VencimientoAsignarRespuesta) => void
 }) {
@@ -267,22 +312,27 @@ function DialogoAsignar({ fila, onCerrar, onListo }: {
   const [cantidad, setCantidad] = useState(String(fila.saldo))
   const [nota, setNota] = useState('')
   const [intentado, setIntentado] = useState(false)
-  const { enVuelo, error, claveDe, enviar } = useEscritura()
+  const { enVuelo, error, enviar } = useEscritura(pendientes)
 
   const errorDelLote = lote.trim() === '' ? 'Escribí el código del lote.' : null
   // `<input type="date">` entrega `aaaa-mm-dd` o vacío: eso es lo que se manda, sin reformatear.
   const errorDeLaFecha = /^\d{4}-\d{2}-\d{2}$/.test(vence) ? null : 'Elegí la fecha de vencimiento.'
   const errorDeLaCantidad = errorDeCantidad(cantidad, fila.saldo)
 
+  const datos = errorDelLote || errorDeLaFecha || errorDeLaCantidad ? null : {
+    producto_id: fila.producto_id, deposito_id: fila.deposito_id, variante_id: fila.variante_id, lote: lote.trim(),
+    vence, cantidad: Number(cantidad), nota: nota.trim(),
+  }
+  const firma = datos && `asignar:${JSON.stringify(datos)}`
+  const hayPendiente = firma !== null && pendientes.has(firma)
+
   function confirmar() {
     setIntentado(true)
-    if (errorDelLote || errorDeLaFecha || errorDeLaCantidad) return
-    const datos = {
-      producto_id: fila.producto_id, deposito_id: fila.deposito_id, variante_id: fila.variante_id, lote: lote.trim(),
-      vence, cantidad: Number(cantidad), nota: nota.trim(),
-    }
-    const cuerpo: VencimientoAsignarPayload = { ...datos, clave_operacion: claveDe(JSON.stringify(datos)) }
-    void enviar(() => api.post<VencimientoAsignarRespuesta>(`${RUTA}/asignar`, cuerpo), onListo)
+    if (!datos || !firma) return
+    void enviar(firma, (clave_operacion) => {
+      const cuerpo: VencimientoAsignarPayload = { ...datos, clave_operacion }
+      return api.post<VencimientoAsignarRespuesta>(`${RUTA}/asignar`, cuerpo)
+    }, onListo)
   }
 
   return (
@@ -296,6 +346,7 @@ function DialogoAsignar({ fila, onCerrar, onListo }: {
           </DialogDescription>
         </DialogHeader>
         <AvisoSaldoSobreestimado />
+        {hayPendiente && !error && <AvisoIntentoPendiente />}
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         <div className="grid gap-4">
           <Campo id="asignar-lote" etiqueta="Lote" error={intentado ? errorDelLote : null}>
@@ -386,6 +437,8 @@ export function Vencimientos({ puedeMover = true, puedeMarcar = true }: { puedeM
   const [aviso, setAviso] = useState<Aviso | null>(null)
   const [aMermar, setAMermar] = useState<VencimientoLote | null>(null)
   const [aAsignar, setAAsignar] = useState<VencimientoSinLote | null>(null)
+  // Las claves de las escrituras de resultado incierto: sobreviven a cerrar el diálogo (ver el encabezado).
+  const [pendientes] = useState<Pendientes>(() => new Map())
 
   const errorDeLosDias = errorDeDias(dias)
   const valido = errorDeLosDias === null
@@ -678,10 +731,10 @@ export function Vencimientos({ puedeMover = true, puedeMarcar = true }: { puedeM
       <ProductosQueVencen puedeMarcar={puedeMarcar} onMarcado={(texto) => { setAviso({ texto }); setRecarga((r) => r + 1) }} />
 
       {aMermar && (
-        <DialogoMerma fila={aMermar} onCerrar={() => setAMermar(null)} onListo={(r) => mermaHecha(aMermar, r)} />
+        <DialogoMerma fila={aMermar} pendientes={pendientes} onCerrar={() => setAMermar(null)} onListo={(r) => mermaHecha(aMermar, r)} />
       )}
       {aAsignar && (
-        <DialogoAsignar fila={aAsignar} onCerrar={() => setAAsignar(null)} onListo={(r) => asignacionHecha(aAsignar, r)} />
+        <DialogoAsignar fila={aAsignar} pendientes={pendientes} onCerrar={() => setAAsignar(null)} onListo={(r) => asignacionHecha(aAsignar, r)} />
       )}
     </div>
   )
@@ -765,7 +818,7 @@ function ProductosQueVencen({ puedeMarcar, onMarcado }: { puedeMarcar: boolean; 
           <div className="grid max-w-md gap-2">
             <Label htmlFor="vencimientos-producto">Producto</Label>
             <SelectBuscable
-              id="vencimientos-producto" value={productoId} onChange={elegir} opciones={opciones}
+              id="vencimientos-producto" value={productoId} onChange={elegir} opciones={opciones} disabled={marcando}
               placeholder="Buscá un producto…" emptyMessage="Ningún producto coincide." ariaLabel="Producto"
             />
           </div>

@@ -853,6 +853,149 @@ describe('Vencimientos: asignar vencimiento', () => {
   })
 })
 
+const AVISO_PENDIENTE = /Hay un intento anterior sin confirmar para esta misma operación; al confirmar se reenvía con la misma clave, así que no se duplica\./
+const cancelar = (user: ReturnType<typeof userEvent.setup>) => user.click(within(dialogo()).getByRole('button', { name: 'Cancelar' }))
+
+describe('Vencimientos: un resultado incierto sobrevive al diálogo', () => {
+  it.each([
+    ['sin respuesta (red)', () => 'caida' as const],
+    ['un 500', () => json({ detail: 'Internal Server Error' }, 500)],
+    ['un 502', () => json({ detail: 'Bad Gateway' }, 502)],
+  ])('🔑 merma: %s → cerrar → reabrir → reintentar reenvía la MISMA clave, avisa, y con repetida:true cierra como éxito y limpia la entrada', async (_caso, fallo) => {
+    const user = userEvent.setup()
+    await abrir()
+    secuencia(MERMA, [fallo, () => json({ ...MERMA_OK, repetida: true }), () => json(MERMA_OK)])
+    await abrirMerma(user)
+    await user.click(confirmar())
+    expect((await within(dialogo()).findByRole('alert')).textContent).toContain('No se sabe si se llegó a registrar')
+    await cancelar(user)
+    expect(screen.queryByRole('dialog')).toBeNull()
+
+    // Reabre con los mismos datos: se dice que es el mismo intento, y no hace falta tocar nada.
+    await abrirMerma(user)
+    expect(texto(within(dialogo()).getByRole('status'))).toMatch(AVISO_PENDIENTE)
+    await user.click(confirmar())
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(enviosA(MERMA)).toHaveLength(2)
+    expect(enviosA(MERMA)[1]).toEqual(enviosA(MERMA)[0])
+    expect((await screen.findByText(/Ya estaba registrado/)).getAttribute('role')).toBe('status')
+
+    // Con un resultado definitivo la entrada se limpió: reabrir es un intento nuevo, sin aviso y con otra clave.
+    await abrirMerma(user)
+    expect(within(dialogo()).queryByText(AVISO_PENDIENTE)).toBeNull()
+    await user.click(confirmar())
+    await waitFor(() => expect(enviosA(MERMA)).toHaveLength(3))
+    expect(clavesDe(MERMA)[2]).not.toBe(clavesDe(MERMA)[0])
+  })
+
+  it('🔑 asignar: respuesta perdida → cerrar → reabrir con los mismos datos → reenvía la MISMA clave y con repetida:true cierra como éxito', async () => {
+    const user = userEvent.setup()
+    await abrir()
+    secuencia(ASIGNAR, [() => 'caida', () => json({ ...ASIGNAR_OK, repetida: true }), () => json(ASIGNAR_OK)])
+    await abrirAsignar(user)
+    completarAsignacion()
+    await user.click(confirmar())
+    await within(dialogo()).findByText(/No se sabe si se llegó a registrar/)
+    await cancelar(user)
+
+    await abrirAsignar(user)
+    // Sin los datos (el diálogo se abre vacío) no hay nada pendiente todavía que mostrar.
+    expect(within(dialogo()).queryByText(AVISO_PENDIENTE)).toBeNull()
+    completarAsignacion()
+    expect(texto(within(dialogo()).getByRole('status'))).toMatch(AVISO_PENDIENTE)
+    await user.click(confirmar())
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(enviosA(ASIGNAR)).toHaveLength(2)
+    expect(enviosA(ASIGNAR)[1]).toEqual(enviosA(ASIGNAR)[0])
+    expect((await screen.findByText(/Ya estaba registrado/)).getAttribute('role')).toBe('status')
+
+    await abrirAsignar(user)
+    completarAsignacion()
+    expect(within(dialogo()).queryByText(AVISO_PENDIENTE)).toBeNull()
+    await user.click(confirmar())
+    await waitFor(() => expect(enviosA(ASIGNAR)).toHaveLength(3))
+    expect(clavesDe(ASIGNAR)[2]).not.toBe(clavesDe(ASIGNAR)[0])
+  })
+
+  it('🔑 tras un 409 (o 422, 404, 503) en el reintento la entrada se limpia: la próxima apertura es un intento nuevo', async () => {
+    const user = userEvent.setup()
+    await abrir()
+    secuencia(MERMA, [() => 'caida', () => json({ detail: 'el lote L1 tiene 1 y se quieren dar de baja 4' }, 409), () => json(MERMA_OK)])
+    await abrirMerma(user)
+    await user.click(confirmar())
+    await within(dialogo()).findByText(/No se sabe si se llegó a registrar/)
+    await cancelar(user)
+    await abrirMerma(user)
+    await user.click(confirmar())
+    await within(dialogo()).findByText('el lote L1 tiene 1 y se quieren dar de baja 4')
+    expect(clavesDe(MERMA)[1]).toBe(clavesDe(MERMA)[0])
+    // El 409 dice que no se escribió: nada pendiente.
+    expect(within(dialogo()).queryByText(AVISO_PENDIENTE)).toBeNull()
+    await cancelar(user)
+    await abrirMerma(user)
+    expect(within(dialogo()).queryByText(AVISO_PENDIENTE)).toBeNull()
+    await user.click(confirmar())
+    await waitFor(() => expect(enviosA(MERMA)).toHaveLength(3))
+    expect(clavesDe(MERMA)[2]).not.toBe(clavesDe(MERMA)[0])
+  })
+
+  it('un fallo definitivo de entrada (4xx) no deja nada pendiente', async () => {
+    const user = userEvent.setup()
+    await abrir()
+    secuencia(MERMA, [() => json({ detail: 'hace falta el lote' }, 422), () => json(MERMA_OK)])
+    await abrirMerma(user)
+    await user.click(confirmar())
+    await within(dialogo()).findByText('hace falta el lote')
+    await cancelar(user)
+    await abrirMerma(user)
+    expect(within(dialogo()).queryByText(AVISO_PENDIENTE)).toBeNull()
+    await user.click(confirmar())
+    await waitFor(() => expect(enviosA(MERMA)).toHaveLength(2))
+    expect(clavesDe(MERMA)[1]).not.toBe(clavesDe(MERMA)[0])
+  })
+
+  it('🔑 cambiar un dato de la operación pendiente es otra operación: otra clave y sin aviso; volver a los datos de antes recupera la clave', async () => {
+    const user = userEvent.setup()
+    await abrir()
+    secuencia(MERMA, [() => 'caida', () => json(MERMA_OK)])
+    await abrirMerma(user)
+    await user.click(confirmar())
+    await within(dialogo()).findByText(/No se sabe si se llegó a registrar/)
+    await cancelar(user)
+
+    await abrirMerma(user)
+    expect(within(dialogo()).getByText(AVISO_PENDIENTE)).toBeTruthy()
+    fireEvent.change(within(dialogo()).getByLabelText('Cantidad a dar de baja'), { target: { value: '1' } })
+    expect(within(dialogo()).queryByText(AVISO_PENDIENTE)).toBeNull()
+    fireEvent.change(within(dialogo()).getByLabelText('Nota'), { target: { value: 'x' } })
+    fireEvent.change(within(dialogo()).getByLabelText('Nota'), { target: { value: '' } })
+    fireEvent.change(within(dialogo()).getByLabelText('Cantidad a dar de baja'), { target: { value: '4' } })
+    expect(within(dialogo()).getByText(AVISO_PENDIENTE)).toBeTruthy()
+
+    fireEvent.change(within(dialogo()).getByLabelText('Cantidad a dar de baja'), { target: { value: '1' } })
+    await user.click(confirmar())
+    await waitFor(() => expect(enviosA(MERMA)).toHaveLength(2))
+    expect(enviosA(MERMA)[1]).toMatchObject({ cantidad: 1 })
+    expect(clavesDe(MERMA)[1]).not.toBe(clavesDe(MERMA)[0])
+  })
+
+  it('las operaciones pendientes no se mezclan: la misma clave no viaja a otro lote ni de merma a asignar', async () => {
+    const user = userEvent.setup()
+    await abrir()
+    secuencia(MERMA, [() => 'caida', () => json(MERMA_OK)])
+    await abrirMerma(user, 'Yerba')
+    await user.click(confirmar())
+    await within(dialogo()).findByText(/No se sabe si se llegó a registrar/)
+    await cancelar(user)
+
+    await abrirMerma(user, 'Crema')
+    expect(within(dialogo()).queryByText(AVISO_PENDIENTE)).toBeNull()
+    await user.click(confirmar())
+    await waitFor(() => expect(enviosA(MERMA)).toHaveLength(2))
+    expect(clavesDe(MERMA)[1]).not.toBe(clavesDe(MERMA)[0])
+  })
+})
+
 describe('Vencimientos: la clave de operación', () => {
   it('sin crypto.randomUUID (un producto servido por http) se genera igual un UUID v4', async () => {
     const real = globalThis.crypto
@@ -955,6 +1098,33 @@ describe('Vencimientos: productos que vencen', () => {
     expect(fetchMock.mock.calls.filter((c) => (c[1] as RequestInit | undefined)?.method === 'PUT')).toHaveLength(1)
     soltar()
     await screen.findByText(/quedó marcado/)
+  })
+
+  it('mientras un PUT está en vuelo no se puede cambiar de producto: la respuesta tardía de A no puede pisar la ficha de B', async () => {
+    const user = userEvent.setup()
+    await abrir({
+      ...TODO, [RUTA_FICHA]: FICHA(false),
+      '/api/vencimientos/productos/2/lotes': { producto: { producto_id: 2, codigo: 'P-2', nombre: 'Crema', unidad: 'u', vence: true }, hoy: '2026-09-30', lotes: [] },
+    })
+    await elegirEnBuscable(user, screen.getByRole('combobox', { name: 'Producto' }), /Yerba/)
+    const boton = await screen.findByRole('button', { name: 'Marcar como perecedero' })
+    let soltar!: () => void
+    const base = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation((entrada: RequestInfo | URL, init?: RequestInit) =>
+      (init?.method === 'PUT' ? new Promise<Response>((r) => { soltar = () => r(json({ producto_id: 1, vence: true })) }) : base(entrada, init)))
+    await user.click(boton)
+    const selector = screen.getByRole('combobox', { name: 'Producto' })
+    expect((selector as HTMLButtonElement).disabled).toBe(true)
+    await user.click(selector)
+    expect(screen.queryByRole('listbox')).toBeNull()
+
+    soltar()
+    await screen.findByText(/quedó marcado/)
+    expect((screen.getByRole('combobox', { name: 'Producto' }) as HTMLButtonElement).disabled).toBe(false)
+    // Ahora sí se puede pasar a B, y B muestra lo suyo (no queda en «Consultando…»).
+    await elegirEnBuscable(user, screen.getByRole('combobox', { name: 'Producto' }), /Crema/)
+    expect(await screen.findByText((_, el) => el?.tagName === 'P' && /^Crema está marcado como perecedero/.test(texto(el as HTMLElement)))).toBeTruthy()
+    expect(screen.queryByText('Consultando…')).toBeNull()
   })
 
   it('puedeMarcar=false deja ver si vence pero sin el botón de marcar', async () => {
