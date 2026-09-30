@@ -376,6 +376,30 @@ describe('Reposición: cargando, vacío y errores', () => {
     expect(screen.queryByText('Solo admin')).toBeNull()
   })
 
+  it('mientras contesta una consulta nueva no se muestran las cantidades de la anterior bajo los controles nuevos', async () => {
+    await abrir()
+    let soltar!: () => void
+    const lenta = new Promise<Response>((resolve) => {
+      soltar = () => resolve(json({ ...DATA, dias_cobertura: 20, productos: [{ ...YERBA, nombre: 'Nueva', sugerido: 99 }] }))
+    })
+    fetchMock.mockImplementation((entrada: RequestInfo | URL) => (String(entrada).startsWith(RUTA) ? lenta : Promise.resolve(json([]))))
+    fireEvent.change(screen.getByLabelText('Días de cobertura'), { target: { value: '20' } })
+
+    // Los controles ya dicen 20: la tabla vieja (cobertura 15) no puede seguir ahí, ni su resumen, ni su CSV.
+    expect(await screen.findByText('Cargando…')).toBeTruthy()
+    expect(screen.queryByRole('table')).toBeNull()
+    expect(screen.queryByText('Yerba')).toBeNull()
+    expect(screen.queryByText('3 productos')).toBeNull()
+    expect(screen.queryByRole('link', { name: /CSV/ })).toBeNull()
+    // La ayuda habla de lo que dicen los controles: 20 + 3 días, no el horizonte de la respuesta vieja (18).
+    expect(texto(screen.getByText(/proyecta a los días de cobertura/))).toContain('(23 días)')
+
+    soltar()
+    expect(await screen.findByText('Nueva')).toBeTruthy()
+    expect(screen.getByRole('link', { name: /CSV/ }).getAttribute('href')).toContain('dias_cobertura=20')
+    expect(texto(screen.getByText(/proyecta a los días de cobertura/))).toContain('(23 días)')
+  })
+
   it('una respuesta lenta de parámetros viejos no pisa a la de los nuevos', async () => {
     let soltarLaVieja!: () => void
     const vieja = new Promise<Response>((resolve) => {

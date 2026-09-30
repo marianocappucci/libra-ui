@@ -152,9 +152,12 @@ export function Reposicion() {
     return () => { vigente = false }
   }, [consulta])
 
-  const data = respuesta?.data ?? null
-  const loading = respuesta?.consulta !== consulta
-  const error = respuesta?.consulta === consulta ? respuesta.error : null
+  // Sólo vale lo que contestó el motor a la consulta de los controles de ahora: mientras llega la de un cambio
+  // reciente no se muestra la tabla anterior (sus cantidades serían de otros parámetros); se muestra «Cargando…».
+  const actual = respuesta?.consulta === consulta
+  const data = actual ? respuesta.data : null
+  const loading = !actual
+  const error = actual ? respuesta.error : null
 
   function ordenarPor(clave: ClaveOrden) {
     if (orden?.clave === clave) setOrden({ clave, sentido: orden.sentido === 1 ? -1 : 1 })
@@ -162,8 +165,8 @@ export function Reposicion() {
   }
 
   const productos = useMemo(() => ordenar(data?.productos ?? [], orden), [data, orden])
-  // Lo que dice la ayuda es lo que se pidió (lo que devolvió el motor), no lo que se está tipeando.
-  const horizonte = data ? data.dias_cobertura + data.plazo_entrega_dias : null
+  // Lo que dice la ayuda son los controles, que son también lo que muestra la tabla (sólo se muestra la de esta consulta).
+  const horizonte = valido ? Number(valores.dias_cobertura) + Number(valores.plazo_entrega_dias) : null
 
   return (
     <div className="grid gap-4">
@@ -228,7 +231,7 @@ export function Reposicion() {
       ) : !data ? (
         loading && <p role="status" className="py-6 text-center text-sm text-muted-foreground">Cargando…</p>
       ) : (
-        <Card aria-busy={loading}>
+        <Card>
           <CardHeader className="flex flex-wrap items-center justify-between gap-2 space-y-0">
             <CardTitle className="flex items-center gap-2 text-base">
               <TrendingDown className="size-4 text-primary" />
@@ -243,9 +246,8 @@ export function Reposicion() {
               {orden && (
                 <Button size="sm" variant="outline" onClick={() => setOrden(null)}>Orden por urgencia</Button>
               )}
-              {/* La consulta de la lista que se ve, no la que está en camino: lo que se baja es lo que se ve. */}
               <Button asChild size="sm" variant="outline">
-                <a href={`${RUTA}/export?${respuesta?.consulta}`}><Download />CSV</a>
+                <a href={`${RUTA}/export?${consulta}`}><Download />CSV</a>
               </Button>
             </div>
           </CardHeader>
