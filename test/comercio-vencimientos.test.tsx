@@ -119,10 +119,12 @@ async function abrir(tabla: Record<string, unknown> = TODO, props: { puedeMover?
   await screen.findByText('5 lotes')
 }
 
+/** El `detail` real del 503 de `SinRevision` (libracommerce/erp/vencimientos.py): el único 503 que dice que no se escribió. */
+const DETALLE_SIN_REVISION = 'Falta la revisión 0002_vencimientos_lotes del motor: corré `libracommerce-migrar upgrade` (--prefijo del producto) antes de usar vencimientos y lotes.'
 const MERMA = '/api/vencimientos/merma'
 const ASIGNAR = '/api/vencimientos/asignar'
 const dialogo = () => screen.getByRole('dialog')
-const confirmar = () => within(dialogo()).getByRole('button', { name: /Confirmar|Guardando/ })
+const confirmar = () => within(dialogo()).getByRole('button', { name: /Confirmar|Guardando|Reenviar el intento anterior/ })
 
 async function abrirMerma(user: ReturnType<typeof userEvent.setup>, nombre = 'Yerba') {
   await user.click(within(fila(nombre)).getByRole('button', { name: /Dar de baja/ }))
@@ -139,6 +141,7 @@ function completarAsignacion(lote = 'A-2026', vence = '2027-03-15') {
 
 beforeEach(() => {
   cleanup()
+  sessionStorage.clear()
   prepararFetch()
 })
 
@@ -336,7 +339,7 @@ describe('Vencimientos: cargando, errores y consultas viejas', () => {
     expect(screen.queryByRole('table')).toBeNull()
 
     cleanup()
-    responder({ ...TODO, [RUTA]: { status: 503, detail: 'Falta la revisión 0002_vencimientos_lotes del motor' } })
+    responder({ ...TODO, [RUTA]: { status: 503, detail: DETALLE_SIN_REVISION } })
     montar('/vencimientos', <Vencimientos />)
     expect((await screen.findByRole('alert')).textContent).toBe(
       'La base no tiene aplicada la revisión de vencimientos; pedí al administrador que ejecute libracommerce-migrar upgrade.')
@@ -620,7 +623,7 @@ describe('Vencimientos: dar de baja (merma)', () => {
     [409, 'la clave_operacion ya se usó en este producto con otros parámetros', 'la clave_operacion ya se usó en este producto con otros parámetros'],
     [422, 'hace falta el lote o el vencimiento', 'hace falta el lote o el vencimiento'],
     [404, 'el producto 1 no existe', 'el producto 1 no existe'],
-    [503, 'Falta la revisión 0002_vencimientos_lotes del motor', 'La base no tiene aplicada la revisión de vencimientos; pedí al administrador que ejecute libracommerce-migrar upgrade.'],
+    [503, DETALLE_SIN_REVISION, 'La base no tiene aplicada la revisión de vencimientos; pedí al administrador que ejecute libracommerce-migrar upgrade.'],
     [403, 'Sin permiso', 'Sin permiso'],
   ])('un %i deja el diálogo abierto con el mensaje del motor y no refresca', async (status, detail, esperado) => {
     const user = userEvent.setup()
@@ -819,7 +822,7 @@ describe('Vencimientos: asignar vencimiento', () => {
     for (const [status, detail, esperado] of [
       [409, 'el producto 6 no está marcado como perecedero: marcalo antes de asignar un vencimiento', 'el producto 6 no está marcado como perecedero: marcalo antes de asignar un vencimiento'],
       [422, 'fecha ilegible', 'fecha ilegible'],
-      [503, 'Falta la revisión', 'La base no tiene aplicada la revisión de vencimientos; pedí al administrador que ejecute libracommerce-migrar upgrade.'],
+      [503, DETALLE_SIN_REVISION, 'La base no tiene aplicada la revisión de vencimientos; pedí al administrador que ejecute libracommerce-migrar upgrade.'],
     ] as const) {
       secuencia(ASIGNAR, [() => json({ detail }, status)])
       await abrirAsignar(user)
@@ -853,133 +856,192 @@ describe('Vencimientos: asignar vencimiento', () => {
   })
 })
 
-const AVISO_PENDIENTE = /Hay un intento anterior sin confirmar para esta misma operación; al confirmar se reenvía con la misma clave, así que no se duplica\./
+const ALMACEN = 'libra-ui:vencimientos:pendientes'
+type Guardado = Record<string, { tipo: string; cuerpo: Record<string, unknown>; creado: number }>
+const guardado = () => JSON.parse(sessionStorage.getItem(ALMACEN) ?? '{}') as Guardado
+const panel = () => within(dialogo()).queryByText(/Hay un intento anterior sin confirmar para esta misma operación/)
 const cancelar = (user: ReturnType<typeof userEvent.setup>) => user.click(within(dialogo()).getByRole('button', { name: 'Cancelar' }))
+const enBotones = (nombre: string | RegExp) => within(dialogo()).getByRole('button', { name: nombre })
+/** La firma del destino de una merma sobre la fila de Yerba (tipo, producto, depósito, variante, lote, fecha). */
+const FIRMA_YERBA = JSON.stringify(['merma', 1, 1, null, 'L1', '2026-09-25'])
 
-describe('Vencimientos: un resultado incierto sobrevive al diálogo', () => {
+describe('Vencimientos: un intento incierto bloquea el destino hasta reenviarlo o descartarlo', () => {
   it.each([
     ['sin respuesta (red)', () => 'caida' as const],
     ['un 500', () => json({ detail: 'Internal Server Error' }, 500)],
     ['un 502', () => json({ detail: 'Bad Gateway' }, 502)],
-  ])('🔑 merma: %s → cerrar → reabrir → reintentar reenvía la MISMA clave, avisa, y con repetida:true cierra como éxito y limpia la entrada', async (_caso, fallo) => {
+    ['un 503 genérico (un proxy)', () => json({ detail: 'Service Unavailable' }, 503)],
+    ['un 503 que no es el de la migración', () => json({ detail: 'Falta la revisión de algo, no sé de qué' }, 503)],
+    ['un 408', () => json({ detail: 'Request Timeout' }, 408)],
+  ])('🔑 merma: %s → queda guardado, bloquea, sobrevive a cerrar, y reenviarlo (repetida:true) cierra como éxito y limpia', async (_caso, fallo) => {
     const user = userEvent.setup()
     await abrir()
     secuencia(MERMA, [fallo, () => json({ ...MERMA_OK, repetida: true }), () => json(MERMA_OK)])
     await abrirMerma(user)
     await user.click(confirmar())
-    expect((await within(dialogo()).findByRole('alert')).textContent).toContain('No se sabe si se llegó a registrar')
-    await cancelar(user)
-    expect(screen.queryByRole('dialog')).toBeNull()
+    expect((await within(dialogo()).findByText(/No se sabe si se llegó a registrar/)).getAttribute('role')).toBe('alert')
 
-    // Reabre con los mismos datos: se dice que es el mismo intento, y no hace falta tocar nada.
+    // Guardado con el cuerpo completo y la clave, bajo la firma del destino, con la hora.
+    const entradas = Object.entries(guardado())
+    expect(entradas).toHaveLength(1)
+    expect(entradas[0][0]).toBe(FIRMA_YERBA)
+    expect(entradas[0][1].cuerpo).toEqual(enviosA(MERMA)[0])
+    // Bloqueado: el aviso con la hora, los campos apagados y sólo reenviar o descartar.
+    expect(texto(panel())).toMatch(/intento del \d{2}:\d{2}/)
+    for (const campo of ['Cantidad a dar de baja', 'Motivo', 'Nota']) expect((within(dialogo()).getByLabelText(campo) as HTMLInputElement).disabled).toBe(true)
+    expect(enBotones('Reenviar el intento anterior')).toBeTruthy()
+    expect(enBotones('Descartar el intento anterior…')).toBeTruthy()
+    expect(within(dialogo()).queryByRole('button', { name: 'Confirmar' })).toBeNull()
+    // La fila lo marca.
+    await cancelar(user)
+    expect(within(fila('Yerba')).getByText('Intento sin confirmar')).toBeTruthy()
+
     await abrirMerma(user)
-    expect(texto(within(dialogo()).getByRole('status'))).toMatch(AVISO_PENDIENTE)
+    expect(panel()).toBeTruthy()
     await user.click(confirmar())
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(enviosA(MERMA)).toHaveLength(2)
     expect(enviosA(MERMA)[1]).toEqual(enviosA(MERMA)[0])
     expect((await screen.findByText(/Ya estaba registrado/)).getAttribute('role')).toBe('status')
+    expect(guardado()).toEqual({})
+    expect(within(fila('Yerba')).queryByText('Intento sin confirmar')).toBeNull()
 
-    // Con un resultado definitivo la entrada se limpió: reabrir es un intento nuevo, sin aviso y con otra clave.
+    // Con el resultado definitivo se puede operar de nuevo, con clave nueva.
     await abrirMerma(user)
-    expect(within(dialogo()).queryByText(AVISO_PENDIENTE)).toBeNull()
+    expect(panel()).toBeNull()
     await user.click(confirmar())
     await waitFor(() => expect(enviosA(MERMA)).toHaveLength(3))
     expect(clavesDe(MERMA)[2]).not.toBe(clavesDe(MERMA)[0])
   })
 
-  it('🔑 asignar: respuesta perdida → cerrar → reabrir con los mismos datos → reenvía la MISMA clave y con repetida:true cierra como éxito', async () => {
+  it('🔑 el 503 de la migración SÍ es definitivo: no queda nada guardado y se puede reintentar (la clave no se gastó)', async () => {
     const user = userEvent.setup()
     await abrir()
-    secuencia(ASIGNAR, [() => 'caida', () => json({ ...ASIGNAR_OK, repetida: true }), () => json(ASIGNAR_OK)])
-    await abrirAsignar(user)
-    completarAsignacion()
+    secuencia(MERMA, [() => json({ detail: DETALLE_SIN_REVISION }, 503)])
+    await abrirMerma(user)
     await user.click(confirmar())
-    await within(dialogo()).findByText(/No se sabe si se llegó a registrar/)
-    await cancelar(user)
-
-    await abrirAsignar(user)
-    // Sin los datos (el diálogo se abre vacío) no hay nada pendiente todavía que mostrar.
-    expect(within(dialogo()).queryByText(AVISO_PENDIENTE)).toBeNull()
-    completarAsignacion()
-    expect(texto(within(dialogo()).getByRole('status'))).toMatch(AVISO_PENDIENTE)
-    await user.click(confirmar())
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    expect(enviosA(ASIGNAR)).toHaveLength(2)
-    expect(enviosA(ASIGNAR)[1]).toEqual(enviosA(ASIGNAR)[0])
-    expect((await screen.findByText(/Ya estaba registrado/)).getAttribute('role')).toBe('status')
-
-    await abrirAsignar(user)
-    completarAsignacion()
-    expect(within(dialogo()).queryByText(AVISO_PENDIENTE)).toBeNull()
-    await user.click(confirmar())
-    await waitFor(() => expect(enviosA(ASIGNAR)).toHaveLength(3))
-    expect(clavesDe(ASIGNAR)[2]).not.toBe(clavesDe(ASIGNAR)[0])
+    expect((await within(dialogo()).findByRole('alert')).textContent).toBe(
+      'La base no tiene aplicada la revisión de vencimientos; pedí al administrador que ejecute libracommerce-migrar upgrade.')
+    expect(guardado()).toEqual({})
+    expect(panel()).toBeNull()
+    expect((within(dialogo()).getByLabelText('Nota') as HTMLTextAreaElement).disabled).toBe(false)
+    expect(within(dialogo()).queryByText(/No se sabe si se llegó a registrar/)).toBeNull()
   })
 
-  it('🔑 tras un 409 (o 422, 404, 503) en el reintento la entrada se limpia: la próxima apertura es un intento nuevo', async () => {
+  it('🔑 tras un timeout, corregir la nota no crea otra operación: los campos están bloqueados y confirmar reenvía el cuerpo ORIGINAL con la misma clave', async () => {
     const user = userEvent.setup()
     await abrir()
-    secuencia(MERMA, [() => 'caida', () => json({ detail: 'el lote L1 tiene 1 y se quieren dar de baja 4' }, 409), () => json(MERMA_OK)])
+    secuencia(MERMA, [() => 'caida', () => json(MERMA_OK)])
+    await abrirMerma(user)
+    fireEvent.change(within(dialogo()).getByLabelText('Nota'), { target: { value: 'nota original' } })
+    fireEvent.change(within(dialogo()).getByLabelText('Cantidad a dar de baja'), { target: { value: '3' } })
+    await user.click(confirmar())
+    await within(dialogo()).findByText(/No se sabe si se llegó a registrar/)
+
+    const nota = within(dialogo()).getByLabelText('Nota') as HTMLTextAreaElement
+    expect(nota.disabled).toBe(true)
+    await user.type(nota, ' corregida')
+    expect(nota.value).toBe('nota original')
+    expect((within(dialogo()).getByLabelText('Cantidad a dar de baja') as HTMLInputElement).value).toBe('3')
+
+    await user.click(enBotones('Reenviar el intento anterior'))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(enviosA(MERMA)).toHaveLength(2)
+    expect(enviosA(MERMA)[1]).toEqual(enviosA(MERMA)[0])
+    expect(enviosA(MERMA)[1]).toMatchObject({ nota: 'nota original', cantidad: 3 })
+    expect(clavesDe(MERMA)[1]).toBe(clavesDe(MERMA)[0])
+  })
+
+  it('🔑 tras un timeout, cualquier respuesta definitiva al reenvío (409) limpia lo guardado y desbloquea', async () => {
+    const user = userEvent.setup()
+    await abrir()
+    secuencia(MERMA, [() => 'caida', () => json({ detail: 'el lote L1 tiene 1 y se quieren dar de baja 4' }, 409)])
     await abrirMerma(user)
     await user.click(confirmar())
     await within(dialogo()).findByText(/No se sabe si se llegó a registrar/)
-    await cancelar(user)
-    await abrirMerma(user)
     await user.click(confirmar())
     await within(dialogo()).findByText('el lote L1 tiene 1 y se quieren dar de baja 4')
+    expect(guardado()).toEqual({})
+    expect(panel()).toBeNull()
+    expect((within(dialogo()).getByLabelText('Nota') as HTMLTextAreaElement).disabled).toBe(false)
     expect(clavesDe(MERMA)[1]).toBe(clavesDe(MERMA)[0])
-    // El 409 dice que no se escribió: nada pendiente.
-    expect(within(dialogo()).queryByText(AVISO_PENDIENTE)).toBeNull()
-    await cancelar(user)
-    await abrirMerma(user)
-    expect(within(dialogo()).queryByText(AVISO_PENDIENTE)).toBeNull()
-    await user.click(confirmar())
-    await waitFor(() => expect(enviosA(MERMA)).toHaveLength(3))
-    expect(clavesDe(MERMA)[2]).not.toBe(clavesDe(MERMA)[0])
   })
 
-  it('un fallo definitivo de entrada (4xx) no deja nada pendiente', async () => {
-    const user = userEvent.setup()
-    await abrir()
-    secuencia(MERMA, [() => json({ detail: 'hace falta el lote' }, 422), () => json(MERMA_OK)])
-    await abrirMerma(user)
-    await user.click(confirmar())
-    await within(dialogo()).findByText('hace falta el lote')
-    await cancelar(user)
-    await abrirMerma(user)
-    expect(within(dialogo()).queryByText(AVISO_PENDIENTE)).toBeNull()
-    await user.click(confirmar())
-    await waitFor(() => expect(enviosA(MERMA)).toHaveLength(2))
-    expect(clavesDe(MERMA)[1]).not.toBe(clavesDe(MERMA)[0])
-  })
-
-  it('🔑 cambiar un dato de la operación pendiente es otra operación: otra clave y sin aviso; volver a los datos de antes recupera la clave', async () => {
+  it('🔑 descartar exige confirmación con la advertencia; sólo entonces se habilita otra operación, con clave NUEVA (aun con los mismos datos)', async () => {
     const user = userEvent.setup()
     await abrir()
     secuencia(MERMA, [() => 'caida', () => json(MERMA_OK)])
     await abrirMerma(user)
     await user.click(confirmar())
     await within(dialogo()).findByText(/No se sabe si se llegó a registrar/)
-    await cancelar(user)
 
-    await abrirMerma(user)
-    expect(within(dialogo()).getByText(AVISO_PENDIENTE)).toBeTruthy()
-    fireEvent.change(within(dialogo()).getByLabelText('Cantidad a dar de baja'), { target: { value: '1' } })
-    expect(within(dialogo()).queryByText(AVISO_PENDIENTE)).toBeNull()
-    fireEvent.change(within(dialogo()).getByLabelText('Nota'), { target: { value: 'x' } })
-    fireEvent.change(within(dialogo()).getByLabelText('Nota'), { target: { value: '' } })
-    fireEvent.change(within(dialogo()).getByLabelText('Cantidad a dar de baja'), { target: { value: '4' } })
-    expect(within(dialogo()).getByText(AVISO_PENDIENTE)).toBeTruthy()
+    await user.click(enBotones('Descartar el intento anterior…'))
+    expect(texto(within(dialogo()).getByText(/Sólo descartalo si verificaste/))).toBe(
+      'Sólo descartalo si verificaste en el stock que NO se registró; si se registró y lo descartás, podrías duplicar el movimiento.')
+    // Todavía no se descartó nada.
+    expect(Object.keys(guardado())).toHaveLength(1)
+    expect((within(dialogo()).getByLabelText('Nota') as HTMLTextAreaElement).disabled).toBe(true)
+    await user.click(enBotones('No, volver'))
+    expect(Object.keys(guardado())).toHaveLength(1)
+    expect(enBotones('Descartar el intento anterior…')).toBeTruthy()
 
-    fireEvent.change(within(dialogo()).getByLabelText('Cantidad a dar de baja'), { target: { value: '1' } })
+    await user.click(enBotones('Descartar el intento anterior…'))
+    await user.click(enBotones('Sí, descartar el intento anterior'))
+    expect(guardado()).toEqual({})
+    expect(panel()).toBeNull()
+    expect((within(dialogo()).getByLabelText('Nota') as HTMLTextAreaElement).disabled).toBe(false)
+    expect(within(fila('Yerba')).queryByText('Intento sin confirmar')).toBeNull()
+
     await user.click(confirmar())
     await waitFor(() => expect(enviosA(MERMA)).toHaveLength(2))
-    expect(enviosA(MERMA)[1]).toMatchObject({ cantidad: 1 })
     expect(clavesDe(MERMA)[1]).not.toBe(clavesDe(MERMA)[0])
   })
 
-  it('las operaciones pendientes no se mezclan: la misma clave no viaja a otro lote ni de merma a asignar', async () => {
+  it('🔑 asignar: bloquea el destino (lote y fecha), reenvía el original y no bloquea a otro lote, fecha ni depósito', async () => {
+    const user = userEvent.setup()
+    await abrir()
+    secuencia(ASIGNAR, [() => 'caida', () => json({ ...ASIGNAR_OK, repetida: true }), () => json(ASIGNAR_OK)])
+    await abrirAsignar(user)
+    completarAsignacion()
+    fireEvent.change(within(dialogo()).getByLabelText('Nota'), { target: { value: 'conteo' } })
+    await user.click(confirmar())
+    await within(dialogo()).findByText(/No se sabe si se llegó a registrar/)
+    expect(Object.values(guardado())[0]).toMatchObject({ tipo: 'asignar', cuerpo: enviosA(ASIGNAR)[0] })
+    expect((within(dialogo()).getByLabelText('Cantidad') as HTMLInputElement).disabled).toBe(true)
+    expect((within(dialogo()).getByLabelText('Nota') as HTMLTextAreaElement).disabled).toBe(true)
+
+    // Otro lote o otra fecha es otro destino: se puede editar y no está bloqueado.
+    fireEvent.change(within(dialogo()).getByLabelText('Lote'), { target: { value: 'A-OTRO' } })
+    expect(panel()).toBeNull()
+    expect((within(dialogo()).getByLabelText('Cantidad') as HTMLInputElement).disabled).toBe(false)
+    fireEvent.change(within(dialogo()).getByLabelText('Lote'), { target: { value: 'A-2026' } })
+    fireEvent.change(within(dialogo()).getByLabelText('Fecha de vencimiento'), { target: { value: '2027-03-16' } })
+    expect(panel()).toBeNull()
+    fireEvent.change(within(dialogo()).getByLabelText('Fecha de vencimiento'), { target: { value: '2027-03-15' } })
+    expect(panel()).toBeTruthy()
+
+    await cancelar(user)
+    expect(within(filaSinLote('Arroz', 0)).getByText('Intento sin confirmar')).toBeTruthy()
+    // La otra fila de Arroz es otro depósito y otra variante: sin marca y sin bloqueo, aunque se escriba el mismo lote y fecha.
+    expect(within(filaSinLote('Arroz', 1)).queryByText('Intento sin confirmar')).toBeNull()
+    await abrirAsignar(user, 'Arroz', 1)
+    completarAsignacion()
+    expect(panel()).toBeNull()
+    await cancelar(user)
+
+    // Reabrir la fila del intento: viene con su lote y su fecha, bloqueada, y reenviar manda lo original.
+    await abrirAsignar(user)
+    expect((within(dialogo()).getByLabelText('Lote') as HTMLInputElement).value).toBe('A-2026')
+    expect(panel()).toBeTruthy()
+    await user.click(confirmar())
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(enviosA(ASIGNAR)).toHaveLength(2)
+    expect(enviosA(ASIGNAR)[1]).toEqual(enviosA(ASIGNAR)[0])
+    expect(enviosA(ASIGNAR)[1]).toMatchObject({ nota: 'conteo', cantidad: 20 })
+    expect(guardado()).toEqual({})
+  })
+
+  it('una operación sobre OTRO lote u otro depósito no se bloquea, y usa otra clave', async () => {
     const user = userEvent.setup()
     await abrir()
     secuencia(MERMA, [() => 'caida', () => json(MERMA_OK)])
@@ -989,10 +1051,99 @@ describe('Vencimientos: un resultado incierto sobrevive al diálogo', () => {
     await cancelar(user)
 
     await abrirMerma(user, 'Crema')
-    expect(within(dialogo()).queryByText(AVISO_PENDIENTE)).toBeNull()
+    expect(panel()).toBeNull()
+    expect((within(dialogo()).getByLabelText('Nota') as HTMLTextAreaElement).disabled).toBe(false)
     await user.click(confirmar())
     await waitFor(() => expect(enviosA(MERMA)).toHaveLength(2))
     expect(clavesDe(MERMA)[1]).not.toBe(clavesDe(MERMA)[0])
+    // Y el de Yerba sigue pendiente.
+    expect(Object.keys(guardado())).toEqual([FIRMA_YERBA])
+  })
+})
+
+describe('Vencimientos: los intentos inciertos sobreviven a la pantalla y a recargar', () => {
+  it('desmontar la pantalla y volver a montarla recupera el intento (marca en la fila, aviso y reenvío con la misma clave)', async () => {
+    const user = userEvent.setup()
+    await abrir()
+    secuencia(MERMA, [() => 'caida'])
+    await abrirMerma(user)
+    await user.click(confirmar())
+    await within(dialogo()).findByText(/No se sabe si se llegó a registrar/)
+    const original = enviosA(MERMA)[0]
+
+    cleanup()
+    prepararFetch()
+    await abrir()
+    expect(within(fila('Yerba')).getByText('Intento sin confirmar')).toBeTruthy()
+    await abrirMerma(user)
+    expect(panel()).toBeTruthy()
+    await user.click(confirmar())
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(enviosA(MERMA)).toEqual([original])
+  })
+
+  it('una recarga de la pestaña (sessionStorage con un intento de antes) también: muestra la hora del intento y reenvía lo guardado', async () => {
+    const user = userEvent.setup()
+    const cuerpo = { producto_id: 1, deposito_id: 1, variante_id: null, lote: 'L1', vence: '2026-09-25', cantidad: 3, motivo: 'vencimiento', nota: 'de antes', clave_operacion: 'clave-de-la-sesion-anterior' }
+    // 15:30 UTC = 12:30 en Argentina (UTC-3 fijo).
+    sessionStorage.setItem(ALMACEN, JSON.stringify({ [FIRMA_YERBA]: { firma: FIRMA_YERBA, tipo: 'merma', cuerpo, creado: Date.UTC(2026, 8, 30, 15, 30) } }))
+    await abrir()
+    await abrirMerma(user)
+    expect(texto(panel())).toContain('intento del 12:30')
+    expect(texto(panel())).toContain('dar de baja 3 u')
+    expect((within(dialogo()).getByLabelText('Nota') as HTMLTextAreaElement).value).toBe('de antes')
+    await user.click(confirmar())
+    await waitFor(() => expect(enviosA(MERMA)).toHaveLength(1))
+    expect(enviosA(MERMA)[0]).toEqual(cuerpo)
+  })
+
+  it('un intento se guarda ANTES de enviar: si la pestaña se recarga a mitad de un envío, queda', async () => {
+    const user = userEvent.setup()
+    await abrir()
+    secuencia(MERMA, [() => new Promise<Response>(() => {})])
+    await abrirMerma(user)
+    await user.click(confirmar())
+    await waitFor(() => expect(enviosA(MERMA)).toHaveLength(1))
+    expect(Object.values(guardado())[0].cuerpo).toEqual(enviosA(MERMA)[0])
+  })
+
+  it('un almacenamiento ilegible o con basura no rompe la pantalla ni inventa intentos', async () => {
+    sessionStorage.setItem(ALMACEN, '{esto no es json')
+    await abrir()
+    expect(screen.queryByText('Intento sin confirmar')).toBeNull()
+
+    cleanup()
+    prepararFetch()
+    sessionStorage.setItem(ALMACEN, JSON.stringify({ [FIRMA_YERBA]: { firma: FIRMA_YERBA, tipo: 'merma' }, otro: 7, ok: null }))
+    await abrir()
+    expect(screen.queryByText('Intento sin confirmar')).toBeNull()
+
+    cleanup()
+    prepararFetch()
+    sessionStorage.setItem(ALMACEN, '"un texto"')
+    await abrir()
+    expect(screen.queryByText('Intento sin confirmar')).toBeNull()
+  })
+
+  it('si sessionStorage lanza (modo privado) la pantalla funciona y el intento vive en memoria', async () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('SecurityError') })
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('SecurityError') })
+    const user = userEvent.setup()
+    await abrir()
+    secuencia(MERMA, [() => 'caida', () => json(MERMA_OK)])
+    await abrirMerma(user)
+    await user.click(confirmar())
+    await within(dialogo()).findByText(/No se sabe si se llegó a registrar/)
+    expect(panel()).toBeTruthy()
+    await cancelar(user)
+    await abrirMerma(user)
+    expect(panel()).toBeTruthy()
+    await user.click(confirmar())
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(enviosA(MERMA)[1]).toEqual(enviosA(MERMA)[0])
+    // Se limpió también de la memoria.
+    await abrirMerma(user)
+    expect(panel()).toBeNull()
   })
 })
 
@@ -1069,7 +1220,7 @@ describe('Vencimientos: productos que vencen', () => {
     expect(screen.getByText(/no está marcado como perecedero/)).toBeTruthy()
     expect(pedidasAlReporte()).toHaveLength(1)
 
-    responder({ ...TODO, [RUTA_FICHA]: FICHA(false), [`PUT ${RUTA_MARCA}`]: { status: 503, detail: 'Falta la revisión' } })
+    responder({ ...TODO, [RUTA_FICHA]: FICHA(false), [`PUT ${RUTA_MARCA}`]: { status: 503, detail: DETALLE_SIN_REVISION } })
     await user.click(screen.getByRole('button', { name: 'Marcar como perecedero' }))
     expect(await screen.findByText(/pedí al administrador que ejecute libracommerce-migrar upgrade/)).toBeTruthy()
 

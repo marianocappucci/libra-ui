@@ -16,19 +16,29 @@
 //   devoluciones y ajustes descuenten por lote (A-4) siguen restando del stock «sin lote», así que el saldo de cada lote
 //   sobreestima lo que hay. Va arriba de todo, sin botón para cerrarlo, y se repite en los diálogos que mueven stock.
 // - 🔑 **Idempotencia de las escrituras.** `asignar` y `merma` exigen `clave_operacion`. Cada diálogo genera UNA clave
-//   por intento del usuario y la REUSA mientras los datos que se van a enviar no cambien (un error de red, un timeout o
-//   volver a apretar «Confirmar»: el motor devuelve `repetida: true` en vez de escribir dos veces). Se regenera cuando el
-//   usuario cambia algún dato. 🔴 **Un resultado INCIERTO (error de red, timeout, 5xx salvo el 503) sobrevive al diálogo**:
-//   el servidor pudo haber escrito y perderse la respuesta, así que cerrar y reabrir con el MISMO cuerpo reenvía la misma
-//   clave (guardada en la pantalla, `pendientes`: firma del cuerpo → clave) y el motor contesta `repetida: true` en vez de
-//   escribir dos veces. La entrada se borra con un resultado definitivo (éxito, `repetida`, 404/409/422/503, cualquier 4xx).
-//   Límite: `pendientes` vive en la pantalla; si se la desmonta (navegar a otra) se pierde.
+//   por intento del usuario y la REUSA mientras los datos que se van a enviar no cambien (volver a apretar «Confirmar»
+//   tras un rechazo del motor: no se escribió nada, la clave no se gasta). Se regenera cuando el usuario cambia algún dato.
+//   🔴 **Principio: mientras haya un intento INCIERTO sobre un destino de stock, no se manda nada nuevo sobre ese destino
+//   que no sea reenviar exactamente ese intento, con su clave, o descartarlo de forma explícita.** Incierto es no saber si
+//   el motor escribió: error de red, timeout, 5xx y también un 503 que no sea el de la migración. Sólo son definitivos
+//   («no se escribió») los 4xx (menos el 408) y el 503 que dice `libracommerce-migrar upgrade`. Un intento incierto guarda
+//   el CUERPO COMPLETO y su clave (no sólo la clave) bajo una firma del destino (tipo, producto, depósito, variante, lote y
+//   fecha; sin cantidad, nota ni motivo): con esa firma pendiente el diálogo bloquea cantidad, nota y motivo, y sólo ofrece
+//   «Reenviar el intento anterior» (el cuerpo original, no el editado) o «Descartar el intento anterior…» (con confirmación).
+//   El intento se guarda ANTES de enviar y se borra con un resultado definitivo (éxito, `repetida`, 4xx, el 503 de migración)
+//   o al descartarlo.
+//   **Persistencia:** un almacén de módulo respaldado por `sessionStorage` (`libra-ui:vencimientos:pendientes`, con
+//   try/catch: si lanza —modo privado— sigue en memoria), así que sobrevive a desmontar la pantalla y a recargar la
+//   pestaña. Límite: otra pestaña o navegador (otro `sessionStorage`) no lo ve; ahí lo que protege es el motor, que con la
+//   misma clave y el mismo cuerpo contesta `repetida: true`. Un intento pendiente de un lote que ya no aparece en la lista
+//   no se ve en pantalla (queda guardado, inofensivo, hasta que ese destino vuelva a aparecer o se cierre la pestaña).
 // - **«Productos que vencen» es por producto**: el motor no tiene un listado de los productos marcados (sólo se ven en el
 //   reporte los que tienen stock con lote o sin lote), así que se elige un producto, se ve si vence
 //   (`GET /api/vencimientos/productos/{id}/lotes`) y se marca o desmarca (`PUT /api/vencimientos/productos/{id}`).
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, ApiError } from '../api-client'
 import { SelectBuscable } from '../SelectBuscable'
+import { ZONA_AR } from '../fechas'
 import { TituloPantalla } from '../titulo-pantalla'
 import type {
   CategoriaProducto, Producto, Sucursal, VencimientoAsignarPayload, VencimientoAsignarRespuesta, VencimientoLote,
@@ -63,6 +73,10 @@ const AVISO_SALDO =
 
 const SIN_REVISION =
   'La base no tiene aplicada la revisión de vencimientos; pedí al administrador que ejecute libracommerce-migrar upgrade.'
+/** El 503 del motor cuando falta la revisión `0002` (`SinRevision`): «Falta la revisión 0002_vencimientos_lotes del motor:
+ *  corré `libracommerce-migrar upgrade` …». Coincidencia estricta: cualquier otro 503 (un proxy, el servidor caído) NO dice
+ *  que no se escribió. */
+const FALTA_REVISION = /Falta la revisión 0002_vencimientos_lotes.*libracommerce-migrar upgrade/s
 
 /** Las cantidades se muestran como las manda el motor, sin un tope de decimales más bajo que el suyo. */
 function numero(valor: number): string {
@@ -97,7 +111,7 @@ function nuevaClaveDeOperacion(): string {
  *  reusada con otros datos), 422 y 404 traen su texto. Un 422 de validación del cuerpo llega como lista: se juntan los `msg`. */
 function mensajeDeError(err: unknown): string {
   if (!(err instanceof ApiError)) return 'Error de conexión.'
-  if (err.status === 503) return SIN_REVISION
+  if (err.status === 503 && FALTA_REVISION.test(err.detail)) return SIN_REVISION
   if (Array.isArray(err.detailData)) {
     const msgs = err.detailData
       .map((d) => (d && typeof d === 'object' && 'msg' in d ? String((d as { msg: unknown }).msg) : ''))
@@ -152,59 +166,125 @@ const SITUACION: Record<VencimientoSituacion, { etiqueta: string; explicacion: s
   },
 }
 
-// ── Escrituras: una clave por intento, reusada al reintentar ─────────────────────────────────────────────────────
+// ── Escrituras: una clave por intento, y los intentos inciertos guardados ────────────────────────────────────────
 
-/** Las operaciones con resultado INCIERTO: firma del cuerpo (operación y datos) → `clave_operacion` con la que se mandó.
- *  Vive en la pantalla y no en el diálogo, para que cerrar y reabrir no descarte la clave (ver el encabezado). */
-type Pendientes = Map<string, string>
+type Payload = VencimientoMermaPayload | VencimientoAsignarPayload
+type TipoDeEscritura = 'merma' | 'asignar'
 
-/** ¿No se sabe si el motor escribió? Sin respuesta (red, timeout) o con un 5xx que no sea el 503 (que dice que falta la
- *  revisión: no se escribió nada). Un 4xx (404, 409, 422, 403…) es una respuesta definitiva de que no se escribió. */
-function esResultadoIncierto(err: unknown): boolean {
-  return !(err instanceof ApiError) || (err.status >= 500 && err.status !== 503)
+/** Un intento de escritura cuyo resultado no se conoce: el cuerpo completo, con su `clave_operacion`. */
+type Pendiente = { firma: string; tipo: TipoDeEscritura; cuerpo: Payload; creado: number }
+
+const CLAVE_DE_ALMACEN = 'libra-ui:vencimientos:pendientes'
+/** Sólo se usa si `sessionStorage` lanza (modo privado, sitio bloqueado): entonces el almacén vive en memoria. */
+let enMemoria: Record<string, Pendiente> = {}
+
+function esPendiente(v: unknown): v is Pendiente {
+  if (!v || typeof v !== 'object') return false
+  const p = v as Partial<Pendiente>
+  const c = p.cuerpo as Partial<Payload> | undefined
+  return typeof p.firma === 'string' && (p.tipo === 'merma' || p.tipo === 'asignar') && typeof p.creado === 'number'
+    && !!c && typeof c.clave_operacion === 'string' && typeof c.producto_id === 'number'
 }
 
-const AVISO_INCIERTO =
-  'No se sabe si se llegó a registrar: podés volver a apretar «Confirmar», que se reenvía con la misma clave y no se duplica.'
+/** Lo guardado. Lee el almacenamiento en cada llamada (es la fuente de verdad: lo que otra pantalla o una recarga
+ *  dejó ahí); un contenido ilegible cuenta como vacío. */
+function leerPendientes(): Record<string, Pendiente> {
+  let crudo: string | null
+  try {
+    crudo = sessionStorage.getItem(CLAVE_DE_ALMACEN)
+  } catch {
+    return enMemoria
+  }
+  try {
+    const parseado: unknown = crudo ? JSON.parse(crudo) : {}
+    if (!parseado || typeof parseado !== 'object') return {}
+    return Object.fromEntries(Object.entries(parseado).filter(([, v]) => esPendiente(v))) as Record<string, Pendiente>
+  } catch {
+    return {}
+  }
+}
+
+function guardarPendientes(todos: Record<string, Pendiente>) {
+  try {
+    sessionStorage.setItem(CLAVE_DE_ALMACEN, JSON.stringify(todos))
+    enMemoria = {}
+  } catch {
+    enMemoria = todos
+  }
+}
+
+function guardarPendiente(p: Pendiente) {
+  guardarPendientes({ ...leerPendientes(), [p.firma]: p })
+}
+
+function quitarPendiente(firma: string) {
+  const { [firma]: _quitado, ...resto } = leerPendientes()
+  guardarPendientes(resto)
+}
+
+/** La firma del DESTINO de la operación sobre el stock: tipo, producto, depósito, variante, lote y fecha; sin cantidad,
+ *  nota ni motivo (cambiarlos no hace de esto otra operación). */
+function firmaDeDestino(tipo: TipoDeEscritura, d: { producto_id: number; deposito_id: number; variante_id: number | null; lote: string | null; vence: string | null }): string {
+  return JSON.stringify([tipo, d.producto_id, d.deposito_id, d.variante_id, d.lote, d.vence])
+}
+
+const FORMATO_DE_HORA = new Intl.DateTimeFormat('es-AR', { timeZone: ZONA_AR, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+
+/** ¿No se sabe si el motor escribió? Es lo que hay que suponer salvo que la respuesta diga lo contrario: los 4xx (menos el
+ *  408, que puede venir de un proxy que cortó a mitad de camino) y el 503 de la migración son la única forma de saber que
+ *  no se escribió. Sin respuesta (red, timeout), un 5xx o cualquier otro 503, es incierto. */
+function esResultadoDefinitivo(err: unknown): boolean {
+  if (!(err instanceof ApiError)) return false
+  if (err.status === 503) return FALTA_REVISION.test(err.detail)
+  return err.status >= 400 && err.status < 500 && err.status !== 408
+}
+
+const AVISO_INCIERTO = 'No se sabe si se llegó a registrar.'
 
 /** El envío de un diálogo de escritura: sin doble envío (una guarda síncrona, porque dos clics pueden entrar antes de
  *  que el estado deshabilite el botón), el error a la vista y la `clave_operacion` del intento.
  *
- *  🔑 `claveDe(firma)` devuelve la clave de un intento incierto anterior con esa misma `firma` si la hay; si no, la misma
- *  clave mientras la `firma` (los datos que se van a enviar) sea la misma, y una nueva cuando cambia. */
-function useEscritura(pendientes: Pendientes) {
+ *  🔑 `claveDe(firma)`: la misma clave mientras los datos que se van a enviar sean los mismos, otra cuando cambian.
+ *  `enviar` guarda el intento ANTES de mandarlo y lo borra sólo con un resultado definitivo. */
+function useEscritura(alCambiarPendientes: () => void) {
   const [enVuelo, setEnVuelo] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const guarda = useRef(false)
   const clave = useRef<{ firma: string; valor: string } | null>(null)
 
   function claveDe(firma: string): string {
-    const pendiente = pendientes.get(firma)
-    if (pendiente) return pendiente
     if (clave.current?.firma !== firma) clave.current = { firma, valor: nuevaClaveDeOperacion() }
     return clave.current.valor
   }
 
-  async function enviar<T>(firma: string, pedir: (claveOperacion: string) => Promise<T>, alExito: (respuesta: T) => void) {
+  /** Tras descartar un intento: el que venga es otra operación y no puede heredar su clave. */
+  function olvidarClave() {
+    clave.current = null
+  }
+
+  async function enviar<T>(dato: Omit<Pendiente, 'creado'> & { creado?: number }, pedir: (cuerpo: Payload) => Promise<T>, alExito: (respuesta: T) => void) {
     if (guarda.current) return
     guarda.current = true
     setEnVuelo(true)
     setError(null)
-    const claveUsada = claveDe(firma)
+    // Un reenvío conserva la hora del intento original.
+    const intento: Pendiente = { ...dato, creado: dato.creado ?? Date.now() }
+    guardarPendiente(intento)
+    alCambiarPendientes()
     try {
-      const respuesta = await pedir(claveUsada)
-      pendientes.delete(firma)
+      const respuesta = await pedir(intento.cuerpo)
+      quitarPendiente(intento.firma)
+      alCambiarPendientes()
       alExito(respuesta)
     } catch (err) {
-      if (esResultadoIncierto(err)) {
-        // No se sabe si el motor llegó a escribir: la clave queda guardada, y volver a apretar «Confirmar» (en este
-        // diálogo o en uno reabierto con los mismos datos) reenvía la misma.
-        pendientes.set(firma, claveUsada)
-        setError(`${err instanceof ApiError ? mensajeDeError(err) : 'Error de conexión.'} ${AVISO_INCIERTO}`)
-      } else {
-        // Respuesta definitiva de que no se escribió (y no gasta la clave): no queda nada pendiente.
-        pendientes.delete(firma)
+      if (esResultadoDefinitivo(err)) {
+        // El motor dijo que no escribió (y no gasta la clave): no queda nada pendiente.
+        quitarPendiente(intento.firma)
+        alCambiarPendientes()
         setError(mensajeDeError(err))
+      } else {
+        // Se queda guardado, con su cuerpo y su clave: lo único que se puede hacer es reenviarlo o descartarlo.
+        setError(`${err instanceof ApiError ? mensajeDeError(err) : 'Error de conexión.'} ${AVISO_INCIERTO}`)
       }
     } finally {
       guarda.current = false
@@ -212,15 +292,50 @@ function useEscritura(pendientes: Pendientes) {
     }
   }
 
-  return { enVuelo, error, enviar }
+  function descartar(firma: string) {
+    quitarPendiente(firma)
+    olvidarClave()
+    setError(null)
+    alCambiarPendientes()
+  }
+
+  return { enVuelo, error, claveDe, enviar, descartar }
 }
 
-/** Al reabrir un diálogo con los mismos datos de un intento incierto: se dice que el reenvío es el mismo. */
-function AvisoIntentoPendiente() {
+/** Lo que hay que hacer con un intento anterior sin confirmar: reenviarlo tal cual (con «Reenviar el intento anterior»,
+ *  que es el botón de confirmar del diálogo) o descartarlo, y descartar pide una confirmación con la advertencia. */
+function PanelIntentoPendiente({ pendiente, resumen, deshabilitado, onDescartar }: {
+  pendiente: Pendiente
+  resumen: string
+  deshabilitado: boolean
+  onDescartar: () => void
+}) {
+  const [confirmando, setConfirmando] = useState(false)
   return (
-    <p role="status" className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">
-      Hay un intento anterior sin confirmar para esta misma operación; al confirmar se reenvía con la misma clave, así que no se duplica.
-    </p>
+    <div className="grid gap-2 rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">
+      <p role="status">
+        Hay un intento anterior sin confirmar para esta misma operación (intento del {FORMATO_DE_HORA.format(pendiente.creado)}): {resumen}.
+        {' '}Al reenviarlo se manda lo mismo con la misma clave, así que no se duplica. Mientras esté pendiente no se puede
+        mandar otra operación sobre esto.
+      </p>
+      {confirmando ? (
+        <div className="grid gap-2">
+          <p role="alert" className="font-medium">
+            Sólo descartalo si verificaste en el stock que NO se registró; si se registró y lo descartás, podrías duplicar el movimiento.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" size="sm" variant="destructive" disabled={deshabilitado} onClick={onDescartar}>Sí, descartar el intento anterior</Button>
+            <Button type="button" size="sm" variant="outline" onClick={() => setConfirmando(false)}>No, volver</Button>
+          </div>
+        </div>
+      ) : (
+        <div>
+          <Button type="button" size="sm" variant="outline" disabled={deshabilitado} onClick={() => setConfirmando(true)}>
+            Descartar el intento anterior…
+          </Button>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -234,9 +349,9 @@ function Campo({ id, etiqueta, error, children }: { id: string; etiqueta: string
   )
 }
 
-function DialogoMerma({ fila, pendientes, onCerrar, onListo }: {
+function DialogoMerma({ fila, alCambiarPendientes, onCerrar, onListo }: {
   fila: VencimientoLote
-  pendientes: Pendientes
+  alCambiarPendientes: () => void
   onCerrar: () => void
   onListo: (respuesta: VencimientoMermaRespuesta) => void
 }) {
@@ -244,23 +359,28 @@ function DialogoMerma({ fila, pendientes, onCerrar, onListo }: {
   const [motivo, setMotivo] = useState('vencimiento')
   const [nota, setNota] = useState('')
   const [intentado, setIntentado] = useState(false)
-  const { enVuelo, error, enviar } = useEscritura(pendientes)
+  const { enVuelo, error, claveDe, enviar, descartar } = useEscritura(alCambiarPendientes)
   const errorDeLaCantidad = errorDeCantidad(cantidad, fila.saldo)
-  // Lo que se enviaría ahora (`null` si no vale) y su firma: la misma cuenta para enviar y para saber si hay un intento pendiente.
-  const datos = errorDeLaCantidad ? null : {
-    producto_id: fila.producto_id, deposito_id: fila.deposito_id, variante_id: fila.variante_id, lote: fila.lote,
-    vence: fila.vence, cantidad: Number(cantidad), motivo: motivo.trim(), nota: nota.trim(),
-  }
-  const firma = datos && `merma:${JSON.stringify(datos)}`
-  const hayPendiente = firma !== null && pendientes.has(firma)
+
+  // El destino es la fila entera: con un intento pendiente sobre ella, lo único que se puede hacer es reenviarlo o descartarlo.
+  const firma = firmaDeDestino('merma', { ...fila, lote: fila.lote, vence: fila.vence })
+  const pendiente = leerPendientes()[firma] ?? null
+  const cuerpoPendiente = pendiente?.cuerpo as VencimientoMermaPayload | undefined
 
   function confirmar() {
+    if (pendiente) {
+      void enviar(pendiente, (cuerpo) => api.post<VencimientoMermaRespuesta>(`${RUTA}/merma`, cuerpo), onListo)
+      return
+    }
     setIntentado(true)
-    if (!datos || !firma) return
-    void enviar(firma, (clave_operacion) => {
-      const cuerpo: VencimientoMermaPayload = { ...datos, clave_operacion }
-      return api.post<VencimientoMermaRespuesta>(`${RUTA}/merma`, cuerpo)
-    }, onListo)
+    if (errorDeLaCantidad) return
+    const datos = {
+      producto_id: fila.producto_id, deposito_id: fila.deposito_id, variante_id: fila.variante_id, lote: fila.lote,
+      vence: fila.vence, cantidad: Number(cantidad), motivo: motivo.trim(), nota: nota.trim(),
+    }
+    const cuerpo: VencimientoMermaPayload = { ...datos, clave_operacion: claveDe(JSON.stringify(datos)) }
+    void enviar({ firma, tipo: 'merma', cuerpo },
+      (c) => api.post<VencimientoMermaRespuesta>(`${RUTA}/merma`, c), onListo)
   }
 
   return (
@@ -274,26 +394,32 @@ function DialogoMerma({ fila, pendientes, onCerrar, onListo }: {
           </DialogDescription>
         </DialogHeader>
         <AvisoSaldoSobreestimado />
-        {hayPendiente && !error && <AvisoIntentoPendiente />}
+        {pendiente && cuerpoPendiente && !enVuelo && (
+          <PanelIntentoPendiente
+            pendiente={pendiente} deshabilitado={enVuelo} onDescartar={() => descartar(firma)}
+            resumen={`dar de baja ${numero(cuerpoPendiente.cantidad)} ${fila.unidad}`}
+          />
+        )}
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         <div className="grid gap-4">
-          <Campo id="merma-cantidad" etiqueta="Cantidad a dar de baja" error={intentado || cantidad !== '' ? errorDeLaCantidad : null}>
+          <Campo id="merma-cantidad" etiqueta="Cantidad a dar de baja" error={pendiente ? null : (intentado || cantidad !== '' ? errorDeLaCantidad : null)}>
             <Input
-              id="merma-cantidad" type="number" inputMode="decimal" min={0} max={fila.saldo} step="any" value={cantidad}
-              aria-invalid={errorDeLaCantidad !== null} onChange={(e) => setCantidad(e.target.value)}
+              id="merma-cantidad" type="number" inputMode="decimal" min={0} max={fila.saldo} step="any" disabled={!!pendiente}
+              value={cuerpoPendiente ? String(cuerpoPendiente.cantidad) : cantidad}
+              aria-invalid={!pendiente && errorDeLaCantidad !== null} onChange={(e) => setCantidad(e.target.value)}
             />
           </Campo>
           <Campo id="merma-motivo" etiqueta="Motivo">
-            <Input id="merma-motivo" value={motivo} onChange={(e) => setMotivo(e.target.value)} />
+            <Input id="merma-motivo" disabled={!!pendiente} value={cuerpoPendiente ? cuerpoPendiente.motivo : motivo} onChange={(e) => setMotivo(e.target.value)} />
           </Campo>
           <Campo id="merma-nota" etiqueta="Nota">
-            <Textarea id="merma-nota" rows={2} value={nota} onChange={(e) => setNota(e.target.value)} />
+            <Textarea id="merma-nota" rows={2} disabled={!!pendiente} value={cuerpoPendiente ? cuerpoPendiente.nota : nota} onChange={(e) => setNota(e.target.value)} />
           </Campo>
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" disabled={enVuelo} onClick={onCerrar}>Cancelar</Button>
           <Button type="button" disabled={enVuelo} onClick={confirmar}>
-            <Check />{enVuelo ? 'Guardando…' : 'Confirmar'}
+            <Check />{enVuelo ? 'Guardando…' : (pendiente ? 'Reenviar el intento anterior' : 'Confirmar')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -301,38 +427,50 @@ function DialogoMerma({ fila, pendientes, onCerrar, onListo }: {
   )
 }
 
-function DialogoAsignar({ fila, pendientes, onCerrar, onListo }: {
+function DialogoAsignar({ fila, alCambiarPendientes, onCerrar, onListo }: {
   fila: VencimientoSinLote
-  pendientes: Pendientes
+  alCambiarPendientes: () => void
   onCerrar: () => void
   onListo: (respuesta: VencimientoAsignarRespuesta) => void
 }) {
-  const [lote, setLote] = useState('')
-  const [vence, setVence] = useState('')
+  // Con un intento anterior sin confirmar sobre esta fila (el lote y la fecha los puso el usuario, no la fila), se abre
+  // con su lote y su fecha: es lo que lo identifica, y así se ve enseguida.
+  const [previo] = useState(() => Object.values(leerPendientes())
+    .filter((p): p is Pendiente & { cuerpo: VencimientoAsignarPayload } => p.tipo === 'asignar'
+      && p.cuerpo.producto_id === fila.producto_id && p.cuerpo.deposito_id === fila.deposito_id && p.cuerpo.variante_id === fila.variante_id)
+    .sort((a, b) => b.creado - a.creado)[0])
+  const [lote, setLote] = useState(previo?.cuerpo.lote ?? '')
+  const [vence, setVence] = useState(previo?.cuerpo.vence ?? '')
   const [cantidad, setCantidad] = useState(String(fila.saldo))
   const [nota, setNota] = useState('')
   const [intentado, setIntentado] = useState(false)
-  const { enVuelo, error, enviar } = useEscritura(pendientes)
+  const { enVuelo, error, claveDe, enviar, descartar } = useEscritura(alCambiarPendientes)
 
   const errorDelLote = lote.trim() === '' ? 'Escribí el código del lote.' : null
   // `<input type="date">` entrega `aaaa-mm-dd` o vacío: eso es lo que se manda, sin reformatear.
   const errorDeLaFecha = /^\d{4}-\d{2}-\d{2}$/.test(vence) ? null : 'Elegí la fecha de vencimiento.'
   const errorDeLaCantidad = errorDeCantidad(cantidad, fila.saldo)
 
-  const datos = errorDelLote || errorDeLaFecha || errorDeLaCantidad ? null : {
-    producto_id: fila.producto_id, deposito_id: fila.deposito_id, variante_id: fila.variante_id, lote: lote.trim(),
-    vence, cantidad: Number(cantidad), nota: nota.trim(),
-  }
-  const firma = datos && `asignar:${JSON.stringify(datos)}`
-  const hayPendiente = firma !== null && pendientes.has(firma)
+  // El destino son el lote y la fecha elegidos (más la fila): con un intento pendiente sobre él sólo se puede reenviarlo
+  // o descartarlo. Lote y fecha siguen editables: cambiarlos es apuntar a otro destino.
+  const firma = errorDelLote || errorDeLaFecha ? null : firmaDeDestino('asignar', { ...fila, lote: lote.trim(), vence })
+  const pendiente = firma ? leerPendientes()[firma] ?? null : null
+  const cuerpoPendiente = pendiente?.cuerpo as VencimientoAsignarPayload | undefined
 
   function confirmar() {
+    if (pendiente) {
+      void enviar(pendiente, (cuerpo) => api.post<VencimientoAsignarRespuesta>(`${RUTA}/asignar`, cuerpo), onListo)
+      return
+    }
     setIntentado(true)
-    if (!datos || !firma) return
-    void enviar(firma, (clave_operacion) => {
-      const cuerpo: VencimientoAsignarPayload = { ...datos, clave_operacion }
-      return api.post<VencimientoAsignarRespuesta>(`${RUTA}/asignar`, cuerpo)
-    }, onListo)
+    if (!firma || errorDeLaCantidad) return
+    const datos = {
+      producto_id: fila.producto_id, deposito_id: fila.deposito_id, variante_id: fila.variante_id, lote: lote.trim(),
+      vence, cantidad: Number(cantidad), nota: nota.trim(),
+    }
+    const cuerpo: VencimientoAsignarPayload = { ...datos, clave_operacion: claveDe(JSON.stringify(datos)) }
+    void enviar({ firma, tipo: 'asignar', cuerpo },
+      (c) => api.post<VencimientoAsignarRespuesta>(`${RUTA}/asignar`, c), onListo)
   }
 
   return (
@@ -346,7 +484,12 @@ function DialogoAsignar({ fila, pendientes, onCerrar, onListo }: {
           </DialogDescription>
         </DialogHeader>
         <AvisoSaldoSobreestimado />
-        {hayPendiente && !error && <AvisoIntentoPendiente />}
+        {pendiente && cuerpoPendiente && !enVuelo && (
+          <PanelIntentoPendiente
+            pendiente={pendiente} deshabilitado={enVuelo} onDescartar={() => descartar(pendiente.firma)}
+            resumen={`asignar ${numero(cuerpoPendiente.cantidad)} ${fila.unidad} al lote ${cuerpoPendiente.lote} (vence ${fecha(cuerpoPendiente.vence)})`}
+          />
+        )}
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         <div className="grid gap-4">
           <Campo id="asignar-lote" etiqueta="Lote" error={intentado ? errorDelLote : null}>
@@ -361,20 +504,21 @@ function DialogoAsignar({ fila, pendientes, onCerrar, onListo }: {
               onChange={(e) => setVence(e.target.value)}
             />
           </Campo>
-          <Campo id="asignar-cantidad" etiqueta="Cantidad" error={intentado || cantidad !== '' ? errorDeLaCantidad : null}>
+          <Campo id="asignar-cantidad" etiqueta="Cantidad" error={pendiente ? null : (intentado || cantidad !== '' ? errorDeLaCantidad : null)}>
             <Input
-              id="asignar-cantidad" type="number" inputMode="decimal" min={0} max={fila.saldo} step="any" value={cantidad}
-              aria-invalid={errorDeLaCantidad !== null} onChange={(e) => setCantidad(e.target.value)}
+              id="asignar-cantidad" type="number" inputMode="decimal" min={0} max={fila.saldo} step="any" disabled={!!pendiente}
+              value={cuerpoPendiente ? String(cuerpoPendiente.cantidad) : cantidad}
+              aria-invalid={!pendiente && errorDeLaCantidad !== null} onChange={(e) => setCantidad(e.target.value)}
             />
           </Campo>
           <Campo id="asignar-nota" etiqueta="Nota">
-            <Textarea id="asignar-nota" rows={2} value={nota} onChange={(e) => setNota(e.target.value)} />
+            <Textarea id="asignar-nota" rows={2} disabled={!!pendiente} value={cuerpoPendiente ? cuerpoPendiente.nota : nota} onChange={(e) => setNota(e.target.value)} />
           </Campo>
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" disabled={enVuelo} onClick={onCerrar}>Cancelar</Button>
           <Button type="button" disabled={enVuelo} onClick={confirmar}>
-            <Check />{enVuelo ? 'Guardando…' : 'Confirmar'}
+            <Check />{enVuelo ? 'Guardando…' : (pendiente ? 'Reenviar el intento anterior' : 'Confirmar')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -417,6 +561,20 @@ function ordenar(lotes: VencimientoLote[], orden: { clave: ClaveOrden; sentido: 
   })
 }
 
+/** ¿Hay un intento sin confirmar sobre esta fila? En un lote, la baja de ese lote; en un saldo sin lote, cualquier asignación
+ *  sobre ese producto, depósito y variante. */
+const pendienteDeLote = (todos: Pendiente[], l: VencimientoLote) => todos.some((p) => p.firma === firmaDeDestino('merma', l))
+const pendienteDeSinLote = (todos: Pendiente[], s: VencimientoSinLote) => todos.some((p) => p.tipo === 'asignar'
+  && p.cuerpo.producto_id === s.producto_id && p.cuerpo.deposito_id === s.deposito_id && p.cuerpo.variante_id === s.variante_id)
+
+function MarcaSinConfirmar() {
+  return (
+    <Badge variant="outline" className="ml-2 whitespace-normal border-amber-500/50 text-amber-600 dark:text-amber-400">
+      Intento sin confirmar
+    </Badge>
+  )
+}
+
 const claveDeFila = (f: VencimientoLote | VencimientoSinLote) =>
   `${f.producto_id}-${f.deposito_id}-${f.variante_id ?? ''}-${'lote' in f ? `${f.lote ?? ''}-${f.vence}` : 'sin-lote'}`
 
@@ -437,8 +595,11 @@ export function Vencimientos({ puedeMover = true, puedeMarcar = true }: { puedeM
   const [aviso, setAviso] = useState<Aviso | null>(null)
   const [aMermar, setAMermar] = useState<VencimientoLote | null>(null)
   const [aAsignar, setAAsignar] = useState<VencimientoSinLote | null>(null)
-  // Las claves de las escrituras de resultado incierto: sobreviven a cerrar el diálogo (ver el encabezado).
-  const [pendientes] = useState<Pendientes>(() => new Map())
+  // Los intentos inciertos viven en un almacén de módulo (ver el encabezado); este contador sólo vuelve a dibujar la
+  // pantalla (las marcas por fila) cuando un diálogo los cambia.
+  const [, setVersionDePendientes] = useState(0)
+  const alCambiarPendientes = () => setVersionDePendientes((v) => v + 1)
+  const pendientesDeAhora = Object.values(leerPendientes())
 
   const errorDeLosDias = errorDeDias(dias)
   const valido = errorDeLosDias === null
@@ -622,6 +783,7 @@ export function Vencimientos({ puedeMover = true, puedeMarcar = true }: { puedeM
                             <span className="font-medium">{l.nombre}</span>
                             {l.variante && <span className="ml-2 text-xs text-muted-foreground">{l.variante}</span>}
                             {l.categoria && <span className="ml-2 text-xs text-muted-foreground">{l.categoria}</span>}
+                            {pendienteDeLote(pendientesDeAhora, l) && <MarcaSinConfirmar />}
                           </td>
                           <td className="p-3">{l.codigo || '—'}</td>
                           <td className="p-3">
@@ -690,6 +852,7 @@ export function Vencimientos({ puedeMover = true, puedeMarcar = true }: { puedeM
                             <span className="font-medium">{s.nombre}</span>
                             {s.variante && <span className="ml-2 text-xs text-muted-foreground">{s.variante}</span>}
                             {s.categoria && <span className="ml-2 text-xs text-muted-foreground">{s.categoria}</span>}
+                            {pendienteDeSinLote(pendientesDeAhora, s) && <MarcaSinConfirmar />}
                           </td>
                           <td className="p-3">{s.codigo || '—'}</td>
                           <td className="p-3">
@@ -731,10 +894,10 @@ export function Vencimientos({ puedeMover = true, puedeMarcar = true }: { puedeM
       <ProductosQueVencen puedeMarcar={puedeMarcar} onMarcado={(texto) => { setAviso({ texto }); setRecarga((r) => r + 1) }} />
 
       {aMermar && (
-        <DialogoMerma fila={aMermar} pendientes={pendientes} onCerrar={() => setAMermar(null)} onListo={(r) => mermaHecha(aMermar, r)} />
+        <DialogoMerma fila={aMermar} alCambiarPendientes={alCambiarPendientes} onCerrar={() => setAMermar(null)} onListo={(r) => mermaHecha(aMermar, r)} />
       )}
       {aAsignar && (
-        <DialogoAsignar fila={aAsignar} pendientes={pendientes} onCerrar={() => setAAsignar(null)} onListo={(r) => asignacionHecha(aAsignar, r)} />
+        <DialogoAsignar fila={aAsignar} alCambiarPendientes={alCambiarPendientes} onCerrar={() => setAAsignar(null)} onListo={(r) => asignacionHecha(aAsignar, r)} />
       )}
     </div>
   )
