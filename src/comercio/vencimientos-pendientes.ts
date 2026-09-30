@@ -4,8 +4,8 @@
 //
 // 🔑 **La copia en memoria es SIEMPRE la fuente de verdad de la pestaña.** `sessionStorage` sólo sirve para recuperar lo
 // pendiente tras desmontar la pantalla o recargar la pestaña. La lectura es memoria fusionada con lo guardado, y gana la
-// memoria; el borrado limpia las dos. Si `setItem` falla (cuota, modo privado) o `getItem` lanza, el intento igual queda
-// en memoria y se envía. Un borrado que no se pudo persistir queda anotado (`borrados`) para que lo viejo del storage no
+// memoria; el borrado limpia las dos. 🔴 Pero **guardar falla cerrado**: si el intento no queda en el storage (`setItem`
+// falla, cuota, modo privado, sin `sessionStorage`), `guardarPendiente` lo dice y NO se envía. Un borrado que no se pudo persistir queda anotado (`borrados`) para que lo viejo del storage no
 // lo resucite. Límite: otra pestaña u otro navegador (otro `sessionStorage`) no lo ve; ahí lo que protege es el motor, que
 // con la misma clave y el mismo cuerpo contesta `repetida: true`.
 import type { VencimientoAsignarPayload, VencimientoMermaPayload } from './tipos'
@@ -70,10 +70,22 @@ function persistir() {
   }
 }
 
-export function guardarPendiente(p: Pendiente) {
+/** Guarda un intento ANTES de enviarlo. 🔴 **Falla cerrado: devuelve si quedó recuperable tras una recarga**, o sea, si
+ *  leyendo el `sessionStorage` de vuelta está ese intento con esa clave. Si no (cuota, modo privado, sin storage), quien
+ *  llama NO tiene que enviar: con la respuesta perdida y sin el cuerpo y la clave guardados, un reintento duplicaría el
+ *  movimiento. Un intento nuevo que no se pudo guardar no queda en memoria (no se mandó: no está pendiente de nada); uno que
+ *  ya estaba (un reenvío) sigue estándolo, y si ya estaba en el storage cuenta como recuperable. */
+export function guardarPendiente(p: Pendiente): boolean {
+  const previo = enMemoria[p.firma]
+  const estabaBorrado = borrados.has(p.firma)
   enMemoria[p.firma] = p
   borrados.delete(p.firma)
   persistir()
+  if (leerDelAlmacen()[p.firma]?.cuerpo.clave_operacion === p.cuerpo.clave_operacion) return true
+  if (previo) enMemoria[p.firma] = previo
+  else delete enMemoria[p.firma]
+  if (estabaBorrado) borrados.add(p.firma)
+  return false
 }
 
 export function quitarPendiente(firma: string) {

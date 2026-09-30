@@ -30,8 +30,8 @@
 //   «Descartar el intento anterior…» (con confirmación). El intento se guarda ANTES de enviar y se borra con un resultado
 //   definitivo (éxito, `repetida`, 4xx, el 503 de migración) o al descartarlo.
 //   **Persistencia** (`vencimientos-pendientes.ts`): la memoria de la pestaña es la fuente de verdad y `sessionStorage`
-//   (`libra-ui:vencimientos:pendientes`) sólo recupera tras desmontar la pantalla o recargar; si no se puede guardar, el
-//   intento igual se envía y queda en memoria. Límite: otra pestaña o navegador no lo ve; ahí lo que protege es el motor, que
+//   (`libra-ui:vencimientos:pendientes`) sólo recupera tras desmontar la pantalla o recargar. 🔴 Guardar falla cerrado: si el
+//   intento no queda en el storage (cuota, modo privado, sin storage), NO se envía y se avisa (`SIN_ALMACEN`). Límite: otra pestaña o navegador no lo ve; ahí lo que protege es el motor, que
 //   con la misma clave y el mismo cuerpo contesta `repetida: true`. Un intento pendiente de un lote que ya no aparece en la
 //   lista no se ve en pantalla (queda guardado, inofensivo, hasta que ese destino vuelva a aparecer o se cierre la pestaña).
 // - **«Productos que vencen» es por producto**: el motor no tiene un listado de los productos marcados (sólo se ven en el
@@ -185,6 +185,9 @@ function esResultadoDefinitivo(err: unknown): boolean {
 }
 
 const AVISO_INCIERTO = 'No se sabe si se llegó a registrar.'
+const SIN_ALMACEN =
+  'No se pudo guardar el intento en este navegador (¿modo privado o almacenamiento lleno?). No se envía para no arriesgar un ' +
+  'movimiento duplicado si se pierde la respuesta. Liberá espacio o usá otra ventana e intentá de nuevo.'
 
 /** El envío de un diálogo de escritura: sin doble envío (una guarda síncrona, porque dos clics pueden entrar antes de
  *  que el estado deshabilite el botón), el error a la vista y la `clave_operacion` del intento.
@@ -214,7 +217,14 @@ function useEscritura(alCambiarPendientes: () => void) {
     setError(null)
     // Un reenvío conserva la hora del intento original.
     const intento: Pendiente = { ...dato, creado: dato.creado ?? Date.now() }
-    guardarPendiente(intento)
+    if (!guardarPendiente(intento)) {
+      // Falla cerrado: sin el cuerpo y la clave guardados de forma recuperable, si se perdiera la respuesta un reintento
+      // duplicaría el movimiento. No se envía y el botón queda habilitado para reintentar.
+      guarda.current = false
+      setEnVuelo(false)
+      setError(SIN_ALMACEN)
+      return
+    }
     alCambiarPendientes()
     try {
       const respuesta = await pedir(intento.cuerpo)

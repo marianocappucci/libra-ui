@@ -1166,33 +1166,122 @@ describe('Vencimientos: los intentos inciertos sobreviven a la pantalla y a reca
     expect(screen.queryByText('Intento sin confirmar')).toBeNull()
   })
 
-  it('🔑 si getItem anda pero setItem falla (cuota), el intento se envía igual y queda en memoria: no desaparece', async () => {
+  const SIN_ALMACEN = 'No se pudo guardar el intento en este navegador (¿modo privado o almacenamiento lleno?). No se envía para no arriesgar un movimiento duplicado si se pierde la respuesta. Liberá espacio o usá otra ventana e intentá de nuevo.'
+
+  it('🔑 falla cerrado: si setItem falla (cuota) NO se envía, se ve el error, el botón sigue habilitado, y al volver a funcionar el storage el MISMO diálogo envía', async () => {
+    const espia = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('QuotaExceededError') })
+    const user = userEvent.setup()
+    await abrir()
+    secuencia(MERMA, [() => 'caida', () => json(MERMA_OK)])
+    await abrirMerma(user)
+    await user.click(confirmar())
+    expect((await within(dialogo()).findByText(SIN_ALMACEN)).getAttribute('role')).toBe('alert')
+    // No salió ningún POST, no quedó nada pendiente (no se mandó nada) y se puede reintentar.
+    expect(enviosA(MERMA)).toHaveLength(0)
+    expect(guardado()).toEqual({})
+    expect(panel()).toBeNull()
+    expect((confirmar() as HTMLButtonElement).disabled).toBe(false)
+    expect((within(dialogo()).getByLabelText('Nota') as HTMLTextAreaElement).disabled).toBe(false)
+    await user.click(confirmar())
+    await within(dialogo()).findByText(SIN_ALMACEN)
+    expect(enviosA(MERMA)).toHaveLength(0)
+    expect(within(fila('Yerba')).queryByText('Intento sin confirmar')).toBeNull()
+
+    // El storage vuelve a andar: el mismo diálogo, con los mismos datos, guarda y envía.
+    espia.mockRestore()
+    await user.click(confirmar())
+    await within(dialogo()).findByText(/No se sabe si se llegó a registrar/)
+    expect(enviosA(MERMA)).toHaveLength(1)
+    expect(Object.values(guardado())[0].cuerpo).toEqual(enviosA(MERMA)[0])
+    expect(within(dialogo()).queryByText(SIN_ALMACEN)).toBeNull()
+  })
+
+  it('falla cerrado también en asignar', async () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('QuotaExceededError') })
+    const user = userEvent.setup()
+    await abrir()
+    await abrirAsignar(user)
+    completarAsignacion()
+    await user.click(confirmar())
+    await within(dialogo()).findByText(SIN_ALMACEN)
+    expect(enviosA(ASIGNAR)).toHaveLength(0)
+    expect((confirmar() as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('🔑 sin sessionStorage (o si lanza al leer y escribir, modo privado) tampoco se envía', async () => {
+    const real = globalThis.sessionStorage
+    const user = userEvent.setup()
+    await abrir()
+    await abrirMerma(user)
+    vi.stubGlobal('sessionStorage', undefined)
+    try {
+      await user.click(confirmar())
+      await within(dialogo()).findByText(SIN_ALMACEN)
+      expect(enviosA(MERMA)).toHaveLength(0)
+    } finally {
+      vi.stubGlobal('sessionStorage', real)
+    }
+
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('SecurityError') })
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('SecurityError') })
+    await user.click(confirmar())
+    await within(dialogo()).findByText(SIN_ALMACEN)
+    expect(enviosA(MERMA)).toHaveLength(0)
+    expect(panel()).toBeNull()
+  })
+
+  it('🔑 si setItem falla, un intento incierto que ya estaba guardado NO se borra ni se pisa', async () => {
+    const user = userEvent.setup()
+    await abrir()
+    secuencia(MERMA, [() => 'caida', () => json(MERMA_OK)])
+    await abrirMerma(user, 'Yerba')
+    await user.click(confirmar())
+    await within(dialogo()).findByText(/No se sabe si se llegó a registrar/)
+    await cancelar(user)
+    const antes = guardado()
+    expect(Object.keys(antes)).toEqual([FIRMA_YERBA])
+
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('QuotaExceededError') })
+    // Otra operación (Crema): no se puede guardar, no se envía, y lo de Yerba sigue intacto.
+    await abrirMerma(user, 'Crema')
+    await user.click(confirmar())
+    await within(dialogo()).findByText(SIN_ALMACEN)
+    expect(enviosA(MERMA)).toHaveLength(1)
+    await cancelar(user)
+    expect(guardado()).toEqual(antes)
+    expect(within(fila('Yerba')).getByText('Intento sin confirmar')).toBeTruthy()
+
+    // Reenviar el de Yerba sí se puede: ya estaba guardado (es recuperable), aunque el storage no deje escribir.
+    await abrirMerma(user, 'Yerba')
+    expect(panel()).toBeTruthy()
+    await user.click(confirmar())
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(enviosA(MERMA)).toHaveLength(2)
+    expect(enviosA(MERMA)[1]).toEqual(enviosA(MERMA)[0])
+  })
+
+  it('si lo guardado desapareció del storage (se vació) y no se puede volver a escribir, reenviar tampoco envía, pero el intento sigue pendiente en memoria', async () => {
     const user = userEvent.setup()
     await abrir()
     secuencia(MERMA, [() => 'caida', () => json(MERMA_OK)])
     await abrirMerma(user)
     await user.click(confirmar())
     await within(dialogo()).findByText(/No se sabe si se llegó a registrar/)
-    expect(enviosA(MERMA)).toHaveLength(1)
-    expect(sessionStorage.getItem(ALMACEN)).toBeNull()
-    expect(panel()).toBeTruthy()
-    await cancelar(user)
-    expect(within(fila('Yerba')).getByText('Intento sin confirmar')).toBeTruthy()
+    const original = enviosA(MERMA)[0]
 
-    // Desmontar y volver a montar: la memoria manda.
-    cleanup()
-    prepararFetch()
-    await abrir()
-    secuencia(MERMA, [() => json({ ...MERMA_OK, repetida: true })])
-    await abrirMerma(user)
+    sessionStorage.clear()
+    const espia = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('QuotaExceededError') })
+    await user.click(confirmar())
+    await within(dialogo()).findByText(SIN_ALMACEN)
+    expect(enviosA(MERMA)).toHaveLength(1)
+    // Sigue pendiente (bloqueado, con su cuerpo y su clave), no se perdió.
     expect(panel()).toBeTruthy()
+    expect((within(dialogo()).getByLabelText('Nota') as HTMLTextAreaElement).disabled).toBe(true)
+
+    espia.mockRestore()
     await user.click(confirmar())
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    expect(enviosA(MERMA)).toHaveLength(1)
-    expect(within(fila('Yerba')).queryByText('Intento sin confirmar')).toBeNull()
-    await abrirMerma(user)
-    expect(panel()).toBeNull()
+    expect(enviosA(MERMA)).toEqual([original, original])
   })
 
   it('🔑 borrar limpia memoria y storage: si el borrado no se puede escribir, lo viejo del storage no resucita el intento', async () => {
@@ -1212,27 +1301,6 @@ describe('Vencimientos: los intentos inciertos sobreviven a la pantalla y a reca
     expect(within(fila('Yerba')).queryByText('Intento sin confirmar')).toBeNull()
     // El storage sigue teniendo lo viejo (no se pudo escribir), pero no cuenta.
     expect(Object.keys(guardado())).toEqual([FIRMA_YERBA])
-    await abrirMerma(user)
-    expect(panel()).toBeNull()
-  })
-
-  it('si sessionStorage lanza (modo privado) la pantalla funciona y el intento vive en memoria', async () => {
-    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('SecurityError') })
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('SecurityError') })
-    const user = userEvent.setup()
-    await abrir()
-    secuencia(MERMA, [() => 'caida', () => json(MERMA_OK)])
-    await abrirMerma(user)
-    await user.click(confirmar())
-    await within(dialogo()).findByText(/No se sabe si se llegó a registrar/)
-    expect(panel()).toBeTruthy()
-    await cancelar(user)
-    await abrirMerma(user)
-    expect(panel()).toBeTruthy()
-    await user.click(confirmar())
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    expect(enviosA(MERMA)[1]).toEqual(enviosA(MERMA)[0])
-    // Se limpió también de la memoria.
     await abrirMerma(user)
     expect(panel()).toBeNull()
   })
