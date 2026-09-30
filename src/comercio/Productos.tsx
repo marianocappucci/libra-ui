@@ -67,6 +67,9 @@ const productoSchema = z.object({
   // "" (sin comanda) / una estación del producto.
   estacion: z.string(),
   vendible: z.boolean(),
+  // Carga de vencimientos (opt-in, sólo si el backend trae `vence`): si el producto es perecedero. Viaja SÓLO si el usuario
+  // lo cambió respecto de lo que había (ver `handleSubmit`).
+  vence: z.boolean(),
   // Solo se edita en modo edición: en alta siempre nace activo.
   activo: z.boolean(),
 })
@@ -75,7 +78,7 @@ type Valores = z.infer<typeof productoSchema>
 
 const EMPTY_VALUES: Valores = {
   nombre: '', codigo: '', descripcion: '', precio_venta: 0, precio_costo: 0,
-  unidad: 'u', categoria: '', stock_minimo: 0, tipo: 'producto', estacion: '', vendible: true, activo: true,
+  unidad: 'u', categoria: '', stock_minimo: 0, tipo: 'producto', estacion: '', vendible: true, vence: false, activo: true,
 }
 
 // Radix Select no admite value="" (reservado): la estación vacía viaja como un
@@ -108,7 +111,15 @@ export type ProductosProps = {
   conStockTotal?: boolean
   /** El botón de eliminar. Un producto con historial no se elimina sino que se desactiva: quien lo aplica lo apaga. */
   conEliminar?: boolean
+  /** El interruptor «Vence» del formulario (producto perecedero: maneja lotes y fecha de vencimiento). **Por defecto se decide
+   *  solo: aparece si el backend trae `vence` en los productos** (`OpcionesCatalogo.con_vencimientos`), y un producto que no
+   *  lo manda no ve nada nuevo. Con un catálogo todavía vacío no hay de dónde leerlo: `true` lo fuerza (y `false` lo apaga). */
+  conVencimientos?: boolean
 }
+
+const AYUDA_VENCE =
+  'Marcalo si el producto es perecedero: vas a poder cargar lote y fecha al recibir compras y verlo en “Vencimientos y lotes”.'
+const AYUDA_VENCE_SERVICIO = 'Un servicio no tiene inventario: no puede tener lotes ni vencimiento.'
 
 export function Productos({
   conTipo = false,
@@ -120,6 +131,7 @@ export function Productos({
   conDetalle = false,
   conStockTotal = false,
   conEliminar = true,
+  conVencimientos,
 }: ProductosProps) {
   const [productos, setProductos] = useState<Producto[]>([])
   const [loading, setLoading] = useState(true)
@@ -137,6 +149,10 @@ export function Productos({
   const [editingProducto, setEditingProducto] = useState<Producto | null>(null)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  // Opt-in por datos: una vez que algún producto trajo `vence` (aun uno que no vence: `false`) el backend lo maneja, y se
+  // recuerda aunque una búsqueda posterior devuelva una lista vacía.
+  const [backendConVence, setBackendConVence] = useState(false)
+  const conVence = conVencimientos ?? backendConVence
 
   const conEstacion = Boolean(estaciones && estaciones.length > 0)
 
@@ -174,7 +190,9 @@ export function Productos({
     setError(null)
     try {
       const path = query ? `/api/productos?q=${encodeURIComponent(query)}` : '/api/productos'
-      setProductos(await api.get<Producto[]>(path))
+      const lista = await api.get<Producto[]>(path)
+      if (lista.some((p) => typeof p.vence === 'boolean')) setBackendConVence(true)
+      setProductos(lista)
     } catch (err) {
       setError(describeError(err))
     } finally {
@@ -208,6 +226,7 @@ export function Productos({
       tipo: producto.tipo || 'producto',
       estacion: producto.estacion ?? '',
       vendible: !producto.vendible ? false : true,
+      vence: producto.vence === true,
       activo: !!producto.activo,
     })
     setFormError(null)
@@ -235,6 +254,9 @@ export function Productos({
     if (conTipo) payload.tipo = values.tipo
     if (conEstacion) payload.estacion = values.estacion || ''
     if (conVendible) payload.vendible = values.vendible
+    // `vence` viaja sólo si el usuario cambió el interruptor: el backend no toca la marca si no viene (editar otra cosa nunca la
+    // pierde) y cambiarla exige un permiso que quizá no tenga quien sólo corrige un precio.
+    if (conVence && values.vence !== (editingProducto?.vence === true)) payload.vence = values.vence
     try {
       if (editingProducto) {
         await api.put<Producto>(`/api/productos/${editingProducto.id}`, payload)
@@ -360,6 +382,11 @@ export function Productos({
     return cols
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conTipo, conEstacion, conVendible, rutaDeReceta, conDetalle, conStockTotal, conEliminar, stockTotal])
+
+  // Un servicio no tiene inventario: no se marca. Si ya estaba marcado (o se marcó antes de cambiar el tipo) el interruptor
+  // sigue habilitado, para poder desmarcarlo: el backend rechaza (409) guardar un servicio marcado.
+  const esServicio = form.watch('tipo') === 'servicio'
+  const venceAhora = form.watch('vence')
 
   return (
     <div className="grid gap-4">
@@ -563,6 +590,27 @@ export function Productos({
                             <p className="text-xs text-muted-foreground">
                               Si lo desactivás, este producto es un insumo: no aparece en el punto de
                               venta, pero sí en recetas y stock.
+                            </p>
+                          </div>
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                  {conVence && (
+                    <FormField
+                      control={form.control}
+                      name="vence"
+                      render={({ field }) => (
+                        <FormItem className="flex w-full flex-row items-center gap-2 space-y-0">
+                          <FormControl>
+                            <Switch checked={field.value} onCheckedChange={field.onChange} disabled={esServicio && !venceAhora} />
+                          </FormControl>
+                          <div className="grid gap-0.5">
+                            <FormLabel className="!mt-0">Vence (maneja lotes y fecha de vencimiento)</FormLabel>
+                            <p className="text-xs text-muted-foreground">
+                              {esServicio
+                                ? `${AYUDA_VENCE_SERVICIO}${venceAhora ? ' Desmarcalo para poder guardarlo.' : ''}`
+                                : AYUDA_VENCE}
                             </p>
                           </div>
                         </FormItem>

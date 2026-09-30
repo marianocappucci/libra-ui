@@ -2,6 +2,11 @@
 // que se pueden hacer con eso: dar de baja un lote (merma), ponerle lote y vencimiento a stock que no lo tiene y
 // marcar qué productos vencen.
 //
+// 0.92.0 (carga de vencimientos, K-1): esta pantalla ahora también es el lugar donde se aprende y se hace la carga: un bloque
+// «Cómo cargar vencimientos» arriba, «Productos que vencen» por encima de las tablas y «Cargar stock con lote»
+// (`POST /api/vencimientos/entrada`: stock NUEVO con lote y fecha; a diferencia de `asignar`, que sólo le pone fecha a lo
+// que ya está contado sin lote) con la misma idempotencia que las otras dos escrituras.
+//
 // Pantalla nueva (0.91.0, roadmap de producto de VentaLibra, A-2); todo lo que se cuenta es del motor
 // (`/api/vencimientos`, `libracommerce.erp.vencimientos`, ADR-018) y acá sólo se muestra y se pide. Props opcionales
 // `puedeMover` (asignar y dar de baja) y `puedeMarcar` (marcar «vence»): ocultan los botones; el backend igual contesta
@@ -15,7 +20,7 @@
 // - 🔴 **El aviso de que el saldo por lote puede ser MAYOR al real es permanente** (ADR-018): hasta que las ventas,
 //   devoluciones y ajustes descuenten por lote (A-4) siguen restando del stock «sin lote», así que el saldo de cada lote
 //   sobreestima lo que hay. Va arriba de todo, sin botón para cerrarlo, y se repite en los diálogos que mueven stock.
-// - 🔑 **Idempotencia de las escrituras.** `asignar` y `merma` exigen `clave_operacion`. Cada diálogo genera UNA clave
+// - 🔑 **Idempotencia de las escrituras.** `asignar`, `entrada` y `merma` exigen `clave_operacion`. Cada diálogo genera UNA clave
 //   por intento del usuario y la REUSA mientras los datos que se van a enviar no cambien (volver a apretar «Confirmar»
 //   tras un rechazo del motor: no se escribió nada, la clave no se gasta). Se regenera cuando el usuario cambia algún dato.
 //   🔴 **Principio: mientras haya un intento INCIERTO sobre un destino de stock, no se manda nada nuevo sobre ese destino
@@ -24,9 +29,11 @@
 //   («no se escribió») los 4xx (menos el 408) y el 503 que dice `libracommerce-migrar upgrade`. Un intento incierto guarda
 //   el CUERPO COMPLETO y su clave (no sólo la clave) bajo la firma del recurso que la operación consume: en una MERMA,
 //   ese lote (producto, depósito, variante, lote y fecha; `dar_de_baja_lote` mide el saldo del bucket exacto); en una
-//   ASIGNACIÓN, el saldo SIN LOTE de (producto, depósito, variante), sea cual sea el lote y la fecha que se le pongan (por
+//   ENTRADA, el bucket al que suma (producto, depósito, variante, lote y fecha; sin cantidad ni nota: una carga incierta
+//   bloquea reenviar OTRA sobre el mismo destino, como en la merma); en una ASIGNACIÓN, el saldo SIN LOTE de (producto, depósito, variante), sea cual sea el lote y la fecha que se le pongan (por
 //   eso lote y fecha no entran en su firma: cambiarlos no es otra operación, gasta el mismo saldo). Con esa firma pendiente
-//   el diálogo bloquea todos los campos y sólo ofrece «Reenviar el intento anterior» (el cuerpo original, no el editado) o
+//   el diálogo bloquea los campos (en una entrada el destino es lo que se tipea, así que lo que queda bloqueado son la cantidad
+//   y la nota: cambiar el producto, el depósito, la variante, el lote o la fecha es otro destino) y sólo ofrece «Reenviar el intento anterior» (el cuerpo original, no el editado) o
 //   «Descartar el intento anterior…» (con confirmación). El intento se guarda ANTES de enviar y se borra con un resultado
 //   definitivo (éxito, `repetida`, 4xx, el 503 de migración) o al descartarlo.
 //   **Persistencia** (`vencimientos-pendientes.ts`): la memoria de la pestaña es la fuente de verdad y `sessionStorage`
@@ -42,12 +49,13 @@ import { api, ApiError } from '../api-client'
 import { SelectBuscable } from '../SelectBuscable'
 import { ZONA_AR } from '../fechas'
 import { TituloPantalla } from '../titulo-pantalla'
+import { esFechaISOValida } from './fecha-iso'
 import {
-  firmaDeAsignacion, firmaDeMerma, guardarPendiente, leerPendientes, quitarPendiente, type Payload, type Pendiente,
+  firmaDeAsignacion, firmaDeEntrada, firmaDeMerma, guardarPendiente, leerPendientes, quitarPendiente, type Payload, type Pendiente,
 } from './vencimientos-pendientes'
 import type {
-  CategoriaProducto, Producto, Sucursal, VencimientoAsignarPayload, VencimientoAsignarRespuesta, VencimientoLote,
-  VencimientoMarca, VencimientoMermaPayload, VencimientoMermaRespuesta, VencimientoProductoLotes, VencimientoSinLote,
+  CategoriaProducto, Deposito, Producto, Sucursal, VarianteProducto, VencimientoAsignarPayload, VencimientoAsignarRespuesta,
+  VencimientoEntradaPayload, VencimientoEntradaRespuesta, VencimientoLote, VencimientoMarca, VencimientoMermaPayload, VencimientoMermaRespuesta, VencimientoProductoLotes, VencimientoSinLote,
   VencimientosData, VencimientoSituacion,
 } from './tipos'
 import { Badge } from '@/components/ui/badge'
@@ -61,7 +69,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { fecha } from '@/lib/fechas'
-import { CalendarClock, CalendarPlus, Check, Download, TriangleAlert, Trash2 } from 'lucide-react'
+import { CalendarClock, CalendarPlus, Check, Download, PackagePlus, TriangleAlert, Trash2 } from 'lucide-react'
 
 const RUTA = '/api/vencimientos'
 /** El valor de «Toda la instancia» y de «Todas las categorías» en su `Select` (uno de Radix no admite `''`). */
@@ -137,6 +145,39 @@ function AvisoSaldoSobreestimado({ className = '' }: { className?: string }) {
       <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
       <p>{AVISO_SALDO}</p>
     </div>
+  )
+}
+
+/** Los tres caminos para cargar un vencimiento, en una línea (el estado vacío repite el bloque de arriba). */
+const PASOS_EN_UNA_LINEA =
+  '1) marcá el producto como perecedero, 2) al recibir una compra cargá lote y vencimiento por línea, 3) para el stock que ya tenés usá «Cargar stock con lote» o «Asignar vencimiento».'
+
+/** El bloque de ayuda de arriba de la pantalla: el orden de los pasos, en llano. `children` es la acción (el botón de cargar
+ *  stock, que sólo ve quien puede mover). */
+function ComoCargarVencimientos({ children }: { children?: React.ReactNode }) {
+  return (
+    <Card>
+      <CardHeader className="space-y-1">
+        <CardTitle className="text-base">Cómo cargar vencimientos</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-3 text-sm">
+        <ol className="grid list-decimal gap-1 pl-5">
+          <li>
+            <strong className="font-medium">Marcá el producto como perecedero</strong>, en el formulario del producto o acá mismo, en
+            «Productos que vencen».
+          </li>
+          <li>
+            <strong className="font-medium">Al recibir una compra</strong>, cargá el lote y el vencimiento de cada línea.
+          </li>
+          <li>
+            <strong className="font-medium">Para el stock que ya tenés</strong>: «Cargar stock con lote» suma mercadería nueva con su
+            lote y su fecha, y «Asignar vencimiento» le pone lote y fecha a lo que figura sin fecha (en «Sin lote / sin
+            fecha», más abajo).
+          </li>
+        </ol>
+        {children && <div className="flex flex-wrap gap-2">{children}</div>}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -476,6 +517,308 @@ function DialogoAsignar({ fila, alCambiarPendientes, onCerrar, onListo }: {
   )
 }
 
+// ── Cargar stock con lote (entrada) ──────────────────────────────────────────────────────────────────────────────
+
+/** El valor de «sin variante» en el `Select` de variantes (uno de Radix no admite `''`). */
+const SIN_VARIANTE = '__base__'
+
+/** `GET /api/vencimientos/productos/{id}/lotes` del producto elegido: si vence (marcado) y su unidad. El estado va ligado al
+ *  producto al que contestó: si se elige otro mientras llega la anterior, no vale. `version` vuelve a pedirla (alguien marcó
+ *  o desmarcó al producto desde otro lado de la pantalla). */
+type Ficha = { productoId: string; vence: boolean | null; unidad: string | null; error: string | null }
+
+function useFicha(productoId: string, version = 0) {
+  const [ficha, setFicha] = useState<Ficha | null>(null)
+  useEffect(() => {
+    if (!productoId) return
+    let vigente = true
+    api.get<VencimientoProductoLotes>(`${RUTA}/productos/${productoId}/lotes`)
+      .then((r) => { if (vigente) setFicha({ productoId, vence: r.producto.vence, unidad: r.producto.unidad, error: null }) })
+      .catch((err) => { if (vigente) setFicha({ productoId, vence: null, unidad: null, error: mensajeDeError(err) }) })
+    return () => { vigente = false }
+  }, [productoId, version])
+  return { actual: ficha?.productoId === productoId ? ficha : null, setFicha }
+}
+
+/** Un servicio no tiene inventario y uno inactivo no entra al reporte: no se ofrecen. Las opciones de «Productos que vencen» y
+ *  las del diálogo de «Cargar stock con lote» son las mismas. */
+function opcionesDeProductos(productos: Producto[]) {
+  return productos.filter((p) => p.activo && p.tipo !== 'servicio')
+    .map((p) => ({ value: String(p.id), label: p.nombre, hint: p.codigo ?? undefined }))
+}
+
+/** El motivo del rechazo de una cantidad a cargar (stock nuevo: no hay saldo contra el que compararla), o `null` si vale. La
+ *  escala de la unidad (enteros o cuántos decimales) la valida el motor: 422 con su mensaje. */
+function errorDeCantidadNueva(valor: string): string | null {
+  const n = Number(valor)
+  return valor.trim() === '' || !Number.isFinite(n) || n <= 0 ? 'Tiene que ser un número mayor a 0.' : null
+}
+
+function DialogoEntrada({ productos, errorDeProductos, sucursales, puedeMarcar, inicial, alCambiarPendientes, onCerrar, onListo, onMarcado }: {
+  productos: Producto[]
+  errorDeProductos: string | null
+  sucursales: Sucursal[]
+  puedeMarcar: boolean
+  /** Para revisar un intento sin confirmar: el dialogo arranca con su destino (y su cantidad y nota). */
+  inicial: VencimientoEntradaPayload | null
+  alCambiarPendientes: () => void
+  onCerrar: () => void
+  onListo: (respuesta: VencimientoEntradaRespuesta, unidad: string | null) => void
+  onMarcado: () => void
+}) {
+  const [productoId, setProductoId] = useState(inicial ? String(inicial.producto_id) : '')
+  const [depositoId, setDepositoId] = useState(inicial ? String(inicial.deposito_id) : '')
+  const [varianteId, setVarianteId] = useState(inicial ? (inicial.variante_id === null ? SIN_VARIANTE : String(inicial.variante_id)) : '')
+  const [lote, setLote] = useState(inicial?.lote ?? '')
+  const [vence, setVence] = useState(inicial?.vence ?? '')
+  // `<input type="date">` entrega `''` tanto vacío como con una fecha imposible o a medio escribir; `badInput` las distingue.
+  const [fechaIncompleta, setFechaIncompleta] = useState(false)
+  const [cantidad, setCantidad] = useState(inicial ? String(inicial.cantidad) : '')
+  const [nota, setNota] = useState(inicial?.nota ?? '')
+  const [intentado, setIntentado] = useState(false)
+  const [depositos, setDepositos] = useState<{ lista: Deposito[]; error: string | null } | null>(null)
+  const [variantes, setVariantes] = useState<{ productoId: string; lista: VarianteProducto[]; error: string | null } | null>(null)
+  // Sube con «Reintentar» (la consulta de variantes falló): vuelve a pedirla.
+  const [intentoDeVariantes, setIntentoDeVariantes] = useState(0)
+  const [marcando, setMarcando] = useState(false)
+  const [errorDeMarca, setErrorDeMarca] = useState<string | null>(null)
+  const guardaMarca = useRef(false)
+  const { enVuelo, error, claveDe, enviar, descartar } = useEscritura(alCambiarPendientes)
+  const { actual: ficha, setFicha } = useFicha(productoId)
+
+  // Los depósitos, una vez por apertura; el predeterminado viene elegido.
+  useEffect(() => {
+    let vigente = true
+    api.get<Deposito[]>('/api/depositos')
+      .then((lista) => {
+        if (!vigente) return
+        const activos = lista.filter((d) => !!d.activo)
+        setDepositos({ lista: activos, error: null })
+        setDepositoId((actual) => {
+          if (actual) return actual
+          const porDefecto = activos.find((d) => !!d.es_default) ?? activos[0]
+          return porDefecto ? String(porDefecto.id) : ''
+        })
+      })
+      .catch((err) => { if (vigente) setDepositos({ lista: [], error: mensajeDeError(err) }) })
+    return () => { vigente = false }
+  }, [])
+
+  // Las variantes del producto elegido (si tiene, hay que decir cuál). 🔴 Cargar con la consulta en vuelo o fallida podría dejar
+  // el stock en la base cuando el producto las tiene: hasta que la lista del producto ELEGIDO llegó bien no se confirma.
+  useEffect(() => {
+    if (!productoId) return
+    let vigente = true
+    api.get<VarianteProducto[]>(`/api/productos/${productoId}/variantes`)
+      .then((lista) => { if (vigente) setVariantes({ productoId, lista: lista.filter((v) => v.activa), error: null }) })
+      .catch((err) => { if (vigente) setVariantes({ productoId, lista: [], error: mensajeDeError(err) }) })
+    return () => { vigente = false }
+  }, [productoId, intentoDeVariantes])
+
+  const opciones = useMemo(() => opcionesDeProductos(productos), [productos])
+  const elegido = productos.find((p) => String(p.id) === productoId)
+  // Sólo vale la lista del producto elegido ahora (la de otro, o una respuesta vieja, no): `null` = cargando.
+  const variantesDelProducto = variantes?.productoId === productoId ? variantes : null
+  const variantesListas = productoId !== '' && variantesDelProducto !== null && variantesDelProducto.error === null
+  const cargandoVariantes = productoId !== '' && variantesDelProducto === null
+  const tieneVariantes = variantesListas && variantesDelProducto!.lista.length > 0
+  const nombreDeSucursal = (id: number | null | undefined) => sucursales.find((x) => x.id === id)?.nombre
+
+  function elegirProducto(valor: string) {
+    setProductoId(valor)
+    setVarianteId('')
+    setVariantes(null)
+    setErrorDeMarca(null)
+  }
+
+  function reintentarVariantes() {
+    setVariantes(null)
+    setIntentoDeVariantes((n) => n + 1)
+  }
+
+  const productoListo = ficha?.vence === true
+  // Sin variantes (lista llegada y vacía) o «Sin variante» es la base (`null`); una variante elegida es su id.
+  const sinVariantes = variantesListas && !tieneVariantes
+  const varianteNum = sinVariantes || varianteId === SIN_VARIANTE || varianteId === '' ? null : Number(varianteId)
+  // ¿Se sabe a qué variante va? Con la lista vacía, sí (la base); con variantes, sólo si se eligió una o «Sin variante».
+  const varianteResuelta = sinVariantes || varianteId !== ''
+
+  const errorDelProducto = productoId === '' ? 'Elegí el producto.' : null
+  const errorDelDeposito = depositoId === '' ? 'Elegí el depósito.' : null
+  const errorDeLaVariante = tieneVariantes && varianteId === '' ? 'Elegí la variante, o «Sin variante».' : null
+  // Una carga NUEVA necesita la lista de variantes del producto; reenviar un intento guardado manda su cuerpo tal cual.
+  const puedeEnviar = variantesListas
+  const errorDelLote = lote.trim() === '' ? 'Escribí el código del lote.' : null
+  const errorDeLaFecha = fechaIncompleta ? 'La fecha no es válida.' : (esFechaISOValida(vence) ? null : 'Elegí la fecha de vencimiento.')
+  const errorDeLaCantidad = errorDeCantidadNueva(cantidad)
+
+  // El destino es el bucket al que suma (producto, depósito, variante, lote y fecha): con un intento pendiente sobre ÉL,
+  // cantidad y nota quedan bloqueadas y sólo se puede reenviarlo o descartarlo. Cambiar cualquiera de los cinco es otro destino.
+  const firma = productoId !== '' && depositoId !== '' && lote.trim() !== '' && esFechaISOValida(vence) && varianteResuelta
+    ? firmaDeEntrada({ producto_id: Number(productoId), deposito_id: Number(depositoId), variante_id: varianteNum, lote: lote.trim(), vence })
+    : null
+  const pendiente = firma ? (leerPendientes()[firma] ?? null) : null
+  const cuerpoPendiente = pendiente?.tipo === 'entrada' ? pendiente.cuerpo as VencimientoEntradaPayload : undefined
+  const unidad = ficha?.unidad ?? null
+
+  const post = (cuerpo: Payload) => api.post<VencimientoEntradaRespuesta>(`${RUTA}/entrada`, cuerpo)
+
+  function confirmar() {
+    if (pendiente && cuerpoPendiente) {
+      void enviar(pendiente, post, (r) => onListo(r, unidad))
+      return
+    }
+    setIntentado(true)
+    if (!puedeEnviar || !productoListo || errorDelProducto || errorDelDeposito || errorDeLaVariante || errorDelLote || errorDeLaFecha || errorDeLaCantidad || !firma) return
+    const datos = {
+      producto_id: Number(productoId), deposito_id: Number(depositoId), variante_id: varianteNum, lote: lote.trim(),
+      vence, cantidad: Number(cantidad), nota: nota.trim(),
+    }
+    const cuerpo: VencimientoEntradaPayload = { ...datos, clave_operacion: claveDe(JSON.stringify(datos)) }
+    void enviar({ firma, tipo: 'entrada', cuerpo }, post, (r) => onListo(r, unidad))
+  }
+
+  async function marcar() {
+    if (guardaMarca.current) return
+    guardaMarca.current = true
+    setMarcando(true)
+    setErrorDeMarca(null)
+    try {
+      const r = await api.put<VencimientoMarca>(`${RUTA}/productos/${productoId}`, { vence: true })
+      setFicha({ productoId, vence: r.vence, unidad: ficha?.unidad ?? null, error: null })
+      onMarcado()
+    } catch (err) {
+      setErrorDeMarca(mensajeDeError(err))
+    } finally {
+      guardaMarca.current = false
+      setMarcando(false)
+    }
+  }
+
+  const mostrarCampos = productoListo || !!cuerpoPendiente
+  const bloqueado = enVuelo || marcando
+
+  return (
+    <Dialog open onOpenChange={(abierto) => { if (!abierto && !enVuelo) onCerrar() }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><PackagePlus className="size-4" />Cargar stock con lote</DialogTitle>
+          <DialogDescription>
+            Suma mercadería nueva con su lote y su vencimiento al depósito que elijas: el stock total sube. Para ponerle fecha a
+            stock que ya está contado sin lote, usá «Asignar vencimiento».
+          </DialogDescription>
+        </DialogHeader>
+        <AvisoSaldoSobreestimado />
+        {pendiente && cuerpoPendiente && !enVuelo && (
+          <PanelIntentoPendiente
+            pendiente={pendiente} deshabilitado={enVuelo} onDescartar={() => descartar(pendiente.firma)}
+            resumen={`cargar ${numero(cuerpoPendiente.cantidad)} ${unidad ?? ''} al lote ${cuerpoPendiente.lote} (vence ${fecha(cuerpoPendiente.vence)})`.replace(/\s+/g, ' ')}
+          />
+        )}
+        {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+        <div className="grid max-h-[60vh] gap-4 overflow-y-auto pr-1">
+          <Campo id="entrada-producto" etiqueta="Producto" error={intentado ? errorDelProducto : null}>
+            {errorDeProductos ? (
+              <p role="alert" className="text-sm text-destructive">{errorDeProductos}</p>
+            ) : (
+              <SelectBuscable
+                id="entrada-producto" value={productoId} onChange={elegirProducto} opciones={opciones} disabled={bloqueado}
+                placeholder="Buscá un producto…" emptyMessage="Ningún producto coincide." ariaLabel="Producto"
+              />
+            )}
+          </Campo>
+          {productoId && !ficha && <p role="status" className="text-sm text-muted-foreground">Consultando…</p>}
+          {ficha?.error && <p role="alert" className="text-sm text-destructive">{ficha.error}</p>}
+          {ficha && ficha.vence === false && !cuerpoPendiente && (
+            <div className="grid gap-2 rounded-md border p-3 text-sm">
+              <p>
+                <span className="font-medium">{elegido?.nombre}</span> no está marcado como perecedero: hay que marcarlo antes de
+                cargarle un lote.
+              </p>
+              {puedeMarcar ? (
+                <div>
+                  <Button type="button" size="sm" variant="outline" disabled={bloqueado} onClick={() => void marcar()}>
+                    Marcar como perecedero
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-muted-foreground">Pedile a quien tenga el permiso que lo marque.</p>
+              )}
+              {errorDeMarca && <p role="alert" className="text-destructive">{errorDeMarca}</p>}
+            </div>
+          )}
+          {mostrarCampos && (
+            <>
+              <Campo id="entrada-deposito" etiqueta="Depósito" error={intentado ? errorDelDeposito : (depositos?.error ?? null)}>
+                <Select value={depositoId} onValueChange={setDepositoId} disabled={bloqueado}>
+                  <SelectTrigger id="entrada-deposito"><SelectValue placeholder="Depósito…" /></SelectTrigger>
+                  <SelectContent>
+                    {(depositos?.lista ?? []).map((d) => {
+                      const suc = nombreDeSucursal(d.branch_id)
+                      return <SelectItem key={d.id} value={String(d.id)}>{suc ? `${suc} · ${d.nombre}` : d.nombre}</SelectItem>
+                    })}
+                  </SelectContent>
+                </Select>
+              </Campo>
+              {cargandoVariantes && <p role="status" className="text-sm text-muted-foreground">Consultando variantes…</p>}
+              {variantesDelProducto?.error && (
+                <div className="grid gap-2">
+                  <p role="alert" className="text-sm text-destructive">
+                    No se pudieron consultar las variantes del producto: {variantesDelProducto.error} No se puede cargar hasta saber si tiene variantes.
+                  </p>
+                  <div>
+                    <Button type="button" size="sm" variant="outline" disabled={bloqueado} onClick={reintentarVariantes}>Reintentar</Button>
+                  </div>
+                </div>
+              )}
+              {tieneVariantes && (
+                <Campo id="entrada-variante" etiqueta="Variante" error={intentado ? errorDeLaVariante : null}>
+                  <Select value={varianteId} onValueChange={setVarianteId} disabled={bloqueado}>
+                    <SelectTrigger id="entrada-variante"><SelectValue placeholder="Variante…" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={SIN_VARIANTE}>Sin variante</SelectItem>
+                      {variantesDelProducto!.lista.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.nombre} ({v.sku})</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </Campo>
+              )}
+              <Campo id="entrada-lote" etiqueta="Lote" error={intentado ? errorDelLote : null}>
+                <Input
+                  id="entrada-lote" value={lote} maxLength={MAX_LARGO_LOTE} disabled={bloqueado}
+                  aria-invalid={intentado && errorDelLote !== null} onChange={(e) => setLote(e.target.value)}
+                />
+              </Campo>
+              <Campo id="entrada-vence" etiqueta="Fecha de vencimiento" error={intentado ? errorDeLaFecha : null}>
+                <Input
+                  id="entrada-vence" type="date" value={vence} disabled={bloqueado}
+                  aria-invalid={intentado && errorDeLaFecha !== null}
+                  onChange={(e) => { setFechaIncompleta(e.currentTarget.validity?.badInput === true); setVence(e.target.value) }}
+                />
+              </Campo>
+              <Campo id="entrada-cantidad" etiqueta="Cantidad" error={cuerpoPendiente ? null : (intentado || cantidad !== '' ? errorDeLaCantidad : null)}>
+                <Input
+                  id="entrada-cantidad" type="number" inputMode="decimal" min={0} step="any" disabled={bloqueado || !!cuerpoPendiente}
+                  value={cuerpoPendiente ? String(cuerpoPendiente.cantidad) : cantidad}
+                  aria-invalid={!cuerpoPendiente && intentado && errorDeLaCantidad !== null} onChange={(e) => setCantidad(e.target.value)}
+                />
+              </Campo>
+              <Campo id="entrada-nota" etiqueta="Nota">
+                <Textarea id="entrada-nota" rows={2} disabled={bloqueado || !!cuerpoPendiente} value={cuerpoPendiente ? cuerpoPendiente.nota : nota} onChange={(e) => setNota(e.target.value)} />
+              </Campo>
+            </>
+          )}
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" disabled={enVuelo} onClick={onCerrar}>Cancelar</Button>
+          <Button type="button" disabled={bloqueado || !mostrarCampos || (!cuerpoPendiente && !puedeEnviar)} onClick={confirmar}>
+            <Check />{enVuelo ? 'Guardando…' : (cuerpoPendiente ? 'Reenviar el intento anterior' : 'Confirmar')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ── Orden de la tabla de lotes (del navegador) ───────────────────────────────────────────────────────────────────
 
 type ClaveOrden = 'nombre' | 'codigo' | 'ubicacion' | 'lote' | 'vence' | 'dias_para_vencer' | 'saldo'
@@ -544,6 +887,13 @@ export function Vencimientos({ puedeMover = true, puedeMarcar = true }: { puedeM
   const [aviso, setAviso] = useState<Aviso | null>(null)
   const [aMermar, setAMermar] = useState<VencimientoLote | null>(null)
   const [aAsignar, setAAsignar] = useState<VencimientoSinLote | null>(null)
+  // «Cargar stock con lote»: cerrado, abierto en blanco o abierto sobre un intento sin confirmar (`inicial`).
+  const [entrada, setEntrada] = useState<{ inicial: VencimientoEntradaPayload | null } | null>(null)
+  // Los productos, una sola consulta para «Productos que vencen» y para el diálogo de la entrada.
+  const [productos, setProductos] = useState<Producto[]>([])
+  const [errorDeProductos, setErrorDeProductos] = useState<string | null>(null)
+  // Sube cuando el diálogo de la entrada marca un producto: «Productos que vencen» vuelve a preguntar si vence.
+  const [versionDeMarcas, setVersionDeMarcas] = useState(0)
   // Los intentos inciertos viven en un almacén de módulo (ver el encabezado); este contador sólo vuelve a dibujar la
   // pantalla (las marcas por fila) cuando un diálogo los cambia.
   const [, setVersionDePendientes] = useState(0)
@@ -569,6 +919,9 @@ export function Vencimientos({ puedeMover = true, puedeMarcar = true }: { puedeM
     let vigente = true
     api.get<Sucursal[]>('/api/sucursales').then((s) => { if (vigente) setSucursales(s) }).catch(() => {})
     api.get<CategoriaProducto[]>('/api/productos/categorias').then((c) => { if (vigente) setCategorias(c) }).catch(() => {})
+    api.get<Producto[]>('/api/productos')
+      .then((p) => { if (vigente) setProductos(p) })
+      .catch((err) => { if (vigente) setErrorDeProductos(mensajeDeError(err)) })
     return () => { vigente = false }
   }, [])
 
@@ -598,6 +951,7 @@ export function Vencimientos({ puedeMover = true, puedeMarcar = true }: { puedeM
   function listo(texto: string) {
     setAMermar(null)
     setAAsignar(null)
+    setEntrada(null)
     setAviso({ texto })
     setRecarga((r) => r + 1)
   }
@@ -614,12 +968,62 @@ export function Vencimientos({ puedeMover = true, puedeMarcar = true }: { puedeM
       : `Se asignó el lote ${r.lote} (vence ${fecha(r.vence)}) a ${numero(r.cantidad)} ${f.unidad} de ${f.nombre}. Sin lote quedan ${numero(r.saldo_sin_lote)} ${f.unidad}.`)
   }
 
+  function entradaHecha(r: VencimientoEntradaRespuesta, unidad: string | null) {
+    const u = unidad ? ` ${unidad}` : ''
+    listo(r.repetida
+      ? `Ya estaba registrado: esta carga se había guardado antes, no se sumó de nuevo. Saldo del lote: ${numero(r.saldo_lote)}${u}.`
+      : `Se cargaron ${numero(r.cantidad)}${u} de ${productos.find((p) => p.id === r.producto_id)?.nombre ?? `#${r.producto_id}`} al lote ${r.lote} (vence ${fecha(r.vence)}). Saldo del lote: ${numero(r.saldo_lote)}${u}.`)
+  }
+
+  // Las cargas de stock sin confirmar: no tienen fila en el reporte (el stock todavía puede no estar), así que se listan acá.
+  const entradasSinConfirmar = pendientesDeAhora.filter((p) => p.tipo === 'entrada')
+  const reporteVacio = !!data && data.lotes.length === 0 && data.sin_lote.length === 0
+
   return (
     <div className="grid gap-4">
       <TituloPantalla icono={CalendarClock}>Vencimientos y lotes</TituloPantalla>
 
       {/* Permanente: sin botón para cerrarlo y visible aunque la lista esté cargando, con error o vacía. */}
       <AvisoSaldoSobreestimado />
+
+      <ComoCargarVencimientos>
+        {puedeMover && (
+          <Button size="sm" onClick={() => { setAviso(null); setEntrada({ inicial: null }) }}>
+            <PackagePlus />Cargar stock con lote
+          </Button>
+        )}
+      </ComoCargarVencimientos>
+
+      {puedeMover && entradasSinConfirmar.length > 0 && (
+        <div className="grid gap-2 rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">
+          <p role="status">
+            Hay {entradasSinConfirmar.length === 1 ? 'una carga de stock sin confirmar' : `${entradasSinConfirmar.length} cargas de stock sin confirmar`}: no
+            se sabe si se llegaron a registrar. Revisala para reenviarla (no se duplica) o descartarla.
+          </p>
+          <ul className="grid gap-1">
+            {entradasSinConfirmar.map((p) => {
+              const c = p.cuerpo as VencimientoEntradaPayload
+              return (
+                <li key={p.firma} className="flex flex-wrap items-center gap-2">
+                  <span>
+                    {productos.find((x) => x.id === c.producto_id)?.nombre ?? `Producto #${c.producto_id}`} · lote {c.lote} · vence {fecha(c.vence)} · {numero(c.cantidad)}
+                  </span>
+                  <Button type="button" size="sm" variant="outline" onClick={() => { setAviso(null); setEntrada({ inicial: c }) }}>
+                    Revisar la carga sin confirmar
+                  </Button>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
+
+      {aviso && <p role="status" className="rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm">{aviso.texto}</p>}
+
+      <ProductosQueVencen
+        productos={productos} errorDeProductos={errorDeProductos} puedeMarcar={puedeMarcar} version={versionDeMarcas}
+        onMarcado={(texto) => { setAviso({ texto }); setRecarga((r) => r + 1) }}
+      />
 
       <div className="flex flex-wrap items-start gap-3">
         {sucursales.length > 0 && (
@@ -662,12 +1066,10 @@ export function Vencimientos({ puedeMover = true, puedeMarcar = true }: { puedeM
       </div>
 
       <p className="text-sm text-muted-foreground">
-        Sólo aparecen los productos marcados como perecederos (más abajo se marcan). Se listan los lotes con saldo que vencen dentro de
+        Sólo aparecen los productos marcados como perecederos (más arriba se marcan). Se listan los lotes con saldo que vencen dentro de
         los próximos {valido ? dias : '…'} días{incluirVencidos ? ' y los que ya vencieron' : ''}. El stock que no tiene lote ni fecha no se
         puede avisar: está en «Sin lote / sin fecha».
       </p>
-
-      {aviso && <p role="status" className="rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm">{aviso.texto}</p>}
 
       {valido && error && <p role="alert" className="text-sm text-destructive">{error}</p>}
 
@@ -702,9 +1104,15 @@ export function Vencimientos({ puedeMover = true, puedeMarcar = true }: { puedeM
                 Hoy es {fecha(data.hoy)}; se listan los lotes que vencen hasta el {fecha(data.hasta)}. Las cantidades de la suma van cada una en la unidad de su producto.
               </p>
               {data.lotes.length === 0 ? (
-                <p className="py-4 text-center text-sm text-muted-foreground">
-                  No hay lotes por vencer con estos parámetros
-                </p>
+                <div className="grid gap-1 py-4 text-center text-sm text-muted-foreground">
+                  <p>No hay lotes por vencer con estos parámetros</p>
+                  {reporteVacio && (
+                    <p className="mx-auto max-w-2xl px-3" data-testid="vencimientos-vacio">
+                      Todavía no hay nada para mostrar: el reporte sólo incluye productos marcados como perecederos que tengan stock
+                      (o que los filtros de arriba no estén dejando ver). Para empezar: {PASOS_EN_UNA_LINEA}
+                    </p>
+                  )}
+                </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -840,13 +1248,18 @@ export function Vencimientos({ puedeMover = true, puedeMarcar = true }: { puedeM
         </>
       )}
 
-      <ProductosQueVencen puedeMarcar={puedeMarcar} onMarcado={(texto) => { setAviso({ texto }); setRecarga((r) => r + 1) }} />
-
       {aMermar && (
         <DialogoMerma fila={aMermar} alCambiarPendientes={alCambiarPendientes} onCerrar={() => setAMermar(null)} onListo={(r) => mermaHecha(aMermar, r)} />
       )}
       {aAsignar && (
         <DialogoAsignar fila={aAsignar} alCambiarPendientes={alCambiarPendientes} onCerrar={() => setAAsignar(null)} onListo={(r) => asignacionHecha(aAsignar, r)} />
+      )}
+      {entrada && (
+        <DialogoEntrada
+          productos={productos} errorDeProductos={errorDeProductos} sucursales={sucursales} puedeMarcar={puedeMarcar}
+          inicial={entrada.inicial} alCambiarPendientes={alCambiarPendientes} onCerrar={() => setEntrada(null)}
+          onListo={entradaHecha} onMarcado={() => setVersionDeMarcas((v) => v + 1)}
+        />
       )}
     </div>
   )
@@ -854,41 +1267,23 @@ export function Vencimientos({ puedeMover = true, puedeMarcar = true }: { puedeM
 
 // ── Productos que vencen (marcar / desmarcar, de a un producto) ──────────────────────────────────────────────────
 
-function ProductosQueVencen({ puedeMarcar, onMarcado }: { puedeMarcar: boolean; onMarcado: (texto: string) => void }) {
-  const [productos, setProductos] = useState<Producto[]>([])
-  const [errorDeProductos, setErrorDeProductos] = useState<string | null>(null)
+function ProductosQueVencen({ productos, errorDeProductos, puedeMarcar, version, onMarcado }: {
+  productos: Producto[]
+  errorDeProductos: string | null
+  puedeMarcar: boolean
+  version: number
+  onMarcado: (texto: string) => void
+}) {
   const [productoId, setProductoId] = useState('')
   // La ficha con el producto al que pertenece: si se elige otro mientras llega la anterior, no vale.
-  const [ficha, setFicha] = useState<{ productoId: string; vence: boolean | null; error: string | null } | null>(null)
+  const { actual, setFicha } = useFicha(productoId, version)
   const [marcando, setMarcando] = useState(false)
   const [errorDeMarca, setErrorDeMarca] = useState<string | null>(null)
   const guarda = useRef(false)
 
-  useEffect(() => {
-    let vigente = true
-    api.get<Producto[]>('/api/productos')
-      .then((p) => { if (vigente) setProductos(p) })
-      .catch((err) => { if (vigente) setErrorDeProductos(mensajeDeError(err)) })
-    return () => { vigente = false }
-  }, [])
-
-  useEffect(() => {
-    if (!productoId) return
-    let vigente = true
-    api.get<VencimientoProductoLotes>(`${RUTA}/productos/${productoId}/lotes`)
-      .then((r) => { if (vigente) setFicha({ productoId, vence: r.producto.vence, error: null }) })
-      .catch((err) => { if (vigente) setFicha({ productoId, vence: null, error: mensajeDeError(err) }) })
-    return () => { vigente = false }
-  }, [productoId])
-
   // Un servicio no tiene inventario y uno inactivo no entra al reporte: no se ofrecen.
-  const opciones = useMemo(
-    () => productos.filter((p) => p.activo && p.tipo !== 'servicio')
-      .map((p) => ({ value: String(p.id), label: p.nombre, hint: p.codigo ?? undefined })),
-    [productos],
-  )
+  const opciones = useMemo(() => opcionesDeProductos(productos), [productos])
   const elegido = productos.find((p) => String(p.id) === productoId)
-  const actual = ficha?.productoId === productoId ? ficha : null
 
   function elegir(valor: string) {
     setProductoId(valor)
@@ -902,7 +1297,7 @@ function ProductosQueVencen({ puedeMarcar, onMarcado }: { puedeMarcar: boolean; 
     setErrorDeMarca(null)
     try {
       const r = await api.put<VencimientoMarca>(`${RUTA}/productos/${productoId}`, { vence })
-      setFicha({ productoId, vence: r.vence, error: null })
+      setFicha({ productoId, vence: r.vence, unidad: actual?.unidad ?? null, error: null })
       onMarcado(r.vence
         ? `${elegido?.nombre ?? 'El producto'} quedó marcado como perecedero: ahora aparece en los vencimientos.`
         : `${elegido?.nombre ?? 'El producto'} ya no se marca como perecedero. Los lotes que ya tiene no se tocan.`)
@@ -919,7 +1314,7 @@ function ProductosQueVencen({ puedeMarcar, onMarcado }: { puedeMarcar: boolean; 
       <CardHeader className="space-y-1">
         <CardTitle className="text-base">Productos que vencen</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Sólo los productos marcados aparecen en el reporte de arriba. Elegí un producto para ver si vence{puedeMarcar ? ' y marcarlo o desmarcarlo' : ''}.
+          Sólo los productos marcados aparecen en el reporte de más abajo. Elegí un producto para ver si vence{puedeMarcar ? ' y marcarlo o desmarcarlo' : ''}.
           {' '}No hay un listado de los productos marcados: se consulta de a uno.
         </p>
       </CardHeader>

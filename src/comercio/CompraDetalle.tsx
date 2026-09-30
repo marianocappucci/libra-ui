@@ -8,7 +8,7 @@
 //
 // Extraída de `pages/CompraDetalle.tsx` de VentaLibra (F9, 2026-09-27): el
 // único producto de la familia con este módulo (ver el docstring de `tipos.ts`).
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Check, PackageCheck, ShoppingBag } from 'lucide-react'
 
@@ -17,6 +17,7 @@ import { fechaHora } from '@/lib/fechas'
 import { BadgeEstado } from '../badge-estado'
 import { TituloPantalla } from '../titulo-pantalla'
 import { SelectBuscable } from '../SelectBuscable'
+import { esFechaISOValida } from './fecha-iso'
 import {
   opcionesProducto, PURCHASE_ORDER_STATUS_LABELS, PURCHASE_ORDER_STATUS_TONO,
   PURCHASE_RECEIPT_STATUS_LABELS, PURCHASE_RECEIPT_STATUS_TONO,
@@ -38,6 +39,11 @@ function describeError(err: unknown): string {
   if (err instanceof ApiError) return err.detail
   return 'Error de conexión.'
 }
+
+/** El motor limita el lote a 64 caracteres (`add_movimiento_stock`). */
+const MAX_LARGO_LOTE = 64
+const LOTE_Y_FECHA = 'Completá el lote y el vencimiento, o dejá los dos vacíos.'
+const FECHA_INVALIDA = 'La fecha de vencimiento no es válida.'
 
 function money(value: string | number): string {
   return Number(value).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -105,6 +111,19 @@ export function CompraDetalle({ rutaDeCompras = '/compras' }: CompraDetalleProps
 
   function itemName(itemId: number): string {
     return items.find((i) => i.id === itemId)?.nombre ?? `#${itemId}`
+  }
+
+  /** ¿El producto maneja lotes y vencimiento? Sale de la misma consulta de productos que arma la pantalla (`GET /api/productos`
+   *  trae `vence` si el producto habilita vencimientos): no hay una consulta más por abrir el modal ni una por línea.
+   *  - `'si'`: está en la lista con `vence: true`. `'no'`: está en la lista con `vence: false` o sin la clave (un backend sin la opción).
+   *  - `'desconocido'`: NO está en la lista (la consulta es de productos activos: una orden vieja puede tener uno desactivado que
+   *    vence) y el backend sí maneja `vence` (algún producto de la lista lo trae). No se asume que no vence: se ofrecen los campos
+   *    igual. Si ningún producto trae `vence` (consumidores sin la opción), un producto fuera de la lista es `'no'`. */
+  const backendConVence = items.some((i) => typeof i.vence === 'boolean')
+  function vencimientoDe(itemId: number): 'si' | 'no' | 'desconocido' {
+    const p = items.find((i) => i.id === itemId)
+    if (!p) return backendConVence ? 'desconocido' : 'no'
+    return p.vence === true ? 'si' : 'no'
   }
 
   function supplierName(supplierId: number): string {
@@ -254,6 +273,7 @@ export function CompraDetalle({ rutaDeCompras = '/compras' }: CompraDetalleProps
           order={order}
           locations={locations}
           itemName={itemName}
+          vencimientoDe={vencimientoDe}
           onCerrar={() => setRecibirOpen(false)}
           onRecibida={async () => {
             setRecibirOpen(false)
@@ -268,18 +288,22 @@ export function CompraDetalle({ rutaDeCompras = '/compras' }: CompraDetalleProps
 
 /** El modal de "Recibir mercadería": una fila por línea pendiente, con la
  *  cantidad y el costo precargados y editables, el depósito de destino y un
- *  remito opcional. Al confirmar hace los tres pasos del backend en orden
+ *  remito opcional. Las líneas de un producto que VENCE o cuyo vencimiento se DESCONOCE (`vencimientoDe`) ofrecen además «Lote» y
+ *  «Vencimiento», opcionales y de a par: o los dos o ninguno (una fecha sin lote o un lote sin
+ *  fecha no sirven para FEFO). Se mandan como `lot_code` y `expires_at` (ISO `aaaa-mm-dd`, tal
+ *  como lo entrega el `<input type="date">`); un producto que no vence no cambia nada. Al confirmar hace los tres pasos del backend en orden
  *  (crear recepción → cargar líneas → confirmar) -- si alguno falla a mitad de
  *  camino, la recepción que quedó en borrador sigue viendose y confirmable
  *  desde "Recepciones de esta orden" (por eso, ante un error, se recargan las
  *  recepciones con `onRecargarRecepciones` — y NO con `onRecibida`, que cierra
  *  el modal y se llevaría el mensaje de error antes de que se lea). */
 function RecibirMercaderiaDialog({
-  order, locations, itemName, onCerrar, onRecibida, onRecargarRecepciones,
+  order, locations, itemName, vencimientoDe, onCerrar, onRecibida, onRecargarRecepciones,
 }: {
   order: PurchaseOrder
   locations: Deposito[]
   itemName: (itemId: number) => string
+  vencimientoDe: (itemId: number) => 'si' | 'no' | 'desconocido'
   onCerrar: () => void
   onRecibida: () => void | Promise<void>
   onRecargarRecepciones: () => void | Promise<void>
@@ -288,6 +312,8 @@ function RecibirMercaderiaDialog({
     () => order.items.filter((l) => Number(l.pending_quantity) > 0),
     [order],
   )
+  /** ¿Se ofrecen «Lote» y «Vencimiento» en la línea? Sí si vence o no se sabe; no si se sabe que no. */
+  const venceDe = (itemId: number) => vencimientoDe(itemId) !== 'no'
 
   const [cantidades, setCantidades] = useState<Record<number, string>>(
     () => Object.fromEntries(pendientes.map((l) => [l.item_id, l.pending_quantity])),
@@ -295,6 +321,11 @@ function RecibirMercaderiaDialog({
   const [costos, setCostos] = useState<Record<number, string>>(
     () => Object.fromEntries(pendientes.map((l) => [l.item_id, l.unit_cost])),
   )
+  const [lotes, setLotes] = useState<Record<number, string>>({})
+  const [vencimientos, setVencimientos] = useState<Record<number, string>>({})
+  // `<input type="date">` entrega `''` tanto si está vacío como si lo tipeado no es una fecha (31/02, día o año a medio
+  // escribir): `validity.badInput` es lo que los distingue.
+  const [fechasIncompletas, setFechasIncompletas] = useState<Record<number, boolean>>({})
   const [locationId, setLocationId] = useState(() => {
     const porDefecto = locations.find((l) => !!l.es_default)
     return porDefecto ? String(porDefecto.id) : (locations[0] ? String(locations[0].id) : '')
@@ -312,7 +343,17 @@ function RecibirMercaderiaDialog({
     return null
   }
 
-  const hayErrores = pendientes.some((l) => errorDeLinea(l.item_id, l.pending_quantity) !== null)
+  /** El aviso del par lote/vencimiento de una línea, o `null` si está bien (los dos o ninguno, con una fecha que existe). Una
+   *  línea que no se recibe (cantidad 0 o vacía) no se manda, así que no se le exige nada. */
+  function errorDeLote(itemId: number): string | null {
+    if (!venceDe(itemId) || !(Number(cantidades[itemId]) > 0)) return null
+    const lote = (lotes[itemId] ?? '').trim()
+    const fecha = vencimientos[itemId] ?? ''
+    if (fechasIncompletas[itemId] || (fecha !== '' && !esFechaISOValida(fecha))) return FECHA_INVALIDA
+    return (lote === '') === (fecha === '') ? null : LOTE_Y_FECHA
+  }
+
+  const hayErrores = pendientes.some((l) => errorDeLinea(l.item_id, l.pending_quantity) !== null || errorDeLote(l.item_id) !== null)
   const hayAlgunaCantidad = pendientes.some((l) => Number(cantidades[l.item_id]) > 0)
   const puedeConfirmar = hayAlgunaCantidad && !hayErrores && !!locationId && !busy
 
@@ -329,10 +370,14 @@ function RecibirMercaderiaDialog({
       for (const linea of pendientes) {
         const cantidad = cantidades[linea.item_id]
         if (!cantidad || Number(cantidad) <= 0) continue
+        const lote = (lotes[linea.item_id] ?? '').trim()
+        const vence = vencimientos[linea.item_id] ?? ''
         await api.post(`/api/purchase-receipts/${receipt.id}/items`, {
           item_id: linea.item_id,
           quantity: cantidad,
           unit_cost: costos[linea.item_id] ?? linea.unit_cost,
+          // Sólo un producto que vence, y sólo con el par completo (`errorDeLote` no deja pasar uno a medias).
+          ...(venceDe(linea.item_id) && lote !== '' && vence !== '' ? { lot_code: lote, expires_at: vence } : {}),
         })
       }
       await api.post(`/api/purchase-receipts/${receipt.id}/confirm`, { deposito_id: Number(locationId) })
@@ -371,28 +416,68 @@ function RecibirMercaderiaDialog({
             <TableBody>
               {pendientes.map((linea) => {
                 const err = errorDeLinea(linea.item_id, linea.pending_quantity)
+                const vence = venceDe(linea.item_id)
+                const errLote = errorDeLote(linea.item_id)
                 return (
-                  <TableRow key={linea.item_id}>
-                    <TableCell>{itemName(linea.item_id)}</TableCell>
-                    <TableCell className="tabular-nums">{linea.pending_quantity}</TableCell>
-                    <TableCell>
-                      <Input
-                        value={cantidades[linea.item_id] ?? ''}
-                        onChange={(e) => setCantidades((prev) => ({ ...prev, [linea.item_id]: e.target.value }))}
-                        aria-label={`Cantidad a recibir de ${itemName(linea.item_id)}`}
-                        className="w-24 tabular-nums"
-                      />
-                      {err && <p className="text-xs text-destructive">{err}</p>}
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        value={costos[linea.item_id] ?? ''}
-                        onChange={(e) => setCostos((prev) => ({ ...prev, [linea.item_id]: e.target.value }))}
-                        aria-label={`Costo unitario de ${itemName(linea.item_id)}`}
-                        className="w-28 tabular-nums"
-                      />
-                    </TableCell>
-                  </TableRow>
+                  <Fragment key={linea.item_id}>
+                    <TableRow className={vence ? 'border-b-0' : undefined}>
+                      <TableCell>{itemName(linea.item_id)}</TableCell>
+                      <TableCell className="tabular-nums">{linea.pending_quantity}</TableCell>
+                      <TableCell>
+                        <Input
+                          value={cantidades[linea.item_id] ?? ''}
+                          onChange={(e) => setCantidades((prev) => ({ ...prev, [linea.item_id]: e.target.value }))}
+                          aria-label={`Cantidad a recibir de ${itemName(linea.item_id)}`}
+                          className="w-24 tabular-nums"
+                        />
+                        {err && <p className="text-xs text-destructive">{err}</p>}
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          value={costos[linea.item_id] ?? ''}
+                          onChange={(e) => setCostos((prev) => ({ ...prev, [linea.item_id]: e.target.value }))}
+                          aria-label={`Costo unitario de ${itemName(linea.item_id)}`}
+                          className="w-28 tabular-nums"
+                        />
+                      </TableCell>
+                    </TableRow>
+                    {vence && (
+                      <TableRow>
+                        <TableCell colSpan={4} className="pt-0">
+                          {vencimientoDe(linea.item_id) === 'desconocido' && (
+                            <p className="mb-1 text-xs text-muted-foreground">
+                              No pudimos saber si este producto vence; si vence, cargá lote y vencimiento.
+                            </p>
+                          )}
+                          <div className="flex flex-wrap items-start gap-3">
+                            <div className="grid gap-1">
+                              <Label htmlFor={`recepcion-lote-${linea.item_id}`} className="text-xs text-muted-foreground">Lote</Label>
+                              <Input
+                                id={`recepcion-lote-${linea.item_id}`} value={lotes[linea.item_id] ?? ''} maxLength={MAX_LARGO_LOTE}
+                                onChange={(e) => setLotes((prev) => ({ ...prev, [linea.item_id]: e.target.value }))}
+                                aria-label={`Lote de ${itemName(linea.item_id)}`} aria-invalid={errLote !== null}
+                                placeholder="Opcional" className="w-36"
+                              />
+                            </div>
+                            <div className="grid gap-1">
+                              <Label htmlFor={`recepcion-vence-${linea.item_id}`} className="text-xs text-muted-foreground">Vencimiento</Label>
+                              <Input
+                                id={`recepcion-vence-${linea.item_id}`} type="date" value={vencimientos[linea.item_id] ?? ''}
+                                onChange={(e) => {
+                                  const incompleta = e.currentTarget.validity?.badInput === true
+                                  setVencimientos((prev) => ({ ...prev, [linea.item_id]: e.target.value }))
+                                  setFechasIncompletas((prev) => ({ ...prev, [linea.item_id]: incompleta }))
+                                }}
+                                aria-label={`Vencimiento de ${itemName(linea.item_id)}`} aria-invalid={errLote !== null}
+                                className="w-40"
+                              />
+                            </div>
+                          </div>
+                          {errLote && <p role="alert" className="mt-1 text-xs text-destructive">{errLote}</p>}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </Fragment>
                 )
               })}
             </TableBody>

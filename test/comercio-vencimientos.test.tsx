@@ -1478,3 +1478,727 @@ describe('Vencimientos: productos que vencen', () => {
     expect(within(screen.getByRole('listbox')).getAllByRole('option')).toHaveLength(1)
   })
 })
+
+// ── Carga de vencimientos (0.92.0, K-1): el bloque de ayuda, «Cargar stock con lote» y el estado vacío ─────────────────────
+
+const ENTRADA = '/api/vencimientos/entrada'
+const DEPOSITOS = [
+  { id: 1, nombre: 'Depósito Centro', descripcion: '', es_default: 1, activo: 1, branch_id: 1 },
+  { id: 2, nombre: 'Depósito Norte', descripcion: '', es_default: 0, activo: 1, branch_id: 2 },
+  { id: 3, nombre: 'Depósito viejo', descripcion: '', es_default: 0, activo: 0 },
+]
+const FICHA_DE = (vence: boolean, unidad = 'u', id = 1, nombre = 'Yerba') => (
+  { producto: { producto_id: id, codigo: `P-${id}`, nombre, unidad, vence }, hoy: '2026-09-30', lotes: [] })
+const ENTRADA_OK = {
+  producto_id: 1, deposito_id: 1, variante_id: null, lote: 'L-2026', vence: '2027-03-15', cantidad: 12, referencia: 'Entrada con lote',
+  saldo_lote: 12, repetida: false,
+}
+const TODO_ENTRADA = {
+  ...TODO, '/api/depositos': DEPOSITOS, '/api/vencimientos/productos/1/lotes': FICHA_DE(true), '/api/productos/1/variantes': [],
+  [`POST ${ENTRADA}`]: ENTRADA_OK,
+}
+/** La firma del destino de una entrada de Yerba al depósito 1, sin variante, lote L-2026 que vence el 15-03-2027. */
+const FIRMA_ENTRADA = JSON.stringify(['entrada', 1, 1, null, 'L-2026', '2027-03-15'])
+
+async function abrirEntrada(user: ReturnType<typeof userEvent.setup>, producto: string | RegExp = /Yerba/) {
+  await user.click(screen.getByRole('button', { name: 'Cargar stock con lote' }))
+  await elegirEnBuscable(user, within(dialogo()).getByRole('combobox', { name: 'Producto' }), producto)
+  await within(dialogo()).findByLabelText('Lote')
+  // La confirmación espera a la lista de variantes del producto: se sigue cuando ya está habilitada.
+  await waitFor(() => expect((confirmar() as HTMLButtonElement).disabled).toBe(false))
+  return dialogo()
+}
+function completarEntrada(lote = 'L-2026', vence = '2027-03-15', cantidad = '12') {
+  fireEvent.change(within(dialogo()).getByLabelText('Lote'), { target: { value: lote } })
+  fireEvent.change(within(dialogo()).getByLabelText('Fecha de vencimiento'), { target: { value: vence } })
+  fireEvent.change(within(dialogo()).getByLabelText('Cantidad'), { target: { value: cantidad } })
+}
+
+describe('Vencimientos: el bloque «Cómo cargar vencimientos» y el orden de la pantalla', () => {
+  it('explica los tres pasos en llano, arriba del todo (debajo del aviso permanente) y antes de «Productos que vencen» y de las tablas', async () => {
+    await abrir()
+    const guia = screen.getByRole('heading', { name: 'Cómo cargar vencimientos' }).closest('div')!.parentElement!
+    const pasos = within(guia).getAllByRole('listitem').map((li) => texto(li))
+    expect(pasos).toHaveLength(3)
+    expect(pasos[0]).toContain('Marcá el producto como perecedero')
+    expect(pasos[0]).toContain('en el formulario del producto o acá mismo, en «Productos que vencen»')
+    expect(pasos[1]).toContain('Al recibir una compra, cargá el lote y el vencimiento de cada línea')
+    expect(pasos[2]).toContain('«Cargar stock con lote»')
+    expect(pasos[2]).toContain('«Asignar vencimiento»')
+
+    const antes = (a: Node, b: Node) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
+    const aviso = screen.getAllByRole('note')[0]
+    const productosQueVencen = screen.getByRole('heading', { name: 'Productos que vencen' })
+    expect(antes(screen.getByRole('heading', { name: /Vencimientos y lotes/ }), aviso)).toBe(true)
+    expect(antes(aviso, guia)).toBe(true)
+    expect(antes(guia, productosQueVencen)).toBe(true)
+    expect(antes(productosQueVencen, screen.getByLabelText('Días de anticipación'))).toBe(true)
+    expect(antes(productosQueVencen, tablaDeLotes())).toBe(true)
+    // El aviso ámbar sigue siendo uno solo y permanente.
+    expect(screen.getAllByRole('note')).toHaveLength(1)
+  })
+
+  it('«Productos que vencen» sigue funcionando desde su nueva posición (una sola consulta de productos para la pantalla y el diálogo)', async () => {
+    const user = userEvent.setup()
+    await abrir({ ...TODO_ENTRADA, '/api/vencimientos/productos/1/lotes': FICHA_DE(false), 'PUT /api/vencimientos/productos/1': { producto_id: 1, vence: true } })
+    await elegirEnBuscable(user, screen.getByRole('combobox', { name: 'Producto' }), /Yerba/)
+    await user.click(await screen.findByRole('button', { name: 'Marcar como perecedero' }))
+    expect(await screen.findByText(/quedó marcado como perecedero/)).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Cargar stock con lote' }))
+    expect(pedidas().filter((p) => p === 'GET /api/productos')).toHaveLength(1)
+  })
+
+  it('con el reporte vacío el mensaje explica los pasos (sin suponer que no hay productos marcados: no hay listado)', async () => {
+    responder({ ...TODO, [RUTA]: { ...DATA, lotes: [], sin_lote: [], resumen: { ...DATA.resumen, lotes_por_vencer: 0, lotes_vencidos: 0, productos: 0 } } })
+    montar('/vencimientos', <Vencimientos />)
+    expect(await screen.findByText('No hay lotes por vencer con estos parámetros')).toBeTruthy()
+    const vacio = texto(screen.getByTestId('vencimientos-vacio'))
+    expect(vacio).toContain('Todavía no hay nada para mostrar')
+    expect(vacio).toContain('que los filtros de arriba no estén dejando ver')
+    expect(vacio).toContain('1) marcá el producto como perecedero, 2) al recibir una compra cargá lote y vencimiento por línea')
+    expect(vacio).toContain('«Cargar stock con lote» o «Asignar vencimiento»')
+  })
+
+  it('con datos, o con sólo una de las dos listas vacía, no se muestra el mensaje de los pasos', async () => {
+    await abrir()
+    expect(screen.queryByTestId('vencimientos-vacio')).toBeNull()
+    cleanup()
+    responder({ ...TODO, [RUTA]: { ...DATA, lotes: [] } })
+    montar('/vencimientos', <Vencimientos />)
+    expect(await screen.findByText('No hay lotes por vencer con estos parámetros')).toBeTruthy()
+    expect(screen.queryByTestId('vencimientos-vacio')).toBeNull()
+  })
+})
+
+describe('Vencimientos: cargar stock con lote (entrada)', () => {
+  it('el botón está a la vista con puedeMover (el default) y no con puedeMover=false; el bloque de ayuda se queda', async () => {
+    await abrir(TODO_ENTRADA)
+    expect(screen.getByRole('button', { name: 'Cargar stock con lote' })).toBeTruthy()
+    cleanup()
+    await abrir(TODO_ENTRADA, { puedeMover: false })
+    expect(screen.queryByRole('button', { name: 'Cargar stock con lote' })).toBeNull()
+    expect(screen.getByRole('heading', { name: 'Cómo cargar vencimientos' })).toBeTruthy()
+  })
+
+  it('el diálogo repite el aviso del saldo; ofrece los mismos productos que «Productos que vencen»; el depósito predeterminado viene elegido y sólo hay activos', async () => {
+    const user = userEvent.setup()
+    await abrir(TODO_ENTRADA)
+    await user.click(screen.getByRole('button', { name: 'Cargar stock con lote' }))
+    expect(screen.getAllByRole('note')).toHaveLength(2)
+    expect(texto(within(dialogo()).getByRole('note'))).toContain('el saldo de cada lote puede ser MAYOR al real')
+    await user.click(within(dialogo()).getByRole('combobox', { name: 'Producto' }))
+    expect(within(screen.getByRole('listbox')).getAllByRole('option').map((o) => o.textContent))
+      .toEqual([expect.stringContaining('Yerba'), expect.stringContaining('Crema')])
+    await user.click(screen.getByRole('option', { name: /Yerba/ }))
+
+    const deposito = await within(dialogo()).findByLabelText('Depósito') as HTMLSelectElement
+    expect(deposito.value).toBe('1')
+    // Con el nombre de su sucursal cuando la tiene; uno inactivo no se ofrece.
+    expect(Array.from(deposito.options).map((o) => o.textContent)).toEqual(['Centro · Depósito Centro', 'Norte · Depósito Norte'])
+    expect((within(dialogo()).getByLabelText('Fecha de vencimiento') as HTMLInputElement).type).toBe('date')
+    expect(pedidas().filter((p) => p === 'GET /api/depositos')).toHaveLength(1)
+  })
+
+  it('manda el cuerpo exacto con una clave_operacion y la fecha ISO; un éxito cierra, lo cuenta con dd-mm-aaaa y refresca la consulta actual', async () => {
+    const user = userEvent.setup()
+    await abrir(TODO_ENTRADA)
+    fireEvent.change(screen.getByLabelText('Días de anticipación'), { target: { value: '20' } })
+    await waitFor(() => expect(pedidasAlReporte()).toHaveLength(2))
+    await abrirEntrada(user)
+    await user.selectOptions(within(dialogo()).getByLabelText('Depósito'), '2')
+    completarEntrada('  L-2026 ', '2027-03-15', '12.5')
+    fireEvent.change(within(dialogo()).getByLabelText('Nota'), { target: { value: ' pallet 4 ' } })
+    await user.click(confirmar())
+
+    await waitFor(() => expect(enviosA(ENTRADA)).toHaveLength(1))
+    expect(enviosA(ENTRADA)[0]).toEqual({
+      producto_id: 1, deposito_id: 2, variante_id: null, lote: 'L-2026', vence: '2027-03-15', cantidad: 12.5, nota: 'pallet 4',
+      clave_operacion: expect.stringMatching(/^[0-9a-f-]{36}$/),
+    })
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    const aviso = texto(await screen.findByText(/Se cargaron 12 u de Yerba al lote L-2026/))
+    expect(aviso).toContain('vence 15-03-2027')
+    expect(aviso).toContain('Saldo del lote: 12 u')
+    await waitFor(() => expect(pedidasAlReporte()).toHaveLength(3))
+    expect(ultimaConsulta()).toBe(pide('', 'dias=20&incluir_vencidos=true'))
+    expect(guardado()).toEqual({})
+  })
+
+  it('usa la unidad del producto en los mensajes y deja fracciones (step="any"): el motor valida la escala', async () => {
+    const user = userEvent.setup()
+    await abrir({ ...TODO_ENTRADA, '/api/vencimientos/productos/1/lotes': FICHA_DE(true, 'kg'), [`POST ${ENTRADA}`]: { ...ENTRADA_OK, cantidad: 2.5, saldo_lote: 2.5 } })
+    await abrirEntrada(user)
+    expect((within(dialogo()).getByLabelText('Cantidad') as HTMLInputElement).step).toBe('any')
+    completarEntrada('L-2026', '2027-03-15', '2.5')
+    await user.click(confirmar())
+    expect(await screen.findByText(/Se cargaron 2,5 kg de Yerba/)).toBeTruthy()
+    expect(enviosA(ENTRADA)[0].cantidad).toBe(2.5)
+  })
+
+  it('sin producto marcado el diálogo no pide lote: lo dice y ofrece marcarlo ahí mismo (PUT), y recién entonces aparecen los campos', async () => {
+    const user = userEvent.setup()
+    await abrir({ ...TODO_ENTRADA, '/api/vencimientos/productos/1/lotes': FICHA_DE(false), 'PUT /api/vencimientos/productos/1': { producto_id: 1, vence: true } })
+    await user.click(screen.getByRole('button', { name: 'Cargar stock con lote' }))
+    expect(within(dialogo()).queryByLabelText('Lote')).toBeNull()
+    await elegirEnBuscable(user, within(dialogo()).getByRole('combobox', { name: 'Producto' }), /Yerba/)
+    expect(await within(dialogo()).findByText(/no está marcado como perecedero: hay que marcarlo antes de cargarle un lote/)).toBeTruthy()
+    expect(within(dialogo()).queryByLabelText('Lote')).toBeNull()
+    expect((confirmar() as HTMLButtonElement).disabled).toBe(true)
+
+    await user.click(within(dialogo()).getByRole('button', { name: 'Marcar como perecedero' }))
+    expect(await within(dialogo()).findByLabelText('Lote')).toBeTruthy()
+    const put = fetchMock.mock.calls.find((c) => String(c[0]) === '/api/vencimientos/productos/1' && (c[1] as RequestInit)?.method === 'PUT')!
+    expect(JSON.parse(String((put[1] as RequestInit).body))).toEqual({ vence: true })
+    expect(enviosA(ENTRADA)).toHaveLength(0)
+  })
+
+  it('sin permiso para marcar (puedeMarcar=false) lo dice y no ofrece el botón; un error al marcar se muestra dentro del diálogo', async () => {
+    const user = userEvent.setup()
+    await abrir({ ...TODO_ENTRADA, '/api/vencimientos/productos/1/lotes': FICHA_DE(false) }, { puedeMarcar: false })
+    await user.click(screen.getByRole('button', { name: 'Cargar stock con lote' }))
+    await elegirEnBuscable(user, within(dialogo()).getByRole('combobox', { name: 'Producto' }), /Yerba/)
+    expect(await within(dialogo()).findByText(/Pedile a quien tenga el permiso que lo marque/)).toBeTruthy()
+    expect(within(dialogo()).queryByRole('button', { name: 'Marcar como perecedero' })).toBeNull()
+
+    cleanup()
+    await abrir({ ...TODO_ENTRADA, '/api/vencimientos/productos/1/lotes': FICHA_DE(false), 'PUT /api/vencimientos/productos/1': { status: 403, detail: 'No tenés permiso para marcar' } })
+    await user.click(screen.getByRole('button', { name: 'Cargar stock con lote' }))
+    await elegirEnBuscable(user, within(dialogo()).getByRole('combobox', { name: 'Producto' }), /Yerba/)
+    await user.click(await within(dialogo()).findByRole('button', { name: 'Marcar como perecedero' }))
+    expect((await within(dialogo()).findByText('No tenés permiso para marcar')).getAttribute('role')).toBe('alert')
+    expect(within(dialogo()).queryByLabelText('Lote')).toBeNull()
+  })
+
+  it('marcar desde el diálogo actualiza «Productos que vencen» si ese mismo producto estaba elegido ahí', async () => {
+    const user = userEvent.setup()
+    let vence = false
+    await abrir({
+      ...TODO_ENTRADA, '/api/vencimientos/productos/1/lotes': () => FICHA_DE(vence),
+      'PUT /api/vencimientos/productos/1': () => { vence = true; return { producto_id: 1, vence: true } },
+    })
+    await elegirEnBuscable(user, screen.getByRole('combobox', { name: 'Producto' }), /Yerba/)
+    expect(await screen.findByText(/no está marcado como perecedero\./)).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Cargar stock con lote' }))
+    await elegirEnBuscable(user, within(dialogo()).getByRole('combobox', { name: 'Producto' }), /Yerba/)
+    await user.click(await within(dialogo()).findByRole('button', { name: 'Marcar como perecedero' }))
+    await within(dialogo()).findByLabelText('Lote')
+    await user.click(within(dialogo()).getByRole('button', { name: 'Cancelar' }))
+    expect(await screen.findByText(/está marcado como perecedero\./)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Dejar de marcar como perecedero' })).toBeTruthy()
+  })
+
+  it('un producto con variantes exige elegir la variante (o «Sin variante») y la manda; sin variantes no hay selector', async () => {
+    const user = userEvent.setup()
+    const VARIANTES = [
+      { id: 7, producto_id: 1, sku: 'Y-500', nombre: 'x500', atributos: {}, activa: true },
+      { id: 8, producto_id: 1, sku: 'Y-1K', nombre: 'x1kg', atributos: {}, activa: true },
+      { id: 9, producto_id: 1, sku: 'Y-OLD', nombre: 'vieja', atributos: {}, activa: false },
+    ]
+    await abrir({ ...TODO_ENTRADA, '/api/productos/1/variantes': VARIANTES })
+    await abrirEntrada(user)
+    const selector = await within(dialogo()).findByLabelText('Variante') as HTMLSelectElement
+    expect(Array.from(selector.options).map((o) => o.textContent)).toEqual(['Sin variante', 'x500 (Y-500)', 'x1kg (Y-1K)'])
+    completarEntrada()
+    await user.click(confirmar())
+    expect(await within(dialogo()).findByText('Elegí la variante, o «Sin variante».')).toBeTruthy()
+    expect(enviosA(ENTRADA)).toHaveLength(0)
+
+    await user.selectOptions(selector, '8')
+    await user.click(confirmar())
+    await waitFor(() => expect(enviosA(ENTRADA)).toHaveLength(1))
+    expect(enviosA(ENTRADA)[0]).toMatchObject({ producto_id: 1, variante_id: 8 })
+
+    cleanup()
+    sessionStorage.clear()
+    prepararFetch()
+    await abrir({ ...TODO_ENTRADA, '/api/productos/1/variantes': VARIANTES })
+    await abrirEntrada(user)
+    await user.selectOptions(await within(dialogo()).findByLabelText('Variante'), '__base__')
+    completarEntrada()
+    await user.click(confirmar())
+    await waitFor(() => expect(enviosA(ENTRADA)).toHaveLength(1))
+    expect(enviosA(ENTRADA)[0].variante_id).toBeNull()
+
+    cleanup()
+    prepararFetch()
+    await abrir(TODO_ENTRADA)
+    await abrirEntrada(user)
+    expect(within(dialogo()).queryByLabelText('Variante')).toBeNull()
+  })
+
+  it('sin lote, sin fecha, con una fecha incompleta o con una cantidad en 0 o vacía no se manda y dice qué falta', async () => {
+    const user = userEvent.setup()
+    await abrir(TODO_ENTRADA)
+    await abrirEntrada(user)
+    await user.click(confirmar())
+    const alertas = () => within(dialogo()).getAllByRole('alert').map((a) => a.textContent)
+    expect(alertas()).toEqual(expect.arrayContaining(['Escribí el código del lote.', 'Elegí la fecha de vencimiento.', 'Tiene que ser un número mayor a 0.']))
+
+    completarEntrada('L1', '2027-03-15', '0')
+    await user.click(confirmar())
+    expect(alertas()).toEqual(['Tiene que ser un número mayor a 0.'])
+    completarEntrada('L1', '2027-03-15', '-2')
+    await user.click(confirmar())
+    expect(alertas()).toEqual(['Tiene que ser un número mayor a 0.'])
+
+    // Una fecha imposible (31/02) o a medio escribir: el input nativo entrega '' y marca `validity.badInput`.
+    completarEntrada('L1', '', '5')
+    const fechaInput = within(dialogo()).getByLabelText('Fecha de vencimiento') as HTMLInputElement
+    Object.defineProperty(fechaInput, 'validity', { configurable: true, value: { badInput: true } })
+    fireEvent.change(fechaInput, { target: { value: '2027-03-15' } })
+    await user.click(confirmar())
+    expect(alertas()).toEqual(['La fecha no es válida.'])
+    Object.defineProperty(fechaInput, 'validity', { configurable: true, value: { badInput: false } })
+    fireEvent.change(fechaInput, { target: { value: '2027-03-16' } })
+    await user.click(confirmar())
+    await waitFor(() => expect(enviosA(ENTRADA)).toHaveLength(1))
+    expect(enviosA(ENTRADA)[0]).toMatchObject({ lote: 'L1', vence: '2027-03-16', cantidad: 5 })
+  })
+
+  it('🔑 la clave se REUSA tras un 409 o un error de red con los mismos datos, y CAMBIA al modificar el lote, la fecha, la cantidad, la nota o al abrir de nuevo', async () => {
+    const user = userEvent.setup()
+    await abrir(TODO_ENTRADA)
+    secuencia(ENTRADA, [() => json({ detail: 'el producto 1 no está marcado como perecedero' }, 409), () => json({ detail: 'cantidad inválida' }, 422), () => json(ENTRADA_OK)])
+    await abrirEntrada(user)
+    completarEntrada()
+    await user.click(confirmar())
+    await within(dialogo()).findByText('el producto 1 no está marcado como perecedero')
+    await user.click(confirmar())
+    await within(dialogo()).findByText('cantidad inválida')
+    await user.click(confirmar())
+    await waitFor(() => expect(enviosA(ENTRADA)).toHaveLength(3))
+    expect(new Set(clavesDe(ENTRADA)).size).toBe(1)
+    expect(enviosA(ENTRADA)[1]).toEqual(enviosA(ENTRADA)[0])
+  })
+
+  it('🔑 cada cambio de datos es otra clave (lote, fecha, cantidad, nota) y cerrar y abrir de nuevo también', async () => {
+    const user = userEvent.setup()
+    await abrir(TODO_ENTRADA)
+    // 409 definitivo cada vez: no deja nada pendiente y el diálogo sigue abierto.
+    secuencia(ENTRADA, [() => json({ detail: 'rechazado' }, 409)])
+    await abrirEntrada(user)
+    completarEntrada()
+    let n = 0
+    const enviar = async () => { await user.click(confirmar()); n += 1; await waitFor(() => expect(enviosA(ENTRADA)).toHaveLength(n)); await within(dialogo()).findByText('rechazado') }
+    await enviar()
+    for (const cambiar of [
+      () => fireEvent.change(within(dialogo()).getByLabelText('Lote'), { target: { value: 'L-2027' } }),
+      () => fireEvent.change(within(dialogo()).getByLabelText('Fecha de vencimiento'), { target: { value: '2027-04-01' } }),
+      () => fireEvent.change(within(dialogo()).getByLabelText('Cantidad'), { target: { value: '10' } }),
+      () => fireEvent.change(within(dialogo()).getByLabelText('Nota'), { target: { value: 'otra' } }),
+    ]) {
+      cambiar()
+      await enviar()
+      expect(new Set(clavesDe(ENTRADA)).size).toBe(n)
+    }
+    await user.click(within(dialogo()).getByRole('button', { name: 'Cancelar' }))
+    await abrirEntrada(user)
+    completarEntrada('L-2027', '2027-04-01', '10')
+    fireEvent.change(within(dialogo()).getByLabelText('Nota'), { target: { value: 'otra' } })
+    await enviar()
+    expect(new Set(clavesDe(ENTRADA)).size).toBe(n)
+  })
+
+  it('repetida: true es un éxito («ya estaba registrado»), no un error', async () => {
+    const user = userEvent.setup()
+    await abrir({ ...TODO_ENTRADA, [`POST ${ENTRADA}`]: { ...ENTRADA_OK, repetida: true, saldo_lote: 30 } })
+    await abrirEntrada(user)
+    completarEntrada()
+    await user.click(confirmar())
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    const aviso = await screen.findByText(/Ya estaba registrado: esta carga se había guardado antes, no se sumó de nuevo/)
+    expect(aviso.getAttribute('role')).toBe('status')
+    expect(texto(aviso)).toContain('Saldo del lote: 30 u')
+    expect(aviso.textContent).not.toContain('Se cargaron')
+  })
+
+  it.each([
+    ['409 (producto sin marcar o servicio)', 409, 'el producto 1 no está marcado como perecedero: marcalo antes de cargarle un lote'],
+    ['422 (depósito inactivo)', 422, 'el depósito 1 no está activo'],
+    ['422 (variante de otro producto)', 422, 'la variante 7 no es del producto 1'],
+    ['422 (escala de la unidad)', 422, 'la cantidad 2.5 no respeta la unidad: tiene que ser entera'],
+  ])('%s: muestra el mensaje del motor, deja el diálogo abierto con lo tipeado y no deja nada pendiente', async (_caso, status, detail) => {
+    const user = userEvent.setup()
+    await abrir({ ...TODO_ENTRADA, [`POST ${ENTRADA}`]: { status, detail } })
+    await abrirEntrada(user)
+    completarEntrada('L-2026', '2027-03-15', '2.5')
+    await user.click(confirmar())
+    expect((await within(dialogo()).findByText(detail)).getAttribute('role')).toBe('alert')
+    expect((within(dialogo()).getByLabelText('Lote') as HTMLInputElement).value).toBe('L-2026')
+    expect((within(dialogo()).getByLabelText('Cantidad') as HTMLInputElement).value).toBe('2.5')
+    expect(guardado()).toEqual({})
+    expect(panel()).toBeNull()
+    expect(within(dialogo()).queryByText(/No se sabe si se llegó a registrar/)).toBeNull()
+  })
+
+  it('un 422 de validación del cuerpo (una lista) muestra los mensajes, no «[object Object]»', async () => {
+    const user = userEvent.setup()
+    await abrir(TODO_ENTRADA)
+    secuencia(ENTRADA, [() => json({ detail: [{ msg: 'Input should be greater than 0' }, { msg: 'Field required' }] }, 422)])
+    await abrirEntrada(user)
+    completarEntrada()
+    await user.click(confirmar())
+    expect((await within(dialogo()).findByRole('alert')).textContent).toBe('Input should be greater than 0 Field required')
+  })
+
+  it('🔑 el 503 de la migración es definitivo (nada guardado, se puede reintentar); cualquier otro 503 es incierto y queda pendiente', async () => {
+    const user = userEvent.setup()
+    await abrir(TODO_ENTRADA)
+    secuencia(ENTRADA, [() => json({ detail: DETALLE_SIN_REVISION }, 503), () => json({ detail: 'Service Unavailable' }, 503)])
+    await abrirEntrada(user)
+    completarEntrada()
+    await user.click(confirmar())
+    expect((await within(dialogo()).findByRole('alert')).textContent).toBe(
+      'La base no tiene aplicada la revisión de vencimientos; pedí al administrador que ejecute libracommerce-migrar upgrade.')
+    expect(guardado()).toEqual({})
+    expect(panel()).toBeNull()
+
+    await user.click(confirmar())
+    expect((await within(dialogo()).findByText(/No se sabe si se llegó a registrar/)).getAttribute('role')).toBe('alert')
+    expect(Object.keys(guardado())).toEqual([FIRMA_ENTRADA])
+    // Es el mismo intento (misma clave): el 503 definitivo no la gastó.
+    expect(new Set(clavesDe(ENTRADA)).size).toBe(1)
+  })
+
+  it('doble clic en «Confirmar»: un solo envío, y el botón queda deshabilitado mientras está en vuelo', async () => {
+    const user = userEvent.setup()
+    await abrir(TODO_ENTRADA)
+    let liberar: (r: Response) => void = () => {}
+    secuencia(ENTRADA, [() => new Promise<Response>((r) => { liberar = r }) as unknown as Response])
+    await abrirEntrada(user)
+    completarEntrada()
+    await user.dblClick(confirmar())
+    expect(enviosA(ENTRADA)).toHaveLength(1)
+    expect((within(dialogo()).getByRole('button', { name: 'Guardando…' }) as HTMLButtonElement).disabled).toBe(true)
+    await act(async () => { liberar(json(ENTRADA_OK)) })
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(enviosA(ENTRADA)).toHaveLength(1)
+  })
+
+  it.each([
+    ['sin respuesta (red)', () => 'caida' as const],
+    ['un 500', () => json({ detail: 'Internal Server Error' }, 500)],
+    ['un 408', () => json({ detail: 'Request Timeout' }, 408)],
+  ])('🔑 %s: queda guardado bajo el destino, bloquea cantidad y nota, y reenviarlo (repetida: true) cierra como éxito y limpia', async (_caso, fallo) => {
+    const user = userEvent.setup()
+    await abrir(TODO_ENTRADA)
+    secuencia(ENTRADA, [fallo, () => json({ ...ENTRADA_OK, repetida: true })])
+    await abrirEntrada(user)
+    completarEntrada()
+    fireEvent.change(within(dialogo()).getByLabelText('Nota'), { target: { value: 'la primera' } })
+    await user.click(confirmar())
+    expect((await within(dialogo()).findByText(/No se sabe si se llegó a registrar/)).getAttribute('role')).toBe('alert')
+
+    const entradas = Object.entries(guardado())
+    expect(entradas.map(([k]) => k)).toEqual([FIRMA_ENTRADA])
+    expect(entradas[0][1].tipo).toBe('entrada')
+    expect(entradas[0][1].cuerpo).toEqual(enviosA(ENTRADA)[0])
+    expect(texto(panel())).toMatch(/intento del \d{2}:\d{2}/)
+    expect(texto(panel())).toContain('cargar 12 u al lote L-2026 (vence 15-03-2027)')
+    expect((within(dialogo()).getByLabelText('Cantidad') as HTMLInputElement).disabled).toBe(true)
+    expect((within(dialogo()).getByLabelText('Nota') as HTMLTextAreaElement).disabled).toBe(true)
+    expect(within(dialogo()).queryByRole('button', { name: 'Confirmar' })).toBeNull()
+    expect(enBotones('Descartar el intento anterior…')).toBeTruthy()
+
+    // Reenviar manda EXACTAMENTE lo original con la misma clave.
+    await user.click(confirmar())
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(enviosA(ENTRADA)).toHaveLength(2)
+    expect(enviosA(ENTRADA)[1]).toEqual(enviosA(ENTRADA)[0])
+    expect((await screen.findByText(/Ya estaba registrado/)).getAttribute('role')).toBe('status')
+    expect(guardado()).toEqual({})
+  })
+
+  it('🔑 tras un timeout, el mismo destino no admite otra carga (aunque se cambie la cantidad a la fuerza); otro lote, fecha o depósito sí, con clave nueva', async () => {
+    const user = userEvent.setup()
+    await abrir(TODO_ENTRADA)
+    secuencia(ENTRADA, [() => 'caida', () => json(ENTRADA_OK)])
+    await abrirEntrada(user)
+    completarEntrada()
+    await user.click(confirmar())
+    await within(dialogo()).findByText(/No se sabe si se llegó a registrar/)
+
+    // Forzar la cantidad (el campo está apagado) no cambia lo que se manda: se reenvía el original.
+    const cantidad = within(dialogo()).getByLabelText('Cantidad') as HTMLInputElement
+    fireEvent.change(cantidad, { target: { value: '999' } })
+    expect(cantidad.value).toBe('12')
+    await user.click(confirmar())
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(enviosA(ENTRADA)[1]).toEqual(enviosA(ENTRADA)[0])
+    expect(enviosA(ENTRADA)[1].cantidad).toBe(12)
+
+    // Otro destino en otro intento: primero dejamos uno incierto, y cambiamos de lote, de fecha y de depósito.
+    secuencia(ENTRADA, [() => 'caida', () => json(ENTRADA_OK)])
+    await abrirEntrada(user)
+    completarEntrada()
+    await user.click(confirmar())
+    await within(dialogo()).findByText(/No se sabe si se llegó a registrar/)
+    for (const cambiar of [
+      () => fireEvent.change(within(dialogo()).getByLabelText('Lote'), { target: { value: 'L-OTRO' } }),
+      () => fireEvent.change(within(dialogo()).getByLabelText('Fecha de vencimiento'), { target: { value: '2027-03-16' } }),
+    ]) {
+      cambiar()
+      expect(panel()).toBeNull()
+      expect((within(dialogo()).getByLabelText('Cantidad') as HTMLInputElement).disabled).toBe(false)
+      expect(enBotones('Confirmar')).toBeTruthy()
+      // Volver al destino original lo bloquea otra vez.
+      completarEntrada('L-2026', '2027-03-15', '12')
+      expect(panel()).toBeTruthy()
+    }
+    await user.selectOptions(within(dialogo()).getByLabelText('Depósito'), '2')
+    expect(panel()).toBeNull()
+    await user.click(confirmar())
+    await waitFor(() => expect(enviosA(ENTRADA)).toHaveLength(4))
+    expect(enviosA(ENTRADA)[3]).toMatchObject({ deposito_id: 2 })
+    expect(clavesDe(ENTRADA)[3]).not.toBe(clavesDe(ENTRADA)[2])
+  })
+
+  it('🔑 una carga incierta queda a la vista tras cerrar y tras desmontar la pantalla: «Revisar» abre el diálogo con su destino, su cantidad y su nota, y descartar exige confirmación y da clave nueva', async () => {
+    const user = userEvent.setup()
+    await abrir(TODO_ENTRADA)
+    secuencia(ENTRADA, [() => 'caida'])
+    await abrirEntrada(user)
+    completarEntrada()
+    fireEvent.change(within(dialogo()).getByLabelText('Nota'), { target: { value: 'pallet 4' } })
+    await user.click(confirmar())
+    await within(dialogo()).findByText(/No se sabe si se llegó a registrar/)
+    const original = enviosA(ENTRADA)[0]
+    await cancelar(user)
+    expect(screen.getByText(/Hay una carga de stock sin confirmar/)).toBeTruthy()
+    expect(texto(screen.getByText(/Yerba · lote L-2026/))).toContain('vence 15-03-2027')
+
+    cleanup()
+    prepararFetch()
+    await abrir(TODO_ENTRADA)
+    await user.click(screen.getByRole('button', { name: 'Revisar la carga sin confirmar' }))
+    await within(dialogo()).findByLabelText('Lote')
+    expect((within(dialogo()).getByLabelText('Lote') as HTMLInputElement).value).toBe('L-2026')
+    expect((within(dialogo()).getByLabelText('Fecha de vencimiento') as HTMLInputElement).value).toBe('2027-03-15')
+    expect((within(dialogo()).getByLabelText('Cantidad') as HTMLInputElement).value).toBe('12')
+    expect((within(dialogo()).getByLabelText('Nota') as HTMLTextAreaElement).value).toBe('pallet 4')
+    expect(panel()).toBeTruthy()
+
+    await user.click(enBotones('Descartar el intento anterior…'))
+    expect(guardado()).not.toEqual({})
+    await user.click(enBotones('Sí, descartar el intento anterior'))
+    expect(guardado()).toEqual({})
+    expect(panel()).toBeNull()
+    await user.click(confirmar())
+    await waitFor(() => expect(enviosA(ENTRADA)).toHaveLength(1))
+    expect(clavesDe(ENTRADA)[0]).not.toBe(original.clave_operacion)
+    expect(screen.queryByText(/Hay una carga de stock sin confirmar/)).toBeNull()
+  })
+
+  it('sin puedeMover no se ofrece revisar una carga pendiente (tampoco el botón)', async () => {
+    sessionStorage.setItem(ALMACEN, JSON.stringify({ [FIRMA_ENTRADA]: {
+      firma: FIRMA_ENTRADA, tipo: 'entrada', creado: Date.UTC(2026, 8, 30, 15, 30),
+      cuerpo: { producto_id: 1, deposito_id: 1, variante_id: null, lote: 'L-2026', vence: '2027-03-15', cantidad: 12, nota: '', clave_operacion: 'k' },
+    } }))
+    await abrir(TODO_ENTRADA, { puedeMover: false })
+    expect(screen.queryByText(/Hay una carga de stock sin confirmar/)).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Revisar la carga sin confirmar' })).toBeNull()
+  })
+
+  it('🔑 falla cerrado: si setItem falla NO se envía la entrada, y al volver a funcionar el storage el mismo diálogo envía', async () => {
+    const espia = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('QuotaExceededError') })
+    const user = userEvent.setup()
+    await abrir(TODO_ENTRADA)
+    secuencia(ENTRADA, [() => json(ENTRADA_OK)])
+    await abrirEntrada(user)
+    completarEntrada()
+    await user.click(confirmar())
+    expect((await within(dialogo()).findByText(/No se pudo guardar el intento en este navegador/)).getAttribute('role')).toBe('alert')
+    expect(enviosA(ENTRADA)).toHaveLength(0)
+    expect((confirmar() as HTMLButtonElement).disabled).toBe(false)
+    espia.mockRestore()
+    await user.click(confirmar())
+    await waitFor(() => expect(enviosA(ENTRADA)).toHaveLength(1))
+  })
+
+  it('una entrada incierta no bloquea una merma ni una asignación (destinos de otro tipo)', async () => {
+    const user = userEvent.setup()
+    await abrir(TODO_ENTRADA)
+    secuencia(ENTRADA, [() => 'caida'])
+    await abrirEntrada(user)
+    completarEntrada()
+    await user.click(confirmar())
+    await within(dialogo()).findByText(/No se sabe si se llegó a registrar/)
+    await cancelar(user)
+    await abrirMerma(user)
+    expect(panel()).toBeNull()
+    await user.click(confirmar())
+    await waitFor(() => expect(enviosA(MERMA)).toHaveLength(1))
+  })
+
+  it('si la lista de productos no carga, el diálogo lo dice y no ofrece el selector', async () => {
+    const user = userEvent.setup()
+    await abrir({ ...TODO_ENTRADA, '/api/productos': { status: 403, detail: 'Sin permiso de productos' } })
+    await user.click(screen.getByRole('button', { name: 'Cargar stock con lote' }))
+    expect(within(dialogo()).getByText('Sin permiso de productos')).toBeTruthy()
+    expect(within(dialogo()).queryByRole('combobox', { name: 'Producto' })).toBeNull()
+    expect((confirmar() as HTMLButtonElement).disabled).toBe(true)
+  })
+})
+
+describe('Vencimientos: cargar stock con lote: las variantes se conocen ANTES de confirmar', () => {
+  const VARIANTES = [
+    { id: 7, producto_id: 1, sku: 'Y-500', nombre: 'x500', atributos: {}, activa: true },
+    { id: 8, producto_id: 1, sku: 'Y-1K', nombre: 'x1kg', atributos: {}, activa: true },
+  ]
+  const RUTA_VARIANTES_1 = '/api/productos/1/variantes'
+  const RUTA_VARIANTES_2 = '/api/productos/2/variantes'
+
+  /** Retiene un GET hasta que el test lo libere (lo que queda en vuelo no contesta solo). */
+  function retener(ruta: string) {
+    const base = fetchMock.getMockImplementation()!
+    let liberar: (r: Response) => void = () => {}
+    const promesa = new Promise<Response>((r) => { liberar = r })
+    let pedidos = 0
+    fetchMock.mockImplementation((entrada: RequestInfo | URL, init?: RequestInit) => {
+      if (String(entrada) === ruta && (init?.method ?? 'GET') === 'GET') { pedidos += 1; return promesa }
+      return base(entrada, init)
+    })
+    return { liberar, pedidos: () => pedidos }
+  }
+  /** Cambia cómo contesta un GET (para que el reintento ya ande). */
+  function contestar(ruta: string, cuerpo: unknown) {
+    const base = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation((entrada: RequestInfo | URL, init?: RequestInit) =>
+      String(entrada) === ruta && (init?.method ?? 'GET') === 'GET' ? Promise.resolve(json(cuerpo)) : base(entrada, init))
+  }
+  async function elegir(user: ReturnType<typeof userEvent.setup>, producto: string | RegExp) {
+    await elegirEnBuscable(user, within(dialogo()).getByRole('combobox', { name: 'Producto' }), producto)
+  }
+
+  it('con la consulta de variantes en vuelo no se confirma: el botón está apagado, se dice «Consultando variantes…» y no sale ningún POST; al llegar, sí', async () => {
+    const user = userEvent.setup()
+    await abrir({ ...TODO_ENTRADA, [RUTA_VARIANTES_1]: VARIANTES })
+    const variantes = retener(RUTA_VARIANTES_1)
+    await user.click(screen.getByRole('button', { name: 'Cargar stock con lote' }))
+    await elegir(user, /Yerba/)
+    await within(dialogo()).findByLabelText('Lote')
+    completarEntrada()
+    expect(within(dialogo()).getByText('Consultando variantes…')).toBeTruthy()
+    expect((confirmar() as HTMLButtonElement).disabled).toBe(true)
+    await user.click(confirmar())
+    fireEvent.click(confirmar())
+    expect(enviosA(ENTRADA)).toHaveLength(0)
+    expect(guardado()).toEqual({})
+
+    await act(async () => { variantes.liberar(json(VARIANTES)) })
+    await within(dialogo()).findByLabelText('Variante')
+    expect(within(dialogo()).queryByText('Consultando variantes…')).toBeNull()
+    // Con variantes hay que elegir: sin elegir, tampoco sale.
+    await user.click(confirmar())
+    expect(enviosA(ENTRADA)).toHaveLength(0)
+    await user.selectOptions(within(dialogo()).getByLabelText('Variante'), '7')
+    await user.click(confirmar())
+    await waitFor(() => expect(enviosA(ENTRADA)).toHaveLength(1))
+    expect(enviosA(ENTRADA)[0]).toMatchObject({ producto_id: 1, variante_id: 7 })
+  })
+
+  it('si la consulta de variantes falla no se confirma (nunca variante_id: null por omisión), se ve el error con «Reintentar»; tras un reintento exitoso se carga con la variante elegida o «Sin variante»', async () => {
+    const user = userEvent.setup()
+    await abrir({ ...TODO_ENTRADA, [RUTA_VARIANTES_1]: { status: 500, detail: 'falló el catálogo' } })
+    await user.click(screen.getByRole('button', { name: 'Cargar stock con lote' }))
+    await elegir(user, /Yerba/)
+    await within(dialogo()).findByLabelText('Lote')
+    completarEntrada()
+    const alerta = await within(dialogo()).findByText(/No se pudieron consultar las variantes del producto: falló el catálogo/)
+    expect(alerta.getAttribute('role')).toBe('alert')
+    expect((confirmar() as HTMLButtonElement).disabled).toBe(true)
+    await user.click(confirmar())
+    expect(enviosA(ENTRADA)).toHaveLength(0)
+    expect(within(dialogo()).queryByLabelText('Variante')).toBeNull()
+
+    contestar(RUTA_VARIANTES_1, VARIANTES)
+    await user.click(within(dialogo()).getByRole('button', { name: 'Reintentar' }))
+    await within(dialogo()).findByLabelText('Variante')
+    expect(within(dialogo()).queryByRole('button', { name: 'Reintentar' })).toBeNull()
+    // Lo tipeado sigue ahí.
+    expect((within(dialogo()).getByLabelText('Lote') as HTMLInputElement).value).toBe('L-2026')
+    await user.selectOptions(within(dialogo()).getByLabelText('Variante'), '__base__')
+    await user.click(confirmar())
+    await waitFor(() => expect(enviosA(ENTRADA)).toHaveLength(1))
+    expect(enviosA(ENTRADA)[0]).toMatchObject({ producto_id: 1, variante_id: null })
+  })
+
+  it('tras un reintento exitoso con la lista vacía (el producto no tiene variantes) se carga en la base', async () => {
+    const user = userEvent.setup()
+    await abrir({ ...TODO_ENTRADA, [RUTA_VARIANTES_1]: { status: 403, detail: 'Sin permiso de variantes' } })
+    await user.click(screen.getByRole('button', { name: 'Cargar stock con lote' }))
+    await elegir(user, /Yerba/)
+    await within(dialogo()).findByLabelText('Lote')
+    completarEntrada()
+    await within(dialogo()).findByText(/Sin permiso de variantes/)
+    expect((confirmar() as HTMLButtonElement).disabled).toBe(true)
+    contestar(RUTA_VARIANTES_1, [])
+    await user.click(within(dialogo()).getByRole('button', { name: 'Reintentar' }))
+    await waitFor(() => expect((confirmar() as HTMLButtonElement).disabled).toBe(false))
+    await user.click(confirmar())
+    await waitFor(() => expect(enviosA(ENTRADA)).toHaveLength(1))
+    expect(enviosA(ENTRADA)[0]).toMatchObject({ producto_id: 1, variante_id: null })
+  })
+
+  it('carrera: la respuesta vieja de otro producto no habilita la confirmación ni se usa; al cambiar de producto se reinicia', async () => {
+    const user = userEvent.setup()
+    await abrir({
+      ...TODO_ENTRADA, [RUTA_VARIANTES_1]: VARIANTES, [RUTA_VARIANTES_2]: [],
+      '/api/vencimientos/productos/2/lotes': FICHA_DE(true, 'u', 2, 'Crema'),
+      [`POST ${ENTRADA}`]: { ...ENTRADA_OK, producto_id: 2 },
+    })
+    const de1 = retener(RUTA_VARIANTES_1)
+    const de2 = retener(RUTA_VARIANTES_2)
+    await user.click(screen.getByRole('button', { name: 'Cargar stock con lote' }))
+    await elegir(user, /Yerba/)
+    await within(dialogo()).findByLabelText('Lote')
+    await elegir(user, /Crema/)
+    await waitFor(() => expect(de2.pedidos()).toBe(1))
+    await within(dialogo()).findByLabelText('Lote')
+    completarEntrada()
+    // Llega la respuesta de Yerba (vieja): no vale para Crema.
+    await act(async () => { de1.liberar(json(VARIANTES)) })
+    expect(within(dialogo()).queryByLabelText('Variante')).toBeNull()
+    expect(within(dialogo()).getByText('Consultando variantes…')).toBeTruthy()
+    expect((confirmar() as HTMLButtonElement).disabled).toBe(true)
+    await user.click(confirmar())
+    expect(enviosA(ENTRADA)).toHaveLength(0)
+
+    // Llega la de Crema (sin variantes): ahora sí, a la base y de Crema.
+    await act(async () => { de2.liberar(json([])) })
+    await waitFor(() => expect((confirmar() as HTMLButtonElement).disabled).toBe(false))
+    await user.click(confirmar())
+    await waitFor(() => expect(enviosA(ENTRADA)).toHaveLength(1))
+    expect(enviosA(ENTRADA)[0]).toMatchObject({ producto_id: 2, variante_id: null })
+  })
+
+  it('volver a elegir un producto no reusa la variante elegida para el anterior', async () => {
+    const user = userEvent.setup()
+    await abrir({
+      ...TODO_ENTRADA, [RUTA_VARIANTES_1]: VARIANTES, [RUTA_VARIANTES_2]: VARIANTES.map((v) => ({ ...v, producto_id: 2 })),
+      '/api/vencimientos/productos/2/lotes': FICHA_DE(true, 'u', 2, 'Crema'),
+    })
+    await abrirEntrada(user)
+    await user.selectOptions(within(dialogo()).getByLabelText('Variante'), '8')
+    await elegir(user, /Crema/)
+    await waitFor(() => expect((within(dialogo()).getByLabelText('Variante') as HTMLSelectElement)).toBeTruthy())
+    completarEntrada()
+    await user.click(confirmar())
+    expect(await within(dialogo()).findByText('Elegí la variante, o «Sin variante».')).toBeTruthy()
+    expect(enviosA(ENTRADA)).toHaveLength(0)
+  })
+
+  it('reenviar un intento guardado no depende de la consulta de variantes (se manda el cuerpo original)', async () => {
+    const user = userEvent.setup()
+    const cuerpo = { producto_id: 1, deposito_id: 1, variante_id: 8, lote: 'L-2026', vence: '2027-03-15', cantidad: 12, nota: '', clave_operacion: 'k-viejo' }
+    const firma = JSON.stringify(['entrada', 1, 1, 8, 'L-2026', '2027-03-15'])
+    sessionStorage.setItem(ALMACEN, JSON.stringify({ [firma]: { firma, tipo: 'entrada', cuerpo, creado: Date.UTC(2026, 8, 30, 15, 30) } }))
+    await abrir({ ...TODO_ENTRADA, [RUTA_VARIANTES_1]: { status: 500, detail: 'caído' } })
+    await user.click(screen.getByRole('button', { name: 'Revisar la carga sin confirmar' }))
+    await within(dialogo()).findByText(/Hay un intento anterior sin confirmar/)
+    await user.click(confirmar())
+    await waitFor(() => expect(enviosA(ENTRADA)).toHaveLength(1))
+    expect(enviosA(ENTRADA)[0]).toEqual(cuerpo)
+  })
+})
+
