@@ -7,6 +7,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { Vencimientos } from '../src/comercio/Vencimientos'
+import { _reiniciarPendientesEnMemoria } from '../src/comercio/vencimientos-pendientes'
 import type { VencimientoLote, VencimientoSinLote, VencimientosData } from '../src/comercio/tipos'
 import { elegirEnBuscable, fetchMock, json, montar, pedidas, prepararFetch, responder } from './helpers-pantallas'
 
@@ -142,6 +143,7 @@ function completarAsignacion(lote = 'A-2026', vence = '2027-03-15') {
 beforeEach(() => {
   cleanup()
   sessionStorage.clear()
+  _reiniciarPendientesEnMemoria()
   prepararFetch()
 })
 
@@ -997,7 +999,7 @@ describe('Vencimientos: un intento incierto bloquea el destino hasta reenviarlo 
     expect(clavesDe(MERMA)[1]).not.toBe(clavesDe(MERMA)[0])
   })
 
-  it('🔑 asignar: bloquea el destino (lote y fecha), reenvía el original y no bloquea a otro lote, fecha ni depósito', async () => {
+  it('🔑 asignar: bloquea el saldo sin lote (lote, fecha, cantidad y nota), reenvía el original y no bloquea a otro depósito o variante', async () => {
     const user = userEvent.setup()
     await abrir()
     secuencia(ASIGNAR, [() => 'caida', () => json({ ...ASIGNAR_OK, repetida: true }), () => json(ASIGNAR_OK)])
@@ -1010,14 +1012,9 @@ describe('Vencimientos: un intento incierto bloquea el destino hasta reenviarlo 
     expect((within(dialogo()).getByLabelText('Cantidad') as HTMLInputElement).disabled).toBe(true)
     expect((within(dialogo()).getByLabelText('Nota') as HTMLTextAreaElement).disabled).toBe(true)
 
-    // Otro lote o otra fecha es otro destino: se puede editar y no está bloqueado.
-    fireEvent.change(within(dialogo()).getByLabelText('Lote'), { target: { value: 'A-OTRO' } })
-    expect(panel()).toBeNull()
-    expect((within(dialogo()).getByLabelText('Cantidad') as HTMLInputElement).disabled).toBe(false)
-    fireEvent.change(within(dialogo()).getByLabelText('Lote'), { target: { value: 'A-2026' } })
-    fireEvent.change(within(dialogo()).getByLabelText('Fecha de vencimiento'), { target: { value: '2027-03-16' } })
-    expect(panel()).toBeNull()
-    fireEvent.change(within(dialogo()).getByLabelText('Fecha de vencimiento'), { target: { value: '2027-03-15' } })
+    // Lote y fecha también quedan bloqueados: el recurso es el saldo sin lote, no el lote.
+    expect((within(dialogo()).getByLabelText('Lote') as HTMLInputElement).disabled).toBe(true)
+    expect((within(dialogo()).getByLabelText('Fecha de vencimiento') as HTMLInputElement).disabled).toBe(true)
     expect(panel()).toBeTruthy()
 
     await cancelar(user)
@@ -1039,6 +1036,50 @@ describe('Vencimientos: un intento incierto bloquea el destino hasta reenviarlo 
     expect(enviosA(ASIGNAR)[1]).toEqual(enviosA(ASIGNAR)[0])
     expect(enviosA(ASIGNAR)[1]).toMatchObject({ nota: 'conteo', cantidad: 20 })
     expect(guardado()).toEqual({})
+  })
+
+  it('🔑 asignar: tras un timeout, cambiar el lote o la fecha (aunque se fuerce) NO crea otra operación: sigue bloqueado y reenvía el original con la misma clave', async () => {
+    const user = userEvent.setup()
+    await abrir()
+    secuencia(ASIGNAR, [() => 'caida', () => json({ ...ASIGNAR_OK, repetida: true })])
+    await abrirAsignar(user)
+    completarAsignacion('A-2026', '2027-03-15')
+    await user.click(confirmar())
+    await within(dialogo()).findByText(/No se sabe si se llegó a registrar/)
+
+    const lote = within(dialogo()).getByLabelText('Lote') as HTMLInputElement
+    const vence = within(dialogo()).getByLabelText('Fecha de vencimiento') as HTMLInputElement
+    await user.type(lote, 'OTRO')
+    fireEvent.change(lote, { target: { value: 'A-OTRO' } })
+    fireEvent.change(vence, { target: { value: '2028-01-01' } })
+    expect(lote.value).toBe('A-2026')
+    expect(vence.value).toBe('2027-03-15')
+    expect(panel()).toBeTruthy()
+
+    await user.click(confirmar())
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(enviosA(ASIGNAR)).toHaveLength(2)
+    expect(enviosA(ASIGNAR)[1]).toEqual(enviosA(ASIGNAR)[0])
+    expect(enviosA(ASIGNAR)[1]).toMatchObject({ lote: 'A-2026', vence: '2027-03-15' })
+    expect(clavesDe(ASIGNAR)[1]).toBe(clavesDe(ASIGNAR)[0])
+  })
+
+  it('asignar: tras descartar (con confirmación) sí se puede elegir otro lote y fecha, con clave nueva', async () => {
+    const user = userEvent.setup()
+    await abrir()
+    secuencia(ASIGNAR, [() => 'caida', () => json(ASIGNAR_OK)])
+    await abrirAsignar(user)
+    completarAsignacion('A-2026', '2027-03-15')
+    await user.click(confirmar())
+    await within(dialogo()).findByText(/No se sabe si se llegó a registrar/)
+    await user.click(enBotones('Descartar el intento anterior…'))
+    await user.click(enBotones('Sí, descartar el intento anterior'))
+    expect((within(dialogo()).getByLabelText('Lote') as HTMLInputElement).disabled).toBe(false)
+    completarAsignacion('A-NUEVO', '2027-05-01')
+    await user.click(confirmar())
+    await waitFor(() => expect(enviosA(ASIGNAR)).toHaveLength(2))
+    expect(enviosA(ASIGNAR)[1]).toMatchObject({ lote: 'A-NUEVO', vence: '2027-05-01' })
+    expect(clavesDe(ASIGNAR)[1]).not.toBe(clavesDe(ASIGNAR)[0])
   })
 
   it('una operación sobre OTRO lote u otro depósito no se bloquea, y usa otra clave', async () => {
@@ -1123,6 +1164,56 @@ describe('Vencimientos: los intentos inciertos sobreviven a la pantalla y a reca
     sessionStorage.setItem(ALMACEN, '"un texto"')
     await abrir()
     expect(screen.queryByText('Intento sin confirmar')).toBeNull()
+  })
+
+  it('🔑 si getItem anda pero setItem falla (cuota), el intento se envía igual y queda en memoria: no desaparece', async () => {
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('QuotaExceededError') })
+    const user = userEvent.setup()
+    await abrir()
+    secuencia(MERMA, [() => 'caida', () => json(MERMA_OK)])
+    await abrirMerma(user)
+    await user.click(confirmar())
+    await within(dialogo()).findByText(/No se sabe si se llegó a registrar/)
+    expect(enviosA(MERMA)).toHaveLength(1)
+    expect(sessionStorage.getItem(ALMACEN)).toBeNull()
+    expect(panel()).toBeTruthy()
+    await cancelar(user)
+    expect(within(fila('Yerba')).getByText('Intento sin confirmar')).toBeTruthy()
+
+    // Desmontar y volver a montar: la memoria manda.
+    cleanup()
+    prepararFetch()
+    await abrir()
+    secuencia(MERMA, [() => json({ ...MERMA_OK, repetida: true })])
+    await abrirMerma(user)
+    expect(panel()).toBeTruthy()
+    await user.click(confirmar())
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(enviosA(MERMA)).toHaveLength(1)
+    expect(within(fila('Yerba')).queryByText('Intento sin confirmar')).toBeNull()
+    await abrirMerma(user)
+    expect(panel()).toBeNull()
+  })
+
+  it('🔑 borrar limpia memoria y storage: si el borrado no se puede escribir, lo viejo del storage no resucita el intento', async () => {
+    const cuerpo = { producto_id: 1, deposito_id: 1, variante_id: null, lote: 'L1', vence: '2026-09-25', cantidad: 3, motivo: 'vencimiento', nota: '', clave_operacion: 'clave-vieja' }
+    sessionStorage.setItem(ALMACEN, JSON.stringify({ [FIRMA_YERBA]: { firma: FIRMA_YERBA, tipo: 'merma', cuerpo, creado: Date.UTC(2026, 8, 30, 15, 30) } }))
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('QuotaExceededError') })
+    const user = userEvent.setup()
+    await abrir()
+    secuencia(MERMA, [() => json({ detail: 'el lote L1 tiene 1 y se quieren dar de baja 3' }, 409)])
+    await abrirMerma(user)
+    expect(panel()).toBeTruthy()
+    await user.click(confirmar())
+    await within(dialogo()).findByText('el lote L1 tiene 1 y se quieren dar de baja 3')
+    expect(panel()).toBeNull()
+    expect((within(dialogo()).getByLabelText('Nota') as HTMLTextAreaElement).disabled).toBe(false)
+    await cancelar(user)
+    expect(within(fila('Yerba')).queryByText('Intento sin confirmar')).toBeNull()
+    // El storage sigue teniendo lo viejo (no se pudo escribir), pero no cuenta.
+    expect(Object.keys(guardado())).toEqual([FIRMA_YERBA])
+    await abrirMerma(user)
+    expect(panel()).toBeNull()
   })
 
   it('si sessionStorage lanza (modo privado) la pantalla funciona y el intento vive en memoria', async () => {

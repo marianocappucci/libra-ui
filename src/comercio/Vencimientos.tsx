@@ -22,16 +22,18 @@
 //   que no sea reenviar exactamente ese intento, con su clave, o descartarlo de forma explícita.** Incierto es no saber si
 //   el motor escribió: error de red, timeout, 5xx y también un 503 que no sea el de la migración. Sólo son definitivos
 //   («no se escribió») los 4xx (menos el 408) y el 503 que dice `libracommerce-migrar upgrade`. Un intento incierto guarda
-//   el CUERPO COMPLETO y su clave (no sólo la clave) bajo una firma del destino (tipo, producto, depósito, variante, lote y
-//   fecha; sin cantidad, nota ni motivo): con esa firma pendiente el diálogo bloquea cantidad, nota y motivo, y sólo ofrece
-//   «Reenviar el intento anterior» (el cuerpo original, no el editado) o «Descartar el intento anterior…» (con confirmación).
-//   El intento se guarda ANTES de enviar y se borra con un resultado definitivo (éxito, `repetida`, 4xx, el 503 de migración)
-//   o al descartarlo.
-//   **Persistencia:** un almacén de módulo respaldado por `sessionStorage` (`libra-ui:vencimientos:pendientes`, con
-//   try/catch: si lanza —modo privado— sigue en memoria), así que sobrevive a desmontar la pantalla y a recargar la
-//   pestaña. Límite: otra pestaña o navegador (otro `sessionStorage`) no lo ve; ahí lo que protege es el motor, que con la
-//   misma clave y el mismo cuerpo contesta `repetida: true`. Un intento pendiente de un lote que ya no aparece en la lista
-//   no se ve en pantalla (queda guardado, inofensivo, hasta que ese destino vuelva a aparecer o se cierre la pestaña).
+//   el CUERPO COMPLETO y su clave (no sólo la clave) bajo la firma del recurso que la operación consume: en una MERMA,
+//   ese lote (producto, depósito, variante, lote y fecha; `dar_de_baja_lote` mide el saldo del bucket exacto); en una
+//   ASIGNACIÓN, el saldo SIN LOTE de (producto, depósito, variante), sea cual sea el lote y la fecha que se le pongan (por
+//   eso lote y fecha no entran en su firma: cambiarlos no es otra operación, gasta el mismo saldo). Con esa firma pendiente
+//   el diálogo bloquea todos los campos y sólo ofrece «Reenviar el intento anterior» (el cuerpo original, no el editado) o
+//   «Descartar el intento anterior…» (con confirmación). El intento se guarda ANTES de enviar y se borra con un resultado
+//   definitivo (éxito, `repetida`, 4xx, el 503 de migración) o al descartarlo.
+//   **Persistencia** (`vencimientos-pendientes.ts`): la memoria de la pestaña es la fuente de verdad y `sessionStorage`
+//   (`libra-ui:vencimientos:pendientes`) sólo recupera tras desmontar la pantalla o recargar; si no se puede guardar, el
+//   intento igual se envía y queda en memoria. Límite: otra pestaña o navegador no lo ve; ahí lo que protege es el motor, que
+//   con la misma clave y el mismo cuerpo contesta `repetida: true`. Un intento pendiente de un lote que ya no aparece en la
+//   lista no se ve en pantalla (queda guardado, inofensivo, hasta que ese destino vuelva a aparecer o se cierre la pestaña).
 // - **«Productos que vencen» es por producto**: el motor no tiene un listado de los productos marcados (sólo se ven en el
 //   reporte los que tienen stock con lote o sin lote), así que se elige un producto, se ve si vence
 //   (`GET /api/vencimientos/productos/{id}/lotes`) y se marca o desmarca (`PUT /api/vencimientos/productos/{id}`).
@@ -40,6 +42,9 @@ import { api, ApiError } from '../api-client'
 import { SelectBuscable } from '../SelectBuscable'
 import { ZONA_AR } from '../fechas'
 import { TituloPantalla } from '../titulo-pantalla'
+import {
+  firmaDeAsignacion, firmaDeMerma, guardarPendiente, leerPendientes, quitarPendiente, type Payload, type Pendiente,
+} from './vencimientos-pendientes'
 import type {
   CategoriaProducto, Producto, Sucursal, VencimientoAsignarPayload, VencimientoAsignarRespuesta, VencimientoLote,
   VencimientoMarca, VencimientoMermaPayload, VencimientoMermaRespuesta, VencimientoProductoLotes, VencimientoSinLote,
@@ -167,66 +172,6 @@ const SITUACION: Record<VencimientoSituacion, { etiqueta: string; explicacion: s
 }
 
 // ── Escrituras: una clave por intento, y los intentos inciertos guardados ────────────────────────────────────────
-
-type Payload = VencimientoMermaPayload | VencimientoAsignarPayload
-type TipoDeEscritura = 'merma' | 'asignar'
-
-/** Un intento de escritura cuyo resultado no se conoce: el cuerpo completo, con su `clave_operacion`. */
-type Pendiente = { firma: string; tipo: TipoDeEscritura; cuerpo: Payload; creado: number }
-
-const CLAVE_DE_ALMACEN = 'libra-ui:vencimientos:pendientes'
-/** Sólo se usa si `sessionStorage` lanza (modo privado, sitio bloqueado): entonces el almacén vive en memoria. */
-let enMemoria: Record<string, Pendiente> = {}
-
-function esPendiente(v: unknown): v is Pendiente {
-  if (!v || typeof v !== 'object') return false
-  const p = v as Partial<Pendiente>
-  const c = p.cuerpo as Partial<Payload> | undefined
-  return typeof p.firma === 'string' && (p.tipo === 'merma' || p.tipo === 'asignar') && typeof p.creado === 'number'
-    && !!c && typeof c.clave_operacion === 'string' && typeof c.producto_id === 'number'
-}
-
-/** Lo guardado. Lee el almacenamiento en cada llamada (es la fuente de verdad: lo que otra pantalla o una recarga
- *  dejó ahí); un contenido ilegible cuenta como vacío. */
-function leerPendientes(): Record<string, Pendiente> {
-  let crudo: string | null
-  try {
-    crudo = sessionStorage.getItem(CLAVE_DE_ALMACEN)
-  } catch {
-    return enMemoria
-  }
-  try {
-    const parseado: unknown = crudo ? JSON.parse(crudo) : {}
-    if (!parseado || typeof parseado !== 'object') return {}
-    return Object.fromEntries(Object.entries(parseado).filter(([, v]) => esPendiente(v))) as Record<string, Pendiente>
-  } catch {
-    return {}
-  }
-}
-
-function guardarPendientes(todos: Record<string, Pendiente>) {
-  try {
-    sessionStorage.setItem(CLAVE_DE_ALMACEN, JSON.stringify(todos))
-    enMemoria = {}
-  } catch {
-    enMemoria = todos
-  }
-}
-
-function guardarPendiente(p: Pendiente) {
-  guardarPendientes({ ...leerPendientes(), [p.firma]: p })
-}
-
-function quitarPendiente(firma: string) {
-  const { [firma]: _quitado, ...resto } = leerPendientes()
-  guardarPendientes(resto)
-}
-
-/** La firma del DESTINO de la operación sobre el stock: tipo, producto, depósito, variante, lote y fecha; sin cantidad,
- *  nota ni motivo (cambiarlos no hace de esto otra operación). */
-function firmaDeDestino(tipo: TipoDeEscritura, d: { producto_id: number; deposito_id: number; variante_id: number | null; lote: string | null; vence: string | null }): string {
-  return JSON.stringify([tipo, d.producto_id, d.deposito_id, d.variante_id, d.lote, d.vence])
-}
 
 const FORMATO_DE_HORA = new Intl.DateTimeFormat('es-AR', { timeZone: ZONA_AR, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
 
@@ -363,7 +308,7 @@ function DialogoMerma({ fila, alCambiarPendientes, onCerrar, onListo }: {
   const errorDeLaCantidad = errorDeCantidad(cantidad, fila.saldo)
 
   // El destino es la fila entera: con un intento pendiente sobre ella, lo único que se puede hacer es reenviarlo o descartarlo.
-  const firma = firmaDeDestino('merma', { ...fila, lote: fila.lote, vence: fila.vence })
+  const firma = firmaDeMerma(fila)
   const pendiente = leerPendientes()[firma] ?? null
   const cuerpoPendiente = pendiente?.cuerpo as VencimientoMermaPayload | undefined
 
@@ -433,14 +378,8 @@ function DialogoAsignar({ fila, alCambiarPendientes, onCerrar, onListo }: {
   onCerrar: () => void
   onListo: (respuesta: VencimientoAsignarRespuesta) => void
 }) {
-  // Con un intento anterior sin confirmar sobre esta fila (el lote y la fecha los puso el usuario, no la fila), se abre
-  // con su lote y su fecha: es lo que lo identifica, y así se ve enseguida.
-  const [previo] = useState(() => Object.values(leerPendientes())
-    .filter((p): p is Pendiente & { cuerpo: VencimientoAsignarPayload } => p.tipo === 'asignar'
-      && p.cuerpo.producto_id === fila.producto_id && p.cuerpo.deposito_id === fila.deposito_id && p.cuerpo.variante_id === fila.variante_id)
-    .sort((a, b) => b.creado - a.creado)[0])
-  const [lote, setLote] = useState(previo?.cuerpo.lote ?? '')
-  const [vence, setVence] = useState(previo?.cuerpo.vence ?? '')
+  const [lote, setLote] = useState('')
+  const [vence, setVence] = useState('')
   const [cantidad, setCantidad] = useState(String(fila.saldo))
   const [nota, setNota] = useState('')
   const [intentado, setIntentado] = useState(false)
@@ -451,10 +390,11 @@ function DialogoAsignar({ fila, alCambiarPendientes, onCerrar, onListo }: {
   const errorDeLaFecha = /^\d{4}-\d{2}-\d{2}$/.test(vence) ? null : 'Elegí la fecha de vencimiento.'
   const errorDeLaCantidad = errorDeCantidad(cantidad, fila.saldo)
 
-  // El destino son el lote y la fecha elegidos (más la fila): con un intento pendiente sobre él sólo se puede reenviarlo
-  // o descartarlo. Lote y fecha siguen editables: cambiarlos es apuntar a otro destino.
-  const firma = errorDelLote || errorDeLaFecha ? null : firmaDeDestino('asignar', { ...fila, lote: lote.trim(), vence })
-  const pendiente = firma ? leerPendientes()[firma] ?? null : null
+  // El destino es el saldo sin lote de la fila (producto, depósito y variante), sea cual sea el lote y la fecha que se le
+  // quieran poner: con un intento pendiente sobre él, lote, fecha, cantidad y nota quedan bloqueados y sólo se puede
+  // reenviarlo o descartarlo (cambiar el lote no lo hace otra operación: gasta el MISMO saldo).
+  const firma = firmaDeAsignacion(fila)
+  const pendiente = leerPendientes()[firma] ?? null
   const cuerpoPendiente = pendiente?.cuerpo as VencimientoAsignarPayload | undefined
 
   function confirmar() {
@@ -463,7 +403,7 @@ function DialogoAsignar({ fila, alCambiarPendientes, onCerrar, onListo }: {
       return
     }
     setIntentado(true)
-    if (!firma || errorDeLaCantidad) return
+    if (errorDelLote || errorDeLaFecha || errorDeLaCantidad) return
     const datos = {
       producto_id: fila.producto_id, deposito_id: fila.deposito_id, variante_id: fila.variante_id, lote: lote.trim(),
       vence, cantidad: Number(cantidad), nota: nota.trim(),
@@ -486,22 +426,22 @@ function DialogoAsignar({ fila, alCambiarPendientes, onCerrar, onListo }: {
         <AvisoSaldoSobreestimado />
         {pendiente && cuerpoPendiente && !enVuelo && (
           <PanelIntentoPendiente
-            pendiente={pendiente} deshabilitado={enVuelo} onDescartar={() => descartar(pendiente.firma)}
+            pendiente={pendiente} deshabilitado={enVuelo} onDescartar={() => descartar(firma)}
             resumen={`asignar ${numero(cuerpoPendiente.cantidad)} ${fila.unidad} al lote ${cuerpoPendiente.lote} (vence ${fecha(cuerpoPendiente.vence)})`}
           />
         )}
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         <div className="grid gap-4">
-          <Campo id="asignar-lote" etiqueta="Lote" error={intentado ? errorDelLote : null}>
+          <Campo id="asignar-lote" etiqueta="Lote" error={pendiente ? null : (intentado ? errorDelLote : null)}>
             <Input
-              id="asignar-lote" value={lote} maxLength={MAX_LARGO_LOTE} aria-invalid={intentado && errorDelLote !== null}
-              onChange={(e) => setLote(e.target.value)}
+              id="asignar-lote" value={cuerpoPendiente ? cuerpoPendiente.lote : lote} maxLength={MAX_LARGO_LOTE} disabled={!!pendiente}
+              aria-invalid={!pendiente && intentado && errorDelLote !== null} onChange={(e) => setLote(e.target.value)}
             />
           </Campo>
-          <Campo id="asignar-vence" etiqueta="Fecha de vencimiento" error={intentado ? errorDeLaFecha : null}>
+          <Campo id="asignar-vence" etiqueta="Fecha de vencimiento" error={pendiente ? null : (intentado ? errorDeLaFecha : null)}>
             <Input
-              id="asignar-vence" type="date" value={vence} aria-invalid={intentado && errorDeLaFecha !== null}
-              onChange={(e) => setVence(e.target.value)}
+              id="asignar-vence" type="date" value={cuerpoPendiente ? cuerpoPendiente.vence : vence} disabled={!!pendiente}
+              aria-invalid={!pendiente && intentado && errorDeLaFecha !== null} onChange={(e) => setVence(e.target.value)}
             />
           </Campo>
           <Campo id="asignar-cantidad" etiqueta="Cantidad" error={pendiente ? null : (intentado || cantidad !== '' ? errorDeLaCantidad : null)}>
@@ -561,11 +501,10 @@ function ordenar(lotes: VencimientoLote[], orden: { clave: ClaveOrden; sentido: 
   })
 }
 
-/** ¿Hay un intento sin confirmar sobre esta fila? En un lote, la baja de ese lote; en un saldo sin lote, cualquier asignación
+/** ¿Hay un intento sin confirmar sobre esta fila? En un lote, la baja de ese lote; en un saldo sin lote, la asignación
  *  sobre ese producto, depósito y variante. */
-const pendienteDeLote = (todos: Pendiente[], l: VencimientoLote) => todos.some((p) => p.firma === firmaDeDestino('merma', l))
-const pendienteDeSinLote = (todos: Pendiente[], s: VencimientoSinLote) => todos.some((p) => p.tipo === 'asignar'
-  && p.cuerpo.producto_id === s.producto_id && p.cuerpo.deposito_id === s.deposito_id && p.cuerpo.variante_id === s.variante_id)
+const pendienteDeLote = (todos: Pendiente[], l: VencimientoLote) => todos.some((p) => p.firma === firmaDeMerma(l))
+const pendienteDeSinLote = (todos: Pendiente[], s: VencimientoSinLote) => todos.some((p) => p.firma === firmaDeAsignacion(s))
 
 function MarcaSinConfirmar() {
   return (
