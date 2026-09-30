@@ -696,6 +696,169 @@ export type ReposicionData = {
   productos: ReposicionProducto[]
 }
 
+// ── Vencimientos y lotes (`/api/vencimientos`, `libracommerce.erp.vencimientos`, ADR-018) ──
+//
+// Los nombres son los del motor, tal cual. Las cantidades (`saldo`, `cantidad`, …) vienen como `int` si son enteras y
+// `float` si no, ya limpias del ruido de la suma: la pantalla las muestra como llegan.
+
+/** `vencido` si `vence < hoy`; un lote que vence hoy es `por_vencer` (con `dias_para_vencer = 0`). */
+export type VencimientoEstado = 'vencido' | 'por_vencer'
+
+/** Un lote con saldo > 0 de un producto marcado (`lotes` de `GET /api/vencimientos`), por vencimiento. */
+export type VencimientoLote = {
+  producto_id: number
+  codigo: string | null
+  nombre: string
+  unidad: string
+  /** `''` si el producto no tiene categoría. */
+  categoria: string
+  deposito_id: number
+  deposito: string
+  /** Un depósito que ya no se usa igual se mira: la mercadería existe aunque el depósito esté dado de baja. */
+  deposito_activo: boolean
+  sucursal_id: number | null
+  sucursal: string | null
+  variante_id: number | null
+  variante: string | null
+  /** `null` si el lote no tiene código pero sí fecha. */
+  lote: string | null
+  /** `'AAAA-MM-DD'`. */
+  vence: string
+  /** Negativo = ya vencido. */
+  dias_para_vencer: number
+  saldo: number
+  estado: VencimientoEstado
+}
+
+/** `sin_fecha`: saldo sin lote positivo (hay que asignarle un vencimiento). `salidas_sin_lote`: saldo sin lote
+ *  negativo, o sea salidas que hasta A-4 no bajaron ningún lote: los saldos de los lotes están sobreestimados. */
+export type VencimientoSituacion = 'sin_fecha' | 'salidas_sin_lote'
+
+/** Un saldo «sin lote» ≠ 0 de un producto marcado: uno por producto, depósito y variante (`sin_lote` de `GET /api/vencimientos`). */
+export type VencimientoSinLote = {
+  producto_id: number
+  codigo: string | null
+  nombre: string
+  unidad: string
+  categoria: string
+  deposito_id: number
+  deposito: string
+  deposito_activo: boolean
+  sucursal_id: number | null
+  sucursal: string | null
+  variante_id: number | null
+  variante: string | null
+  saldo: number
+  situacion: VencimientoSituacion
+}
+
+export type VencimientosResumen = {
+  lotes_por_vencer: number
+  lotes_vencidos: number
+  /** Suma de cantidades, cada una en la unidad de su producto (kg y u se suman como números). */
+  unidades_por_vencer: number
+  unidades_vencidas: number
+  productos: number
+  productos_sin_lote: number
+  productos_con_salidas_sin_lote: number
+  saldos_sin_fecha: number
+  saldos_con_salidas_sin_lote: number
+}
+
+export type VencimientosData = {
+  sucursal_id: number | null
+  deposito_id: number | null
+  categoria: string | null
+  producto_id: number | null
+  incluir_vencidos: boolean
+  /** La fecha de hoy en Argentina según el motor, `'AAAA-MM-DD'`. */
+  hoy: string
+  dias: number
+  /** `hoy + dias`, inclusive. */
+  hasta: string
+  resumen: VencimientosResumen
+  lotes: VencimientoLote[]
+  sin_lote: VencimientoSinLote[]
+}
+
+/** `GET /api/vencimientos/productos/{id}/lotes`: la ficha (`vence` dice si está marcado). */
+export type VencimientoFicha = { producto_id: number; codigo: string | null; nombre: string; unidad: string; vence: boolean }
+
+/** Una existencia por lote de un producto (saldo ≠ 0), incluido el bucket sin lote (`lote` y `vence` en `null`). */
+export type VencimientoExistencia = {
+  producto_id: number
+  deposito_id: number
+  deposito: string
+  deposito_activo: boolean
+  sucursal_id: number | null
+  sucursal: string | null
+  variante_id: number | null
+  variante: string | null
+  lote: string | null
+  vence: string | null
+  dias_para_vencer: number | null
+  saldo: number
+  sin_lote: boolean
+  estado: 'vencido' | 'vigente' | 'sin_fecha'
+}
+
+export type VencimientoProductoLotes = { producto: VencimientoFicha; hoy: string; lotes: VencimientoExistencia[] }
+
+/** `PUT /api/vencimientos/productos/{id}` (cuerpo `{vence}`, estricto: un booleano) devuelve `{producto_id, vence}`. */
+export type VencimientoMarca = { producto_id: number; vence: boolean }
+
+/** `POST /api/vencimientos/merma`. `clave_operacion` es obligatoria: una por intento del usuario, que se reenvía IGUAL al
+ *  reintentar (con la misma clave y los mismos datos el motor no descuenta otra vez y contesta `repetida: true`). */
+export type VencimientoMermaPayload = {
+  producto_id: number
+  deposito_id: number
+  variante_id: number | null
+  /** Con `vence`: los del bucket tal como los devuelve el reporte. */
+  lote: string | null
+  vence: string | null
+  cantidad: number
+  clave_operacion: string
+  motivo: string
+  nota: string
+}
+
+export type VencimientoMermaRespuesta = {
+  producto_id: number
+  deposito_id: number
+  variante_id: number | null
+  lote: string | null
+  vence: string | null
+  cantidad: number
+  saldo_restante: number
+  repetida: boolean
+}
+
+/** `POST /api/vencimientos/asignar`: le pone lote y vencimiento a saldo que hoy no lo tiene. Misma regla de la clave. */
+export type VencimientoAsignarPayload = {
+  producto_id: number
+  deposito_id: number
+  variante_id: number | null
+  lote: string
+  /** `'AAAA-MM-DD'`. */
+  vence: string
+  cantidad: number
+  clave_operacion: string
+  nota: string
+}
+
+export type VencimientoAsignarRespuesta = {
+  producto_id: number
+  deposito_id: number
+  variante_id: number | null
+  lote: string
+  vence: string
+  cantidad: number
+  referencia: string
+  /** Lo que quedó sin lote al terminar la operación. */
+  saldo_sin_lote: number
+  repetida: boolean
+}
+
 export type CajaMedioVals = { ingresos: number; ingresos_ops: number; egresos: number; egresos_ops: number }
 
 export type CajaMedioPivot = {
