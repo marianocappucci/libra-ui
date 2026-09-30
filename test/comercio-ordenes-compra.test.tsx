@@ -1,13 +1,13 @@
 // Compras: órdenes y recepciones (F9 de VentaLibra, 2026-09-27) — el único
 // producto de la familia con este módulo, ver el docstring de `tipos.ts`.
-import { cleanup, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { Compras } from '../src/comercio/Compras'
 import { CompraDetalle } from '../src/comercio/CompraDetalle'
 import type { Deposito, Producto, Proveedor, PurchaseOrder, PurchaseReceipt } from '../src/comercio/tipos'
-import { cuerpoDe, elegirEnBuscable, montar, pedidas, prepararFetch, responder } from './helpers-pantallas'
+import { cuerpoDe, elegirEnBuscable, fetchMock, montar, pedidas, prepararFetch, responder } from './helpers-pantallas'
 
 const PROVEEDOR: Proveedor = { id: 1, nombre: 'Distribuidora SA', cuit_dni: '30-1', email: '', phone: '', address: '', iva_condition: '' }
 const PRODUCTO: Producto = {
@@ -128,5 +128,194 @@ describe('CompraDetalle', () => {
     responder({ '/api/purchase-orders/10': '!caida' })
     montar('/compras/10', <CompraDetalle />)
     expect(await screen.findByText('Error de conexión.')).toBeTruthy()
+  })
+})
+
+// ── Carga de vencimientos (0.92.0, K-1): lote y vencimiento por línea al recibir ────────────────────────────────────────────
+describe('CompraDetalle: recibir mercadería con lote y vencimiento', () => {
+  const LECHE: Producto = { ...PRODUCTO, id: 2, codigo: 'L002', nombre: 'Leche', unidad: 'u', vence: true }
+  const SAL: Producto = { ...PRODUCTO, id: 3, codigo: 'S003', nombre: 'Sal', unidad: 'kg', vence: false }
+  const linea = (item_id: number, pendiente = '10') => ({ ...LINEA, item_id, quantity_ordered: pendiente, pending_quantity: pendiente })
+  // Yerba (sin `vence` en la respuesta: un producto que no usa vencimientos), Leche (vence) y Sal (vence: false).
+  const ORDEN_TRES: PurchaseOrder = { ...ORDEN_CON_LINEA, items: [linea(1), linea(2, '6'), linea(3, '4')] }
+  const RECEPCION: PurchaseReceipt = { id: 50, proveedor_id: 1, purchase_order_id: 10, status: 'draft', items: [], received_at: null, document_reference: null }
+  const RUTAS_ITEMS = '/api/purchase-receipts/50/items'
+
+  function base(extra: Record<string, unknown> = {}, productos: Producto[] = [PRODUCTO, LECHE, SAL]) {
+    responder({
+      '/api/purchase-orders/10': ORDEN_TRES,
+      '/api/productos?solo_activos=true': productos,
+      '/api/proveedores': [PROVEEDOR],
+      '/api/depositos': [DEPOSITO],
+      '/api/purchase-receipts?purchase_order_id=10': [],
+      'POST /api/purchase-receipts': RECEPCION,
+      [`POST ${RUTAS_ITEMS}`]: RECEPCION,
+      'POST /api/purchase-receipts/50/confirm': { ...RECEPCION, status: 'confirmed' },
+      ...extra,
+    })
+  }
+  async function abrirRecibir(user: ReturnType<typeof userEvent.setup>) {
+    montar('/compras/10', <CompraDetalle />)
+    await user.click(await screen.findByRole('button', { name: /Recibir mercadería/ }))
+    return screen.getByRole('dialog')
+  }
+  const enviosDeLineas = () => pedidas().map((p, i) => ({ p, i })).filter(({ p }) => p === `POST ${RUTAS_ITEMS}`)
+    .map(({ i }) => JSON.parse(String((fetchMock.mock.calls[i][1] as RequestInit).body)) as Record<string, unknown>)
+
+  it('los campos «Lote» y «Vencimiento» aparecen sólo en las líneas de productos que vencen (vence === true): ni sin `vence` ni con vence: false', async () => {
+    base()
+    const user = userEvent.setup()
+    const recibir = await abrirRecibir(user)
+    expect(within(recibir).getByLabelText('Lote de Leche')).toBeTruthy()
+    const fecha = within(recibir).getByLabelText('Vencimiento de Leche') as HTMLInputElement
+    // El tipo nativo: la validación de una fecha imposible (31/02) es del propio input.
+    expect(fecha.type).toBe('date')
+    expect(within(recibir).queryByLabelText('Lote de Yerba 1kg')).toBeNull()
+    expect(within(recibir).queryByLabelText('Vencimiento de Yerba 1kg')).toBeNull()
+    expect(within(recibir).queryByLabelText('Lote de Sal')).toBeNull()
+    expect(within(recibir).queryByLabelText('Vencimiento de Sal')).toBeNull()
+    expect(within(recibir).getAllByLabelText(/^Lote de /)).toHaveLength(1)
+  })
+
+  it('un producto que no vence no cambia nada: el modal y el cuerpo de la línea son los de siempre (sin lot_code ni expires_at)', async () => {
+    responder({
+      '/api/purchase-orders/10': ORDEN_CON_LINEA, '/api/productos?solo_activos=true': [PRODUCTO], '/api/proveedores': [PROVEEDOR],
+      '/api/depositos': [DEPOSITO], '/api/purchase-receipts?purchase_order_id=10': [], 'POST /api/purchase-receipts': RECEPCION,
+      [`POST ${RUTAS_ITEMS}`]: RECEPCION, 'POST /api/purchase-receipts/50/confirm': { ...RECEPCION, status: 'confirmed' },
+    })
+    const user = userEvent.setup()
+    const recibir = await abrirRecibir(user)
+    expect(within(recibir).queryByText('Lote')).toBeNull()
+    expect(within(recibir).queryByText('Vencimiento')).toBeNull()
+    await user.click(within(recibir).getByRole('button', { name: 'Recibir' }))
+    await waitFor(() => expect(pedidas()).toContain('POST /api/purchase-receipts/50/confirm'))
+    expect(cuerpoDe(`POST ${RUTAS_ITEMS}`)).toEqual({ item_id: 1, quantity: '10', unit_cost: '900' })
+  })
+
+  it('un producto que vence con los dos campos vacíos también se recibe como hoy (sin lot_code ni expires_at)', async () => {
+    base()
+    const user = userEvent.setup()
+    const recibir = await abrirRecibir(user)
+    await user.click(within(recibir).getByRole('button', { name: 'Recibir' }))
+    await waitFor(() => expect(pedidas()).toContain('POST /api/purchase-receipts/50/confirm'))
+    expect(enviosDeLineas()).toEqual([
+      { item_id: 1, quantity: '10', unit_cost: '900' },
+      { item_id: 2, quantity: '6', unit_cost: '900' },
+      { item_id: 3, quantity: '4', unit_cost: '900' },
+    ])
+  })
+
+  it('con lote y vencimiento la línea lleva lot_code y expires_at (ISO aaaa-mm-dd, lote sin espacios) y sólo la del producto que vence', async () => {
+    base()
+    const user = userEvent.setup()
+    const recibir = await abrirRecibir(user)
+    fireEvent.change(within(recibir).getByLabelText('Lote de Leche'), { target: { value: '  L-0930 ' } })
+    fireEvent.change(within(recibir).getByLabelText('Vencimiento de Leche'), { target: { value: '2026-12-31' } })
+    // Las cantidades y los costos se siguen pudiendo cambiar y viajan.
+    fireEvent.change(within(recibir).getByLabelText('Cantidad a recibir de Leche'), { target: { value: '5' } })
+    fireEvent.change(within(recibir).getByLabelText('Costo unitario de Leche'), { target: { value: '120.5' } })
+    await user.click(within(recibir).getByRole('button', { name: 'Recibir' }))
+    await waitFor(() => expect(pedidas()).toContain('POST /api/purchase-receipts/50/confirm'))
+    expect(enviosDeLineas()).toEqual([
+      { item_id: 1, quantity: '10', unit_cost: '900' },
+      { item_id: 2, quantity: '5', unit_cost: '120.5', lot_code: 'L-0930', expires_at: '2026-12-31' },
+      { item_id: 3, quantity: '4', unit_cost: '900' },
+    ])
+    expect(cuerpoDe('POST /api/purchase-receipts/50/confirm')).toEqual({ deposito_id: 1 })
+  })
+
+  it('o los dos o ninguno: un lote sin fecha o una fecha sin lote avisa, deshabilita «Recibir» y no manda nada', async () => {
+    base()
+    const user = userEvent.setup()
+    const recibir = await abrirRecibir(user)
+    const AVISO = 'Completá el lote y el vencimiento, o dejá los dos vacíos.'
+    const recibirBtn = () => within(recibir).getByRole('button', { name: 'Recibir' }) as HTMLButtonElement
+    expect(recibirBtn().disabled).toBe(false)
+
+    fireEvent.change(within(recibir).getByLabelText('Lote de Leche'), { target: { value: 'L-1' } })
+    expect((await within(recibir).findByRole('alert')).textContent).toBe(AVISO)
+    expect(recibirBtn().disabled).toBe(true)
+    await user.click(recibirBtn())
+    expect(pedidas()).not.toContain('POST /api/purchase-receipts')
+
+    fireEvent.change(within(recibir).getByLabelText('Lote de Leche'), { target: { value: '   ' } })
+    expect(within(recibir).queryByRole('alert')).toBeNull()
+    expect(recibirBtn().disabled).toBe(false)
+
+    fireEvent.change(within(recibir).getByLabelText('Vencimiento de Leche'), { target: { value: '2026-12-31' } })
+    expect(within(recibir).getByRole('alert').textContent).toBe(AVISO)
+    expect(recibirBtn().disabled).toBe(true)
+
+    // Completando el par, se habilita.
+    fireEvent.change(within(recibir).getByLabelText('Lote de Leche'), { target: { value: 'L-1' } })
+    expect(within(recibir).queryByRole('alert')).toBeNull()
+    expect(recibirBtn().disabled).toBe(false)
+    expect(pedidas()).not.toContain('POST /api/purchase-receipts')
+  })
+
+  it('una fecha imposible o a medio escribir (el input nativo entrega vacío con badInput) se avisa aparte y bloquea', async () => {
+    base()
+    const user = userEvent.setup()
+    const recibir = await abrirRecibir(user)
+    fireEvent.change(within(recibir).getByLabelText('Lote de Leche'), { target: { value: 'L-1' } })
+    const fecha = within(recibir).getByLabelText('Vencimiento de Leche') as HTMLInputElement
+    Object.defineProperty(fecha, 'validity', { configurable: true, value: { badInput: true } })
+    fireEvent.change(fecha, { target: { value: '2026-12-31' } })
+    expect(within(recibir).getByRole('alert').textContent).toBe('La fecha de vencimiento no es válida.')
+    expect((within(recibir).getByRole('button', { name: 'Recibir' }) as HTMLButtonElement).disabled).toBe(true)
+
+    Object.defineProperty(fecha, 'validity', { configurable: true, value: { badInput: false } })
+    fireEvent.change(fecha, { target: { value: '2026-12-30' } })
+    expect(within(recibir).queryByRole('alert')).toBeNull()
+    await user.click(within(recibir).getByRole('button', { name: 'Recibir' }))
+    await waitFor(() => expect(pedidas()).toContain('POST /api/purchase-receipts/50/confirm'))
+    expect(enviosDeLineas()[1]).toEqual({ item_id: 2, quantity: '6', unit_cost: '900', lot_code: 'L-1', expires_at: '2026-12-30' })
+  })
+
+  it('una línea que no se recibe (cantidad 0) no exige ni manda lote y vencimiento', async () => {
+    base()
+    const user = userEvent.setup()
+    const recibir = await abrirRecibir(user)
+    fireEvent.change(within(recibir).getByLabelText('Lote de Leche'), { target: { value: 'L-1' } })
+    expect(within(recibir).getByRole('alert')).toBeTruthy()
+    fireEvent.change(within(recibir).getByLabelText('Cantidad a recibir de Leche'), { target: { value: '0' } })
+    expect(within(recibir).queryByRole('alert')).toBeNull()
+    await user.click(within(recibir).getByRole('button', { name: 'Recibir' }))
+    await waitFor(() => expect(pedidas()).toContain('POST /api/purchase-receipts/50/confirm'))
+    expect(enviosDeLineas().map((l) => l.item_id)).toEqual([1, 3])
+  })
+
+  it('hay UNA sola consulta de productos: abrir el modal (y las líneas que vencen) no agrega ninguna', async () => {
+    base()
+    const user = userEvent.setup()
+    montar('/compras/10', <CompraDetalle />)
+    await screen.findByText(/OC-000001/)
+    const antes = pedidas().filter((p) => p.includes('/api/productos')).length
+    expect(antes).toBe(1)
+    await user.click(screen.getByRole('button', { name: /Recibir mercadería/ }))
+    expect(screen.getByLabelText('Lote de Leche')).toBeTruthy()
+    expect(pedidas().filter((p) => p.includes('/api/productos'))).toHaveLength(1)
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancelar' }))
+    await user.click(screen.getByRole('button', { name: /Recibir mercadería/ }))
+    expect(pedidas().filter((p) => p.includes('/api/productos'))).toHaveLength(1)
+  })
+
+  it('una recepción cortada a mitad sigue igual: el error se ve, la recepción queda en borrador, sin confirmar, y las líneas ya enviadas llevaron su lote', async () => {
+    let n = 0
+    base({
+      [`POST ${RUTAS_ITEMS}`]: () => { n += 1; return n === 3 ? { status: 409, detail: 'la recepción ya no admite líneas' } : RECEPCION },
+      '/api/purchase-receipts?purchase_order_id=10': [{ ...RECEPCION, items: [{ item_id: 1, quantity: '10', unit_cost: '900', lot_code: null, expires_at: null }] }],
+    })
+    const user = userEvent.setup()
+    const recibir = await abrirRecibir(user)
+    fireEvent.change(within(recibir).getByLabelText('Lote de Leche'), { target: { value: 'L-1' } })
+    fireEvent.change(within(recibir).getByLabelText('Vencimiento de Leche'), { target: { value: '2026-12-31' } })
+    await user.click(within(recibir).getByRole('button', { name: 'Recibir' }))
+    expect(await within(recibir).findByText('la recepción ya no admite líneas')).toBeTruthy()
+    expect(pedidas()).not.toContain('POST /api/purchase-receipts/50/confirm')
+    expect(enviosDeLineas()[1]).toMatchObject({ item_id: 2, lot_code: 'L-1', expires_at: '2026-12-31' })
+    // El diálogo sigue abierto con lo tipeado y la recepción en borrador aparece en «Recepciones de esta orden».
+    expect((within(recibir).getByLabelText('Lote de Leche') as HTMLInputElement).value).toBe('L-1')
+    expect(await screen.findByText('Borrador')).toBeTruthy()
   })
 })

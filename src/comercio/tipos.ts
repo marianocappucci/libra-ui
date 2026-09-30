@@ -28,6 +28,10 @@ export type Producto = {
   tipo: 'producto' | 'servicio'
   /** Sólo si el backend lo trae (v0.19.0): el `id` de la categoría, para quien la filtra por id. */
   categoria_id?: number | null
+  /** Sólo si el backend lo trae (carga de vencimientos, opt-in `OpcionesCatalogo.con_vencimientos`): si el producto está
+   *  marcado como perecedero (maneja lotes y fecha de vencimiento). Ausente = el producto no usa vencimientos y las
+   *  pantallas no muestran nada de eso. */
+  vence?: boolean
 }
 
 /** Un código de un producto (`GET /api/productos/{id}/codigos`): barras, SKU, balanza… El principal es el de `Producto.codigo`. */
@@ -856,6 +860,33 @@ export type VencimientoAsignarRespuesta = {
   referencia: string
   /** Lo que quedó sin lote al terminar la operación. */
   saldo_sin_lote: number
+  repetida: boolean
+}
+
+/** `POST /api/vencimientos/entrada`: una entrada manual de stock NUEVO con lote y vencimiento (suma stock; no toca el «sin
+ *  lote»). Misma regla de la clave que `merma` y `asignar`. */
+export type VencimientoEntradaPayload = {
+  producto_id: number
+  deposito_id: number
+  variante_id: number | null
+  lote: string
+  /** `'AAAA-MM-DD'`. */
+  vence: string
+  cantidad: number
+  clave_operacion: string
+  nota: string
+}
+
+export type VencimientoEntradaRespuesta = {
+  producto_id: number
+  deposito_id: number
+  variante_id: number | null
+  lote: string
+  vence: string
+  cantidad: number
+  referencia: string
+  /** El saldo de ese lote (en ese depósito y variante) tras la entrada. */
+  saldo_lote: number
   repetida: boolean
 }
 
