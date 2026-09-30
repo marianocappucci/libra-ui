@@ -1504,6 +1504,8 @@ async function abrirEntrada(user: ReturnType<typeof userEvent.setup>, producto: 
   await user.click(screen.getByRole('button', { name: 'Cargar stock con lote' }))
   await elegirEnBuscable(user, within(dialogo()).getByRole('combobox', { name: 'Producto' }), producto)
   await within(dialogo()).findByLabelText('Lote')
+  // La confirmación espera a la lista de variantes del producto: se sigue cuando ya está habilitada.
+  await waitFor(() => expect((confirmar() as HTMLButtonElement).disabled).toBe(false))
   return dialogo()
 }
 function completarEntrada(lote = 'L-2026', vence = '2027-03-15', cantidad = '12') {
@@ -1722,13 +1724,6 @@ describe('Vencimientos: cargar stock con lote (entrada)', () => {
     await abrir(TODO_ENTRADA)
     await abrirEntrada(user)
     expect(within(dialogo()).queryByLabelText('Variante')).toBeNull()
-  })
-
-  it('si no se pueden consultar las variantes lo dice y no se manda (no se carga en la base por omisión)', async () => {
-    const user = userEvent.setup()
-    await abrir({ ...TODO_ENTRADA, '/api/productos/1/variantes': { status: 403, detail: 'Sin permiso de variantes' } })
-    await abrirEntrada(user)
-    expect((await within(dialogo()).findByText('Sin permiso de variantes')).getAttribute('role')).toBe('alert')
   })
 
   it('sin lote, sin fecha, con una fecha incompleta o con una cantidad en 0 o vacía no se manda y dice qué falta', async () => {
@@ -2044,3 +2039,166 @@ describe('Vencimientos: cargar stock con lote (entrada)', () => {
     expect((confirmar() as HTMLButtonElement).disabled).toBe(true)
   })
 })
+
+describe('Vencimientos: cargar stock con lote: las variantes se conocen ANTES de confirmar', () => {
+  const VARIANTES = [
+    { id: 7, producto_id: 1, sku: 'Y-500', nombre: 'x500', atributos: {}, activa: true },
+    { id: 8, producto_id: 1, sku: 'Y-1K', nombre: 'x1kg', atributos: {}, activa: true },
+  ]
+  const RUTA_VARIANTES_1 = '/api/productos/1/variantes'
+  const RUTA_VARIANTES_2 = '/api/productos/2/variantes'
+
+  /** Retiene un GET hasta que el test lo libere (lo que queda en vuelo no contesta solo). */
+  function retener(ruta: string) {
+    const base = fetchMock.getMockImplementation()!
+    let liberar: (r: Response) => void = () => {}
+    const promesa = new Promise<Response>((r) => { liberar = r })
+    let pedidos = 0
+    fetchMock.mockImplementation((entrada: RequestInfo | URL, init?: RequestInit) => {
+      if (String(entrada) === ruta && (init?.method ?? 'GET') === 'GET') { pedidos += 1; return promesa }
+      return base(entrada, init)
+    })
+    return { liberar, pedidos: () => pedidos }
+  }
+  /** Cambia cómo contesta un GET (para que el reintento ya ande). */
+  function contestar(ruta: string, cuerpo: unknown) {
+    const base = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation((entrada: RequestInfo | URL, init?: RequestInit) =>
+      String(entrada) === ruta && (init?.method ?? 'GET') === 'GET' ? Promise.resolve(json(cuerpo)) : base(entrada, init))
+  }
+  async function elegir(user: ReturnType<typeof userEvent.setup>, producto: string | RegExp) {
+    await elegirEnBuscable(user, within(dialogo()).getByRole('combobox', { name: 'Producto' }), producto)
+  }
+
+  it('con la consulta de variantes en vuelo no se confirma: el botón está apagado, se dice «Consultando variantes…» y no sale ningún POST; al llegar, sí', async () => {
+    const user = userEvent.setup()
+    await abrir({ ...TODO_ENTRADA, [RUTA_VARIANTES_1]: VARIANTES })
+    const variantes = retener(RUTA_VARIANTES_1)
+    await user.click(screen.getByRole('button', { name: 'Cargar stock con lote' }))
+    await elegir(user, /Yerba/)
+    await within(dialogo()).findByLabelText('Lote')
+    completarEntrada()
+    expect(within(dialogo()).getByText('Consultando variantes…')).toBeTruthy()
+    expect((confirmar() as HTMLButtonElement).disabled).toBe(true)
+    await user.click(confirmar())
+    fireEvent.click(confirmar())
+    expect(enviosA(ENTRADA)).toHaveLength(0)
+    expect(guardado()).toEqual({})
+
+    await act(async () => { variantes.liberar(json(VARIANTES)) })
+    await within(dialogo()).findByLabelText('Variante')
+    expect(within(dialogo()).queryByText('Consultando variantes…')).toBeNull()
+    // Con variantes hay que elegir: sin elegir, tampoco sale.
+    await user.click(confirmar())
+    expect(enviosA(ENTRADA)).toHaveLength(0)
+    await user.selectOptions(within(dialogo()).getByLabelText('Variante'), '7')
+    await user.click(confirmar())
+    await waitFor(() => expect(enviosA(ENTRADA)).toHaveLength(1))
+    expect(enviosA(ENTRADA)[0]).toMatchObject({ producto_id: 1, variante_id: 7 })
+  })
+
+  it('si la consulta de variantes falla no se confirma (nunca variante_id: null por omisión), se ve el error con «Reintentar»; tras un reintento exitoso se carga con la variante elegida o «Sin variante»', async () => {
+    const user = userEvent.setup()
+    await abrir({ ...TODO_ENTRADA, [RUTA_VARIANTES_1]: { status: 500, detail: 'falló el catálogo' } })
+    await user.click(screen.getByRole('button', { name: 'Cargar stock con lote' }))
+    await elegir(user, /Yerba/)
+    await within(dialogo()).findByLabelText('Lote')
+    completarEntrada()
+    const alerta = await within(dialogo()).findByText(/No se pudieron consultar las variantes del producto: falló el catálogo/)
+    expect(alerta.getAttribute('role')).toBe('alert')
+    expect((confirmar() as HTMLButtonElement).disabled).toBe(true)
+    await user.click(confirmar())
+    expect(enviosA(ENTRADA)).toHaveLength(0)
+    expect(within(dialogo()).queryByLabelText('Variante')).toBeNull()
+
+    contestar(RUTA_VARIANTES_1, VARIANTES)
+    await user.click(within(dialogo()).getByRole('button', { name: 'Reintentar' }))
+    await within(dialogo()).findByLabelText('Variante')
+    expect(within(dialogo()).queryByRole('button', { name: 'Reintentar' })).toBeNull()
+    // Lo tipeado sigue ahí.
+    expect((within(dialogo()).getByLabelText('Lote') as HTMLInputElement).value).toBe('L-2026')
+    await user.selectOptions(within(dialogo()).getByLabelText('Variante'), '__base__')
+    await user.click(confirmar())
+    await waitFor(() => expect(enviosA(ENTRADA)).toHaveLength(1))
+    expect(enviosA(ENTRADA)[0]).toMatchObject({ producto_id: 1, variante_id: null })
+  })
+
+  it('tras un reintento exitoso con la lista vacía (el producto no tiene variantes) se carga en la base', async () => {
+    const user = userEvent.setup()
+    await abrir({ ...TODO_ENTRADA, [RUTA_VARIANTES_1]: { status: 403, detail: 'Sin permiso de variantes' } })
+    await user.click(screen.getByRole('button', { name: 'Cargar stock con lote' }))
+    await elegir(user, /Yerba/)
+    await within(dialogo()).findByLabelText('Lote')
+    completarEntrada()
+    await within(dialogo()).findByText(/Sin permiso de variantes/)
+    expect((confirmar() as HTMLButtonElement).disabled).toBe(true)
+    contestar(RUTA_VARIANTES_1, [])
+    await user.click(within(dialogo()).getByRole('button', { name: 'Reintentar' }))
+    await waitFor(() => expect((confirmar() as HTMLButtonElement).disabled).toBe(false))
+    await user.click(confirmar())
+    await waitFor(() => expect(enviosA(ENTRADA)).toHaveLength(1))
+    expect(enviosA(ENTRADA)[0]).toMatchObject({ producto_id: 1, variante_id: null })
+  })
+
+  it('carrera: la respuesta vieja de otro producto no habilita la confirmación ni se usa; al cambiar de producto se reinicia', async () => {
+    const user = userEvent.setup()
+    await abrir({
+      ...TODO_ENTRADA, [RUTA_VARIANTES_1]: VARIANTES, [RUTA_VARIANTES_2]: [],
+      '/api/vencimientos/productos/2/lotes': FICHA_DE(true, 'u', 2, 'Crema'),
+      [`POST ${ENTRADA}`]: { ...ENTRADA_OK, producto_id: 2 },
+    })
+    const de1 = retener(RUTA_VARIANTES_1)
+    const de2 = retener(RUTA_VARIANTES_2)
+    await user.click(screen.getByRole('button', { name: 'Cargar stock con lote' }))
+    await elegir(user, /Yerba/)
+    await within(dialogo()).findByLabelText('Lote')
+    await elegir(user, /Crema/)
+    await waitFor(() => expect(de2.pedidos()).toBe(1))
+    await within(dialogo()).findByLabelText('Lote')
+    completarEntrada()
+    // Llega la respuesta de Yerba (vieja): no vale para Crema.
+    await act(async () => { de1.liberar(json(VARIANTES)) })
+    expect(within(dialogo()).queryByLabelText('Variante')).toBeNull()
+    expect(within(dialogo()).getByText('Consultando variantes…')).toBeTruthy()
+    expect((confirmar() as HTMLButtonElement).disabled).toBe(true)
+    await user.click(confirmar())
+    expect(enviosA(ENTRADA)).toHaveLength(0)
+
+    // Llega la de Crema (sin variantes): ahora sí, a la base y de Crema.
+    await act(async () => { de2.liberar(json([])) })
+    await waitFor(() => expect((confirmar() as HTMLButtonElement).disabled).toBe(false))
+    await user.click(confirmar())
+    await waitFor(() => expect(enviosA(ENTRADA)).toHaveLength(1))
+    expect(enviosA(ENTRADA)[0]).toMatchObject({ producto_id: 2, variante_id: null })
+  })
+
+  it('volver a elegir un producto no reusa la variante elegida para el anterior', async () => {
+    const user = userEvent.setup()
+    await abrir({
+      ...TODO_ENTRADA, [RUTA_VARIANTES_1]: VARIANTES, [RUTA_VARIANTES_2]: VARIANTES.map((v) => ({ ...v, producto_id: 2 })),
+      '/api/vencimientos/productos/2/lotes': FICHA_DE(true, 'u', 2, 'Crema'),
+    })
+    await abrirEntrada(user)
+    await user.selectOptions(within(dialogo()).getByLabelText('Variante'), '8')
+    await elegir(user, /Crema/)
+    await waitFor(() => expect((within(dialogo()).getByLabelText('Variante') as HTMLSelectElement)).toBeTruthy())
+    completarEntrada()
+    await user.click(confirmar())
+    expect(await within(dialogo()).findByText('Elegí la variante, o «Sin variante».')).toBeTruthy()
+    expect(enviosA(ENTRADA)).toHaveLength(0)
+  })
+
+  it('reenviar un intento guardado no depende de la consulta de variantes (se manda el cuerpo original)', async () => {
+    const user = userEvent.setup()
+    const cuerpo = { producto_id: 1, deposito_id: 1, variante_id: 8, lote: 'L-2026', vence: '2027-03-15', cantidad: 12, nota: '', clave_operacion: 'k-viejo' }
+    const firma = JSON.stringify(['entrada', 1, 1, 8, 'L-2026', '2027-03-15'])
+    sessionStorage.setItem(ALMACEN, JSON.stringify({ [firma]: { firma, tipo: 'entrada', cuerpo, creado: Date.UTC(2026, 8, 30, 15, 30) } }))
+    await abrir({ ...TODO_ENTRADA, [RUTA_VARIANTES_1]: { status: 500, detail: 'caído' } })
+    await user.click(screen.getByRole('button', { name: 'Revisar la carga sin confirmar' }))
+    await within(dialogo()).findByText(/Hay un intento anterior sin confirmar/)
+    await user.click(confirmar())
+    await waitFor(() => expect(enviosA(ENTRADA)).toHaveLength(1))
+    expect(enviosA(ENTRADA)[0]).toEqual(cuerpo)
+  })
+})
+

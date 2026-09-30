@@ -578,6 +578,8 @@ function DialogoEntrada({ productos, errorDeProductos, sucursales, puedeMarcar, 
   const [intentado, setIntentado] = useState(false)
   const [depositos, setDepositos] = useState<{ lista: Deposito[]; error: string | null } | null>(null)
   const [variantes, setVariantes] = useState<{ productoId: string; lista: VarianteProducto[]; error: string | null } | null>(null)
+  // Sube con «Reintentar» (la consulta de variantes falló): vuelve a pedirla.
+  const [intentoDeVariantes, setIntentoDeVariantes] = useState(0)
   const [marcando, setMarcando] = useState(false)
   const [errorDeMarca, setErrorDeMarca] = useState<string | null>(null)
   const guardaMarca = useRef(false)
@@ -602,7 +604,8 @@ function DialogoEntrada({ productos, errorDeProductos, sucursales, puedeMarcar, 
     return () => { vigente = false }
   }, [])
 
-  // Las variantes del producto elegido (si tiene, hay que decir cuál).
+  // Las variantes del producto elegido (si tiene, hay que decir cuál). 🔴 Cargar con la consulta en vuelo o fallida podría dejar
+  // el stock en la base cuando el producto las tiene: hasta que la lista del producto ELEGIDO llegó bien no se confirma.
   useEffect(() => {
     if (!productoId) return
     let vigente = true
@@ -610,33 +613,48 @@ function DialogoEntrada({ productos, errorDeProductos, sucursales, puedeMarcar, 
       .then((lista) => { if (vigente) setVariantes({ productoId, lista: lista.filter((v) => v.activa), error: null }) })
       .catch((err) => { if (vigente) setVariantes({ productoId, lista: [], error: mensajeDeError(err) }) })
     return () => { vigente = false }
-  }, [productoId])
+  }, [productoId, intentoDeVariantes])
 
   const opciones = useMemo(() => opcionesDeProductos(productos), [productos])
   const elegido = productos.find((p) => String(p.id) === productoId)
+  // Sólo vale la lista del producto elegido ahora (la de otro, o una respuesta vieja, no): `null` = cargando.
   const variantesDelProducto = variantes?.productoId === productoId ? variantes : null
-  const tieneVariantes = (variantesDelProducto?.lista.length ?? 0) > 0
+  const variantesListas = productoId !== '' && variantesDelProducto !== null && variantesDelProducto.error === null
+  const cargandoVariantes = productoId !== '' && variantesDelProducto === null
+  const tieneVariantes = variantesListas && variantesDelProducto!.lista.length > 0
   const nombreDeSucursal = (id: number | null | undefined) => sucursales.find((x) => x.id === id)?.nombre
 
   function elegirProducto(valor: string) {
     setProductoId(valor)
     setVarianteId('')
+    setVariantes(null)
     setErrorDeMarca(null)
   }
 
+  function reintentarVariantes() {
+    setVariantes(null)
+    setIntentoDeVariantes((n) => n + 1)
+  }
+
   const productoListo = ficha?.vence === true
-  const varianteNum = tieneVariantes && varianteId !== SIN_VARIANTE && varianteId !== '' ? Number(varianteId) : null
+  // Sin variantes (lista llegada y vacía) o «Sin variante» es la base (`null`); una variante elegida es su id.
+  const sinVariantes = variantesListas && !tieneVariantes
+  const varianteNum = sinVariantes || varianteId === SIN_VARIANTE || varianteId === '' ? null : Number(varianteId)
+  // ¿Se sabe a qué variante va? Con la lista vacía, sí (la base); con variantes, sólo si se eligió una o «Sin variante».
+  const varianteResuelta = sinVariantes || varianteId !== ''
 
   const errorDelProducto = productoId === '' ? 'Elegí el producto.' : null
   const errorDelDeposito = depositoId === '' ? 'Elegí el depósito.' : null
   const errorDeLaVariante = tieneVariantes && varianteId === '' ? 'Elegí la variante, o «Sin variante».' : null
+  // Una carga NUEVA necesita la lista de variantes del producto; reenviar un intento guardado manda su cuerpo tal cual.
+  const puedeEnviar = variantesListas
   const errorDelLote = lote.trim() === '' ? 'Escribí el código del lote.' : null
   const errorDeLaFecha = fechaIncompleta ? 'La fecha no es válida.' : (esFechaISOValida(vence) ? null : 'Elegí la fecha de vencimiento.')
   const errorDeLaCantidad = errorDeCantidadNueva(cantidad)
 
   // El destino es el bucket al que suma (producto, depósito, variante, lote y fecha): con un intento pendiente sobre ÉL,
   // cantidad y nota quedan bloqueadas y sólo se puede reenviarlo o descartarlo. Cambiar cualquiera de los cinco es otro destino.
-  const firma = productoId !== '' && depositoId !== '' && lote.trim() !== '' && esFechaISOValida(vence) && errorDeLaVariante === null
+  const firma = productoId !== '' && depositoId !== '' && lote.trim() !== '' && esFechaISOValida(vence) && varianteResuelta
     ? firmaDeEntrada({ producto_id: Number(productoId), deposito_id: Number(depositoId), variante_id: varianteNum, lote: lote.trim(), vence })
     : null
   const pendiente = firma ? (leerPendientes()[firma] ?? null) : null
@@ -651,7 +669,7 @@ function DialogoEntrada({ productos, errorDeProductos, sucursales, puedeMarcar, 
       return
     }
     setIntentado(true)
-    if (!productoListo || errorDelProducto || errorDelDeposito || errorDeLaVariante || errorDelLote || errorDeLaFecha || errorDeLaCantidad || !firma) return
+    if (!puedeEnviar || !productoListo || errorDelProducto || errorDelDeposito || errorDeLaVariante || errorDelLote || errorDeLaFecha || errorDeLaCantidad || !firma) return
     const datos = {
       producto_id: Number(productoId), deposito_id: Number(depositoId), variante_id: varianteNum, lote: lote.trim(),
       vence, cantidad: Number(cantidad), nota: nota.trim(),
@@ -742,7 +760,17 @@ function DialogoEntrada({ productos, errorDeProductos, sucursales, puedeMarcar, 
                   </SelectContent>
                 </Select>
               </Campo>
-              {variantesDelProducto?.error && <p role="alert" className="text-sm text-destructive">{variantesDelProducto.error}</p>}
+              {cargandoVariantes && <p role="status" className="text-sm text-muted-foreground">Consultando variantes…</p>}
+              {variantesDelProducto?.error && (
+                <div className="grid gap-2">
+                  <p role="alert" className="text-sm text-destructive">
+                    No se pudieron consultar las variantes del producto: {variantesDelProducto.error} No se puede cargar hasta saber si tiene variantes.
+                  </p>
+                  <div>
+                    <Button type="button" size="sm" variant="outline" disabled={bloqueado} onClick={reintentarVariantes}>Reintentar</Button>
+                  </div>
+                </div>
+              )}
               {tieneVariantes && (
                 <Campo id="entrada-variante" etiqueta="Variante" error={intentado ? errorDeLaVariante : null}>
                   <Select value={varianteId} onValueChange={setVarianteId} disabled={bloqueado}>
@@ -782,7 +810,7 @@ function DialogoEntrada({ productos, errorDeProductos, sucursales, puedeMarcar, 
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" disabled={enVuelo} onClick={onCerrar}>Cancelar</Button>
-          <Button type="button" disabled={bloqueado || !mostrarCampos} onClick={confirmar}>
+          <Button type="button" disabled={bloqueado || !mostrarCampos || (!cuerpoPendiente && !puedeEnviar)} onClick={confirmar}>
             <Check />{enVuelo ? 'Guardando…' : (cuerpoPendiente ? 'Reenviar el intento anterior' : 'Confirmar')}
           </Button>
         </DialogFooter>

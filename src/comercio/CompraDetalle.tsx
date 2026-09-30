@@ -114,10 +114,16 @@ export function CompraDetalle({ rutaDeCompras = '/compras' }: CompraDetalleProps
   }
 
   /** ¿El producto maneja lotes y vencimiento? Sale de la misma consulta de productos que arma la pantalla (`GET /api/productos`
-   *  trae `vence` si el producto habilita vencimientos): no hay una consulta más por abrir el modal ni una por línea. Sin
-   *  `vence` en la respuesta (un producto que no usa vencimientos) o un producto que no está en la lista, `false`. */
-  function venceDe(itemId: number): boolean {
-    return items.find((i) => i.id === itemId)?.vence === true
+   *  trae `vence` si el producto habilita vencimientos): no hay una consulta más por abrir el modal ni una por línea.
+   *  - `'si'`: está en la lista con `vence: true`. `'no'`: está en la lista con `vence: false` o sin la clave (un backend sin la opción).
+   *  - `'desconocido'`: NO está en la lista (la consulta es de productos activos: una orden vieja puede tener uno desactivado que
+   *    vence) y el backend sí maneja `vence` (algún producto de la lista lo trae). No se asume que no vence: se ofrecen los campos
+   *    igual. Si ningún producto trae `vence` (consumidores sin la opción), un producto fuera de la lista es `'no'`. */
+  const backendConVence = items.some((i) => typeof i.vence === 'boolean')
+  function vencimientoDe(itemId: number): 'si' | 'no' | 'desconocido' {
+    const p = items.find((i) => i.id === itemId)
+    if (!p) return backendConVence ? 'desconocido' : 'no'
+    return p.vence === true ? 'si' : 'no'
   }
 
   function supplierName(supplierId: number): string {
@@ -267,7 +273,7 @@ export function CompraDetalle({ rutaDeCompras = '/compras' }: CompraDetalleProps
           order={order}
           locations={locations}
           itemName={itemName}
-          venceDe={venceDe}
+          vencimientoDe={vencimientoDe}
           onCerrar={() => setRecibirOpen(false)}
           onRecibida={async () => {
             setRecibirOpen(false)
@@ -282,7 +288,7 @@ export function CompraDetalle({ rutaDeCompras = '/compras' }: CompraDetalleProps
 
 /** El modal de "Recibir mercadería": una fila por línea pendiente, con la
  *  cantidad y el costo precargados y editables, el depósito de destino y un
- *  remito opcional. Las líneas de un producto que VENCE (`venceDe`) ofrecen además «Lote» y
+ *  remito opcional. Las líneas de un producto que VENCE o cuyo vencimiento se DESCONOCE (`vencimientoDe`) ofrecen además «Lote» y
  *  «Vencimiento», opcionales y de a par: o los dos o ninguno (una fecha sin lote o un lote sin
  *  fecha no sirven para FEFO). Se mandan como `lot_code` y `expires_at` (ISO `aaaa-mm-dd`, tal
  *  como lo entrega el `<input type="date">`); un producto que no vence no cambia nada. Al confirmar hace los tres pasos del backend en orden
@@ -292,12 +298,12 @@ export function CompraDetalle({ rutaDeCompras = '/compras' }: CompraDetalleProps
  *  recepciones con `onRecargarRecepciones` — y NO con `onRecibida`, que cierra
  *  el modal y se llevaría el mensaje de error antes de que se lea). */
 function RecibirMercaderiaDialog({
-  order, locations, itemName, venceDe, onCerrar, onRecibida, onRecargarRecepciones,
+  order, locations, itemName, vencimientoDe, onCerrar, onRecibida, onRecargarRecepciones,
 }: {
   order: PurchaseOrder
   locations: Deposito[]
   itemName: (itemId: number) => string
-  venceDe: (itemId: number) => boolean
+  vencimientoDe: (itemId: number) => 'si' | 'no' | 'desconocido'
   onCerrar: () => void
   onRecibida: () => void | Promise<void>
   onRecargarRecepciones: () => void | Promise<void>
@@ -306,6 +312,8 @@ function RecibirMercaderiaDialog({
     () => order.items.filter((l) => Number(l.pending_quantity) > 0),
     [order],
   )
+  /** ¿Se ofrecen «Lote» y «Vencimiento» en la línea? Sí si vence o no se sabe; no si se sabe que no. */
+  const venceDe = (itemId: number) => vencimientoDe(itemId) !== 'no'
 
   const [cantidades, setCantidades] = useState<Record<number, string>>(
     () => Object.fromEntries(pendientes.map((l) => [l.item_id, l.pending_quantity])),
@@ -436,6 +444,11 @@ function RecibirMercaderiaDialog({
                     {vence && (
                       <TableRow>
                         <TableCell colSpan={4} className="pt-0">
+                          {vencimientoDe(linea.item_id) === 'desconocido' && (
+                            <p className="mb-1 text-xs text-muted-foreground">
+                              No pudimos saber si este producto vence; si vence, cargá lote y vencimiento.
+                            </p>
+                          )}
                           <div className="flex flex-wrap items-start gap-3">
                             <div className="grid gap-1">
                               <Label htmlFor={`recepcion-lote-${linea.item_id}`} className="text-xs text-muted-foreground">Lote</Label>

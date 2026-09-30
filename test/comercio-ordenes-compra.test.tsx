@@ -318,4 +318,75 @@ describe('CompraDetalle: recibir mercadería con lote y vencimiento', () => {
     expect((within(recibir).getByLabelText('Lote de Leche') as HTMLInputElement).value).toBe('L-1')
     expect(await screen.findByText('Borrador')).toBeTruthy()
   })
+
+  describe('un producto de la orden que no está en la lista de activos (vencimiento desconocido)', () => {
+    const DESCONOCIDO = 4 // una línea de un producto desactivado: `solo_activos=true` no lo trae
+    const ORDEN_CON_DESACTIVADO: PurchaseOrder = { ...ORDEN_CON_LINEA, items: [linea(1), linea(DESCONOCIDO, '5')] }
+    const AYUDA = 'No pudimos saber si este producto vence; si vence, cargá lote y vencimiento.'
+
+    function con(productos: Producto[]) {
+      base({ '/api/purchase-orders/10': ORDEN_CON_DESACTIVADO }, productos)
+    }
+
+    it('con un backend que maneja `vence` se ofrecen «Lote» y «Vencimiento» (opcionales, con su ayuda); los conocidos que no vencen, nada', async () => {
+      con([{ ...PRODUCTO, vence: false }, LECHE])
+      const user = userEvent.setup()
+      const recibir = await abrirRecibir(user)
+      expect(within(recibir).getByLabelText('Lote de #4')).toBeTruthy()
+      expect((within(recibir).getByLabelText('Vencimiento de #4') as HTMLInputElement).type).toBe('date')
+      expect(within(recibir).getAllByText(AYUDA)).toHaveLength(1)
+      expect(within(recibir).queryByLabelText('Lote de Yerba 1kg')).toBeNull()
+      // Vacíos: se recibe como hoy.
+      await user.click(within(recibir).getByRole('button', { name: 'Recibir' }))
+      await waitFor(() => expect(pedidas()).toContain('POST /api/purchase-receipts/50/confirm'))
+      expect(enviosDeLineas()).toEqual([
+        { item_id: 1, quantity: '10', unit_cost: '900' },
+        { item_id: 4, quantity: '5', unit_cost: '900' },
+      ])
+    })
+
+    it('rige «ambos o ninguno» y con el par completo viajan lot_code y expires_at', async () => {
+      con([{ ...PRODUCTO, vence: false }, LECHE])
+      const user = userEvent.setup()
+      const recibir = await abrirRecibir(user)
+      fireEvent.change(within(recibir).getByLabelText('Vencimiento de #4'), { target: { value: '2026-11-30' } })
+      expect(within(recibir).getByRole('alert').textContent).toBe('Completá el lote y el vencimiento, o dejá los dos vacíos.')
+      expect((within(recibir).getByRole('button', { name: 'Recibir' }) as HTMLButtonElement).disabled).toBe(true)
+      fireEvent.change(within(recibir).getByLabelText('Lote de #4'), { target: { value: 'D-9' } })
+      await user.click(within(recibir).getByRole('button', { name: 'Recibir' }))
+      await waitFor(() => expect(pedidas()).toContain('POST /api/purchase-receipts/50/confirm'))
+      expect(enviosDeLineas()[1]).toEqual({ item_id: 4, quantity: '5', unit_cost: '900', lot_code: 'D-9', expires_at: '2026-11-30' })
+    })
+
+    it('un backend SIN `vence` (ningún producto de la lista lo trae) no cambia nada: ni campos ni ayuda para los que faltan en la lista', async () => {
+      con([PRODUCTO, { ...PRODUCTO, id: 2, nombre: 'Leche', codigo: 'L002' }])
+      const user = userEvent.setup()
+      const recibir = await abrirRecibir(user)
+      expect(within(recibir).queryByLabelText(/^Lote de /)).toBeNull()
+      expect(within(recibir).queryByText(AYUDA)).toBeNull()
+      await user.click(within(recibir).getByRole('button', { name: 'Recibir' }))
+      await waitFor(() => expect(pedidas()).toContain('POST /api/purchase-receipts/50/confirm'))
+      expect(enviosDeLineas()).toEqual([
+        { item_id: 1, quantity: '10', unit_cost: '900' },
+        { item_id: 4, quantity: '5', unit_cost: '900' },
+      ])
+    })
+
+    it('con la lista de productos vacía (no hay de dónde saber si el backend maneja `vence`) tampoco se ofrecen', async () => {
+      con([])
+      const user = userEvent.setup()
+      const recibir = await abrirRecibir(user)
+      expect(within(recibir).queryByLabelText(/^Lote de /)).toBeNull()
+      expect(within(recibir).queryByText(AYUDA)).toBeNull()
+    })
+
+    it('los productos que están en la lista con vence:false nunca muestran la ayuda, aunque haya otros desconocidos', async () => {
+      con([{ ...PRODUCTO, vence: false }, LECHE])
+      const user = userEvent.setup()
+      const recibir = await abrirRecibir(user)
+      expect(within(recibir).getAllByText(AYUDA)).toHaveLength(1)
+      expect(within(recibir).queryByLabelText('Vencimiento de Yerba 1kg')).toBeNull()
+    })
+  })
 })
+
