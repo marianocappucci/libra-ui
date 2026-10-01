@@ -672,6 +672,9 @@ export type ReposicionProducto = {
   /** `''` si el producto no tiene categoría. */
   categoria: string
   stock: number
+  /** La parte de `stock` que está en lotes ya vencidos y la sugerencia no cuenta (motor >= 0.31.0, ADR-019). Falta con un
+   *  motor anterior: se toma como 0. */
+  vencido?: number
   /** Lo pedido a proveedores que todavía no llegó (órdenes abiertas, `draft` incluido). */
   en_camino: number
   /** La parte de `en_camino` que sale de órdenes sin sucursal: con una sucursal elegida se cuenta igual. */

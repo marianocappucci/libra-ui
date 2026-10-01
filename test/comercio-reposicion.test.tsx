@@ -137,6 +137,20 @@ describe('Reposición: lo que muestra', () => {
   })
 })
 
+describe('Reposición: lo vencido', () => {
+  it('avisa en el stock cuánto está vencido y no cuenta; sin vencido, o con un motor que no lo manda, no dice nada', async () => {
+    await abrir({ ...TODO, [RUTA]: { ...DATA, productos: [{ ...YERBA, stock: 16, vencido: 6 }, HARINA, { ...SAL, vencido: 0 }] } })
+    expect(texto(fila('Yerba'))).toContain('incluye 6 vencido, que no se cuenta para pedir')
+    expect(texto(fila('Harina'))).not.toContain('vencido')
+    expect(texto(fila('Sal'))).not.toContain('vencido')
+  })
+
+  it('la explicación dice que lo vencido no cuenta como stock', async () => {
+    await abrir()
+    expect(screen.getByText(/Lo que está en lotes vencidos no cuenta como stock/)).toBeTruthy()
+  })
+})
+
 describe('Reposición: lo que pide', () => {
   it('«Toda la instancia» no manda sucursal, y elegir una manda su id (y volver a la instancia la saca)', async () => {
     const user = userEvent.setup()
