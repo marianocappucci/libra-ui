@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
-  CLAVES_DE_TEMA, COLORES_DE_TEMA, aplicarTema, contraste, luminancia, normalizarHex, textoSobre, validarTema,
+  CLAVES_DE_TEMA, CLAVE_DE_CACHE_DEL_TEMA, COLORES_DE_TEMA, aplicarTema, cargarTema, contraste, luminancia, normalizarHex, textoSobre, validarTema,
 } from '../src/tema'
 
 describe('colores', () => {
@@ -83,5 +83,88 @@ describe('aplicarTema', () => {
     const el = document.createElement('div')
     aplicarTema({ menuActivoFondo: '#7b7b7b' }, el)
     expect(el.style.getPropertyValue('--libra-menu-activo-fondo')).toBe('')
+  })
+})
+
+describe('cargarTema', () => {
+  const FONDO = '--libra-menu-activo-fondo'
+  const fondo = (el: HTMLElement) => el.style.getPropertyValue(FONDO)
+
+  function respuesta(cuerpo: unknown, ok = true) {
+    return Promise.resolve({ ok, json: () => Promise.resolve(cuerpo) } as Response)
+  }
+
+  beforeEach(() => {
+    window.localStorage.clear()
+    vi.unstubAllGlobals()
+  })
+
+  it('aplica la caché ANTES de que conteste la red y después aplica y guarda lo que llegó', async () => {
+    window.localStorage.setItem(CLAVE_DE_CACHE_DEL_TEMA, JSON.stringify({ menuActivoFondo: '#1e3a8a' }))
+    let resolver: (r: Response) => void = () => {}
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>((r) => { resolver = r })))
+    const el = document.createElement('div')
+    const promesa = cargarTema({ elemento: el })
+    expect(fondo(el)).toBe('#1e3a8a')
+    resolver({ ok: true, json: () => Promise.resolve({ tema: { menuActivoFondo: '#fdf2f8' } }) } as Response)
+    expect(await promesa).toEqual({ menuActivoFondo: '#fdf2f8' })
+    expect(fondo(el)).toBe('#fdf2f8')
+    expect(JSON.parse(window.localStorage.getItem(CLAVE_DE_CACHE_DEL_TEMA) ?? '{}')).toEqual({ menuActivoFondo: '#fdf2f8' })
+  })
+
+  it('pide el tema a la propia instancia, sin credenciales ni caché del navegador', async () => {
+    const f = vi.fn(() => respuesta({ tema: {} }))
+    vi.stubGlobal('fetch', f)
+    await cargarTema({ elemento: document.createElement('div') })
+    const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe('/api/tema')
+    expect(init.credentials).toBe('omit')
+    expect(init.cache).toBe('no-store')
+  })
+
+  it('un tema vacío del servidor restaura los valores por defecto y limpia la caché', async () => {
+    window.localStorage.setItem(CLAVE_DE_CACHE_DEL_TEMA, JSON.stringify({ menuActivoFondo: '#1e3a8a' }))
+    vi.stubGlobal('fetch', vi.fn(() => respuesta({ tema: {} })))
+    const el = document.createElement('div')
+    await cargarTema({ elemento: el })
+    expect(fondo(el)).toBe('')
+    expect(window.localStorage.getItem(CLAVE_DE_CACHE_DEL_TEMA)).toBeNull()
+  })
+
+  it.each([
+    ['error de red', () => Promise.reject(new Error('sin red'))],
+    ['un 500', () => respuesta({}, false)],
+    ['un cuerpo que no es JSON', () => Promise.resolve({ ok: true, json: () => Promise.reject(new Error('x')) } as Response)],
+  ])('con %s queda lo que ya había y no lanza', async (_nombre, falla) => {
+    window.localStorage.setItem(CLAVE_DE_CACHE_DEL_TEMA, JSON.stringify({ menuActivoFondo: '#1e3a8a' }))
+    vi.stubGlobal('fetch', vi.fn(falla))
+    const el = document.createElement('div')
+    await expect(cargarTema({ elemento: el })).resolves.toEqual({ menuActivoFondo: '#1e3a8a' })
+    expect(fondo(el)).toBe('#1e3a8a')
+  })
+
+  it('no se cuelga: pasado el tiempo corta y la app arranca igual', async () => {
+    vi.stubGlobal('fetch', vi.fn((_u: string, init: RequestInit) => new Promise<Response>((_r, rechazar) => {
+      init.signal?.addEventListener('abort', () => rechazar(new Error('abortado')))
+    })))
+    await expect(cargarTema({ tiempoMs: 20, elemento: document.createElement('div') })).resolves.toEqual({})
+  })
+
+  it('ignora lo inválido que mande el servidor y una caché corrupta', async () => {
+    window.localStorage.setItem(CLAVE_DE_CACHE_DEL_TEMA, '{no es json')
+    vi.stubGlobal('fetch', vi.fn(() => respuesta({ tema: { menuActivoFondo: '#7b7b7b', colorFuturo: '#000000' } })))
+    const el = document.createElement('div')
+    expect(await cargarTema({ elemento: el })).toEqual({})
+    expect(fondo(el)).toBe('')
+  })
+
+  it('sin localStorage aplica igual', async () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('bloqueado') })
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('bloqueado') })
+    vi.stubGlobal('fetch', vi.fn(() => respuesta({ tema: { menuActivoFondo: '#fdf2f8' } })))
+    const el = document.createElement('div')
+    await cargarTema({ elemento: el })
+    expect(fondo(el)).toBe('#fdf2f8')
+    vi.restoreAllMocks()
   })
 })

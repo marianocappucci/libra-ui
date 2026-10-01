@@ -151,7 +151,10 @@ aplicarTema(tema)                              // fija las variables en <html>; 
 - **El modo oscuro no tiene valores propios.** Se editan los del claro y el texto se recalcula, así el contraste vale en los dos.
 - Un color nuevo se agrega **sólo** en `COLORES_DE_TEMA` (y en `tema.css` si es una variable propia): lo leen el backoffice, la
   instancia y la SPA.
-- Hoy está la fase 1. Las siguientes (endpoint de tema, pantalla del backoffice y carga en el arranque) no cambian esta API.
+- **Carga al arrancar (`v0.94.0`, ADR-008):** en `main.tsx`, antes de montar React, `void cargarTema()`. Aplica síncrono lo último guardado en
+  `localStorage` y después pide `GET /api/tema` a la propia instancia (no al backoffice), valida, aplica y guarda. Nunca lanza ni se cuelga
+  (tope de 3 s): un color no puede impedir entrar al sistema.
+- Hoy están las fases 1 y 2. Las siguientes (pantalla del backoffice y el resto de los productos) no cambian esta API.
 
 ## El segundo factor en dos pasos: modal con un dígito por casillero (`v0.70.0`)
 
