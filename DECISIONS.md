@@ -98,3 +98,17 @@ wiki (entidad `libra-ui` y `concepts/estandares-desarrollo`).
   correo); (4) subir el pin y desplegar los seis productos de a uno.
 - Consecuencias: un color nuevo se agrega en `COLORES_DE_TEMA` (y en `tema.css` si es una variable propia) y en ningún otro lugar;
   la instancia, el backoffice y la SPA leen la misma lista. Un producto que no importa `tema.css` no cambia nada.
+
+## ADR-008 — El tema se carga de la propia instancia al arrancar, con caché local y sin poder trabar la app
+
+- Estado: aceptada (decisión del humano, 2026-10-01); fase 2 de 4 del tema por suite (ADR-007)
+- Fecha: 2026-10-01 (`v0.94.0`)
+- Decisión: `cargarTema()` de `libra-ui/tema` se llama una vez en `main.tsx`, antes de montar React. Aplica **síncrono** lo último guardado en
+  `localStorage` (la página se pinta con los colores de la suite desde el primer cuadro) y después pide `GET /api/tema` a la propia
+  instancia (ADR-012 de `libracore`), valida, aplica y guarda. Un tema vacío limpia la caché. Va sin credenciales (el login también lleva los
+  colores) y con un tope de 3 s.
+- **Nunca lanza ni se cuelga:** sin red, con un 500, con un cuerpo roto, sin `localStorage` o pasado el tiempo, queda lo que había y la app
+  arranca igual. Un color es un adorno y no puede impedir entrar al sistema.
+- Consecuencias: sólo la primerísima visita de un navegador arranca con los colores de siempre, y un cambio hecho en el backoffice se ve en
+  el siguiente arranque (no en vivo). El tema se valida de nuevo en el cliente (`validarTema`): lo que llegue mal no se pinta.
+

@@ -138,3 +138,64 @@ export function aplicarTema(tema: Tema, elemento: HTMLElement = document.documen
     }
   }
 }
+
+/** Dónde se guarda la última versión del tema que vino de la instancia. */
+export const CLAVE_DE_CACHE_DEL_TEMA = 'libra.tema'
+
+function leerCache(): Tema {
+  try {
+    return validarTema(JSON.parse(window.localStorage.getItem(CLAVE_DE_CACHE_DEL_TEMA) ?? 'null')).tema
+  } catch {
+    return {}
+  }
+}
+
+function guardarCache(tema: Tema): void {
+  try {
+    if (Object.keys(tema).length) window.localStorage.setItem(CLAVE_DE_CACHE_DEL_TEMA, JSON.stringify(tema))
+    else window.localStorage.removeItem(CLAVE_DE_CACHE_DEL_TEMA)
+  } catch {
+    // Sin almacenamiento (navegación privada, cuota): el tema se aplica igual, sólo que sin caché.
+  }
+}
+
+/** Carga el tema de la suite al arrancar la SPA. Se llama UNA vez, en `main.tsx`, **antes** de montar React:
+ *
+ *     import { cargarTema } from 'libra-ui/tema'
+ *     void cargarTema()
+ *
+ * 1. **Síncrono:** aplica lo último que se guardó en `localStorage`, así la página se pinta con los colores de la suite desde el primer
+ *    cuadro (sólo la primerísima visita de un navegador arranca con los de siempre).
+ * 2. **Después** pide `GET /api/tema` a la propia instancia (no al backoffice: una instancia de cliente no puede depender de que el plano
+ *    de control esté arriba), valida lo que llegó, lo aplica y lo guarda. Un tema vacío limpia la caché: es «restaurar los valores por
+ *    defecto».
+ *
+ * **Nunca lanza ni se queda colgada:** sin red, con un error del servidor, con una respuesta rota o pasados `tiempoMs`, queda aplicado lo
+ * que ya había y la app arranca igual. Un color es un adorno, no puede impedir entrar al sistema. */
+export async function cargarTema(
+  { url = '/api/tema', tiempoMs = 3000, elemento }: { url?: string; tiempoMs?: number; elemento?: HTMLElement } = {},
+): Promise<Tema> {
+  if (typeof window === 'undefined') return {}
+  const guardado = leerCache()
+  aplicarTema(guardado, elemento)
+
+  const control = new AbortController()
+  const reloj = setTimeout(() => control.abort(), tiempoMs)
+  try {
+    const respuesta = await fetch(url, { credentials: 'omit', cache: 'no-store', signal: control.signal })
+    if (!respuesta.ok) return guardado
+    const cuerpo = (await respuesta.json()) as { tema?: unknown } | null
+    // Sin un objeto `tema` la respuesta está rota (un proxy que devuelve otra cosa, una versión vieja): se conserva lo que había. Sólo
+    // un `{}` explícito es «restaurar los valores por defecto».
+    const crudo = cuerpo?.tema
+    if (!crudo || typeof crudo !== 'object' || Array.isArray(crudo)) return guardado
+    const { tema } = validarTema(crudo)
+    aplicarTema(tema, elemento)
+    guardarCache(tema)
+    return tema
+  } catch {
+    return guardado
+  } finally {
+    clearTimeout(reloj)
+  }
+}
