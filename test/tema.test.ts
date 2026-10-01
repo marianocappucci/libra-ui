@@ -134,6 +134,8 @@ describe('cargarTema', () => {
   it.each([
     ['error de red', () => Promise.reject(new Error('sin red'))],
     ['un 500', () => respuesta({}, false)],
+    ['un 200 sin el campo `tema`', () => respuesta({})],
+    ['un 200 con `tema` que no es un objeto', () => respuesta({ tema: 'x' })],
     ['un cuerpo que no es JSON', () => Promise.resolve({ ok: true, json: () => Promise.reject(new Error('x')) } as Response)],
   ])('con %s queda lo que ya había y no lanza', async (_nombre, falla) => {
     window.localStorage.setItem(CLAVE_DE_CACHE_DEL_TEMA, JSON.stringify({ menuActivoFondo: '#1e3a8a' }))

@@ -184,8 +184,12 @@ export async function cargarTema(
   try {
     const respuesta = await fetch(url, { credentials: 'omit', cache: 'no-store', signal: control.signal })
     if (!respuesta.ok) return guardado
-    const cuerpo = (await respuesta.json()) as { tema?: unknown }
-    const { tema } = validarTema(cuerpo?.tema)
+    const cuerpo = (await respuesta.json()) as { tema?: unknown } | null
+    // Sin un objeto `tema` la respuesta está rota (un proxy que devuelve otra cosa, una versión vieja): se conserva lo que había. Sólo
+    // un `{}` explícito es «restaurar los valores por defecto».
+    const crudo = cuerpo?.tema
+    if (!crudo || typeof crudo !== 'object' || Array.isArray(crudo)) return guardado
+    const { tema } = validarTema(crudo)
     aplicarTema(tema, elemento)
     guardarCache(tema)
     return tema
