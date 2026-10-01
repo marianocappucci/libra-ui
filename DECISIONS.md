@@ -79,3 +79,22 @@ wiki (entidad `libra-ui` y `concepts/estandares-desarrollo`).
 - Consecuencias: una sola copia de las primitivas; `vitest` las excluye
   (`exclude: ['src/ui/**']`) por ser componentes de terceros, que se prueban aguas
   abajo.
+
+## ADR-007 — El tema de la suite: variables CSS semánticas y una lista cerrada de colores editables
+
+- Estado: aceptada (decisión del humano, 2026-10-01); fase 1 de 4
+- Fecha: 2026-10-01 (`v0.93.0`)
+- Contexto: el humano pidió que el color del ítem activo del menú (`#ECFDF5` y borde `#5EE9B5`, que sólo tenía VentaLibra) viva en
+  el kit, y que desde el backoffice de cada suite se pueda cambiar «ciertos colores» para todas sus instancias, de modo que cada
+  suite tenga su personalidad.
+- Decisión: **`libra-ui/tema.css`** declara variables propias (`--libra-menu-activo-fondo`, `--libra-menu-activo-borde`,
+  `--libra-menu-activo-texto`) con los valores de siempre como defecto y la regla que las usa; el producto lo importa una vez.
+  **`libra-ui/tema`** es la ÚNICA lista de colores editables (`COLORES_DE_TEMA`) y trae `validarTema`, `aplicarTema` y el
+  contraste WCAG. Los colores son una lista **cerrada**, no «cualquier variable»; el texto que va sobre un fondo elegido no se
+  elige, se calcula (`textoSobre`), y un fondo sobre el que ningún texto llega a 4,5:1 se rechaza. El modo oscuro no tiene
+  valores propios: se editan los colores del claro y el texto se recalcula, así el contraste vale en los dos.
+- Fases: (1) este kit: variables, catálogo y el ítem activo; (2) endpoint público de tema en `libracore` y carga en el arranque de la
+  SPA; (3) pantalla «Apariencia» en `libra-backoffice`, que empuja el tema a todas las instancias de la suite por HTTP (como el
+  correo); (4) subir el pin y desplegar los seis productos de a uno.
+- Consecuencias: un color nuevo se agrega en `COLORES_DE_TEMA` (y en `tema.css` si es una variable propia) y en ningún otro lugar;
+  la instancia, el backoffice y la SPA leen la misma lista. Un producto que no importa `tema.css` no cambia nada.
