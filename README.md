@@ -126,6 +126,33 @@ Tres cosas que no son obvias:
 Los cinco productos que no pasan nada de esto renderizan exactamente igual que
 antes — misma regla que rige desde `v0.3.0`.
 
+## El tema de la suite: colores editables (`v0.93.0`, ADR-007)
+
+`libra-ui/tema.css` declara las variables de color que el backoffice de cada suite puede cambiar, con los valores de siempre como
+defecto, y la regla del ítem activo del menú lateral que las usa (fondo `#ECFDF5`, borde `#5EE9B5`). El producto lo importa una vez,
+después de Tailwind:
+
+```css
+@import "tailwindcss";
+@import "libra-ui/tema.css";
+```
+
+`libra-ui/tema` es la **única lista** de colores editables (`COLORES_DE_TEMA`) y trae lo que hace falta para usarla:
+
+```ts
+import { aplicarTema, validarTema } from 'libra-ui/tema'
+
+const { tema, errores } = validarTema(crudo)  // sólo claves conocidas, #rrggbb, con contraste AA
+aplicarTema(tema)                              // fija las variables en <html>; aplicarTema({}) restaura los defectos
+```
+
+- **El texto sobre un fondo elegido se calcula**, no se elige: `textoSobre` devuelve el oscuro o el claro que mejor se lee, y un
+  fondo sobre el que ninguno llega a 4,5:1 se rechaza.
+- **El modo oscuro no tiene valores propios.** Se editan los del claro y el texto se recalcula, así el contraste vale en los dos.
+- Un color nuevo se agrega **sólo** en `COLORES_DE_TEMA` (y en `tema.css` si es una variable propia): lo leen el backoffice, la
+  instancia y la SPA.
+- Hoy está la fase 1. Las siguientes (endpoint de tema, pantalla del backoffice y carga en el arranque) no cambian esta API.
+
 ## El segundo factor en dos pasos: modal con un dígito por casillero (`v0.70.0`)
 
 Reemplaza al segundo factor de una sola pantalla de `v0.60.0` (F2): antes el

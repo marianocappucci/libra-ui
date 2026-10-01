@@ -1,0 +1,31 @@
+/* El tema de la suite: las variables que el backoffice puede cambiar y la regla que las usa (ADR-007, `v0.93.0`).
+ *
+ * El producto lo importa UNA vez, después de su `@import "tailwindcss"`:
+ *
+ *     @import "libra-ui/tema.css";
+ *
+ * Cada variable trae como defecto el valor de siempre, así que un producto que no hace nada más se ve igual que hoy. Para
+ * cambiarlas en runtime alcanza con fijarlas en `document.documentElement.style` (lo hace `aplicarTema` de `libra-ui/tema`):
+ * un estilo en línea le gana a este `:root`. Las claves y los valores válidos viven en `src/tema.ts`, que es la única lista.
+ *
+ * Sin `@layer` a propósito: la regla del ítem activo tiene que ganarle a las utilidades `data-[active=true]:` de la sidebar
+ * del kit, que Tailwind emite en su capa de utilidades.
+ */
+:root {
+  /* Ítem activo del menú lateral (pedido del humano, 2026-10-01). El texto sale del contraste sobre el fondo: `aplicarTema` lo
+     recalcula y acá queda el que corresponde al fondo por defecto. */
+  --libra-menu-activo-fondo: #ecfdf5;
+  --libra-menu-activo-borde: #5ee9b5;
+  --libra-menu-activo-texto: #064e3b;
+}
+
+/* El borde es un `box-shadow` inset y no un `border`: el ítem no se corre 1 px respecto de los demás. El fondo es el mismo en modo
+   oscuro (un chip claro sobre la barra oscura) y el texto se recalcula con él, así que el contraste vale en los dos modos. */
+[data-sidebar="menu-button"][data-active="true"],
+[data-sidebar="menu-button"][data-active="true"]:hover,
+[data-sidebar="menu-sub-button"][data-active="true"],
+[data-sidebar="menu-sub-button"][data-active="true"]:hover {
+  background-color: var(--libra-menu-activo-fondo);
+  color: var(--libra-menu-activo-texto);
+  box-shadow: inset 0 0 0 1px var(--libra-menu-activo-borde);
+}
