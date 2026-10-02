@@ -373,4 +373,65 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     expect(within(dialogo()).getByLabelText('Precio de costo')).toBeTruthy()
     expect(within(dialogo()).getByText(/Margen/)).toBeTruthy()
   })
+
+  // ── Proveedor habitual (motor >= 0.33.0, ADR-021) ──
+  const LISTA = [{ id: 7, nombre: 'Distribuidora Norte' }, { id: 8, nombre: 'Mayorista Sur' }]
+  const CON_PROV = { ...PROPIOS, proveedor_id: 7, proveedor: 'Distribuidora Norte' }
+  const selectorProveedor = () => within(dialogo()).getByLabelText('Proveedor habitual') as HTMLSelectElement
+
+  it('con un motor que no devuelve proveedor_id no hay selector de proveedor', async () => {
+    responder({ ...base, [`GET ${RUTA}`]: PROPIOS, '/api/proveedores': LISTA })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    await waitFor(() => expect(plazo().value).toBe('7'))
+    expect(within(dialogo()).queryByLabelText('Proveedor habitual')).toBeNull()
+  })
+
+  it('con proveedor_id muestra el proveedor del producto; sin tocarlo NO viaja en el cuerpo (el motor lo deja como estaba)', async () => {
+    responder({ ...base, [`GET ${RUTA}`]: CON_PROV, [`PUT ${RUTA}`]: CON_PROV, '/api/proveedores': LISTA, 'PUT /api/productos/1': { id: 1 } })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    await waitFor(() => expect(selectorProveedor().value).toBe('7'))
+    fireEvent.change(plazo(), { target: { value: '9' } })
+    await guardar(user)
+    await waitFor(() => expect(puts()).toHaveLength(1))
+    expect(cuerpoDe(`PUT ${RUTA}`)).toEqual({ plazo_entrega_dias: 9, stock_maximo: 40 })
+    expect('proveedor_id' in cuerpoDe(`PUT ${RUTA}`)).toBe(false)
+  })
+
+  it('cambiar sólo el proveedor guarda la reposición (no el producto) con proveedor_id; «Sin proveedor» manda null', async () => {
+    responder({ ...base, [`GET ${RUTA}`]: CON_PROV, [`PUT ${RUTA}`]: CON_PROV, '/api/proveedores': LISTA, 'PUT /api/productos/1': { id: 1 } })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    await waitFor(() => expect(selectorProveedor().value).toBe('7'))
+    await user.selectOptions(selectorProveedor(), '8')
+    await guardar(user)
+    await waitFor(() => expect(puts()).toHaveLength(1))
+    expect(cuerpoDe(`PUT ${RUTA}`)).toEqual({ plazo_entrega_dias: 7, stock_maximo: 40, proveedor_id: 8 })
+    expect(pedidas()).not.toContain('PUT /api/productos/1')
+  })
+
+  it('«Sin proveedor» borra el habitual: viaja proveedor_id: null', async () => {
+    responder({ ...base, [`GET ${RUTA}`]: CON_PROV, [`PUT ${RUTA}`]: PROPIOS, '/api/proveedores': LISTA })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    await waitFor(() => expect(selectorProveedor().value).toBe('7'))
+    await user.selectOptions(selectorProveedor(), '__sin__')
+    await guardar(user)
+    await waitFor(() => expect(puts()).toHaveLength(1))
+    expect(cuerpoDe(`PUT ${RUTA}`)).toMatchObject({ proveedor_id: null })
+  })
+
+  it('un proveedor que no está en la lista (dado de baja, o sin permiso para listar) igual se ve con su nombre', async () => {
+    responder({ ...base, [`GET ${RUTA}`]: CON_PROV, '/api/proveedores': { status: 403, detail: 'forbidden' } })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    await waitFor(() => expect(selectorProveedor().value).toBe('7'))
+    expect(within(selectorProveedor()).getByRole('option', { name: 'Distribuidora Norte' })).toBeTruthy()
+  })
 })

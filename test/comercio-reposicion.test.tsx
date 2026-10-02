@@ -435,3 +435,51 @@ describe('Reposición: cargando, vacío y errores', () => {
     expect(screen.getByText('Nueva')).toBeTruthy()
   })
 })
+
+describe('Reposición: proveedor habitual (motor >= 0.33.0, ADR-021)', () => {
+  const PROVEEDORES = [{ id: 7, nombre: 'Distribuidora Norte' }, { id: 8, nombre: 'Mayorista Sur' }]
+  const CON_PROVEEDOR: ReposicionData = {
+    ...DATA, proveedor_id: null,
+    productos: [{ ...YERBA, proveedor_id: 7, proveedor: 'Distribuidora Norte' }, { ...HARINA, proveedor_id: null, proveedor: null }, SAL],
+  }
+  const TODO_CON = { ...TODO, [RUTA]: CON_PROVEEDOR, '/api/proveedores': PROVEEDORES }
+
+  it('con un motor que no lo maneja la pantalla es la de siempre: ni columna ni filtro', async () => {
+    await abrir({ ...TODO, '/api/proveedores': PROVEEDORES })
+    expect(screen.queryByLabelText('Proveedor')).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Proveedor/ })).toBeNull()
+  })
+
+  it('si el motor lo maneja aparecen la columna «Proveedor» (con un guion donde no hay) y el filtro', async () => {
+    await abrir(TODO_CON)
+    expect(await screen.findByLabelText('Proveedor')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^Proveedor/ })).toBeTruthy()
+    expect(texto(fila('Yerba'))).toContain('Distribuidora Norte')
+    expect(texto(fila('Harina'))).toContain('—')
+  })
+
+  it('elegir un proveedor lo manda como proveedor_id, y «Todos los proveedores» lo saca', async () => {
+    const user = userEvent.setup()
+    await abrir(TODO_CON)
+    await user.selectOptions(await screen.findByLabelText('Proveedor'), '7')
+    await waitFor(() => expect(ultimaConsulta()).toBe(pide('&proveedor_id=7')))
+    await user.selectOptions(screen.getByLabelText('Proveedor'), '__todas__')
+    await waitFor(() => expect(ultimaConsulta()).toBe(pide()))
+  })
+
+  it('la columna ordena por el nombre del proveedor y lo que no tiene va siempre al final', async () => {
+    const user = userEvent.setup()
+    await abrir(TODO_CON)
+    const boton = await screen.findByRole('button', { name: /^Proveedor/ })
+    await user.click(boton)
+    expect(nombresEnTabla()[0]).toBe('Yerba')
+    await user.click(screen.getByRole('button', { name: /^Proveedor/ }))
+    expect(nombresEnTabla()[0]).toBe('Yerba')                  // descendente: sigue primero el único con proveedor
+  })
+
+  it('el filtro no se ofrece sin proveedores cargados, y la lista que falla no rompe la pantalla', async () => {
+    await abrir({ ...TODO_CON, '/api/proveedores': [] })
+    expect(screen.queryByLabelText('Proveedor')).toBeNull()
+    expect(screen.getByRole('button', { name: /^Proveedor/ })).toBeTruthy()      // la columna sí: viene en los datos
+  })
+})
