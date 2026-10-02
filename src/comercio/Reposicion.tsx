@@ -137,11 +137,13 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
   // no lo cierra ni le cambia lo que muestra. `pendiente` es el que se cortó sin saber si llegó: reabrir lo reenvía tal cual (ver `reposicion-ordenes.tsx`).
   const [generando, setGenerando] = useState<IntentoDeOrdenes | null>(null)
   const pendiente = useRef<IntentoDeOrdenes | null>(null)
+  // Lo mismo que `pendiente`, como estado, para que el botón de reintento aparezca aunque la lista esté vacía o no haya cargado.
+  const [hayPendiente, setHayPendiente] = useState(false)
   // Sube cuando se crean órdenes: la lista se vuelve a pedir (lo creado ya cuenta como «en camino»).
   const [recarga, setRecarga] = useState(0)
   // Lo último que contestó el motor, con la consulta a la que contestó: que `loading` y `error` se deriven de acá
   // (y no de estados sueltos que hay que apagar y prender) evita mostrar el error o la carga de una consulta vieja.
-  const [respuesta, setRespuesta] = useState<{ consulta: string; data: ReposicionData | null; error: string | null } | null>(null)
+  const [respuesta, setRespuesta] = useState<{ consulta: string; recarga: number; data: ReposicionData | null; error: string | null } | null>(null)
 
   const errores = Object.fromEntries(PARAMETROS.map((p) => [p.clave, errorDelParametro(valores[p.clave], p.max)])) as
     Record<ClaveParametro, string | null>
@@ -180,18 +182,19 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
     api.get<ReposicionData>(`${RUTA}?${consulta}`)
       .then((data) => {
         if (!vigente) return
-        setRespuesta({ consulta, data, error: null })
+        setRespuesta({ consulta, recarga, data, error: null })
         if (data && typeof data === 'object' && 'proveedor_id' in data) setConProveedor(true)
       })
       .catch((err) => {
-        if (vigente) setRespuesta({ consulta, data: null, error: err instanceof ApiError ? err.detail : 'Error de conexión.' })
+        if (vigente) setRespuesta({ consulta, recarga, data: null, error: err instanceof ApiError ? err.detail : 'Error de conexión.' })
       })
     return () => { vigente = false }
   }, [consulta, recarga])
 
   // Sólo vale lo que contestó el motor a la consulta de los controles de ahora: mientras llega la de un cambio
   // reciente no se muestra la tabla anterior (sus cantidades serían de otros parámetros); se muestra «Cargando…».
-  const actual = respuesta?.consulta === consulta
+  // La recarga cuenta: tras crear órdenes la lista de antes está vieja (sus cantidades no incluyen lo recién pedido) y no se muestra hasta que llega la nueva.
+  const actual = respuesta?.consulta === consulta && respuesta.recarga === recarga
   const data = actual ? respuesta.data : null
   const loading = !actual
   const error = actual ? respuesta.error : null
@@ -273,6 +276,14 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
           Sólo lo que hay que pedir
         </label>
       </div>
+
+      {conGenerarOrdenes && hayPendiente && !generando && (
+        <div role="status" className="flex flex-wrap items-center gap-2 rounded-md border border-amber-500/50 p-3 text-sm">
+          <AlertTriangle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+          <span>Un pedido de órdenes en borrador se cortó y no se sabe si llegó.</span>
+          <Button size="sm" variant="outline" onClick={() => setGenerando(pendiente.current)}>Reintentar el pedido anterior</Button>
+        </div>
+      )}
 
       <p className="text-sm text-muted-foreground">
         Se mira lo que se vendió en los últimos {valido ? valores.dias_rotacion : '…'} días y se proyecta a los días de
@@ -393,14 +404,16 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
       )}
       {generando && (
         <DialogoGenerarOrdenes
+          key={generando.clave}
           intento={generando}
           reanudado={pendiente.current === generando}
           rutaDeOrden={rutaDeOrden}
           onCerrar={() => setGenerando(null)}
           onCreadas={() => setRecarga((n) => n + 1)}
-          onEstado={(estado) => { pendiente.current = estado === 'incierto' ? generando : null }}
+          onEstado={(estado) => { pendiente.current = estado === 'incierto' ? generando : null; setHayPendiente(estado === 'incierto') }}
           onDescartar={() => {
             pendiente.current = null
+            setHayPendiente(false)
             if (data) setGenerando({ clave: nuevaClaveDeOperacion(), filas: data.productos, parametros: parametrosDeOrdenes })
             else setGenerando(null)
           }}

@@ -303,4 +303,79 @@ describe('Reposición: generar órdenes en borrador', () => {
     await user.click(boton()!)
     expect(within(dialogo()).getByText(/Un pedido anterior se cortó/)).toBeTruthy()
   })
+
+  it('el intento cortado se puede reintentar aunque los filtros dejen la lista vacía (botón propio, sin depender de la lista)', async () => {
+    const user = userEvent.setup()
+    await abrir({ conGenerarOrdenes: true }, { ...TODO, '/api/productos/categorias': [{ id: 1, nombre: 'Almacén' }] })
+    let intento = 0
+    const original = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation((entrada: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(entrada)
+      if (url === ORDENES && init?.method === 'POST') {
+        intento += 1
+        return intento === 1 ? Promise.reject(new TypeError('sin red')) : Promise.resolve(json({ ...RESULTADO, repetida: true }))
+      }
+      if (url.includes('categoria=')) return Promise.resolve(json({ ...DATA, productos: [], resumen: { productos: 0, a_pedir: 0, posible_quiebre: 0, sin_ventas: 0 } }))
+      return original(entrada, init)
+    })
+    await user.click(boton()!)
+    await user.click(within(dialogo()).getByRole('button', { name: 'Crear 2 órdenes' }))
+    await within(dialogo()).findByRole('alert')
+    await user.click(within(dialogo()).getByRole('button', { name: 'Cancelar' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await user.selectOptions(screen.getByLabelText('Categoría'), 'Almacén')                 // la lista queda vacía
+    await screen.findByText('0 productos')
+    expect(boton()).toBeDisabled()                                                          // el botón de generar no sirve (no hay nada)...
+    await user.click(screen.getByRole('button', { name: 'Reintentar el pedido anterior' })) // ...pero el reintento sí
+    await user.click(within(dialogo()).getByRole('button', { name: 'Crear 2 órdenes' }))
+    expect(await within(dialogo()).findByText(/ya se habían creado con este mismo pedido/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Reintentar el pedido anterior' })).toBeNull()      // resuelto: ya no hay pendiente
+  })
+
+  it('tras crear, la lista vieja no se muestra (ni su botón) hasta que llega la recarga', async () => {
+    const user = userEvent.setup()
+    await abrir()
+    await user.click(boton()!)
+    let soltar: () => void = () => {}
+    const lenta = new Promise<void>((r) => { soltar = r })
+    const original = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation((entrada: RequestInfo | URL, init?: RequestInit) => {
+      if (String(entrada).startsWith(`${RUTA}?`)) return lenta.then(() => json({ ...DATA, productos: [] , resumen: { productos: 0, a_pedir: 0, posible_quiebre: 0, sin_ventas: 0 } }))
+      return original(entrada, init)
+    })
+    await user.click(within(dialogo()).getByRole('button', { name: 'Crear 2 órdenes' }))
+    await within(dialogo()).findByRole('link', { name: 'OC-000041' })
+    await user.click(within(dialogo()).getByRole('button', { name: 'Cerrar' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(boton()).toBeNull()                                                              // la recarga está pendiente: nada de la lista vieja
+    expect(screen.queryByText('Yerba')).toBeNull()
+    soltar()
+    await screen.findByText('0 productos')
+  })
+
+  it('descartar un intento y armar el nuevo no arrastra el error del anterior', async () => {
+    const user = userEvent.setup()
+    await abrir()
+    let intento = 0
+    const original = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation((entrada: RequestInfo | URL, init?: RequestInit) => {
+      if (String(entrada) === ORDENES && init?.method === 'POST') {
+        intento += 1
+        return Promise.reject(new TypeError('sin red'))
+      }
+      return original(entrada, init)
+    })
+    await user.click(boton()!)
+    await user.click(within(dialogo()).getByRole('button', { name: 'Crear 2 órdenes' }))
+    await within(dialogo()).findByRole('alert')
+    await user.click(within(dialogo()).getByRole('button', { name: 'Cancelar' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await user.click(boton()!)
+    expect(within(dialogo()).queryByRole('alert')).toBeNull()
+    await user.click(within(dialogo()).getByRole('button', { name: 'Crear 2 órdenes' }))
+    await within(dialogo()).findByRole('alert')
+    await user.click(within(dialogo()).getByRole('button', { name: 'Descartar y empezar de nuevo' }))
+    expect(within(dialogo()).queryByRole('alert')).toBeNull()                                // el pedido nuevo no se presenta como ya fallido
+    expect(intento).toBe(2)
+  })
 })
