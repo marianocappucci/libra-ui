@@ -24,7 +24,7 @@
 // sucursal elegida se está descontando lo pedido en órdenes que no dicen a qué sucursal van.
 // `vencido` (0.95.0, motor >= 0.31.0): la parte del stock que está en lotes vencidos; la sugerencia no la cuenta como stock,
 // y se avisa en la celda para que no parezca que sobra mercadería. Falta con un motor anterior: no se muestra nada.
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, ApiError } from '../api-client'
 import { TituloPantalla } from '../titulo-pantalla'
 import type {
@@ -37,6 +37,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { AlertTriangle, Download, FilePlus2, PackagePlus, TrendingDown } from 'lucide-react'
+import { nuevaClaveDeOperacion } from './clave-de-operacion'
 import { DialogoGenerarOrdenes, type ParametrosDeOrdenes } from './reposicion-ordenes'
 
 const RUTA = '/api/reportes/reposicion'
@@ -134,6 +135,9 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
   const [conProveedor, setConProveedor] = useState(false)
   // Las filas con que se abrió el diálogo de órdenes (una copia): recargar la lista de fondo, o que la recarga falle, no lo cierra ni le cambia lo que muestra.
   const [generando, setGenerando] = useState<ReposicionProducto[] | null>(null)
+  // La `clave_operacion` del intento en curso: sobrevive a cerrar el diálogo tras un corte (el motor podría haber creado las órdenes) y se descarta con la primera
+  // respuesta buena.
+  const claveDeOrdenes = useRef<string | null>(null)
   // Sube cuando se crean órdenes: la lista se vuelve a pedir (lo creado ya cuenta como «en camino»).
   const [recarga, setRecarga] = useState(0)
   // Lo último que contestó el motor, con la consulta a la que contestó: que `loading` y `error` se deriven de acá
@@ -301,7 +305,7 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
                 <Button size="sm" variant="outline" onClick={() => setOrden(null)}>Orden por urgencia</Button>
               )}
               {conGenerarOrdenes && (
-                <Button size="sm" onClick={() => setGenerando(data.productos)} disabled={data.productos.length === 0}>
+                <Button size="sm" onClick={() => { claveDeOrdenes.current ??= nuevaClaveDeOperacion(); setGenerando(data.productos) }} disabled={data.productos.length === 0}>
                   <FilePlus2 />Generar órdenes en borrador
                 </Button>
               )}
@@ -392,6 +396,8 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
         <DialogoGenerarOrdenes
           filas={generando}
           parametros={parametrosDeOrdenes}
+          clave={claveDeOrdenes.current ?? ''}
+          onResuelta={() => { claveDeOrdenes.current = null }}
           rutaDeOrden={rutaDeOrden}
           onCerrar={() => setGenerando(null)}
           onCreadas={() => setRecarga((n) => n + 1)}

@@ -3,13 +3,14 @@
 // Un diálogo que resume qué se va a crear (una orden por proveedor habitual, con los productos de la lista que hay que pedir), lo crea con
 // `POST /api/reportes/reposicion/ordenes` y muestra las órdenes creadas. **Nunca envía ni confirma nada**: son borradores para revisar.
 //
-// Lo que se confirma es lo que se ve: el cuerpo lleva los `producto_ids` de las filas con proveedor que hay que pedir, así que si los datos cambiaron
-// mientras tanto el motor puede crear menos (lo que ya no hay que pedir vuelve en `omitidos`), nunca más.
+// Lo que se confirma es lo que se ve: el cuerpo lleva los `producto_ids` de las filas con proveedor que hay que pedir y, como `topes`, la cantidad que se
+// mostró de cada una. Si los datos cambiaron mientras tanto el motor puede crear menos (lo que ya no hay que pedir vuelve en `omitidos`) pero nunca más
+// de lo que se vio.
 //
-// 🔑 **La `clave_operacion` es una por apertura del diálogo y se conserva hasta que sale bien.** Si el pedido se cortó (timeout, red) y no se sabe si el
-// motor lo creó, reintentar manda la misma clave y el motor devuelve las mismas órdenes en vez de crear otras (`repetida: true`). Cerrar y abrir de nuevo
-// es otra operación, con otra clave: lo que ya se creó cuenta como «en camino» y la reposición no lo vuelve a pedir.
-import { useMemo, useRef, useState } from 'react'
+// 🔑 **La `clave_operacion` la guarda la pantalla y se conserva hasta que el motor contesta bien (`onResuelta`).** Si el pedido se cortó (timeout, red) y no se
+// sabe si el motor lo creó, reintentar —aun cerrando y reabriendo el diálogo— manda la misma clave y el motor devuelve las mismas órdenes en vez de crear
+// otras (`repetida: true`). Después de una respuesta buena la clave se descarta: la próxima apertura es otra operación, y lo ya creado cuenta como «en camino».
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, ApiError } from '../api-client'
 import type { GenerarOrdenesResultado, ReposicionProducto } from './tipos'
@@ -35,16 +36,6 @@ function moneda(valor: string): string {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(Number(valor))
 }
 
-/** Un identificador único por intento. `randomUUID` sólo existe en contextos seguros (https o localhost): fuera de ahí cae a `getRandomValues`. */
-function nuevaClave(): string {
-  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
-  const b = crypto.getRandomValues(new Uint8Array(16))
-  b[6] = (b[6] & 0x0f) | 0x40
-  b[8] = (b[8] & 0x3f) | 0x80
-  const h = Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('')
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`
-}
-
 function mensajeDeError(err: unknown): string {
   if (!(err instanceof ApiError)) return 'Error de conexión. Podés reintentar: si la orden ya se había creado, no se duplica.'
   if (err.status === 503) return 'El servidor todavía no tiene los proveedores por producto (falta la migración del motor).'
@@ -65,29 +56,34 @@ function resumenDeOrdenes(filas: ReposicionProducto[]) {
   return { grupos: [...grupos.values()], sinProveedor }
 }
 
-export function DialogoGenerarOrdenes({ filas, parametros, rutaDeOrden, onCerrar, onCreadas }: {
+export function DialogoGenerarOrdenes({ filas, parametros, clave, rutaDeOrden, onCerrar, onCreadas, onResuelta }: {
   filas: ReposicionProducto[]
   parametros: ParametrosDeOrdenes
+  /** La `clave_operacion` de este intento: la guarda quien abre el diálogo, para que sobreviva a un cierre tras un corte. */
+  clave: string
   rutaDeOrden?: (id: number) => string
   onCerrar: () => void
   /** Se llama tras toda respuesta buena del motor (con órdenes nuevas, las de un reintento o ninguna): la pantalla recarga la lista, que ya cuenta lo creado como pedido. */
   onCreadas: () => void
+  /** El motor contestó bien: la clave ya cumplió y se descarta. */
+  onResuelta: () => void
 }) {
   const { grupos, sinProveedor } = useMemo(() => resumenDeOrdenes(filas), [filas])
-  const clave = useRef(nuevaClave())
   const [enVuelo, setEnVuelo] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [resultado, setResultado] = useState<GenerarOrdenesResultado | null>(null)
-  const idsAPedir = useMemo(() => grupos.flatMap((g) => g.productos.map((p) => p.producto_id)), [grupos])
+  const aPedir = useMemo(() => grupos.flatMap((g) => g.productos), [grupos])
 
   async function generar() {
     setEnVuelo(true)
     setError(null)
     try {
       const r = await api.post<GenerarOrdenesResultado>(RUTA_ORDENES, {
-        ...parametros, clave_operacion: clave.current, producto_ids: idsAPedir,
+        ...parametros, clave_operacion: clave, producto_ids: aPedir.map((p) => p.producto_id),
+        topes: Object.fromEntries(aPedir.map((p) => [p.producto_id, p.sugerido])),
       })
       setResultado(r)
+      onResuelta()
       // Se recarga tras CUALQUIER respuesta buena (también la de cero órdenes: si lo sugerido cambió, la lista de fondo ya está vieja).
       onCreadas()
     } catch (err) {

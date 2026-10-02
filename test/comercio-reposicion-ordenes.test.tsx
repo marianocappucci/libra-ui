@@ -139,7 +139,7 @@ describe('Reposición: generar órdenes en borrador', () => {
     expect(claves[0]).toBe(claves[1])
   })
 
-  it('cerrar y volver a abrir es otra operación, con otra clave', async () => {
+  it('tras una respuesta buena, abrir de nuevo es otra operación con otra clave', async () => {
     const user = userEvent.setup()
     await abrir()
     for (let i = 0; i < 2; i += 1) {
@@ -152,6 +152,40 @@ describe('Reposición: generar órdenes en borrador', () => {
     const claves = fetchMock.mock.calls.filter((c) => String(c[0]) === ORDENES).map((c) => JSON.parse(String((c[1] as RequestInit).body)).clave_operacion)
     expect(claves).toHaveLength(2)
     expect(claves[0]).not.toBe(claves[1])
+  })
+
+  it('tras un corte sin saber si el motor lo creó, cerrar y reabrir reintenta con la MISMA clave', async () => {
+    const user = userEvent.setup()
+    await abrir()
+    let intento = 0
+    const original = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation((entrada: RequestInfo | URL, init?: RequestInit) => {
+      if (String(entrada) === ORDENES && init?.method === 'POST') {
+        intento += 1
+        return intento === 1 ? Promise.reject(new TypeError('sin red')) : Promise.resolve(json({ ...RESULTADO, repetida: true }))
+      }
+      return original(entrada, init)
+    })
+    await user.click(boton()!)
+    await user.click(within(dialogo()).getByRole('button', { name: 'Crear 2 órdenes' }))
+    expect(await within(dialogo()).findByRole('alert')).toBeTruthy()
+    await user.click(within(dialogo()).getByRole('button', { name: 'Cancelar' }))              // cierra sin saber qué pasó
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await user.click(boton()!)
+    await user.click(within(dialogo()).getByRole('button', { name: 'Crear 2 órdenes' }))
+    expect(await within(dialogo()).findByText(/ya se habían creado con este mismo pedido/)).toBeTruthy()
+    const claves = fetchMock.mock.calls.filter((c) => String(c[0]) === ORDENES).map((c) => JSON.parse(String((c[1] as RequestInit).body)).clave_operacion)
+    expect(claves).toHaveLength(2)
+    expect(claves[0]).toBe(claves[1])
+  })
+
+  it('los topes mandan la cantidad que se vio de cada producto', async () => {
+    const user = userEvent.setup()
+    await abrir()
+    await user.click(boton()!)
+    await user.click(within(dialogo()).getByRole('button', { name: 'Crear 2 órdenes' }))
+    await waitFor(() => expect(escrituras()).toHaveLength(1))
+    expect(cuerpoDe(`POST ${ORDENES}`).topes).toEqual({ 1: 8, 2: 4, 3: 8 })
   })
 
   it('el servidor sin la migración (503) lo explica; un 422 muestra su detalle; y cancelar no escribe', async () => {
