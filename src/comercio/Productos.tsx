@@ -269,7 +269,9 @@ export function Productos({
       codigo: producto.codigo ?? '',
       descripcion: producto.descripcion ?? '',
       precio_venta: producto.precio_venta,
-      precio_costo: producto.precio_costo,
+      // Un rol sin `costos.ver` recibe el producto SIN `precio_costo` (VentaLibra, ADR-049): sin un número el formulario no valida y quien sólo
+      // decide la reposición (el depósito) no podría guardar ni el plazo ni el techo. Se muestra 0 (nunca se guarda: ver `productoSinCambios`).
+      precio_costo: producto.precio_costo ?? 0,
       unidad: producto.unidad || 'u',
       categoria: producto.categoria ?? '',
       stock_minimo: producto.stock_minimo,

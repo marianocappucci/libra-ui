@@ -312,4 +312,22 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     expect(guardados).toHaveLength(2)
     expect(JSON.parse(String((guardados[1][1] as RequestInit).body)).nombre).toBe('Yerba')
   })
+
+  it('un rol sin costos.ver (el producto llega SIN precio_costo) igual puede guardar el plazo y el techo', async () => {
+    const { precio_costo: _costo, ...sinCosto } = YERBA
+    responder({
+      '/api/productos': [sinCosto], '/api/productos/categorias': [], [`GET ${RUTA}`]: PROPIOS, [`PUT ${RUTA}`]: PROPIOS,
+      'PUT /api/productos/1': { status: 403, detail: 'forbidden' },
+    })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    await waitFor(() => expect(plazo().value).toBe('7'))
+    fireEvent.change(techo(), { target: { value: '45' } })
+    await guardar(user)
+    await waitFor(() => expect(puts()).toHaveLength(1))
+    expect(cuerpoDe(`PUT ${RUTA}`)).toEqual({ plazo_entrega_dias: 7, stock_maximo: 45 })
+    expect(pedidas()).not.toContain('PUT /api/productos/1')
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
 })
