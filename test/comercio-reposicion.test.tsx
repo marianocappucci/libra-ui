@@ -539,15 +539,17 @@ describe('Reposición: estacionalidad (motor >= 0.35.0, ADR-023)', () => {
     expect(nombresEnTabla().at(-1)).toBe('Sal')
   })
 
-  it('apagar el ajuste con la tabla ordenada por «Estacional» vuelve al orden por urgencia del motor', async () => {
+  it('apagar el ajuste con la tabla ordenada por «Estacional» limpia ese orden: al volver a encenderlo la columna no vuelve ordenada', async () => {
     const user = userEvent.setup()
     await abrir(tabla(AJUSTADA))
     await user.click(await screen.findByRole('button', { name: /^Estacional/ }))
-    expect(nombresEnTabla()[0]).toBe('Yerba')
-    responder(tabla({ ...CON_EST, productos: [SAL, YERBA, HARINA] }))                       // el motor devuelve ahora su orden de urgencia
+    expect(screen.getByRole('button', { name: /^Estacional/ }).closest('th')).toHaveAttribute('aria-sort', 'descending')
+    responder(tabla({ ...CON_EST, productos: [SAL, YERBA, HARINA] }))
     await user.click(screen.getByLabelText('Ajustar por estacionalidad'))
     await waitFor(() => expect(screen.queryByRole('button', { name: /^Estacional/ })).toBeNull())
-    expect(nombresEnTabla()).toEqual(['Sal', 'Yerba', 'Harina'])                            // sin un orden escondido por una columna que ya no está
+    expect(nombresEnTabla()).toEqual(['Sal', 'Yerba', 'Harina'])                            // el orden por urgencia del motor
+    responder(tabla(AJUSTADA))
+    await user.click(screen.getByLabelText('Ajustar por estacionalidad'))
+    expect((await screen.findByRole('button', { name: /^Estacional/ })).closest('th')).toHaveAttribute('aria-sort', 'none')
   })
 })
-
