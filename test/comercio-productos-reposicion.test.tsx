@@ -231,4 +231,49 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     await waitFor(() => expect(boton.disabled).toBe(false))
     expect(plazo().value).toBe('7')
   })
+
+  it('si sólo se cambió el plazo o el techo, el producto NO se vuelve a guardar (quien decide la reposición puede no poder editarlo)', async () => {
+    responder({
+      ...base, [`GET ${RUTA}`]: PROPIOS, [`PUT ${RUTA}`]: PROPIOS,
+      'PUT /api/productos/1': { status: 403, detail: 'forbidden' },    // el rol no puede editar el producto
+    })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    await waitFor(() => expect(plazo().value).toBe('7'))
+    fireEvent.change(plazo(), { target: { value: '9' } })
+    await guardar(user)
+    await waitFor(() => expect(puts()).toHaveLength(1))
+    expect(cuerpoDe(`PUT ${RUTA}`)).toEqual({ plazo_entrega_dias: 9, stock_maximo: 40 })
+    expect(pedidas()).not.toContain('PUT /api/productos/1')
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  it('si además se cambió algo del producto, se guarda el producto primero (y si eso falla no se manda el plazo/techo)', async () => {
+    responder({
+      ...base, [`GET ${RUTA}`]: PROPIOS, [`PUT ${RUTA}`]: PROPIOS,
+      'PUT /api/productos/1': { status: 403, detail: 'forbidden' },
+    })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    await waitFor(() => expect(plazo().value).toBe('7'))
+    fireEvent.change(within(dialogo()).getByLabelText('Nombre'), { target: { value: 'Yerba 2' } })
+    fireEvent.change(plazo(), { target: { value: '9' } })
+    await guardar(user)
+    expect(await within(dialogo()).findByText(/forbidden/)).toBeTruthy()
+    expect(pedidas()).toContain('PUT /api/productos/1')
+    expect(puts()).toHaveLength(0)
+  })
+
+  it('sin cambiar nada de reposición, un guardado sin cambios sigue guardando el producto como siempre', async () => {
+    responder({ ...base, [`GET ${RUTA}`]: PROPIOS, 'PUT /api/productos/1': { id: 1 } })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    await waitFor(() => expect(plazo().value).toBe('7'))
+    await guardar(user)
+    await waitFor(() => expect(pedidas()).toContain('PUT /api/productos/1'))
+    expect(puts()).toHaveLength(0)
+  })
 })
