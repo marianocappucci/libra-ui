@@ -139,6 +139,25 @@ describe('el estado del comprobante', () => {
   })
 })
 
+describe('el motivo de que no tenga CAE', () => {
+  it('el rótulo es siempre «Sin CAE»; el motivo, si lo hay, va de ayuda', async () => {
+    responder([{ ...SIN_CAE, cae_error: 'WSFE rechazó el comprobante: [10246] falta la condición' }])
+    montar()
+    const badge = await screen.findByText('Sin CAE')
+    expect(badge.parentElement).toHaveAttribute('title', expect.stringContaining('10246'))
+    expect(screen.queryByText(/10246/)).toBeNull()   // no se vuelca en la fila
+  })
+
+  it('sin motivo no se inventa uno: «Sin CAE» a secas, sin ayuda', async () => {
+    // El caso de una instancia sin ARCA, o de una factura anterior a que el motor
+    // guardara el motivo.
+    responder([SIN_CAE])
+    montar()
+    const badge = await screen.findByText('Sin CAE')
+    expect(badge.parentElement).not.toHaveAttribute('title')
+  })
+})
+
 describe('la búsqueda', () => {
   it('no consulta en cada tecla: sale al apretar Buscar', async () => {
     montar()

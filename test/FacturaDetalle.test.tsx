@@ -86,6 +86,31 @@ function montar(detalle: FacturaDetalleType, props: Partial<Parameters<typeof Fa
   )
 }
 
+describe('el motivo de que no tenga CAE', () => {
+  it('con motivo, el aviso dice «sin CAE» y por qué', async () => {
+    montar({
+      ...SIN_CAE,
+      factura: { ...SIN_CAE.factura, cae_error: 'WSFE rechazó el comprobante: [10246] falta la condición' },
+    })
+    expect(await screen.findByTestId('motivo-sin-cae')).toHaveTextContent('10246')
+    expect(screen.getByText(/sin CAE/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Reintentar autorización ARCA/ })).toBeInTheDocument()
+  })
+
+  it('sin motivo no se muestra ninguna línea de motivo, pero sí el aviso', async () => {
+    montar(SIN_CAE)
+    expect(await screen.findByRole('button', { name: /Reintentar autorización ARCA/ })).toBeInTheDocument()
+    expect(screen.queryByTestId('motivo-sin-cae')).toBeNull()
+    expect(screen.getByText(/sin CAE/)).toBeInTheDocument()
+  })
+
+  it('un comprobante autorizado no muestra motivo aunque quedara uno viejo', async () => {
+    montar({ ...CON_CAE, factura: { ...CON_CAE.factura, cae_error: 'viejo' } })
+    expect(await screen.findByText(/Comprobante autorizado por ARCA/)).toBeInTheDocument()
+    expect(screen.queryByTestId('motivo-sin-cae')).toBeNull()
+  })
+})
+
 describe('acciones gateadas por rol', () => {
   it('con esAdmin, un comprobante autorizado ofrece notas de crédito y débito', async () => {
     montar(CON_CAE, { esAdmin: true })
