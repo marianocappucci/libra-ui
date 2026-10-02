@@ -373,4 +373,149 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     expect(within(dialogo()).getByLabelText('Precio de costo')).toBeTruthy()
     expect(within(dialogo()).getByText(/Margen/)).toBeTruthy()
   })
+
+  // ── Proveedor habitual (motor >= 0.33.0, ADR-021) ──
+  const LISTA = [{ id: 7, nombre: 'Distribuidora Norte' }, { id: 8, nombre: 'Mayorista Sur' }]
+  const CON_PROV = { ...PROPIOS, proveedor_id: 7, proveedor: 'Distribuidora Norte' }
+  const selectorProveedor = () => within(dialogo()).getByLabelText('Proveedor habitual') as HTMLSelectElement
+
+  it('con un motor que no devuelve proveedor_id no hay selector de proveedor', async () => {
+    responder({ ...base, [`GET ${RUTA}`]: PROPIOS, '/api/proveedores': LISTA })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    await waitFor(() => expect(plazo().value).toBe('7'))
+    expect(within(dialogo()).queryByLabelText('Proveedor habitual')).toBeNull()
+  })
+
+  it('con proveedor_id muestra el proveedor del producto; sin tocarlo NO viaja en el cuerpo (el motor lo deja como estaba)', async () => {
+    responder({ ...base, [`GET ${RUTA}`]: CON_PROV, [`PUT ${RUTA}`]: CON_PROV, '/api/proveedores': LISTA, 'PUT /api/productos/1': { id: 1 } })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    await waitFor(() => expect(selectorProveedor().value).toBe('7'))
+    fireEvent.change(plazo(), { target: { value: '9' } })
+    await guardar(user)
+    await waitFor(() => expect(puts()).toHaveLength(1))
+    expect(cuerpoDe(`PUT ${RUTA}`)).toEqual({ plazo_entrega_dias: 9, stock_maximo: 40 })
+    expect('proveedor_id' in cuerpoDe(`PUT ${RUTA}`)).toBe(false)
+  })
+
+  it('cambiar sólo el proveedor guarda la reposición (no el producto) con proveedor_id; «Sin proveedor» manda null', async () => {
+    responder({ ...base, [`GET ${RUTA}`]: CON_PROV, [`PUT ${RUTA}`]: CON_PROV, '/api/proveedores': LISTA, 'PUT /api/productos/1': { id: 1 } })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    await waitFor(() => expect(selectorProveedor().value).toBe('7'))
+    await user.selectOptions(selectorProveedor(), '8')
+    await guardar(user)
+    await waitFor(() => expect(puts()).toHaveLength(1))
+    expect(cuerpoDe(`PUT ${RUTA}`)).toEqual({ plazo_entrega_dias: 7, stock_maximo: 40, proveedor_id: 8 })
+    expect(pedidas()).not.toContain('PUT /api/productos/1')
+  })
+
+  it('«Sin proveedor» borra el habitual: viaja proveedor_id: null', async () => {
+    responder({ ...base, [`GET ${RUTA}`]: CON_PROV, [`PUT ${RUTA}`]: PROPIOS, '/api/proveedores': LISTA })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    await waitFor(() => expect(selectorProveedor().value).toBe('7'))
+    await user.selectOptions(selectorProveedor(), '__sin__')
+    await guardar(user)
+    await waitFor(() => expect(puts()).toHaveLength(1))
+    expect(cuerpoDe(`PUT ${RUTA}`)).toMatchObject({ proveedor_id: null })
+  })
+
+  it('un proveedor que no está en la lista (dado de baja, o sin permiso para listar) igual se ve con su nombre', async () => {
+    responder({ ...base, [`GET ${RUTA}`]: CON_PROV, '/api/proveedores': { status: 403, detail: 'forbidden' } })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    await waitFor(() => expect(selectorProveedor().value).toBe('7'))
+    expect(within(selectorProveedor()).getByRole('option', { name: 'Distribuidora Norte' })).toBeTruthy()
+  })
+
+  it('en el alta el selector de proveedor está desde el primer momento (el motor se sondea con el primer producto) y el proveedor viaja con el id creado', async () => {
+    responder({
+      ...base, [`GET ${RUTA}`]: CON_PROV, 'POST /api/productos': { id: 9 }, 'PUT /api/productos/9/reposicion': CON_PROV, '/api/proveedores': LISTA,
+    })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await screen.findByText('Yerba')
+    await waitFor(() => expect(pedidas()).toContain(`GET ${RUTA}`))          // el sondeo
+    await user.click(screen.getByRole('button', { name: /Nuevo producto/ }))
+    fireEvent.change(within(dialogo()).getByLabelText('Nombre'), { target: { value: 'Nuevo' } })
+    await user.selectOptions(selectorProveedor(), '8')
+    await user.click(within(dialogo()).getByRole('button', { name: 'Crear producto' }))
+    await waitFor(() => expect(pedidas()).toContain('PUT /api/productos/9/reposicion'))
+    expect(cuerpoDe('PUT /api/productos/9/reposicion')).toEqual({ plazo_entrega_dias: null, stock_maximo: null, proveedor_id: 8 })
+  })
+
+  it('conProveedorHabitual fuerza el selector en el alta aunque el catálogo esté vacío, y false lo apaga aunque el motor lo maneje', async () => {
+    responder({ '/api/productos': [], '/api/productos/categorias': [], '/api/proveedores': LISTA })
+    const user = userEvent.setup()
+    const { unmount } = montar('/productos', <Productos conParametrosDeReposicion conProveedorHabitual />)
+    await user.click(await screen.findByRole('button', { name: /Nuevo producto/ }))
+    expect(selectorProveedor()).toBeTruthy()
+    unmount()
+    cleanup()
+    prepararFetch()
+    responder({ ...base, [`GET ${RUTA}`]: CON_PROV, '/api/proveedores': LISTA })
+    montar('/productos', <Productos conParametrosDeReposicion conProveedorHabitual={false} />)
+    await editar(user)
+    await waitFor(() => expect(plazo().value).toBe('7'))
+    expect(within(dialogo()).queryByLabelText('Proveedor habitual')).toBeNull()
+  })
+
+  it('si el sondeo del motor termina con el diálogo del alta ya abierto, el selector de proveedor aparece en ese mismo diálogo', async () => {
+    let soltar: (v: unknown) => void = () => {}
+    const lenta = new Promise((r) => { soltar = r })
+    responder({ ...base, '/api/proveedores': LISTA })
+    const original = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation((entrada: RequestInfo | URL, init?: RequestInit) => {
+      if (String(entrada) === RUTA && (init?.method ?? 'GET') === 'GET') {
+        return lenta.then((v) => new Response(JSON.stringify(v), { status: 200, headers: { 'content-type': 'application/json' } }))
+      }
+      return original(entrada, init)
+    })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await screen.findByText('Yerba')
+    await user.click(screen.getByRole('button', { name: /Nuevo producto/ }))
+    expect(within(dialogo()).queryByLabelText('Proveedor habitual')).toBeNull()      // el sondeo todavía no contestó
+    soltar(CON_PROV)
+    await waitFor(() => expect(selectorProveedor()).toBeTruthy())
+  })
+
+  it('con el sondeo tardío, un alta cuyo plazo/techo falla conserva el proveedor elegido al reintentar', async () => {
+    let soltar: (v: unknown) => void = () => {}
+    const lenta = new Promise((r) => { soltar = r })
+    let intentos = 0
+    responder({
+      ...base, '/api/proveedores': LISTA, 'POST /api/productos': { id: 9, nombre: 'Nuevo' }, 'PUT /api/productos/9': { id: 9 },
+      'PUT /api/productos/9/reposicion': () => (++intentos === 1 ? { status: 422, detail: 'techo inválido' } : CON_PROV),
+    })
+    const original = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation((entrada: RequestInfo | URL, init?: RequestInit) => {
+      if (String(entrada) === RUTA && (init?.method ?? 'GET') === 'GET') {
+        return lenta.then((v) => new Response(JSON.stringify(v), { status: 200, headers: { 'content-type': 'application/json' } }))
+      }
+      return original(entrada, init)
+    })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await screen.findByText('Yerba')
+    await user.click(screen.getByRole('button', { name: /Nuevo producto/ }))
+    soltar(CON_PROV)                                                          // el sondeo termina con el diálogo abierto
+    await waitFor(() => expect(selectorProveedor()).toBeTruthy())
+    fireEvent.change(within(dialogo()).getByLabelText('Nombre'), { target: { value: 'Nuevo' } })
+    await user.selectOptions(selectorProveedor(), '8')
+    await user.click(within(dialogo()).getByRole('button', { name: 'Crear producto' }))
+    expect(await within(dialogo()).findByText(/El producto se guardó, pero/)).toBeTruthy()
+    expect(selectorProveedor().value).toBe('8')                               // el selector sigue ahí, con lo elegido
+    await user.click(within(dialogo()).getByRole('button', { name: 'Guardar cambios' }))
+    await waitFor(() => expect(pedidas().filter((p) => p === 'PUT /api/productos/9/reposicion')).toHaveLength(2))
+    const envios = fetchMock.mock.calls.filter((c) => (c[1] as RequestInit | undefined)?.method === 'PUT' && String(c[0]) === '/api/productos/9/reposicion')
+    expect(JSON.parse(String((envios[1][1] as RequestInit).body)).proveedor_id).toBe(8)
+  })
 })

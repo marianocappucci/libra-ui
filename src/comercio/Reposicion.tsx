@@ -12,6 +12,9 @@
 // - **Los parámetros se validan acá con los mismos topes que el motor** (`erp.reposicion.MAX_*`): un valor fuera de
 //   rango no se manda (el motor contestaría 422) y no se muestra una lista que no corresponde a lo que dicen los campos.
 //
+// **Proveedor habitual (0.102.0, motor >= 0.33.0, ADR-021):** una columna «Proveedor» y un filtro por proveedor, sólo si el motor lo maneja
+// (la respuesta trae la clave `proveedor_id`; con uno anterior la pantalla es la de siempre).
+//
 // 🔴 **Los avisos por fila no son adorno.** `posible_quiebre` dice que la rotación de ese producto se estimó con
 // pocos días con stock y puede estar subestimada (se sugiere de menos); `sin_ventas` que no hay rotación, y por eso
 // la cobertura es un guion y el producto sólo aparece si está bajo el mínimo; `en_camino_sin_sucursal`, que con una
@@ -22,7 +25,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api, ApiError } from '../api-client'
 import { TituloPantalla } from '../titulo-pantalla'
 import type {
-  CategoriaProducto, ReposicionData, ReposicionMotivo, ReposicionProducto, Sucursal,
+  CategoriaProducto, Proveedor, ReposicionData, ReposicionMotivo, ReposicionProducto, Sucursal,
 } from './tipos'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -65,7 +68,7 @@ function errorDelParametro(valor: string, max: number): string | null {
 
 type ClaveOrden =
   | 'nombre' | 'codigo' | 'stock' | 'en_camino' | 'stock_minimo' | 'unidades_vendidas' | 'rotacion_diaria'
-  | 'cobertura_dias' | 'sugerido' | 'motivo'
+  | 'cobertura_dias' | 'sugerido' | 'motivo' | 'proveedor'
 
 const COLUMNAS: { orden: ClaveOrden; titulo: string; alinea: 'left' | 'right' }[] = [
   { orden: 'nombre', titulo: 'Producto', alinea: 'left' },
@@ -80,10 +83,13 @@ const COLUMNAS: { orden: ClaveOrden; titulo: string; alinea: 'left' | 'right' }[
   { orden: 'motivo', titulo: 'Motivo', alinea: 'left' },
 ]
 
+const COLUMNA_PROVEEDOR: { orden: ClaveOrden; titulo: string; alinea: 'left' | 'right' } = { orden: 'proveedor', titulo: 'Proveedor', alinea: 'left' }
+
 /** Lo que se ordena de cada fila; `null` (sin código, sin cobertura, sin motivo) va siempre al final. */
 function valorDeOrden(p: ReposicionProducto, clave: ClaveOrden): number | string | null {
   if (clave === 'motivo') return p.motivo ? etiquetaDelMotivo(p.motivo) : null
   if (clave === 'codigo') return p.codigo || null
+  if (clave === 'proveedor') return p.proveedor || null
   return p[clave]
 }
 
@@ -110,6 +116,10 @@ export function Reposicion() {
   const [orden, setOrden] = useState<{ clave: ClaveOrden; sentido: 1 | -1 } | null>(null)
   const [sucursales, setSucursales] = useState<Sucursal[]>([])
   const [categorias, setCategorias] = useState<CategoriaProducto[]>([])
+  const [proveedor, setProveedor] = useState(TODAS)
+  const [proveedores, setProveedores] = useState<Proveedor[]>([])
+  // Una vez que el motor contestó con la clave `proveedor_id` maneja proveedores: se recuerda aunque una consulta posterior falle o venga vacía.
+  const [conProveedor, setConProveedor] = useState(false)
   // Lo último que contestó el motor, con la consulta a la que contestó: que `loading` y `error` se deriven de acá
   // (y no de estados sueltos que hay que apagar y prender) evita mostrar el error o la carga de una consulta vieja.
   const [respuesta, setRespuesta] = useState<{ consulta: string; data: ReposicionData | null; error: string | null } | null>(null)
@@ -129,8 +139,9 @@ export function Reposicion() {
     })
     if (sucursal !== TODAS) q.set('sucursal_id', sucursal)
     if (categoria !== TODAS) q.set('categoria', categoria)
+    if (proveedor !== TODAS) q.set('proveedor_id', proveedor)
     return q.toString()
-  }, [valido, valores, soloAPedir, sucursal, categoria])
+  }, [valido, valores, soloAPedir, sucursal, categoria, proveedor])
 
   // Sin sucursales o sin categorías (un producto sin sucursales, o un usuario sin permiso) la pantalla sigue: sólo
   // pierde ese filtro.
@@ -138,6 +149,7 @@ export function Reposicion() {
     let vigente = true
     api.get<Sucursal[]>('/api/sucursales').then((s) => { if (vigente) setSucursales(s) }).catch(() => {})
     api.get<CategoriaProducto[]>('/api/productos/categorias').then((c) => { if (vigente) setCategorias(c) }).catch(() => {})
+    api.get<Proveedor[]>('/api/proveedores').then((p) => { if (vigente && Array.isArray(p)) setProveedores(p) }).catch(() => {})
     return () => { vigente = false }
   }, [])
 
@@ -147,7 +159,11 @@ export function Reposicion() {
     // Una respuesta que llega después de otro cambio de parámetros no pisa a la más nueva.
     let vigente = true
     api.get<ReposicionData>(`${RUTA}?${consulta}`)
-      .then((data) => { if (vigente) setRespuesta({ consulta, data, error: null }) })
+      .then((data) => {
+        if (!vigente) return
+        setRespuesta({ consulta, data, error: null })
+        if (data && typeof data === 'object' && 'proveedor_id' in data) setConProveedor(true)
+      })
       .catch((err) => {
         if (vigente) setRespuesta({ consulta, data: null, error: err instanceof ApiError ? err.detail : 'Error de conexión.' })
       })
@@ -163,10 +179,11 @@ export function Reposicion() {
 
   function ordenarPor(clave: ClaveOrden) {
     if (orden?.clave === clave) setOrden({ clave, sentido: orden.sentido === 1 ? -1 : 1 })
-    else setOrden({ clave, sentido: clave === 'nombre' || clave === 'codigo' || clave === 'motivo' ? 1 : -1 })
+    else setOrden({ clave, sentido: clave === 'nombre' || clave === 'codigo' || clave === 'motivo' || clave === 'proveedor' ? 1 : -1 })
   }
 
   const productos = useMemo(() => ordenar(data?.productos ?? [], orden), [data, orden])
+  const columnas = conProveedor ? [...COLUMNAS.slice(0, 2), COLUMNA_PROVEEDOR, ...COLUMNAS.slice(2)] : COLUMNAS
   // Lo que dice la ayuda son los controles, que son también lo que muestra la tabla (sólo se muestra la de esta consulta).
   const horizonte = valido ? Number(valores.dias_cobertura) + Number(valores.plazo_entrega_dias) : null
 
@@ -195,6 +212,18 @@ export function Reposicion() {
               <SelectContent>
                 <SelectItem value={TODAS}>Todas las categorías</SelectItem>
                 {categorias.map((c) => <SelectItem key={c.id} value={c.nombre}>{c.nombre}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        {conProveedor && proveedores.length > 0 && (
+          <div className="grid gap-2">
+            <Label htmlFor="reposicion-proveedor">Proveedor</Label>
+            <Select value={proveedor} onValueChange={setProveedor}>
+              <SelectTrigger id="reposicion-proveedor" className="w-56"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={TODAS}>Todos los proveedores</SelectItem>
+                {proveedores.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.nombre}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -263,7 +292,7 @@ export function Reposicion() {
                 <table className="w-full text-sm">
                   <thead className="border-b text-muted-foreground">
                     <tr>
-                      {COLUMNAS.map((c) => (
+                      {columnas.map((c) => (
                         <th
                           key={c.orden}
                           scope="col"
@@ -297,6 +326,7 @@ export function Reposicion() {
                           )}
                         </td>
                         <td className="p-3">{p.codigo || '—'}</td>
+                        {conProveedor && <td className="p-3">{p.proveedor || '—'}</td>}
                         <td className={`min-w-36 p-3 text-right ${p.stock <= 0 ? 'text-destructive' : ''}`}>
                           {numero(p.stock)}
                           {(p.vencido ?? 0) > 0 && (

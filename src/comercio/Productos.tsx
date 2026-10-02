@@ -29,7 +29,7 @@ import { api, ApiError } from '../api-client'
 import { anchoColumnaAcciones, DataTable, sortableHeader } from '../data-table'
 import { BadgeEstado } from '../badge-estado'
 import { TituloPantalla } from '../titulo-pantalla'
-import { UNIDADES, type CategoriaProducto, type Estacion, type Producto } from './tipos'
+import { UNIDADES, type CategoriaProducto, type Estacion, type Producto, type Proveedor } from './tipos'
 import { ProductoCodigosVariantes } from './ProductoCodigosVariantes'
 import { formatEntero } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
@@ -120,11 +120,18 @@ export type ProductosProps = {
    *  /api/productos/{id}/reposicion`, `libracommerce.web.reposicion_router.build_reposicion_parametros_router`, ADR-020 del motor). **Opt-in
    *  por prop** (por defecto no se muestra): el backend tiene que montar ese router. Se guardan aparte del producto, después de él. */
   conParametrosDeReposicion?: boolean
+  /** El selector «Proveedor habitual» dentro de «Reposición sugerida» (motor >= 0.33.0, ADR-021). **Por defecto se decide solo**: aparece si el
+   *  motor devuelve `proveedor_id` en `GET /api/productos/{id}/reposicion` (se sondea con el primer producto de la lista, así también está en el
+   *  alta). `true` lo fuerza (para un producto que pina el motor y quiere el selector aun con el catálogo vacío) y `false` lo apaga. */
+  conProveedorHabitual?: boolean
 }
 
 /** Los topes del motor (`erp.reposicion.MAX_PLAZO_ENTREGA_DIAS`). */
 const MAX_PLAZO_REPOSICION = 180
 type ParametrosReposicion = { plazo_entrega_dias: number | null; stock_maximo: number | null }
+/** Lo que devuelve `GET /api/productos/{id}/reposicion`; `proveedor_id` y `proveedor` sólo con un motor >= 0.33.0 (ADR-021). */
+type ParametrosLeidos = ParametrosReposicion & { proveedor_id?: number | null; proveedor?: string | null }
+const SIN_PROVEEDOR = '__sin__'
 type EstadoReposicion = 'sin' | 'cargando' | 'listo' | 'error'
 
 /** Valida los dos campos de texto (vacío = sin valor propio). Devuelve el error, o los valores a mandar. */
@@ -166,6 +173,7 @@ export function Productos({
   conEliminar = true,
   conVencimientos,
   conParametrosDeReposicion = false,
+  conProveedorHabitual,
 }: ProductosProps) {
   const [productos, setProductos] = useState<Producto[]>([])
   const [loading, setLoading] = useState(true)
@@ -193,6 +201,15 @@ export function Productos({
   const [repoTecho, setRepoTecho] = useState('')
   const [repoOriginal, setRepoOriginal] = useState<ParametrosReposicion>({ plazo_entrega_dias: null, stock_maximo: null })
   const [repoEstado, setRepoEstado] = useState<EstadoReposicion>('sin')
+  // Proveedor habitual (motor >= 0.33.0): el selector sólo aparece si el motor lo devolvió. `''` = sin proveedor.
+  const [repoConProveedor, setRepoConProveedor] = useState(false)
+  const [repoProveedor, setRepoProveedor] = useState('')
+  const [repoProveedorOriginal, setRepoProveedorOriginal] = useState('')
+  const [repoProveedorNombre, setRepoProveedorNombre] = useState('')
+  const [proveedoresLista, setProveedoresLista] = useState<Proveedor[]>([])
+  const motorConProveedor = useRef(conProveedorHabitual === true)
+  // Lo mismo que la ref, como estado: si el sondeo termina con el diálogo del alta ya abierto, el selector aparece en ese mismo diálogo.
+  const [motorConProveedorSt, setMotorConProveedorSt] = useState(conProveedorHabitual === true)
   // Cada apertura del diálogo numera su lectura: la respuesta de un producto anterior que llega tarde no pisa a la del actual.
   const repoLectura = useRef(0)
   // Los valores del producto tal como se abrió el diálogo de edición (para saber si el usuario tocó algo del producto o sólo del plazo/techo).
@@ -203,6 +220,9 @@ export function Productos({
   const sinCosto = productos.length > 0 && productos.every((p) => p.precio_costo === undefined || p.precio_costo === null)
   // El producto que se está editando llegó sin costo: el campo «Precio de costo» y el margen no se ofrecen (el 0 sería inventado).
   const costoOcultoEnForm = editingProducto !== null && (editingProducto.precio_costo === undefined || editingProducto.precio_costo === null)
+  // El selector de proveedor: si el GET de este producto lo trajo, o si el motor ya se sondeó (el sondeo puede terminar con el diálogo abierto, y
+  // el diálogo pasa a editar el producto recién creado si falla el plazo/techo: el selector tiene que seguir ahí para reintentar con el mismo proveedor).
+  const proveedorDisponible = conProveedorHabitual !== false && (repoConProveedor || motorConProveedorSt)
 
   const conEstacion = Boolean(estaciones && estaciones.length > 0)
 
@@ -221,6 +241,7 @@ export function Productos({
   useEffect(() => {
     loadProductos()
     api.get<CategoriaProducto[]>('/api/productos/categorias').then(setCategorias).catch(() => {})
+    if (conParametrosDeReposicion) api.get<Proveedor[]>('/api/proveedores').then((l) => { if (Array.isArray(l)) setProveedoresLista(l) }).catch(() => {})
     api.get<string[]>('/api/productos/unidades').then((u) => { if (Array.isArray(u) && u.length > 0) setUnidades(u) }).catch(() => {})
     if (conStockTotal) {
       api.get<{ productos: { id: number; stock_actual: number }[] }>('/api/stock')
@@ -243,6 +264,12 @@ export function Productos({
       const lista = await api.get<Producto[]>(path)
       if (lista.some((p) => typeof p.vence === 'boolean')) setBackendConVence(true)
       setProductos(lista)
+      // ¿El motor maneja proveedores? Se sondea con el primer producto para que el selector esté también en el alta.
+      if (conParametrosDeReposicion && conProveedorHabitual === undefined && !motorConProveedor.current && lista.length > 0) {
+        api.get<ParametrosLeidos>(`/api/productos/${lista[0].id}/reposicion`)
+          .then((d) => { if (d && typeof d === 'object' && 'proveedor_id' in d) { motorConProveedor.current = true; setMotorConProveedorSt(true) } })
+          .catch(() => {})
+      }
     } catch (err) {
       setError(describeError(err))
     } finally {
@@ -264,6 +291,10 @@ export function Productos({
     setRepoPlazo('')
     setRepoTecho('')
     setRepoOriginal({ plazo_entrega_dias: null, stock_maximo: null })
+    setRepoConProveedor(conProveedorHabitual !== false && motorConProveedor.current)
+    setRepoProveedor('')
+    setRepoProveedorOriginal('')
+    setRepoProveedorNombre('')
     setRepoEstado(conParametrosDeReposicion ? 'listo' : 'sin')
     repoLectura.current += 1
     setDialogOpen(true)
@@ -295,15 +326,28 @@ export function Productos({
     setRepoPlazo('')
     setRepoTecho('')
     setRepoOriginal({ plazo_entrega_dias: null, stock_maximo: null })
+    setRepoConProveedor(conProveedorHabitual === true)
+    setRepoProveedor('')
+    setRepoProveedorOriginal('')
+    setRepoProveedorNombre('')
     setRepoEstado(conParametrosDeReposicion ? 'cargando' : 'sin')
     const lectura = ++repoLectura.current
     setDialogOpen(true)
     if (conParametrosDeReposicion) {
-      api.get<ParametrosReposicion>(`/api/productos/${producto.id}/reposicion`)
+      api.get<ParametrosLeidos>(`/api/productos/${producto.id}/reposicion`)
         .then((d) => {
           if (lectura !== repoLectura.current) return
           const original = { plazo_entrega_dias: d?.plazo_entrega_dias ?? null, stock_maximo: d?.stock_maximo ?? null }
           setRepoOriginal(original)
+          if (conProveedorHabitual !== false && d && typeof d === 'object' && 'proveedor_id' in d) {
+            motorConProveedor.current = true
+            setMotorConProveedorSt(true)
+            const id = d.proveedor_id === null || d.proveedor_id === undefined ? '' : String(d.proveedor_id)
+            setRepoConProveedor(true)
+            setRepoProveedor(id)
+            setRepoProveedorOriginal(id)
+            setRepoProveedorNombre(d.proveedor ?? '')
+          }
           setRepoPlazo(original.plazo_entrega_dias === null ? '' : String(original.plazo_entrega_dias))
           setRepoTecho(original.stock_maximo === null ? '' : String(original.stock_maximo))
           setRepoEstado('listo')
@@ -339,7 +383,7 @@ export function Productos({
     // pierde) y cambiarla exige un permiso que quizá no tenga quien sólo corrige un precio.
     if (conVence && values.vence !== (editingProducto?.vence === true)) payload.vence = values.vence
     // Plazo y techo se validan ANTES de escribir nada: un valor inválido no deja el producto a medias.
-    let repoAMandar: ParametrosReposicion | null = null
+    let repoAMandar: (ParametrosReposicion & { proveedor_id?: number | null }) | null = null
     if (conParametrosDeReposicion && repoEstado === 'listo') {
       const leidos = leerParametrosReposicion(repoPlazo, repoTecho, Number(values.stock_minimo) || 0)
       if ('error' in leidos) {
@@ -348,7 +392,11 @@ export function Productos({
         return
       }
       const v = leidos.valores
-      if (v.plazo_entrega_dias !== repoOriginal.plazo_entrega_dias || v.stock_maximo !== repoOriginal.stock_maximo) repoAMandar = v
+      // El proveedor viaja sólo si el motor lo maneja Y el usuario lo cambió (un motor anterior rechaza claves de más, y no tocarlo lo deja como estaba).
+      const proveedorCambio = proveedorDisponible && repoProveedor !== repoProveedorOriginal
+      if (v.plazo_entrega_dias !== repoOriginal.plazo_entrega_dias || v.stock_maximo !== repoOriginal.stock_maximo || proveedorCambio) {
+        repoAMandar = proveedorCambio ? { ...v, proveedor_id: repoProveedor === '' ? null : Number(repoProveedor) } : v
+      }
     }
     let guardado = false
     try {
@@ -703,6 +751,22 @@ export function Productos({
                             <Input id="repo-techo" inputMode="decimal" placeholder="sin tope" className="w-32" value={repoTecho}
                               disabled={repoEstado === 'cargando'} onChange={(e) => setRepoTecho(e.target.value)} />
                           </div>
+                          {proveedorDisponible && (
+                            <div className="grid gap-2">
+                              <Label htmlFor="repo-proveedor">Proveedor habitual</Label>
+                              <Select value={repoProveedor === '' ? SIN_PROVEEDOR : repoProveedor}
+                                onValueChange={(v) => setRepoProveedor(v === SIN_PROVEEDOR ? '' : v)} disabled={repoEstado === 'cargando'}>
+                                <SelectTrigger id="repo-proveedor" className="w-56"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value={SIN_PROVEEDOR}>Sin proveedor</SelectItem>
+                                  {repoProveedor !== '' && !proveedoresLista.some((p) => String(p.id) === repoProveedor) && (
+                                    <SelectItem value={repoProveedor}>{repoProveedorNombre || `Proveedor ${repoProveedor}`}</SelectItem>
+                                  )}
+                                  {proveedoresLista.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.nombre}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          )}
                           <p className="w-full text-xs text-muted-foreground">
                             Vacíos, la reposición usa el plazo general y no pone tope. El máximo cuenta lo que ya viene en camino y no puede ser menor que el stock mínimo.
                           </p>
