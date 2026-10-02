@@ -16,7 +16,7 @@
 // el mismo para los dos (`build_productos_router` de LibraCommerce), que
 // acepta la unión de los campos y aplica los defaults históricos a los que no
 // se mandan.
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -36,6 +36,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { Label } from '@/components/ui/label'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
@@ -115,6 +116,38 @@ export type ProductosProps = {
    *  solo: aparece si el backend trae `vence` en los productos** (`OpcionesCatalogo.con_vencimientos`), y un producto que no
    *  lo manda no ve nada nuevo. Con un catálogo todavía vacío no hay de dónde leerlo: `true` lo fuerza (y `false` lo apaga). */
   conVencimientos?: boolean
+  /** «Plazo de entrega» y «Stock máximo» propios del producto, que usa la **reposición sugerida** (`GET`/`PUT
+   *  /api/productos/{id}/reposicion`, `libracommerce.web.reposicion_router.build_reposicion_parametros_router`, ADR-020 del motor). **Opt-in
+   *  por prop** (por defecto no se muestra): el backend tiene que montar ese router. Se guardan aparte del producto, después de él. */
+  conParametrosDeReposicion?: boolean
+}
+
+/** Los topes del motor (`erp.reposicion.MAX_PLAZO_ENTREGA_DIAS`). */
+const MAX_PLAZO_REPOSICION = 180
+type ParametrosReposicion = { plazo_entrega_dias: number | null; stock_maximo: number | null }
+type EstadoReposicion = 'sin' | 'cargando' | 'listo' | 'error'
+
+/** Valida los dos campos de texto (vacío = sin valor propio). Devuelve el error, o los valores a mandar. */
+function leerParametrosReposicion(plazo: string, techo: string, minimo: number):
+  { error: string } | { valores: ParametrosReposicion } {
+  const p = plazo.trim()
+  const t = techo.trim().replace(',', '.')
+  let plazoDias: number | null = null
+  if (p !== '') {
+    if (!/^\d+$/.test(p) || Number(p) < 1 || Number(p) > MAX_PLAZO_REPOSICION) {
+      return { error: `El plazo de entrega tiene que ser un entero entre 1 y ${MAX_PLAZO_REPOSICION} días (o vacío, para usar el general).` }
+    }
+    plazoDias = Number(p)
+  }
+  let maximo: number | null = null
+  if (t !== '') {
+    if (!/^\d+(\.\d+)?$/.test(t) || !Number.isFinite(Number(t)) || Number(t) <= 0) {
+      return { error: 'El stock máximo tiene que ser mayor que 0 (o vacío, sin techo).' }
+    }
+    maximo = Number(t)
+    if (minimo > 0 && maximo < minimo) return { error: `El stock máximo no puede ser menor que el stock mínimo (${minimo}).` }
+  }
+  return { valores: { plazo_entrega_dias: plazoDias, stock_maximo: maximo } }
 }
 
 const AYUDA_VENCE =
@@ -132,6 +165,7 @@ export function Productos({
   conStockTotal = false,
   conEliminar = true,
   conVencimientos,
+  conParametrosDeReposicion = false,
 }: ProductosProps) {
   const [productos, setProductos] = useState<Producto[]>([])
   const [loading, setLoading] = useState(true)
@@ -153,6 +187,14 @@ export function Productos({
   // recuerda aunque una búsqueda posterior devuelva una lista vacía.
   const [backendConVence, setBackendConVence] = useState(false)
   const conVence = conVencimientos ?? backendConVence
+  // Plazo y techo de reposición del producto que se edita: texto de los dos campos, lo que había (para mandar sólo si cambió) y si
+  // se pudieron leer (si no, no se muestran ni se mandan: no se pisa lo que no se vio).
+  const [repoPlazo, setRepoPlazo] = useState('')
+  const [repoTecho, setRepoTecho] = useState('')
+  const [repoOriginal, setRepoOriginal] = useState<ParametrosReposicion>({ plazo_entrega_dias: null, stock_maximo: null })
+  const [repoEstado, setRepoEstado] = useState<EstadoReposicion>('sin')
+  // Cada apertura del diálogo numera su lectura: la respuesta de un producto anterior que llega tarde no pisa a la del actual.
+  const repoLectura = useRef(0)
 
   const conEstacion = Boolean(estaciones && estaciones.length > 0)
 
@@ -209,6 +251,11 @@ export function Productos({
     setEditingProducto(null)
     form.reset(EMPTY_VALUES)
     setFormError(null)
+    setRepoPlazo('')
+    setRepoTecho('')
+    setRepoOriginal({ plazo_entrega_dias: null, stock_maximo: null })
+    setRepoEstado(conParametrosDeReposicion ? 'listo' : 'sin')
+    repoLectura.current += 1
     setDialogOpen(true)
   }
 
@@ -230,10 +277,29 @@ export function Productos({
       activo: !!producto.activo,
     })
     setFormError(null)
+    setRepoPlazo('')
+    setRepoTecho('')
+    setRepoOriginal({ plazo_entrega_dias: null, stock_maximo: null })
+    setRepoEstado(conParametrosDeReposicion ? 'cargando' : 'sin')
+    const lectura = ++repoLectura.current
     setDialogOpen(true)
+    if (conParametrosDeReposicion) {
+      api.get<ParametrosReposicion>(`/api/productos/${producto.id}/reposicion`)
+        .then((d) => {
+          if (lectura !== repoLectura.current) return
+          const original = { plazo_entrega_dias: d?.plazo_entrega_dias ?? null, stock_maximo: d?.stock_maximo ?? null }
+          setRepoOriginal(original)
+          setRepoPlazo(original.plazo_entrega_dias === null ? '' : String(original.plazo_entrega_dias))
+          setRepoTecho(original.stock_maximo === null ? '' : String(original.stock_maximo))
+          setRepoEstado('listo')
+        })
+        .catch(() => { if (lectura === repoLectura.current) setRepoEstado('error') })
+    }
   }
 
   async function handleSubmit(values: Valores) {
+    // No se guarda mientras se leen el plazo y el techo: sin verlos no se puede validar el mínimo contra el máximo que ya había.
+    if (repoEstado === 'cargando') return
     setSaving(true)
     setFormError(null)
     // Se manda sólo lo que este producto edita: lo que no se manda toma el
@@ -257,16 +323,41 @@ export function Productos({
     // `vence` viaja sólo si el usuario cambió el interruptor: el backend no toca la marca si no viene (editar otra cosa nunca la
     // pierde) y cambiarla exige un permiso que quizá no tenga quien sólo corrige un precio.
     if (conVence && values.vence !== (editingProducto?.vence === true)) payload.vence = values.vence
+    // Plazo y techo se validan ANTES de escribir nada: un valor inválido no deja el producto a medias.
+    let repoAMandar: ParametrosReposicion | null = null
+    if (conParametrosDeReposicion && repoEstado === 'listo') {
+      const leidos = leerParametrosReposicion(repoPlazo, repoTecho, Number(values.stock_minimo) || 0)
+      if ('error' in leidos) {
+        setFormError(leidos.error)
+        setSaving(false)
+        return
+      }
+      const v = leidos.valores
+      if (v.plazo_entrega_dias !== repoOriginal.plazo_entrega_dias || v.stock_maximo !== repoOriginal.stock_maximo) repoAMandar = v
+    }
+    let guardado = false
     try {
+      let id = editingProducto?.id
       if (editingProducto) {
         await api.put<Producto>(`/api/productos/${editingProducto.id}`, payload)
       } else {
-        await api.post<Producto>('/api/productos', payload)
+        const creado = await api.post<Producto>('/api/productos', payload)
+        id = creado?.id
+        // Ya existe: si falla el plazo/techo y se reintenta, el diálogo pasa a editar ESE producto y no crea otro.
+        if (creado && repoAMandar) setEditingProducto(creado)
       }
+      guardado = true
+      if (repoAMandar && id !== undefined) await api.put(`/api/productos/${id}/reposicion`, repoAMandar)
       setDialogOpen(false)
       await loadProductos()
     } catch (err) {
-      setFormError(describeError(err))
+      if (guardado) {
+        // El producto sí quedó guardado; sólo falló el plazo/techo. Se dice y el diálogo sigue abierto para reintentar.
+        setFormError(`El producto se guardó, pero no se pudieron guardar el plazo y el stock máximo: ${describeError(err)}`)
+        await loadProductos()
+      } else {
+        setFormError(describeError(err))
+      }
     } finally {
       setSaving(false)
     }
@@ -558,6 +649,32 @@ export function Productos({
                       </FormItem>
                     )}
                   />
+                  {conParametrosDeReposicion && repoEstado !== 'sin' && (
+                    <fieldset className="grid w-full gap-2 rounded-md border p-3" aria-label="Reposición">
+                      <legend className="px-1 text-sm font-medium">Reposición sugerida</legend>
+                      {repoEstado === 'error' ? (
+                        <p role="status" className="text-xs text-muted-foreground">
+                          No se pudieron leer el plazo ni el stock máximo de este producto; no se van a modificar.
+                        </p>
+                      ) : (
+                        <div className="flex flex-wrap gap-4">
+                          <div className="grid gap-2">
+                            <Label htmlFor="repo-plazo">Plazo de entrega (días)</Label>
+                            <Input id="repo-plazo" inputMode="numeric" placeholder="general" className="w-32" value={repoPlazo}
+                              disabled={repoEstado === 'cargando'} onChange={(e) => setRepoPlazo(e.target.value)} />
+                          </div>
+                          <div className="grid gap-2">
+                            <Label htmlFor="repo-techo">Stock máximo</Label>
+                            <Input id="repo-techo" inputMode="decimal" placeholder="sin tope" className="w-32" value={repoTecho}
+                              disabled={repoEstado === 'cargando'} onChange={(e) => setRepoTecho(e.target.value)} />
+                          </div>
+                          <p className="w-full text-xs text-muted-foreground">
+                            Vacíos, la reposición usa el plazo general y no pone tope. El máximo cuenta lo que ya viene en camino y no puede ser menor que el stock mínimo.
+                          </p>
+                        </div>
+                      )}
+                    </fieldset>
+                  )}
                   <FormField
                     control={form.control}
                     name="descripcion"
@@ -638,7 +755,7 @@ export function Productos({
                       </Button>
                     )}
                     <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
-                    <Button type="submit" disabled={saving}>
+                    <Button type="submit" disabled={saving || repoEstado === 'cargando'}>
                       {saving ? 'Guardando…' : editingProducto ? 'Guardar cambios' : 'Crear producto'}
                     </Button>
                   </DialogFooter>
