@@ -15,6 +15,10 @@
 // **Proveedor habitual (0.102.0, motor >= 0.33.0, ADR-021):** una columna «Proveedor» y un filtro por proveedor, sólo si el motor lo maneja
 // (la respuesta trae la clave `proveedor_id`; con uno anterior la pantalla es la de siempre).
 //
+// **Estacionalidad (0.107.0, motor >= 0.35.0, ADR-023):** un interruptor «Ajustar por estacionalidad» (sólo si el motor lo maneja: la respuesta trae la clave `estacionalidad`)
+// que proyecta con lo que pasó hace un año, y una columna «Estacional» con el factor de cada producto (`×3`: hace un año, después de una ventana como la de ahora, se vendió el
+// triple por día; un guion = sin historia de hace un año, sin ajuste). Las órdenes en borrador se calculan con el mismo ajuste que se ve.
+//
 // **Órdenes en borrador (0.105.0, motor >= 0.34.0, ADR-022):** el botón «Generar órdenes en borrador» (prop `conGenerarOrdenes`: el producto la enciende
 // sólo si su motor es >= 0.34.0 y quien mira puede escribir Compras) crea una orden por proveedor habitual con lo que se ve; ver `reposicion-ordenes.tsx`. `rutaDeOrden` lleva a cada orden creada.
 //
@@ -74,7 +78,7 @@ function errorDelParametro(valor: string, max: number): string | null {
 
 type ClaveOrden =
   | 'nombre' | 'codigo' | 'stock' | 'en_camino' | 'stock_minimo' | 'unidades_vendidas' | 'rotacion_diaria'
-  | 'cobertura_dias' | 'sugerido' | 'motivo' | 'proveedor'
+  | 'cobertura_dias' | 'sugerido' | 'motivo' | 'proveedor' | 'factor_estacional'
 
 const COLUMNAS: { orden: ClaveOrden; titulo: string; alinea: 'left' | 'right' }[] = [
   { orden: 'nombre', titulo: 'Producto', alinea: 'left' },
@@ -89,6 +93,7 @@ const COLUMNAS: { orden: ClaveOrden; titulo: string; alinea: 'left' | 'right' }[
   { orden: 'motivo', titulo: 'Motivo', alinea: 'left' },
 ]
 
+const COLUMNA_ESTACIONAL: { orden: ClaveOrden; titulo: string; alinea: 'left' | 'right' } = { orden: 'factor_estacional', titulo: 'Estacional', alinea: 'right' }
 const COLUMNA_PROVEEDOR: { orden: ClaveOrden; titulo: string; alinea: 'left' | 'right' } = { orden: 'proveedor', titulo: 'Proveedor', alinea: 'left' }
 
 /** Lo que se ordena de cada fila; `null` (sin código, sin cobertura, sin motivo) va siempre al final. */
@@ -96,6 +101,7 @@ function valorDeOrden(p: ReposicionProducto, clave: ClaveOrden): number | string
   if (clave === 'motivo') return p.motivo ? etiquetaDelMotivo(p.motivo) : null
   if (clave === 'codigo') return p.codigo || null
   if (clave === 'proveedor') return p.proveedor || null
+  if (clave === 'factor_estacional') return p.factor_estacional ?? null
   return p[clave]
 }
 
@@ -127,6 +133,9 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
   const [sucursal, setSucursal] = useState(TODAS)
   const [categoria, setCategoria] = useState(TODAS)
   const [soloAPedir, setSoloAPedir] = useState(true)
+  const [estacionalidad, setEstacionalidad] = useState(false)
+  // Una vez que el motor contestó con la clave `estacionalidad` la maneja: se recuerda aunque una consulta posterior falle o venga vacía.
+  const [conEstacionalidad, setConEstacionalidad] = useState(false)
   const [orden, setOrden] = useState<{ clave: ClaveOrden; sentido: 1 | -1 } | null>(null)
   const [sucursales, setSucursales] = useState<Sucursal[]>([])
   const [categorias, setCategorias] = useState<CategoriaProducto[]>([])
@@ -141,7 +150,8 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
   const [guardado] = useState(leerIntentoPendiente)
   const pendiente = useRef<IntentoDeOrdenes | null>(guardado)
   // Lo mismo que `pendiente`, como estado, para que el botón de reintento aparezca aunque la lista esté vacía o no haya cargado.
-  const [hayPendiente, setHayPendiente] = useState(guardado !== null)
+  const [clavePendiente, setClavePendiente] = useState<string | null>(guardado?.clave ?? null)
+  const hayPendiente = clavePendiente !== null
   // Sube cuando se crean órdenes: la lista se vuelve a pedir (lo creado ya cuenta como «en camino»).
   const [recarga, setRecarga] = useState(0)
   // Lo último que contestó el motor, con la consulta a la que contestó: que `loading` y `error` se deriven de acá
@@ -160,12 +170,13 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
       dias_cobertura: String(Number(valores.dias_cobertura)),
       plazo_entrega_dias: String(Number(valores.plazo_entrega_dias)),
       solo_a_pedir: String(soloAPedir),
+      ...(estacionalidad ? { estacionalidad: 'true' } : {}),
     })
     if (sucursal !== TODAS) q.set('sucursal_id', sucursal)
     if (categoria !== TODAS) q.set('categoria', categoria)
     if (proveedor !== TODAS) q.set('proveedor_id', proveedor)
     return q.toString()
-  }, [valido, valores, soloAPedir, sucursal, categoria, proveedor])
+  }, [valido, valores, soloAPedir, estacionalidad, sucursal, categoria, proveedor])
 
   // Sin sucursales o sin categorías (un producto sin sucursales, o un usuario sin permiso) la pantalla sigue: sólo
   // pierde ese filtro.
@@ -187,6 +198,7 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
         if (!vigente) return
         setRespuesta({ consulta, recarga, data, error: null })
         if (data && typeof data === 'object' && 'proveedor_id' in data) setConProveedor(true)
+        if (data && typeof data === 'object' && 'estacionalidad' in data) setConEstacionalidad(true)
       })
       .catch((err) => {
         if (vigente) setRespuesta({ consulta, recarga, data: null, error: err instanceof ApiError ? err.detail : 'Error de conexión.' })
@@ -214,8 +226,11 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
     ...(sucursal !== TODAS ? { sucursal_id: Number(sucursal) } : {}),
     ...(categoria !== TODAS ? { categoria } : {}),
     ...(proveedor !== TODAS ? { proveedor_id: Number(proveedor) } : {}),
+    ...(estacionalidad ? { estacionalidad: true } : {}),
   }
-  const columnas = conProveedor ? [...COLUMNAS.slice(0, 2), COLUMNA_PROVEEDOR, ...COLUMNAS.slice(2)] : COLUMNAS
+  const conColumnaEstacional = data?.estacionalidad === true
+  const base = conProveedor ? [...COLUMNAS.slice(0, 2), COLUMNA_PROVEEDOR, ...COLUMNAS.slice(2)] : COLUMNAS
+  const columnas = conColumnaEstacional ? [...base.slice(0, base.findIndex((c) => c.orden === 'sugerido')), COLUMNA_ESTACIONAL, ...base.slice(base.findIndex((c) => c.orden === 'sugerido'))] : base
   // Lo que dice la ayuda son los controles, que son también lo que muestra la tabla (sólo se muestra la de esta consulta).
   const horizonte = valido ? Number(valores.dias_cobertura) + Number(valores.plazo_entrega_dias) : null
 
@@ -278,6 +293,16 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
           <input type="checkbox" checked={soloAPedir} onChange={(e) => setSoloAPedir(e.target.checked)} className="size-4" />
           Sólo lo que hay que pedir
         </label>
+        {conEstacionalidad && (
+          <label className="flex items-center gap-2 pt-7 text-sm" title="Proyecta con lo que pasó hace un año: lo que se vendió después de una ventana como la de ahora">
+            <input type="checkbox" checked={estacionalidad} onChange={(e) => {
+              setEstacionalidad(e.target.checked)
+              // Al apagarlo la columna desaparece: un orden por ella quedaría activo sin que se vea (y sin su flecha).
+              if (!e.target.checked && orden?.clave === 'factor_estacional') setOrden(null)
+            }} className="size-4" />
+            Ajustar por estacionalidad
+          </label>
+        )}
       </div>
 
       {conGenerarOrdenes && hayPendiente && !generando && (
@@ -392,6 +417,11 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
                         <td className="p-3 text-right">{numero(p.unidades_vendidas)}</td>
                         <td className="p-3 text-right">{numero(p.rotacion_diaria)}</td>
                         <td className="p-3 text-right">{p.cobertura_dias === null ? '—' : numero(p.cobertura_dias)}</td>
+                        {conColumnaEstacional && (
+                          <td className="p-3 text-right" title={p.factor_estacional == null ? 'Sin historia de hace un año: no se ajustó' : undefined}>
+                            {p.factor_estacional == null ? '—' : `×${numero(p.factor_estacional)}`}
+                          </td>
+                        )}
                         <td className="p-3 text-right font-semibold">
                           {numero(p.sugerido)}{p.unidad && <> <span className="text-xs font-normal text-muted-foreground">{p.unidad}</span></>}
                         </td>
@@ -409,19 +439,19 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
         <DialogoGenerarOrdenes
           key={generando.clave}
           intento={generando}
-          reanudado={pendiente.current === generando}
+          reanudado={clavePendiente === generando.clave}
           rutaDeOrden={rutaDeOrden}
           onCerrar={() => setGenerando(null)}
           onCreadas={() => setRecarga((n) => n + 1)}
           onEstado={(estado) => {
             pendiente.current = estado === 'incierto' ? generando : null
             if (estado === 'definitivo') borrarIntentoPendiente()
-            setHayPendiente(estado === 'incierto')
+            setClavePendiente(estado === 'incierto' ? generando.clave : null)
           }}
           onDescartar={() => {
             pendiente.current = null
             borrarIntentoPendiente()
-            setHayPendiente(false)
+            setClavePendiente(null)
             if (data) setGenerando({ clave: nuevaClaveDeOperacion(), filas: data.productos, parametros: parametrosDeOrdenes })
             else setGenerando(null)
           }}

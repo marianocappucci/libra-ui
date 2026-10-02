@@ -428,4 +428,17 @@ describe('Reposición: generar órdenes en borrador', () => {
     await within(dialogo()).findByRole('link', { name: 'OC-000041' })
     expect(sessionStorage.getItem('libra-ui:reposicion:ordenes-pendiente')).toBeNull()
   })
+
+  it('las órdenes se calculan con el mismo ajuste estacional que se ve: estacionalidad=true viaja en el pedido', async () => {
+    const user = userEvent.setup()
+    await abrir({ conGenerarOrdenes: true }, { ...TODO, [RUTA]: { ...DATA, estacionalidad: false } })
+    responder({ ...TODO, [RUTA]: { ...DATA, estacionalidad: true } })
+    await user.click(await screen.findByLabelText('Ajustar por estacionalidad'))
+    await waitFor(() => expect(pedidas().some((p) => p.includes('estacionalidad=true'))).toBe(true))
+    await user.click(await screen.findByRole('button', { name: /Generar órdenes en borrador/ }))
+    await user.click(within(dialogo()).getByRole('button', { name: 'Crear 2 órdenes' }))
+    await waitFor(() => expect(escrituras()).toHaveLength(1))
+    expect(cuerpoDe(`POST ${ORDENES}`)).toMatchObject({ estacionalidad: true })
+  })
 })
+
