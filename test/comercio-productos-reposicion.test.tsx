@@ -2,6 +2,7 @@
 // (`conParametrosDeReposicion`), que se leen y se guardan aparte del producto (`/api/productos/{id}/reposicion`, ADR-020 del motor).
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useEffect, useState } from 'react'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { Productos } from '../src/comercio/Productos'
@@ -517,5 +518,98 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     await waitFor(() => expect(pedidas().filter((p) => p === 'PUT /api/productos/9/reposicion')).toHaveLength(2))
     const envios = fetchMock.mock.calls.filter((c) => (c[1] as RequestInit | undefined)?.method === 'PUT' && String(c[0]) === '/api/productos/9/reposicion')
     expect(JSON.parse(String((envios[1][1] as RequestInit).body)).proveedor_id).toBe(8)
+  })
+
+  it('si la prop llega después del montaje (la sesión se carga de forma asíncrona), los proveedores se cargan igual y el selector aparece', async () => {
+    responder({ ...base, [`GET ${RUTA}`]: CON_PROV, '/api/proveedores': LISTA })
+    function Tardia() {
+      const [activa, setActiva] = useState(false)
+      useEffect(() => { const t = setTimeout(() => setActiva(true), 30); return () => clearTimeout(t) }, [])
+      return <Productos conParametrosDeReposicion={activa} />
+    }
+    const user = userEvent.setup()
+    montar('/productos', <Tardia />)
+    await screen.findByText('Yerba')
+    await waitFor(() => expect(pedidas()).toContain('GET /api/proveedores'))
+    await waitFor(() => expect(pedidas()).toContain(`GET ${RUTA}`))          // el sondeo también corre
+    await editar(user)
+    await waitFor(() => expect(selectorProveedor().value).toBe('7'))
+    expect(within(selectorProveedor()).getByRole('option', { name: 'Mayorista Sur' })).toBeTruthy()      // la lista completa, no sólo el actual
+  })
+
+  it('una búsqueda que vacía la lista mientras el sondeo está pendiente no lo cancela: el selector del alta aparece igual', async () => {
+    let soltar: (v: unknown) => void = () => {}
+    const lenta = new Promise((r) => { soltar = r })
+    responder({ ...base, '/api/proveedores': LISTA })
+    const original = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation((entrada: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(entrada)
+      if (url === RUTA && (init?.method ?? 'GET') === 'GET') {
+        return lenta.then((v) => new Response(JSON.stringify(v), { status: 200, headers: { 'content-type': 'application/json' } }))
+      }
+      if (url.startsWith('/api/productos?q=')) return Promise.resolve(new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } }))
+      return original(entrada, init)
+    })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await screen.findByText('Yerba')
+    await user.type(screen.getByPlaceholderText(/Buscar/), 'nada{Enter}')       // la lista queda vacía con el sondeo pendiente
+    await waitFor(() => expect(screen.queryByText('Yerba')).toBeNull())
+    soltar(CON_PROV)
+    await new Promise((r) => setTimeout(r, 30))
+    await user.click(screen.getByRole('button', { name: /Nuevo producto/ }))
+    await waitFor(() => expect(selectorProveedor()).toBeTruthy())
+  })
+
+  it('un sondeo que falló se reintenta con la próxima lista y el selector del alta aparece', async () => {
+    let intentos = 0
+    responder({
+      ...base, '/api/proveedores': LISTA,
+      [`GET ${RUTA}`]: () => (++intentos === 1 ? { status: 500, detail: 'caído' } : CON_PROV),
+    })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await screen.findByText('Yerba')
+    await waitFor(() => expect(intentos).toBe(1))
+    await user.type(screen.getByPlaceholderText(/Buscar/), 'Yer{Enter}')            // recarga la lista
+    await waitFor(() => expect(intentos).toBe(2))
+    await user.click(screen.getByRole('button', { name: /Nuevo producto/ }))
+    await waitFor(() => expect(selectorProveedor()).toBeTruthy())
+  })
+
+  it('si la lista cambia mientras el sondeo está en vuelo y éste falla, se reintenta con la lista actual', async () => {
+    let intentos = 0
+    let soltarPrimero: () => void = () => {}
+    const primero = new Promise<void>((r) => { soltarPrimero = r })
+    responder({ ...base, '/api/proveedores': LISTA })
+    const original = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation((entrada: RequestInfo | URL, init?: RequestInit) => {
+      if (String(entrada) === RUTA && (init?.method ?? 'GET') === 'GET') {
+        intentos += 1
+        if (intentos === 1) return primero.then(() => new Response(JSON.stringify({ detail: 'caído' }), { status: 500, headers: { 'content-type': 'application/json' } }))
+        return Promise.resolve(new Response(JSON.stringify(CON_PROV), { status: 200, headers: { 'content-type': 'application/json' } }))
+      }
+      return original(entrada, init)
+    })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await screen.findByText('Yerba')
+    await waitFor(() => expect(intentos).toBe(1))
+    await user.type(screen.getByPlaceholderText(/Buscar/), 'Yer{Enter}')            // llega otra lista con el primero todavía en vuelo
+    await new Promise((r) => setTimeout(r, 30))
+    soltarPrimero()                                                                    // y el primero falla
+    await waitFor(() => expect(intentos).toBe(2))
+    await user.click(screen.getByRole('button', { name: /Nuevo producto/ }))
+    await waitFor(() => expect(selectorProveedor()).toBeTruthy())
+  })
+
+  it('un sondeo que falla no se reintenta de inmediato ni en ráfaga: espera a la próxima lista', async () => {
+    let intentos = 0
+    responder({ ...base, '/api/proveedores': LISTA, [`GET ${RUTA}`]: () => { intentos += 1; return { status: 500, detail: 'caído' } } })
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await screen.findByText('Yerba')
+    await waitFor(() => expect(intentos).toBe(1))
+    await new Promise((r) => setTimeout(r, 200))
+    expect(intentos).toBe(1)
   })
 })
