@@ -44,6 +44,9 @@
 :root {
   --libra-exito: #059669;
   --libra-exito-texto: #ffffff;
+  /* El éxito usado como TEXTO, ajustado por modo a 4,5:1 (el defecto es emerald-700 en claro y emerald-400 en oscuro, como antes de ADR-009). */
+  --libra-exito-como-texto-claro: #047857;
+  --libra-exito-como-texto-oscuro: #34d399;
   --libra-pos-encabezado-inicio: #0284c7;
   --libra-pos-encabezado-fin: #4f46e5;
   --libra-pos-encabezado-texto: #ffffff;
@@ -60,3 +63,8 @@
   background-image: linear-gradient(to right, var(--libra-pos-encabezado-inicio), var(--libra-pos-encabezado-fin));
   color: var(--libra-pos-encabezado-texto);
 }
+
+/* `text-exito` se pinta con la variante de texto del modo en curso, no con el color pleno (que sigue siendo el de `bg-exito` y los bordes). Sin
+   `@layer`, igual que la regla del ítem activo: tiene que ganarle a la utilidad que Tailwind emite en su capa. */
+.text-exito { color: var(--libra-exito-como-texto-claro); }
+.dark .text-exito { color: var(--libra-exito-como-texto-oscuro); }
