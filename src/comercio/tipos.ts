@@ -708,6 +708,27 @@ export type ReposicionData = {
   productos: ReposicionProducto[]
 }
 
+/** Una línea de una orden en borrador generada desde la reposición (`POST /api/reportes/reposicion/ordenes`, motor >= 0.34.0, ADR-022). Los
+ *  importes vienen como texto decimal. `costo_cero`: el producto no tiene costo cargado y hay que completarlo antes de enviar la orden. */
+export type OrdenBorradorLinea = {
+  producto_id: number; nombre: string; cantidad: string; costo_unitario: string; subtotal: string; costo_cero: boolean
+}
+
+export type OrdenBorrador = {
+  id: number; number: string; proveedor_id: number; proveedor: string | null; branch_id: number | null; status: string
+  lineas: OrdenBorradorLinea[]; total: string
+}
+
+export type GenerarOrdenesResultado = {
+  ordenes: OrdenBorrador[]
+  /** Los productos a pedir que no tienen proveedor habitual: no entraron en ninguna orden. */
+  sin_proveedor: { producto_id: number; nombre: string; sugerido: number }[]
+  /** Los `producto_ids` pedidos que ya no tenían nada que pedir. */
+  omitidos: number[]
+  /** `true` si la `clave_operacion` ya había generado estas órdenes (un reintento): no se creó nada nuevo. */
+  repetida: boolean
+}
+
 // ── Vencimientos y lotes (`/api/vencimientos`, `libracommerce.erp.vencimientos`, ADR-018) ──
 //
 // Los nombres son los del motor, tal cual. Las cantidades (`saldo`, `cantidad`, …) vienen como `int` si son enteras y

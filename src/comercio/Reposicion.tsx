@@ -15,6 +15,9 @@
 // **Proveedor habitual (0.102.0, motor >= 0.33.0, ADR-021):** una columna «Proveedor» y un filtro por proveedor, sólo si el motor lo maneja
 // (la respuesta trae la clave `proveedor_id`; con uno anterior la pantalla es la de siempre).
 //
+// **Órdenes en borrador (0.105.0, motor >= 0.34.0, ADR-022):** el botón «Generar órdenes en borrador» (prop `conGenerarOrdenes`, sólo si el motor maneja
+// proveedores) crea una orden por proveedor habitual con lo que se ve; ver `reposicion-ordenes.tsx`. `rutaDeOrden` lleva a cada orden creada.
+//
 // 🔴 **Los avisos por fila no son adorno.** `posible_quiebre` dice que la rotación de ese producto se estimó con
 // pocos días con stock y puede estar subestimada (se sugiere de menos); `sin_ventas` que no hay rotación, y por eso
 // la cobertura es un guion y el producto sólo aparece si está bajo el mínimo; `en_camino_sin_sucursal`, que con una
@@ -33,7 +36,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { AlertTriangle, Download, PackagePlus, TrendingDown } from 'lucide-react'
+import { AlertTriangle, Download, FilePlus2, PackagePlus, TrendingDown } from 'lucide-react'
+import { DialogoGenerarOrdenes, type ParametrosDeOrdenes } from './reposicion-ordenes'
 
 const RUTA = '/api/reportes/reposicion'
 /** El valor de «Toda la instancia» y de «Todas las categorías» en su `Select` (uno de Radix no admite `''`). */
@@ -106,7 +110,14 @@ function ordenar(productos: ReposicionProducto[], orden: { clave: ClaveOrden; se
   })
 }
 
-export function Reposicion() {
+export type ReposicionProps = {
+  /** El botón «Generar órdenes en borrador». Lo ofrece quien puede escribir Compras; aparece sólo si el motor maneja proveedores (>= 0.33.0). */
+  conGenerarOrdenes?: boolean
+  /** A dónde lleva el número de cada orden creada. Sin esto, el número es texto. */
+  rutaDeOrden?: (id: number) => string
+}
+
+export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: ReposicionProps = {}) {
   const [valores, setValores] = useState<Record<ClaveParametro, string>>(
     () => Object.fromEntries(PARAMETROS.map((p) => [p.clave, p.defecto])) as Record<ClaveParametro, string>,
   )
@@ -120,6 +131,9 @@ export function Reposicion() {
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
   // Una vez que el motor contestó con la clave `proveedor_id` maneja proveedores: se recuerda aunque una consulta posterior falle o venga vacía.
   const [conProveedor, setConProveedor] = useState(false)
+  const [generando, setGenerando] = useState(false)
+  // Sube cuando se crean órdenes: la lista se vuelve a pedir (lo creado ya cuenta como «en camino»).
+  const [recarga, setRecarga] = useState(0)
   // Lo último que contestó el motor, con la consulta a la que contestó: que `loading` y `error` se deriven de acá
   // (y no de estados sueltos que hay que apagar y prender) evita mostrar el error o la carga de una consulta vieja.
   const [respuesta, setRespuesta] = useState<{ consulta: string; data: ReposicionData | null; error: string | null } | null>(null)
@@ -168,7 +182,7 @@ export function Reposicion() {
         if (vigente) setRespuesta({ consulta, data: null, error: err instanceof ApiError ? err.detail : 'Error de conexión.' })
       })
     return () => { vigente = false }
-  }, [consulta])
+  }, [consulta, recarga])
 
   // Sólo vale lo que contestó el motor a la consulta de los controles de ahora: mientras llega la de un cambio
   // reciente no se muestra la tabla anterior (sus cantidades serían de otros parámetros); se muestra «Cargando…».
@@ -183,6 +197,13 @@ export function Reposicion() {
   }
 
   const productos = useMemo(() => ordenar(data?.productos ?? [], orden), [data, orden])
+  // Lo mismo que se pidió para la lista: el motor calcula con estos parámetros lo que se va a crear.
+  const parametrosDeOrdenes: ParametrosDeOrdenes = {
+    dias_rotacion: Number(valores.dias_rotacion), dias_cobertura: Number(valores.dias_cobertura), plazo_entrega_dias: Number(valores.plazo_entrega_dias),
+    ...(sucursal !== TODAS ? { sucursal_id: Number(sucursal) } : {}),
+    ...(categoria !== TODAS ? { categoria } : {}),
+    ...(proveedor !== TODAS ? { proveedor_id: Number(proveedor) } : {}),
+  }
   const columnas = conProveedor ? [...COLUMNAS.slice(0, 2), COLUMNA_PROVEEDOR, ...COLUMNAS.slice(2)] : COLUMNAS
   // Lo que dice la ayuda son los controles, que son también lo que muestra la tabla (sólo se muestra la de esta consulta).
   const horizonte = valido ? Number(valores.dias_cobertura) + Number(valores.plazo_entrega_dias) : null
@@ -277,6 +298,11 @@ export function Reposicion() {
               {orden && (
                 <Button size="sm" variant="outline" onClick={() => setOrden(null)}>Orden por urgencia</Button>
               )}
+              {conGenerarOrdenes && conProveedor && (
+                <Button size="sm" onClick={() => setGenerando(true)} disabled={data.productos.length === 0}>
+                  <FilePlus2 />Generar órdenes en borrador
+                </Button>
+              )}
               <Button asChild size="sm" variant="outline">
                 <a href={`${RUTA}/export?${consulta}`}><Download />CSV</a>
               </Button>
@@ -360,6 +386,16 @@ export function Reposicion() {
           </CardContent>
         </Card>
       )}
+      {generando && data && (
+        <DialogoGenerarOrdenes
+          filas={data.productos}
+          parametros={parametrosDeOrdenes}
+          rutaDeOrden={rutaDeOrden}
+          onCerrar={() => setGenerando(false)}
+          onCreadas={() => setRecarga((n) => n + 1)}
+        />
+      )}
     </div>
   )
 }
+
