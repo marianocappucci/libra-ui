@@ -1,4 +1,6 @@
 node_modules/
+# Sin barra: un symlink a node_modules (para correr tests desde un worktree) no es una carpeta y `node_modules/` no lo ignora. Se coló en `main` (0.97.0–0.104.0) por esto.
+node_modules
 *.tsbuildinfo
 
 # Artefactos de cobertura (agregado 2026-07-31, junto con el paso de coverage
