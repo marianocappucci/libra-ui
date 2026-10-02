@@ -434,4 +434,36 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     await waitFor(() => expect(selectorProveedor().value).toBe('7'))
     expect(within(selectorProveedor()).getByRole('option', { name: 'Distribuidora Norte' })).toBeTruthy()
   })
+
+  it('en el alta el selector de proveedor está desde el primer momento (el motor se sondea con el primer producto) y el proveedor viaja con el id creado', async () => {
+    responder({
+      ...base, [`GET ${RUTA}`]: CON_PROV, 'POST /api/productos': { id: 9 }, 'PUT /api/productos/9/reposicion': CON_PROV, '/api/proveedores': LISTA,
+    })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await screen.findByText('Yerba')
+    await waitFor(() => expect(pedidas()).toContain(`GET ${RUTA}`))          // el sondeo
+    await user.click(screen.getByRole('button', { name: /Nuevo producto/ }))
+    fireEvent.change(within(dialogo()).getByLabelText('Nombre'), { target: { value: 'Nuevo' } })
+    await user.selectOptions(selectorProveedor(), '8')
+    await user.click(within(dialogo()).getByRole('button', { name: 'Crear producto' }))
+    await waitFor(() => expect(pedidas()).toContain('PUT /api/productos/9/reposicion'))
+    expect(cuerpoDe('PUT /api/productos/9/reposicion')).toEqual({ plazo_entrega_dias: null, stock_maximo: null, proveedor_id: 8 })
+  })
+
+  it('conProveedorHabitual fuerza el selector en el alta aunque el catálogo esté vacío, y false lo apaga aunque el motor lo maneje', async () => {
+    responder({ '/api/productos': [], '/api/productos/categorias': [], '/api/proveedores': LISTA })
+    const user = userEvent.setup()
+    const { unmount } = montar('/productos', <Productos conParametrosDeReposicion conProveedorHabitual />)
+    await user.click(await screen.findByRole('button', { name: /Nuevo producto/ }))
+    expect(selectorProveedor()).toBeTruthy()
+    unmount()
+    cleanup()
+    prepararFetch()
+    responder({ ...base, [`GET ${RUTA}`]: CON_PROV, '/api/proveedores': LISTA })
+    montar('/productos', <Productos conParametrosDeReposicion conProveedorHabitual={false} />)
+    await editar(user)
+    await waitFor(() => expect(plazo().value).toBe('7'))
+    expect(within(dialogo()).queryByLabelText('Proveedor habitual')).toBeNull()
+  })
 })

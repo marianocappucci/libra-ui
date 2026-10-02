@@ -120,6 +120,10 @@ export type ProductosProps = {
    *  /api/productos/{id}/reposicion`, `libracommerce.web.reposicion_router.build_reposicion_parametros_router`, ADR-020 del motor). **Opt-in
    *  por prop** (por defecto no se muestra): el backend tiene que montar ese router. Se guardan aparte del producto, después de él. */
   conParametrosDeReposicion?: boolean
+  /** El selector «Proveedor habitual» dentro de «Reposición sugerida» (motor >= 0.33.0, ADR-021). **Por defecto se decide solo**: aparece si el
+   *  motor devuelve `proveedor_id` en `GET /api/productos/{id}/reposicion` (se sondea con el primer producto de la lista, así también está en el
+   *  alta). `true` lo fuerza (para un producto que pina el motor y quiere el selector aun con el catálogo vacío) y `false` lo apaga. */
+  conProveedorHabitual?: boolean
 }
 
 /** Los topes del motor (`erp.reposicion.MAX_PLAZO_ENTREGA_DIAS`). */
@@ -169,6 +173,7 @@ export function Productos({
   conEliminar = true,
   conVencimientos,
   conParametrosDeReposicion = false,
+  conProveedorHabitual,
 }: ProductosProps) {
   const [productos, setProductos] = useState<Producto[]>([])
   const [loading, setLoading] = useState(true)
@@ -202,7 +207,7 @@ export function Productos({
   const [repoProveedorOriginal, setRepoProveedorOriginal] = useState('')
   const [repoProveedorNombre, setRepoProveedorNombre] = useState('')
   const [proveedoresLista, setProveedoresLista] = useState<Proveedor[]>([])
-  const motorConProveedor = useRef(false)
+  const motorConProveedor = useRef(conProveedorHabitual === true)
   // Cada apertura del diálogo numera su lectura: la respuesta de un producto anterior que llega tarde no pisa a la del actual.
   const repoLectura = useRef(0)
   // Los valores del producto tal como se abrió el diálogo de edición (para saber si el usuario tocó algo del producto o sólo del plazo/techo).
@@ -254,6 +259,12 @@ export function Productos({
       const lista = await api.get<Producto[]>(path)
       if (lista.some((p) => typeof p.vence === 'boolean')) setBackendConVence(true)
       setProductos(lista)
+      // ¿El motor maneja proveedores? Se sondea con el primer producto para que el selector esté también en el alta.
+      if (conParametrosDeReposicion && conProveedorHabitual === undefined && !motorConProveedor.current && lista.length > 0) {
+        api.get<ParametrosLeidos>(`/api/productos/${lista[0].id}/reposicion`)
+          .then((d) => { if (d && typeof d === 'object' && 'proveedor_id' in d) motorConProveedor.current = true })
+          .catch(() => {})
+      }
     } catch (err) {
       setError(describeError(err))
     } finally {
@@ -275,7 +286,7 @@ export function Productos({
     setRepoPlazo('')
     setRepoTecho('')
     setRepoOriginal({ plazo_entrega_dias: null, stock_maximo: null })
-    setRepoConProveedor(motorConProveedor.current)
+    setRepoConProveedor(conProveedorHabitual !== false && motorConProveedor.current)
     setRepoProveedor('')
     setRepoProveedorOriginal('')
     setRepoProveedorNombre('')
@@ -310,7 +321,7 @@ export function Productos({
     setRepoPlazo('')
     setRepoTecho('')
     setRepoOriginal({ plazo_entrega_dias: null, stock_maximo: null })
-    setRepoConProveedor(false)
+    setRepoConProveedor(conProveedorHabitual === true)
     setRepoProveedor('')
     setRepoProveedorOriginal('')
     setRepoProveedorNombre('')
@@ -323,7 +334,7 @@ export function Productos({
           if (lectura !== repoLectura.current) return
           const original = { plazo_entrega_dias: d?.plazo_entrega_dias ?? null, stock_maximo: d?.stock_maximo ?? null }
           setRepoOriginal(original)
-          if (d && typeof d === 'object' && 'proveedor_id' in d) {
+          if (conProveedorHabitual !== false && d && typeof d === 'object' && 'proveedor_id' in d) {
             motorConProveedor.current = true
             const id = d.proveedor_id === null || d.proveedor_id === undefined ? '' : String(d.proveedor_id)
             setRepoConProveedor(true)
