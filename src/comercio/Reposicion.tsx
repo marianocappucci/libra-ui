@@ -179,7 +179,7 @@ export function Reposicion() {
 
   function ordenarPor(clave: ClaveOrden) {
     if (orden?.clave === clave) setOrden({ clave, sentido: orden.sentido === 1 ? -1 : 1 })
-    else setOrden({ clave, sentido: clave === 'nombre' || clave === 'codigo' || clave === 'motivo' ? 1 : -1 })
+    else setOrden({ clave, sentido: clave === 'nombre' || clave === 'codigo' || clave === 'motivo' || clave === 'proveedor' ? 1 : -1 })
   }
 
   const productos = useMemo(() => ordenar(data?.productos ?? [], orden), [data, orden])

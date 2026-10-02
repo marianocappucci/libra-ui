@@ -467,14 +467,21 @@ describe('Reposición: proveedor habitual (motor >= 0.33.0, ADR-021)', () => {
     await waitFor(() => expect(ultimaConsulta()).toBe(pide()))
   })
 
-  it('la columna ordena por el nombre del proveedor y lo que no tiene va siempre al final', async () => {
+  it('la columna ordena A–Z en el primer clic (texto), Z–A en el segundo, y lo que no tiene proveedor va siempre al final', async () => {
     const user = userEvent.setup()
-    await abrir(TODO_CON)
-    const boton = await screen.findByRole('button', { name: /^Proveedor/ })
-    await user.click(boton)
-    expect(nombresEnTabla()[0]).toBe('Yerba')
+    const dos: ReposicionData = {
+      ...CON_PROVEEDOR,
+      productos: [
+        { ...YERBA, proveedor_id: 7, proveedor: 'Mayorista Sur' },
+        { ...HARINA, proveedor_id: 8, proveedor: 'Distribuidora Norte' },
+        { ...SAL, proveedor_id: null, proveedor: null },
+      ],
+    }
+    await abrir({ ...TODO_CON, [RUTA]: dos })
+    await user.click(await screen.findByRole('button', { name: /^Proveedor/ }))
+    expect(nombresEnTabla()).toEqual(['Harina', 'Yerba', 'Sal'])             // Distribuidora Norte, Mayorista Sur, y sin proveedor al final
     await user.click(screen.getByRole('button', { name: /^Proveedor/ }))
-    expect(nombresEnTabla()[0]).toBe('Yerba')                  // descendente: sigue primero el único con proveedor
+    expect(nombresEnTabla()).toEqual(['Yerba', 'Harina', 'Sal'])             // Z–A; el que no tiene sigue al final
   })
 
   it('el filtro no se ofrece sin proveedores cargados, y la lista que falla no rompe la pantalla', async () => {
