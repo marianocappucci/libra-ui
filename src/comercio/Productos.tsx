@@ -349,14 +349,17 @@ export function Productos({
         const iniciales = valoresIniciales.current
         const productoSinCambios = repoAMandar !== null && iniciales !== null &&
           (Object.keys(values) as (keyof Valores)[]).every((k) => String(values[k]) === String(iniciales[k]))
-        if (!productoSinCambios) await api.put<Producto>(`/api/productos/${editingProducto.id}`, payload)
+        if (!productoSinCambios) {
+          await api.put<Producto>(`/api/productos/${editingProducto.id}`, payload)
+          guardado = true
+        }
       } else {
         const creado = await api.post<Producto>('/api/productos', payload)
         id = creado?.id
+        guardado = true
         // Ya existe: si falla el plazo/techo y se reintenta, el diálogo pasa a editar ESE producto y no crea otro.
         if (creado && repoAMandar) setEditingProducto(creado)
       }
-      guardado = true
       if (repoAMandar && id !== undefined) await api.put(`/api/productos/${id}/reposicion`, repoAMandar)
       setDialogOpen(false)
       await loadProductos()

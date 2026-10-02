@@ -137,6 +137,7 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     montar('/productos', <Productos conParametrosDeReposicion />)
     await editar(user)
     await waitFor(() => expect(plazo().disabled).toBe(false))
+    fireEvent.change(within(dialogo()).getByLabelText('Nombre'), { target: { value: 'Yerba 2' } })   // también cambia el producto
     fireEvent.change(plazo(), { target: { value: '9' } })
     await guardar(user)
     expect(await within(dialogo()).findByText(/El producto se guardó, pero no se pudieron guardar el plazo y el stock máximo/)).toBeTruthy()
@@ -275,5 +276,18 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     await guardar(user)
     await waitFor(() => expect(pedidas()).toContain('PUT /api/productos/1'))
     expect(puts()).toHaveLength(0)
+  })
+
+  it('si sólo cambió el plazo/techo y eso falla, el error es el de la reposición (no dice que el producto se guardó)', async () => {
+    responder({ ...base, [`GET ${RUTA}`]: PROPIOS, [`PUT ${RUTA}`]: { status: 422, detail: 'techo inválido' }, 'PUT /api/productos/1': { id: 1 } })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    await waitFor(() => expect(plazo().value).toBe('7'))
+    fireEvent.change(plazo(), { target: { value: '9' } })
+    await guardar(user)
+    expect(await within(dialogo()).findByText(/techo inválido/)).toBeTruthy()
+    expect(within(dialogo()).queryByText(/El producto se guardó/)).toBeNull()
+    expect(pedidas()).not.toContain('PUT /api/productos/1')
   })
 })
