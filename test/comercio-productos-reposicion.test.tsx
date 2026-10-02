@@ -536,4 +536,28 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     await waitFor(() => expect(selectorProveedor().value).toBe('7'))
     expect(within(selectorProveedor()).getByRole('option', { name: 'Mayorista Sur' })).toBeTruthy()      // la lista completa, no sólo el actual
   })
+
+  it('una búsqueda que vacía la lista mientras el sondeo está pendiente no lo cancela: el selector del alta aparece igual', async () => {
+    let soltar: (v: unknown) => void = () => {}
+    const lenta = new Promise((r) => { soltar = r })
+    responder({ ...base, '/api/proveedores': LISTA })
+    const original = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation((entrada: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(entrada)
+      if (url === RUTA && (init?.method ?? 'GET') === 'GET') {
+        return lenta.then((v) => new Response(JSON.stringify(v), { status: 200, headers: { 'content-type': 'application/json' } }))
+      }
+      if (url.startsWith('/api/productos?q=')) return Promise.resolve(new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } }))
+      return original(entrada, init)
+    })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await screen.findByText('Yerba')
+    await user.type(screen.getByPlaceholderText(/Buscar/), 'nada{Enter}')       // la lista queda vacía con el sondeo pendiente
+    await waitFor(() => expect(screen.queryByText('Yerba')).toBeNull())
+    soltar(CON_PROV)
+    await new Promise((r) => setTimeout(r, 30))
+    await user.click(screen.getByRole('button', { name: /Nuevo producto/ }))
+    await waitFor(() => expect(selectorProveedor()).toBeTruthy())
+  })
 })

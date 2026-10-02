@@ -259,17 +259,17 @@ export function Productos({
     return () => { vigente = false }
   }, [conParametrosDeReposicion])
 
-  // ¿El motor maneja proveedores? Se sondea con el primer producto para que el selector esté también en el alta.
+  // ¿El motor maneja proveedores? Se sondea con el primer producto para que el selector esté también en el alta. El resultado se guarda aunque
+  // la lista cambie mientras tanto (una búsqueda que la vacía no cancela el sondeo): sólo depende del id del primer producto.
+  const primerProductoId = productos[0]?.id
   useEffect(() => {
-    if (!conParametrosDeReposicion || conProveedorHabitual !== undefined || motorConProveedor.current || productos.length === 0) return
-    let vigente = true
-    api.get<ParametrosLeidos>(`/api/productos/${productos[0].id}/reposicion`)
+    if (!conParametrosDeReposicion || conProveedorHabitual !== undefined || motorConProveedor.current || primerProductoId === undefined) return
+    api.get<ParametrosLeidos>(`/api/productos/${primerProductoId}/reposicion`)
       .then((d) => {
-        if (vigente && d && typeof d === 'object' && 'proveedor_id' in d) { motorConProveedor.current = true; setMotorConProveedorSt(true) }
+        if (d && typeof d === 'object' && 'proveedor_id' in d) { motorConProveedor.current = true; setMotorConProveedorSt(true) }
       })
       .catch(() => {})
-    return () => { vigente = false }
-  }, [conParametrosDeReposicion, conProveedorHabitual, productos])
+  }, [conParametrosDeReposicion, conProveedorHabitual, primerProductoId])
 
   function describeError(err: unknown): string {
     if (err instanceof ApiError) return err.detail
