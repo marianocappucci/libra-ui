@@ -484,7 +484,15 @@ export function FacturaDetalle({
             </div>
           ) : (
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-900 dark:bg-amber-950/40">
-              <span className="flex items-center gap-2"><AlertTriangle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />Comprobante <strong>pendiente de autorización ARCA</strong>.</span>
+              <div className="grid gap-1">
+                <span className="flex items-center gap-2"><AlertTriangle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />Comprobante <strong>sin CAE</strong>, pendiente de autorización ARCA.</span>
+                {/* El motivo sólo está si se pidió el CAE y falló: sin él, «Sin CAE» a secas. */}
+                {detalle.factura.cae_error && (
+                  <span className="pl-6 text-muted-foreground" data-testid="motivo-sin-cae">
+                    <strong>Motivo:</strong> {detalle.factura.cae_error}
+                  </span>
+                )}
+              </div>
               <Button size="sm" variant="outline" disabled={saving} onClick={autorizar}><RefreshCw />Reintentar autorización ARCA</Button>
             </div>
           )}
