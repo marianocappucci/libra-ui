@@ -466,4 +466,24 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     await waitFor(() => expect(plazo().value).toBe('7'))
     expect(within(dialogo()).queryByLabelText('Proveedor habitual')).toBeNull()
   })
+
+  it('si el sondeo del motor termina con el diálogo del alta ya abierto, el selector de proveedor aparece en ese mismo diálogo', async () => {
+    let soltar: (v: unknown) => void = () => {}
+    const lenta = new Promise((r) => { soltar = r })
+    responder({ ...base, '/api/proveedores': LISTA })
+    const original = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation((entrada: RequestInfo | URL, init?: RequestInit) => {
+      if (String(entrada) === RUTA && (init?.method ?? 'GET') === 'GET') {
+        return lenta.then((v) => new Response(JSON.stringify(v), { status: 200, headers: { 'content-type': 'application/json' } }))
+      }
+      return original(entrada, init)
+    })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await screen.findByText('Yerba')
+    await user.click(screen.getByRole('button', { name: /Nuevo producto/ }))
+    expect(within(dialogo()).queryByLabelText('Proveedor habitual')).toBeNull()      // el sondeo todavía no contestó
+    soltar(CON_PROV)
+    await waitFor(() => expect(selectorProveedor()).toBeTruthy())
+  })
 })

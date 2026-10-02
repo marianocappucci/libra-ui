@@ -208,6 +208,8 @@ export function Productos({
   const [repoProveedorNombre, setRepoProveedorNombre] = useState('')
   const [proveedoresLista, setProveedoresLista] = useState<Proveedor[]>([])
   const motorConProveedor = useRef(conProveedorHabitual === true)
+  // Lo mismo que la ref, como estado: si el sondeo termina con el diálogo del alta ya abierto, el selector aparece en ese mismo diálogo.
+  const [motorConProveedorSt, setMotorConProveedorSt] = useState(conProveedorHabitual === true)
   // Cada apertura del diálogo numera su lectura: la respuesta de un producto anterior que llega tarde no pisa a la del actual.
   const repoLectura = useRef(0)
   // Los valores del producto tal como se abrió el diálogo de edición (para saber si el usuario tocó algo del producto o sólo del plazo/techo).
@@ -218,6 +220,8 @@ export function Productos({
   const sinCosto = productos.length > 0 && productos.every((p) => p.precio_costo === undefined || p.precio_costo === null)
   // El producto que se está editando llegó sin costo: el campo «Precio de costo» y el margen no se ofrecen (el 0 sería inventado).
   const costoOcultoEnForm = editingProducto !== null && (editingProducto.precio_costo === undefined || editingProducto.precio_costo === null)
+  // El selector de proveedor: al editar, si el GET de ese producto lo trajo; en el alta, si el motor ya se sondeó (puede terminar con el diálogo abierto).
+  const proveedorDisponible = conProveedorHabitual !== false && (repoConProveedor || (editingProducto === null && motorConProveedorSt))
 
   const conEstacion = Boolean(estaciones && estaciones.length > 0)
 
@@ -262,7 +266,7 @@ export function Productos({
       // ¿El motor maneja proveedores? Se sondea con el primer producto para que el selector esté también en el alta.
       if (conParametrosDeReposicion && conProveedorHabitual === undefined && !motorConProveedor.current && lista.length > 0) {
         api.get<ParametrosLeidos>(`/api/productos/${lista[0].id}/reposicion`)
-          .then((d) => { if (d && typeof d === 'object' && 'proveedor_id' in d) motorConProveedor.current = true })
+          .then((d) => { if (d && typeof d === 'object' && 'proveedor_id' in d) { motorConProveedor.current = true; setMotorConProveedorSt(true) } })
           .catch(() => {})
       }
     } catch (err) {
@@ -336,6 +340,7 @@ export function Productos({
           setRepoOriginal(original)
           if (conProveedorHabitual !== false && d && typeof d === 'object' && 'proveedor_id' in d) {
             motorConProveedor.current = true
+            setMotorConProveedorSt(true)
             const id = d.proveedor_id === null || d.proveedor_id === undefined ? '' : String(d.proveedor_id)
             setRepoConProveedor(true)
             setRepoProveedor(id)
@@ -387,7 +392,7 @@ export function Productos({
       }
       const v = leidos.valores
       // El proveedor viaja sólo si el motor lo maneja Y el usuario lo cambió (un motor anterior rechaza claves de más, y no tocarlo lo deja como estaba).
-      const proveedorCambio = repoConProveedor && repoProveedor !== repoProveedorOriginal
+      const proveedorCambio = proveedorDisponible && repoProveedor !== repoProveedorOriginal
       if (v.plazo_entrega_dias !== repoOriginal.plazo_entrega_dias || v.stock_maximo !== repoOriginal.stock_maximo || proveedorCambio) {
         repoAMandar = proveedorCambio ? { ...v, proveedor_id: repoProveedor === '' ? null : Number(repoProveedor) } : v
       }
@@ -745,7 +750,7 @@ export function Productos({
                             <Input id="repo-techo" inputMode="decimal" placeholder="sin tope" className="w-32" value={repoTecho}
                               disabled={repoEstado === 'cargando'} onChange={(e) => setRepoTecho(e.target.value)} />
                           </div>
-                          {repoConProveedor && (
+                          {proveedorDisponible && (
                             <div className="grid gap-2">
                               <Label htmlFor="repo-proveedor">Proveedor habitual</Label>
                               <Select value={repoProveedor === '' ? SIN_PROVEEDOR : repoProveedor}
