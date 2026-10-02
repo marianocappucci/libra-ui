@@ -222,4 +222,85 @@ describe('Reposición: generar órdenes en borrador', () => {
     expect(await within(dialogo()).findByText(/No había nada para crear/)).toBeTruthy()
     await waitFor(() => expect(pedidas().filter((p) => p.startsWith(`GET ${RUTA}?`)).length).toBeGreaterThan(antes))
   })
+
+  it('un intento cortado se reenvía ENTERO aunque se hayan cambiado los filtros: mismo cuerpo, misma clave', async () => {
+    const user = userEvent.setup()
+    await abrir({ conGenerarOrdenes: true }, { ...TODO, '/api/productos/categorias': [{ id: 1, nombre: 'Almacén' }] })
+    let intento = 0
+    const original = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation((entrada: RequestInfo | URL, init?: RequestInit) => {
+      if (String(entrada) === ORDENES && init?.method === 'POST') {
+        intento += 1
+        return intento === 1 ? Promise.reject(new TypeError('sin red')) : Promise.resolve(json({ ...RESULTADO, repetida: true }))
+      }
+      return original(entrada, init)
+    })
+    await user.click(boton()!)
+    await user.click(within(dialogo()).getByRole('button', { name: 'Crear 2 órdenes' }))
+    expect(await within(dialogo()).findByRole('alert')).toBeTruthy()
+    await user.click(within(dialogo()).getByRole('button', { name: 'Cancelar' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await user.selectOptions(screen.getByLabelText('Categoría'), 'Almacén')                      // cambia un filtro entre tanto
+    await user.click(await screen.findByRole('button', { name: /Generar órdenes en borrador/ }))
+    expect(within(dialogo()).getByText(/Un pedido anterior se cortó y no se sabe si llegó/)).toBeTruthy()
+    await user.click(within(dialogo()).getByRole('button', { name: 'Crear 2 órdenes' }))
+    await within(dialogo()).findByText(/ya se habían creado con este mismo pedido/)
+    const cuerpos = fetchMock.mock.calls.filter((c) => String(c[0]) === ORDENES).map((c) => JSON.parse(String((c[1] as RequestInit).body)))
+    expect(cuerpos).toHaveLength(2)
+    expect(cuerpos[1]).toEqual(cuerpos[0])                                                        // idéntico, sin la categoría nueva
+    expect('categoria' in cuerpos[1]).toBe(false)
+  })
+
+  it('«Descartar y empezar de nuevo» tira el intento cortado: el pedido se arma con lo que se ve y otra clave', async () => {
+    const user = userEvent.setup()
+    await abrir()
+    let intento = 0
+    const original = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation((entrada: RequestInfo | URL, init?: RequestInit) => {
+      if (String(entrada) === ORDENES && init?.method === 'POST') {
+        intento += 1
+        return intento === 1 ? Promise.reject(new TypeError('sin red')) : Promise.resolve(json(RESULTADO))
+      }
+      return original(entrada, init)
+    })
+    await user.click(boton()!)
+    await user.click(within(dialogo()).getByRole('button', { name: 'Crear 2 órdenes' }))
+    await within(dialogo()).findByRole('alert')
+    await user.click(within(dialogo()).getByRole('button', { name: 'Cancelar' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await user.click(boton()!)
+    await user.click(within(dialogo()).getByRole('button', { name: 'Descartar y empezar de nuevo' }))
+    expect(within(dialogo()).queryByText(/Un pedido anterior se cortó/)).toBeNull()
+    await user.click(within(dialogo()).getByRole('button', { name: 'Crear 2 órdenes' }))
+    await within(dialogo()).findByRole('link', { name: 'OC-000041' })
+    const claves = fetchMock.mock.calls.filter((c) => String(c[0]) === ORDENES).map((c) => JSON.parse(String((c[1] as RequestInit).body)).clave_operacion)
+    expect(claves).toHaveLength(2)
+    expect(claves[0]).not.toBe(claves[1])
+  })
+
+  it('un 4xx del motor (no creó nada) no deja un intento pendiente: la próxima apertura es limpia', async () => {
+    const user = userEvent.setup()
+    await abrir({ conGenerarOrdenes: true }, { ...TODO, [`POST ${ORDENES}`]: { status: 422, detail: 'parámetro inválido' } })
+    await user.click(boton()!)
+    await user.click(within(dialogo()).getByRole('button', { name: 'Crear 2 órdenes' }))
+    expect(await within(dialogo()).findByRole('alert')).toHaveTextContent('parámetro inválido')
+    await user.click(within(dialogo()).getByRole('button', { name: 'Cancelar' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await user.click(boton()!)
+    expect(within(dialogo()).queryByText(/Un pedido anterior se cortó/)).toBeNull()
+  })
+
+  it('un 503 que no es de la migración (un proxy) no dice «falta la migración» y deja el intento pendiente', async () => {
+    const user = userEvent.setup()
+    await abrir({ conGenerarOrdenes: true }, { ...TODO, [`POST ${ORDENES}`]: { status: 503, detail: 'Service Unavailable' } })
+    await user.click(boton()!)
+    await user.click(within(dialogo()).getByRole('button', { name: 'Crear 2 órdenes' }))
+    const alerta = await within(dialogo()).findByRole('alert')
+    expect(alerta).not.toHaveTextContent(/migración/)
+    expect(alerta).toHaveTextContent(/No se sabe si llegó/)
+    await user.click(within(dialogo()).getByRole('button', { name: 'Cancelar' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await user.click(boton()!)
+    expect(within(dialogo()).getByText(/Un pedido anterior se cortó/)).toBeTruthy()
+  })
 })

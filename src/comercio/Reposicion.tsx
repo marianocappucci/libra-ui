@@ -38,7 +38,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { AlertTriangle, Download, FilePlus2, PackagePlus, TrendingDown } from 'lucide-react'
 import { nuevaClaveDeOperacion } from './clave-de-operacion'
-import { DialogoGenerarOrdenes, type ParametrosDeOrdenes } from './reposicion-ordenes'
+import { DialogoGenerarOrdenes, type IntentoDeOrdenes, type ParametrosDeOrdenes } from './reposicion-ordenes'
 
 const RUTA = '/api/reportes/reposicion'
 /** El valor de «Toda la instancia» y de «Todas las categorías» en su `Select` (uno de Radix no admite `''`). */
@@ -133,11 +133,10 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
   // Una vez que el motor contestó con la clave `proveedor_id` maneja proveedores: se recuerda aunque una consulta posterior falle o venga vacía.
   const [conProveedor, setConProveedor] = useState(false)
-  // Las filas con que se abrió el diálogo de órdenes (una copia): recargar la lista de fondo, o que la recarga falle, no lo cierra ni le cambia lo que muestra.
-  const [generando, setGenerando] = useState<ReposicionProducto[] | null>(null)
-  // La `clave_operacion` del intento en curso: sobrevive a cerrar el diálogo tras un corte (el motor podría haber creado las órdenes) y se descarta con la primera
-  // respuesta buena.
-  const claveDeOrdenes = useRef<string | null>(null)
+  // El intento de generar órdenes en curso (una copia de lo que se vio, los parámetros y la clave de la operación): recargar la lista de fondo, o que la recarga falle,
+  // no lo cierra ni le cambia lo que muestra. `pendiente` es el que se cortó sin saber si llegó: reabrir lo reenvía tal cual (ver `reposicion-ordenes.tsx`).
+  const [generando, setGenerando] = useState<IntentoDeOrdenes | null>(null)
+  const pendiente = useRef<IntentoDeOrdenes | null>(null)
   // Sube cuando se crean órdenes: la lista se vuelve a pedir (lo creado ya cuenta como «en camino»).
   const [recarga, setRecarga] = useState(0)
   // Lo último que contestó el motor, con la consulta a la que contestó: que `loading` y `error` se deriven de acá
@@ -305,7 +304,7 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
                 <Button size="sm" variant="outline" onClick={() => setOrden(null)}>Orden por urgencia</Button>
               )}
               {conGenerarOrdenes && (
-                <Button size="sm" onClick={() => { claveDeOrdenes.current ??= nuevaClaveDeOperacion(); setGenerando(data.productos) }} disabled={data.productos.length === 0}>
+                <Button size="sm" onClick={() => setGenerando(pendiente.current ?? { clave: nuevaClaveDeOperacion(), filas: data.productos, parametros: parametrosDeOrdenes })} disabled={data.productos.length === 0}>
                   <FilePlus2 />Generar órdenes en borrador
                 </Button>
               )}
@@ -394,13 +393,17 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
       )}
       {generando && (
         <DialogoGenerarOrdenes
-          filas={generando}
-          parametros={parametrosDeOrdenes}
-          clave={claveDeOrdenes.current ?? ''}
-          onResuelta={() => { claveDeOrdenes.current = null }}
+          intento={generando}
+          reanudado={pendiente.current === generando}
           rutaDeOrden={rutaDeOrden}
           onCerrar={() => setGenerando(null)}
           onCreadas={() => setRecarga((n) => n + 1)}
+          onEstado={(estado) => { pendiente.current = estado === 'incierto' ? generando : null }}
+          onDescartar={() => {
+            pendiente.current = null
+            if (data) setGenerando({ clave: nuevaClaveDeOperacion(), filas: data.productos, parametros: parametrosDeOrdenes })
+            else setGenerando(null)
+          }}
         />
       )}
     </div>

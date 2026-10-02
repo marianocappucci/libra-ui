@@ -7,9 +7,10 @@
 // mostró de cada una. Si los datos cambiaron mientras tanto el motor puede crear menos (lo que ya no hay que pedir vuelve en `omitidos`) pero nunca más
 // de lo que se vio.
 //
-// 🔑 **La `clave_operacion` la guarda la pantalla y se conserva hasta que el motor contesta bien (`onResuelta`).** Si el pedido se cortó (timeout, red) y no se
-// sabe si el motor lo creó, reintentar —aun cerrando y reabriendo el diálogo— manda la misma clave y el motor devuelve las mismas órdenes en vez de crear
-// otras (`repetida: true`). Después de una respuesta buena la clave se descarta: la próxima apertura es otra operación, y lo ya creado cuenta como «en camino».
+// 🔑 **Un intento es el pedido ENTERO, no sólo su clave.** Si el pedido se cortó (timeout, red, un 5xx) y no se sabe si el motor lo creó, la pantalla guarda el
+// intento —las filas que se vieron, los parámetros y la `clave_operacion`— y reabrir el diálogo lo REENVÍA tal cual: el motor devuelve las mismas órdenes en vez de
+// crear otras (`repetida: true`), aunque entre tanto se hayan cambiado los filtros. Una clave identifica un pedido; con otros datos sería otro pedido. Se descarta con una
+// respuesta definitiva (buena, o un error 4xx: ahí el motor no creó nada) o a pedido de la persona («Descartar y empezar de nuevo»).
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, ApiError } from '../api-client'
@@ -38,7 +39,9 @@ function moneda(valor: string): string {
 
 function mensajeDeError(err: unknown): string {
   if (!(err instanceof ApiError)) return 'Error de conexión. Podés reintentar: si la orden ya se había creado, no se duplica.'
-  if (err.status === 503) return 'El servidor todavía no tiene los proveedores por producto (falta la migración del motor).'
+  // Sólo es «falta la migración» si el motor lo dice: un 503 de un proxy o de un servidor sobrecargado puede haber llegado igual.
+  if (err.status === 503 && /revisi[oó]n|migra/i.test(err.detail)) return 'El servidor todavía no tiene los proveedores por producto (falta la migración del motor).'
+  if (err.status >= 500) return `${err.detail || 'El servidor no pudo completar el pedido.'} No se sabe si llegó: podés reintentar, y si ya se había creado no se duplica.`
   return err.detail
 }
 
@@ -56,18 +59,23 @@ function resumenDeOrdenes(filas: ReposicionProducto[]) {
   return { grupos: [...grupos.values()], sinProveedor }
 }
 
-export function DialogoGenerarOrdenes({ filas, parametros, clave, rutaDeOrden, onCerrar, onCreadas, onResuelta }: {
-  filas: ReposicionProducto[]
-  parametros: ParametrosDeOrdenes
-  /** La `clave_operacion` de este intento: la guarda quien abre el diálogo, para que sobreviva a un cierre tras un corte. */
-  clave: string
+/** El pedido entero de un intento: lo que se vio, con qué parámetros y con qué clave. */
+export type IntentoDeOrdenes = { clave: string; filas: ReposicionProducto[]; parametros: ParametrosDeOrdenes }
+
+export function DialogoGenerarOrdenes({ intento, reanudado, rutaDeOrden, onCerrar, onCreadas, onEstado, onDescartar }: {
+  intento: IntentoDeOrdenes
+  /** Es un intento anterior que quedó sin saberse si llegó: se reenvía tal cual. */
+  reanudado: boolean
   rutaDeOrden?: (id: number) => string
   onCerrar: () => void
   /** Se llama tras toda respuesta buena del motor (con órdenes nuevas, las de un reintento o ninguna): la pantalla recarga la lista, que ya cuenta lo creado como pedido. */
   onCreadas: () => void
-  /** El motor contestó bien: la clave ya cumplió y se descarta. */
-  onResuelta: () => void
+  /** `incierto`: el pedido se cortó y no se sabe si llegó (se conserva el intento); `definitivo`: el motor contestó (bien, o con un 4xx: no creó nada) y se descarta. */
+  onEstado: (estado: 'incierto' | 'definitivo') => void
+  /** Tirar el intento pendiente y volver a armar el pedido con lo que se ve ahora. */
+  onDescartar: () => void
 }) {
+  const { clave, filas, parametros } = intento
   const { grupos, sinProveedor } = useMemo(() => resumenDeOrdenes(filas), [filas])
   const [enVuelo, setEnVuelo] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -83,10 +91,12 @@ export function DialogoGenerarOrdenes({ filas, parametros, clave, rutaDeOrden, o
         topes: Object.fromEntries(aPedir.map((p) => [p.producto_id, p.sugerido])),
       })
       setResultado(r)
-      onResuelta()
+      onEstado('definitivo')
       // Se recarga tras CUALQUIER respuesta buena (también la de cero órdenes: si lo sugerido cambió, la lista de fondo ya está vieja).
       onCreadas()
     } catch (err) {
+      // Un 4xx es una respuesta del motor que no creó nada; lo demás (red, 5xx, tiempo agotado) puede haber llegado.
+      onEstado(err instanceof ApiError && err.status >= 400 && err.status < 500 ? 'definitivo' : 'incierto')
       setError(mensajeDeError(err))
     } finally {
       setEnVuelo(false)
@@ -105,6 +115,13 @@ export function DialogoGenerarOrdenes({ filas, parametros, clave, rutaDeOrden, o
           </DialogDescription>
         </DialogHeader>
 
+        {!resultado && reanudado && (
+          <p role="status" className="flex flex-wrap items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
+            <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
+            <span>Un pedido anterior se cortó y no se sabe si llegó. Se vuelve a mandar tal cual para que no se duplique.</span>
+            <Button type="button" size="sm" variant="outline" onClick={onDescartar} disabled={enVuelo}>Descartar y empezar de nuevo</Button>
+          </p>
+        )}
         {!resultado && (
           <div className="grid gap-3 text-sm">
             {grupos.length === 0 ? (
