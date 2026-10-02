@@ -16,6 +16,8 @@
 // pocos días con stock y puede estar subestimada (se sugiere de menos); `sin_ventas` que no hay rotación, y por eso
 // la cobertura es un guion y el producto sólo aparece si está bajo el mínimo; `en_camino_sin_sucursal`, que con una
 // sucursal elegida se está descontando lo pedido en órdenes que no dicen a qué sucursal van.
+// `vencido` (0.95.0, motor >= 0.31.0): la parte del stock que está en lotes vencidos; la sugerencia no la cuenta como stock,
+// y se avisa en la celda para que no parezca que sobra mercadería. Falta con un motor anterior: no se muestra nada.
 import { useEffect, useMemo, useState } from 'react'
 import { api, ApiError } from '../api-client'
 import { TituloPantalla } from '../titulo-pantalla'
@@ -221,7 +223,7 @@ export function Reposicion() {
         Se mira lo que se vendió en los últimos {valido ? valores.dias_rotacion : '…'} días y se proyecta a los días de
         cobertura más el plazo de entrega{horizonte !== null ? ` (${horizonte} días)` : ''}: sugerido = lo que se vendería en ese
         tiempo, menos lo que hay y lo que ya viene en camino. Si con eso no se llega al stock mínimo, se pide lo que falta
-        para llegar. Sólo sugiere: no genera ninguna orden de compra.
+        para llegar. Lo que está en lotes vencidos no cuenta como stock. Sólo sugiere: no genera ninguna orden de compra.
       </p>
 
       {valido && error && <p role="alert" className="text-sm text-destructive">{error}</p>}
@@ -295,7 +297,14 @@ export function Reposicion() {
                           )}
                         </td>
                         <td className="p-3">{p.codigo || '—'}</td>
-                        <td className={`p-3 text-right ${p.stock <= 0 ? 'text-destructive' : ''}`}>{numero(p.stock)}</td>
+                        <td className={`p-3 text-right ${p.stock <= 0 ? 'text-destructive' : ''}`}>
+                          {numero(p.stock)}
+                          {(p.vencido ?? 0) > 0 && (
+                            <span className="block text-xs text-amber-600 dark:text-amber-400">
+                              incluye {numero(p.vencido ?? 0)} vencido, que no se cuenta para pedir
+                            </span>
+                          )}
+                        </td>
                         <td className="p-3 text-right">
                           {numero(p.en_camino)}
                           {data.sucursal_id !== null && p.en_camino_sin_sucursal > 0 && (
