@@ -38,7 +38,8 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { AlertTriangle, Download, FilePlus2, PackagePlus, TrendingDown } from 'lucide-react'
 import { nuevaClaveDeOperacion } from './clave-de-operacion'
-import { DialogoGenerarOrdenes, type IntentoDeOrdenes, type ParametrosDeOrdenes } from './reposicion-ordenes'
+import { DialogoGenerarOrdenes } from './reposicion-ordenes'
+import { borrarIntentoPendiente, leerIntentoPendiente, type IntentoDeOrdenes, type ParametrosDeOrdenes } from './reposicion-ordenes-pendiente'
 
 const RUTA = '/api/reportes/reposicion'
 /** El valor de «Toda la instancia» y de «Todas las categorías» en su `Select` (uno de Radix no admite `''`). */
@@ -136,9 +137,11 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
   // El intento de generar órdenes en curso (una copia de lo que se vio, los parámetros y la clave de la operación): recargar la lista de fondo, o que la recarga falle,
   // no lo cierra ni le cambia lo que muestra. `pendiente` es el que se cortó sin saber si llegó: reabrir lo reenvía tal cual (ver `reposicion-ordenes.tsx`).
   const [generando, setGenerando] = useState<IntentoDeOrdenes | null>(null)
-  const pendiente = useRef<IntentoDeOrdenes | null>(null)
+  // Arranca con lo que haya quedado en `sessionStorage` (una recarga o salir y volver no pierde un pedido cortado).
+  const [guardado] = useState(leerIntentoPendiente)
+  const pendiente = useRef<IntentoDeOrdenes | null>(guardado)
   // Lo mismo que `pendiente`, como estado, para que el botón de reintento aparezca aunque la lista esté vacía o no haya cargado.
-  const [hayPendiente, setHayPendiente] = useState(false)
+  const [hayPendiente, setHayPendiente] = useState(guardado !== null)
   // Sube cuando se crean órdenes: la lista se vuelve a pedir (lo creado ya cuenta como «en camino»).
   const [recarga, setRecarga] = useState(0)
   // Lo último que contestó el motor, con la consulta a la que contestó: que `loading` y `error` se deriven de acá
@@ -410,9 +413,14 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
           rutaDeOrden={rutaDeOrden}
           onCerrar={() => setGenerando(null)}
           onCreadas={() => setRecarga((n) => n + 1)}
-          onEstado={(estado) => { pendiente.current = estado === 'incierto' ? generando : null; setHayPendiente(estado === 'incierto') }}
+          onEstado={(estado) => {
+            pendiente.current = estado === 'incierto' ? generando : null
+            if (estado === 'definitivo') borrarIntentoPendiente()
+            setHayPendiente(estado === 'incierto')
+          }}
           onDescartar={() => {
             pendiente.current = null
+            borrarIntentoPendiente()
             setHayPendiente(false)
             if (data) setGenerando({ clave: nuevaClaveDeOperacion(), filas: data.productos, parametros: parametrosDeOrdenes })
             else setGenerando(null)

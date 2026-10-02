@@ -14,6 +14,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, ApiError } from '../api-client'
+import { guardarIntentoPendiente, type IntentoDeOrdenes } from './reposicion-ordenes-pendiente'
 import type { GenerarOrdenesResultado, ReposicionProducto } from './tipos'
 import { Button } from '@/components/ui/button'
 import {
@@ -22,12 +23,6 @@ import {
 import { AlertTriangle, FilePlus2 } from 'lucide-react'
 
 const RUTA_ORDENES = '/api/reportes/reposicion/ordenes'
-
-/** Lo que de la consulta de la pantalla viaja al motor para que calcule lo mismo que se ve. */
-export type ParametrosDeOrdenes = {
-  dias_rotacion: number; dias_cobertura: number; plazo_entrega_dias: number
-  sucursal_id?: number; categoria?: string; proveedor_id?: number
-}
 
 function numero(valor: number | string): string {
   return new Intl.NumberFormat('es-AR', { maximumFractionDigits: 10 }).format(Number(valor))
@@ -59,9 +54,6 @@ function resumenDeOrdenes(filas: ReposicionProducto[]) {
   return { grupos: [...grupos.values()], sinProveedor }
 }
 
-/** El pedido entero de un intento: lo que se vio, con qué parámetros y con qué clave. */
-export type IntentoDeOrdenes = { clave: string; filas: ReposicionProducto[]; parametros: ParametrosDeOrdenes }
-
 export function DialogoGenerarOrdenes({ intento, reanudado, rutaDeOrden, onCerrar, onCreadas, onEstado, onDescartar }: {
   intento: IntentoDeOrdenes
   /** Es un intento anterior que quedó sin saberse si llegó: se reenvía tal cual. */
@@ -85,6 +77,7 @@ export function DialogoGenerarOrdenes({ intento, reanudado, rutaDeOrden, onCerra
   async function generar() {
     setEnVuelo(true)
     setError(null)
+    guardarIntentoPendiente(intento)                  // ANTES de enviar: si se corta y se recarga la pestaña, se puede reenviar igual
     try {
       const r = await api.post<GenerarOrdenesResultado>(RUTA_ORDENES, {
         ...parametros, clave_operacion: clave, producto_ids: aPedir.map((p) => p.producto_id),
@@ -95,8 +88,9 @@ export function DialogoGenerarOrdenes({ intento, reanudado, rutaDeOrden, onCerra
       // Se recarga tras CUALQUIER respuesta buena (también la de cero órdenes: si lo sugerido cambió, la lista de fondo ya está vieja).
       onCreadas()
     } catch (err) {
-      // Un 4xx es una respuesta del motor que no creó nada; lo demás (red, 5xx, tiempo agotado) puede haber llegado.
-      onEstado(err instanceof ApiError && err.status >= 400 && err.status < 500 ? 'definitivo' : 'incierto')
+      // Un 4xx es una respuesta del motor que no creó nada (menos el 408: un proxy puede devolverlo después de reenviar el pedido); lo demás (red, 5xx, tiempo
+      // agotado) puede haber llegado.
+      onEstado(err instanceof ApiError && err.status >= 400 && err.status < 500 && err.status !== 408 ? 'definitivo' : 'incierto')
       setError(mensajeDeError(err))
     } finally {
       setEnVuelo(false)

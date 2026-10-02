@@ -42,6 +42,7 @@ const TODO = { [RUTA]: DATA, '/api/sucursales': [], '/api/productos/categorias':
 
 beforeEach(() => {
   cleanup()
+  sessionStorage.clear()
   prepararFetch()
 })
 
@@ -377,5 +378,54 @@ describe('Reposición: generar órdenes en borrador', () => {
     await user.click(within(dialogo()).getByRole('button', { name: 'Descartar y empezar de nuevo' }))
     expect(within(dialogo()).queryByRole('alert')).toBeNull()                                // el pedido nuevo no se presenta como ya fallido
     expect(intento).toBe(2)
+  })
+
+  it('un 408 (un proxy que pudo reenviar el pedido) cuenta como incierto: el intento queda pendiente', async () => {
+    const user = userEvent.setup()
+    await abrir({ conGenerarOrdenes: true }, { ...TODO, [`POST ${ORDENES}`]: { status: 408, detail: 'Request Timeout' } })
+    await user.click(boton()!)
+    await user.click(within(dialogo()).getByRole('button', { name: 'Crear 2 órdenes' }))
+    await within(dialogo()).findByRole('alert')
+    await user.click(within(dialogo()).getByRole('button', { name: 'Cancelar' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(screen.getByRole('button', { name: 'Reintentar el pedido anterior' })).toBeTruthy()
+  })
+
+  it('un intento cortado sobrevive a salir de la pantalla y volver (o recargar): se reenvía con la misma clave y el mismo cuerpo', async () => {
+    const user = userEvent.setup()
+    await abrir()
+    let intento = 0
+    const original = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation((entrada: RequestInfo | URL, init?: RequestInit) => {
+      if (String(entrada) === ORDENES && init?.method === 'POST') {
+        intento += 1
+        return intento === 1 ? Promise.reject(new TypeError('sin red')) : Promise.resolve(json({ ...RESULTADO, repetida: true }))
+      }
+      return original(entrada, init)
+    })
+    await user.click(boton()!)
+    await user.click(within(dialogo()).getByRole('button', { name: 'Crear 2 órdenes' }))
+    await within(dialogo()).findByRole('alert')
+    cleanup()                                                                              // se desmonta la pantalla (navegar, recargar)
+    montar('/reposicion', <Reposicion conGenerarOrdenes />)
+    await screen.findByText('4 productos')
+    await user.click(await screen.findByRole('button', { name: 'Reintentar el pedido anterior' }))
+    await user.click(within(dialogo()).getByRole('button', { name: 'Crear 2 órdenes' }))
+    expect(await within(dialogo()).findByText(/ya se habían creado con este mismo pedido/)).toBeTruthy()
+    const cuerpos = fetchMock.mock.calls.filter((c) => String(c[0]) === ORDENES).map((c) => JSON.parse(String((c[1] as RequestInit).body)))
+    expect(cuerpos).toHaveLength(2)
+    expect(cuerpos[1]).toEqual(cuerpos[0])
+    expect(sessionStorage.length).toBe(0)                                                  // y al resolverse, no queda nada guardado
+  })
+
+  it('una respuesta definitiva borra el intento guardado; un storage ilegible no rompe nada', async () => {
+    const user = userEvent.setup()
+    sessionStorage.setItem('libra-ui:reposicion:ordenes-pendiente', '{no es json')
+    await abrir()
+    expect(screen.queryByRole('button', { name: 'Reintentar el pedido anterior' })).toBeNull()
+    await user.click(boton()!)
+    await user.click(within(dialogo()).getByRole('button', { name: 'Crear 2 órdenes' }))
+    await within(dialogo()).findByRole('link', { name: 'OC-000041' })
+    expect(sessionStorage.getItem('libra-ui:reposicion:ordenes-pendiente')).toBeNull()
   })
 })
