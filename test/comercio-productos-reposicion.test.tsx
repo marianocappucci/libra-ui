@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { Productos } from '../src/comercio/Productos'
 import type { Producto } from '../src/comercio/tipos'
-import { cuerpoDe, montar, pedidas, prepararFetch, responder } from './helpers-pantallas'
+import { cuerpoDe, fetchMock, montar, pedidas, prepararFetch, responder } from './helpers-pantallas'
 
 const producto = (id: number, nombre: string, extra: Partial<Producto> = {}): Producto => ({
   id, codigo: `P${id}`, nombre, descripcion: '', precio_venta: 100, precio_costo: 60, unidad: 'u', categoria: '', stock_minimo: 0,
@@ -137,6 +137,7 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     montar('/productos', <Productos conParametrosDeReposicion />)
     await editar(user)
     await waitFor(() => expect(plazo().disabled).toBe(false))
+    fireEvent.change(within(dialogo()).getByLabelText('Nombre'), { target: { value: 'Yerba 2' } })   // también cambia el producto
     fireEvent.change(plazo(), { target: { value: '9' } })
     await guardar(user)
     expect(await within(dialogo()).findByText(/El producto se guardó, pero no se pudieron guardar el plazo y el stock máximo/)).toBeTruthy()
@@ -230,5 +231,85 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     soltar(PROPIOS)
     await waitFor(() => expect(boton.disabled).toBe(false))
     expect(plazo().value).toBe('7')
+  })
+
+  it('si sólo se cambió el plazo o el techo, el producto NO se vuelve a guardar (quien decide la reposición puede no poder editarlo)', async () => {
+    responder({
+      ...base, [`GET ${RUTA}`]: PROPIOS, [`PUT ${RUTA}`]: PROPIOS,
+      'PUT /api/productos/1': { status: 403, detail: 'forbidden' },    // el rol no puede editar el producto
+    })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    await waitFor(() => expect(plazo().value).toBe('7'))
+    fireEvent.change(plazo(), { target: { value: '9' } })
+    await guardar(user)
+    await waitFor(() => expect(puts()).toHaveLength(1))
+    expect(cuerpoDe(`PUT ${RUTA}`)).toEqual({ plazo_entrega_dias: 9, stock_maximo: 40 })
+    expect(pedidas()).not.toContain('PUT /api/productos/1')
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  it('si además se cambió algo del producto, se guarda el producto primero (y si eso falla no se manda el plazo/techo)', async () => {
+    responder({
+      ...base, [`GET ${RUTA}`]: PROPIOS, [`PUT ${RUTA}`]: PROPIOS,
+      'PUT /api/productos/1': { status: 403, detail: 'forbidden' },
+    })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    await waitFor(() => expect(plazo().value).toBe('7'))
+    fireEvent.change(within(dialogo()).getByLabelText('Nombre'), { target: { value: 'Yerba 2' } })
+    fireEvent.change(plazo(), { target: { value: '9' } })
+    await guardar(user)
+    expect(await within(dialogo()).findByText(/forbidden/)).toBeTruthy()
+    expect(pedidas()).toContain('PUT /api/productos/1')
+    expect(puts()).toHaveLength(0)
+  })
+
+  it('sin cambiar nada de reposición, un guardado sin cambios sigue guardando el producto como siempre', async () => {
+    responder({ ...base, [`GET ${RUTA}`]: PROPIOS, 'PUT /api/productos/1': { id: 1 } })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    await waitFor(() => expect(plazo().value).toBe('7'))
+    await guardar(user)
+    await waitFor(() => expect(pedidas()).toContain('PUT /api/productos/1'))
+    expect(puts()).toHaveLength(0)
+  })
+
+  it('si sólo cambió el plazo/techo y eso falla, el error es el de la reposición (no dice que el producto se guardó)', async () => {
+    responder({ ...base, [`GET ${RUTA}`]: PROPIOS, [`PUT ${RUTA}`]: { status: 422, detail: 'techo inválido' }, 'PUT /api/productos/1': { id: 1 } })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    await waitFor(() => expect(plazo().value).toBe('7'))
+    fireEvent.change(plazo(), { target: { value: '9' } })
+    await guardar(user)
+    expect(await within(dialogo()).findByText(/techo inválido/)).toBeTruthy()
+    expect(within(dialogo()).queryByText(/El producto se guardó/)).toBeNull()
+    expect(pedidas()).not.toContain('PUT /api/productos/1')
+  })
+
+  it('si el producto se guardó y falla el plazo/techo, deshacer el cambio del producto y reintentar vuelve a guardarlo (no queda el primer cambio)', async () => {
+    let intentos = 0
+    responder({
+      ...base, [`GET ${RUTA}`]: PROPIOS, 'PUT /api/productos/1': { id: 1 },
+      [`PUT ${RUTA}`]: () => (++intentos === 1 ? { status: 422, detail: 'techo inválido' } : PROPIOS),
+    })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    await waitFor(() => expect(plazo().value).toBe('7'))
+    fireEvent.change(within(dialogo()).getByLabelText('Nombre'), { target: { value: 'Yerba 2' } })
+    fireEvent.change(plazo(), { target: { value: '9' } })
+    await guardar(user)
+    expect(await within(dialogo()).findByText(/El producto se guardó, pero/)).toBeTruthy()
+    fireEvent.change(within(dialogo()).getByLabelText('Nombre'), { target: { value: 'Yerba' } })   // vuelve al nombre original
+    await guardar(user)
+    await waitFor(() => expect(puts()).toHaveLength(2))
+    const guardados = fetchMock.mock.calls.filter((c) => c[1] && (c[1] as RequestInit).method === 'PUT' && String(c[0]) === '/api/productos/1')
+    expect(guardados).toHaveLength(2)
+    expect(JSON.parse(String((guardados[1][1] as RequestInit).body)).nombre).toBe('Yerba')
   })
 })

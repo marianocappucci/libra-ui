@@ -195,6 +195,8 @@ export function Productos({
   const [repoEstado, setRepoEstado] = useState<EstadoReposicion>('sin')
   // Cada apertura del diálogo numera su lectura: la respuesta de un producto anterior que llega tarde no pisa a la del actual.
   const repoLectura = useRef(0)
+  // Los valores del producto tal como se abrió el diálogo de edición (para saber si el usuario tocó algo del producto o sólo del plazo/techo).
+  const valoresIniciales = useRef<Valores | null>(null)
 
   const conEstacion = Boolean(estaciones && estaciones.length > 0)
 
@@ -250,6 +252,7 @@ export function Productos({
   function abrirNuevo() {
     setEditingProducto(null)
     form.reset(EMPTY_VALUES)
+    valoresIniciales.current = null
     setFormError(null)
     setRepoPlazo('')
     setRepoTecho('')
@@ -261,7 +264,7 @@ export function Productos({
 
   function abrirEditar(producto: Producto) {
     setEditingProducto(producto)
-    form.reset({
+    const iniciales: Valores = {
       nombre: producto.nombre,
       codigo: producto.codigo ?? '',
       descripcion: producto.descripcion ?? '',
@@ -275,7 +278,9 @@ export function Productos({
       vendible: !producto.vendible ? false : true,
       vence: producto.vence === true,
       activo: !!producto.activo,
-    })
+    }
+    form.reset(iniciales)
+    valoresIniciales.current = iniciales
     setFormError(null)
     setRepoPlazo('')
     setRepoTecho('')
@@ -339,14 +344,25 @@ export function Productos({
     try {
       let id = editingProducto?.id
       if (editingProducto) {
-        await api.put<Producto>(`/api/productos/${editingProducto.id}`, payload)
+        // Si sólo cambió el plazo o el techo, el producto no se vuelve a guardar: quien puede decidir la reposición (el depósito) no siempre
+        // puede editar el producto, y un guardado del producto que no cambia nada no tiene por qué fallarle ni escribir de más.
+        const iniciales = valoresIniciales.current
+        const productoSinCambios = repoAMandar !== null && iniciales !== null &&
+          (Object.keys(values) as (keyof Valores)[]).every((k) => String(values[k]) === String(iniciales[k]))
+        if (!productoSinCambios) {
+          await api.put<Producto>(`/api/productos/${editingProducto.id}`, payload)
+          guardado = true
+          // Lo que ya quedó en el servidor es la base para comparar si hay que reintentar: si el plazo/techo falla y el usuario deshace
+          // su cambio al producto, ese deshacer tiene que guardarse.
+          valoresIniciales.current = { ...values }
+        }
       } else {
         const creado = await api.post<Producto>('/api/productos', payload)
         id = creado?.id
+        guardado = true
         // Ya existe: si falla el plazo/techo y se reintenta, el diálogo pasa a editar ESE producto y no crea otro.
         if (creado && repoAMandar) setEditingProducto(creado)
       }
-      guardado = true
       if (repoAMandar && id !== undefined) await api.put(`/api/productos/${id}/reposicion`, repoAMandar)
       setDialogOpen(false)
       await loadProductos()
