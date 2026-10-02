@@ -271,7 +271,14 @@ export function Facturas({
       minSize: 90,
       cell: ({ row }) => {
         const f = row.original
-        if (!estaAutorizada(f)) return <BadgeEstado tono="neutro">Sin CAE</BadgeEstado>
+        if (!estaAutorizada(f)) {
+          // El rótulo es siempre «Sin CAE»; el motivo, si lo hay, va de ayuda.
+          return (
+            <span title={f.cae_error || undefined}>
+              <BadgeEstado tono="neutro">Sin CAE</BadgeEstado>
+            </span>
+          )
+        }
         // Sin cruce de cobros no se puede decir más que «autorizada»: inventar
         // un «Sin cobrar» sería mentirle al que ya cobró en efectivo.
         if (esNota || !muestraCobros) {

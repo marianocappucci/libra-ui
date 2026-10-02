@@ -79,6 +79,11 @@ export type Factura = {
   concepto: number
   cae: string
   cae_vto: string
+  /** Por qué ARCA no autorizó el comprobante, **si se pidió el CAE y falló**. Es el
+   *  motivo, no el estado: «sin CAE» es `!cae`, y puede no tener motivo (una
+   *  instancia sin ARCA, o una factura anterior a que el motor lo guardara).
+   *  Opcional: un motor viejo no lo manda. */
+  cae_error?: string
   observaciones: string
   condicion_venta: string
   total_cobrado?: number
