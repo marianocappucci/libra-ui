@@ -15,13 +15,16 @@
 // **Proveedor habitual (0.102.0, motor >= 0.33.0, ADR-021):** una columna «Proveedor» y un filtro por proveedor, sólo si el motor lo maneja
 // (la respuesta trae la clave `proveedor_id`; con uno anterior la pantalla es la de siempre).
 //
+// **Órdenes en borrador (0.105.0, motor >= 0.34.0, ADR-022):** el botón «Generar órdenes en borrador» (prop `conGenerarOrdenes`: el producto la enciende
+// sólo si su motor es >= 0.34.0 y quien mira puede escribir Compras) crea una orden por proveedor habitual con lo que se ve; ver `reposicion-ordenes.tsx`. `rutaDeOrden` lleva a cada orden creada.
+//
 // 🔴 **Los avisos por fila no son adorno.** `posible_quiebre` dice que la rotación de ese producto se estimó con
 // pocos días con stock y puede estar subestimada (se sugiere de menos); `sin_ventas` que no hay rotación, y por eso
 // la cobertura es un guion y el producto sólo aparece si está bajo el mínimo; `en_camino_sin_sucursal`, que con una
 // sucursal elegida se está descontando lo pedido en órdenes que no dicen a qué sucursal van.
 // `vencido` (0.95.0, motor >= 0.31.0): la parte del stock que está en lotes vencidos; la sugerencia no la cuenta como stock,
 // y se avisa en la celda para que no parezca que sobra mercadería. Falta con un motor anterior: no se muestra nada.
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, ApiError } from '../api-client'
 import { TituloPantalla } from '../titulo-pantalla'
 import type {
@@ -33,7 +36,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { AlertTriangle, Download, PackagePlus, TrendingDown } from 'lucide-react'
+import { AlertTriangle, Download, FilePlus2, PackagePlus, TrendingDown } from 'lucide-react'
+import { nuevaClaveDeOperacion } from './clave-de-operacion'
+import { DialogoGenerarOrdenes } from './reposicion-ordenes'
+import { borrarIntentoPendiente, leerIntentoPendiente, type IntentoDeOrdenes, type ParametrosDeOrdenes } from './reposicion-ordenes-pendiente'
 
 const RUTA = '/api/reportes/reposicion'
 /** El valor de «Toda la instancia» y de «Todas las categorías» en su `Select` (uno de Radix no admite `''`). */
@@ -106,7 +112,15 @@ function ordenar(productos: ReposicionProducto[], orden: { clave: ClaveOrden; se
   })
 }
 
-export function Reposicion() {
+export type ReposicionProps = {
+  /** El botón «Generar órdenes en borrador». **Lo enciende el producto** y sólo si su motor tiene `POST /api/reportes/reposicion/ordenes` (>= 0.34.0) y quien
+   *  mira puede escribir Compras: la pantalla no puede saberlo desde los datos de la lista. */
+  conGenerarOrdenes?: boolean
+  /** A dónde lleva el número de cada orden creada. Sin esto, el número es texto. */
+  rutaDeOrden?: (id: number) => string
+}
+
+export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: ReposicionProps = {}) {
   const [valores, setValores] = useState<Record<ClaveParametro, string>>(
     () => Object.fromEntries(PARAMETROS.map((p) => [p.clave, p.defecto])) as Record<ClaveParametro, string>,
   )
@@ -120,9 +134,19 @@ export function Reposicion() {
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
   // Una vez que el motor contestó con la clave `proveedor_id` maneja proveedores: se recuerda aunque una consulta posterior falle o venga vacía.
   const [conProveedor, setConProveedor] = useState(false)
+  // El intento de generar órdenes en curso (una copia de lo que se vio, los parámetros y la clave de la operación): recargar la lista de fondo, o que la recarga falle,
+  // no lo cierra ni le cambia lo que muestra. `pendiente` es el que se cortó sin saber si llegó: reabrir lo reenvía tal cual (ver `reposicion-ordenes.tsx`).
+  const [generando, setGenerando] = useState<IntentoDeOrdenes | null>(null)
+  // Arranca con lo que haya quedado en `sessionStorage` (una recarga o salir y volver no pierde un pedido cortado).
+  const [guardado] = useState(leerIntentoPendiente)
+  const pendiente = useRef<IntentoDeOrdenes | null>(guardado)
+  // Lo mismo que `pendiente`, como estado, para que el botón de reintento aparezca aunque la lista esté vacía o no haya cargado.
+  const [hayPendiente, setHayPendiente] = useState(guardado !== null)
+  // Sube cuando se crean órdenes: la lista se vuelve a pedir (lo creado ya cuenta como «en camino»).
+  const [recarga, setRecarga] = useState(0)
   // Lo último que contestó el motor, con la consulta a la que contestó: que `loading` y `error` se deriven de acá
   // (y no de estados sueltos que hay que apagar y prender) evita mostrar el error o la carga de una consulta vieja.
-  const [respuesta, setRespuesta] = useState<{ consulta: string; data: ReposicionData | null; error: string | null } | null>(null)
+  const [respuesta, setRespuesta] = useState<{ consulta: string; recarga: number; data: ReposicionData | null; error: string | null } | null>(null)
 
   const errores = Object.fromEntries(PARAMETROS.map((p) => [p.clave, errorDelParametro(valores[p.clave], p.max)])) as
     Record<ClaveParametro, string | null>
@@ -161,18 +185,19 @@ export function Reposicion() {
     api.get<ReposicionData>(`${RUTA}?${consulta}`)
       .then((data) => {
         if (!vigente) return
-        setRespuesta({ consulta, data, error: null })
+        setRespuesta({ consulta, recarga, data, error: null })
         if (data && typeof data === 'object' && 'proveedor_id' in data) setConProveedor(true)
       })
       .catch((err) => {
-        if (vigente) setRespuesta({ consulta, data: null, error: err instanceof ApiError ? err.detail : 'Error de conexión.' })
+        if (vigente) setRespuesta({ consulta, recarga, data: null, error: err instanceof ApiError ? err.detail : 'Error de conexión.' })
       })
     return () => { vigente = false }
-  }, [consulta])
+  }, [consulta, recarga])
 
   // Sólo vale lo que contestó el motor a la consulta de los controles de ahora: mientras llega la de un cambio
   // reciente no se muestra la tabla anterior (sus cantidades serían de otros parámetros); se muestra «Cargando…».
-  const actual = respuesta?.consulta === consulta
+  // La recarga cuenta: tras crear órdenes la lista de antes está vieja (sus cantidades no incluyen lo recién pedido) y no se muestra hasta que llega la nueva.
+  const actual = respuesta?.consulta === consulta && respuesta.recarga === recarga
   const data = actual ? respuesta.data : null
   const loading = !actual
   const error = actual ? respuesta.error : null
@@ -183,6 +208,13 @@ export function Reposicion() {
   }
 
   const productos = useMemo(() => ordenar(data?.productos ?? [], orden), [data, orden])
+  // Lo mismo que se pidió para la lista: el motor calcula con estos parámetros lo que se va a crear.
+  const parametrosDeOrdenes: ParametrosDeOrdenes = {
+    dias_rotacion: Number(valores.dias_rotacion), dias_cobertura: Number(valores.dias_cobertura), plazo_entrega_dias: Number(valores.plazo_entrega_dias),
+    ...(sucursal !== TODAS ? { sucursal_id: Number(sucursal) } : {}),
+    ...(categoria !== TODAS ? { categoria } : {}),
+    ...(proveedor !== TODAS ? { proveedor_id: Number(proveedor) } : {}),
+  }
   const columnas = conProveedor ? [...COLUMNAS.slice(0, 2), COLUMNA_PROVEEDOR, ...COLUMNAS.slice(2)] : COLUMNAS
   // Lo que dice la ayuda son los controles, que son también lo que muestra la tabla (sólo se muestra la de esta consulta).
   const horizonte = valido ? Number(valores.dias_cobertura) + Number(valores.plazo_entrega_dias) : null
@@ -248,6 +280,14 @@ export function Reposicion() {
         </label>
       </div>
 
+      {conGenerarOrdenes && hayPendiente && !generando && (
+        <div role="status" className="flex flex-wrap items-center gap-2 rounded-md border border-amber-500/50 p-3 text-sm">
+          <AlertTriangle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+          <span>Un pedido de órdenes en borrador se cortó y no se sabe si llegó.</span>
+          <Button size="sm" variant="outline" onClick={() => setGenerando(pendiente.current)}>Reintentar el pedido anterior</Button>
+        </div>
+      )}
+
       <p className="text-sm text-muted-foreground">
         Se mira lo que se vendió en los últimos {valido ? valores.dias_rotacion : '…'} días y se proyecta a los días de
         cobertura más el plazo de entrega{horizonte !== null ? ` (${horizonte} días)` : ''}: sugerido = lo que se vendería en ese
@@ -276,6 +316,11 @@ export function Reposicion() {
             <div className="flex items-center gap-2">
               {orden && (
                 <Button size="sm" variant="outline" onClick={() => setOrden(null)}>Orden por urgencia</Button>
+              )}
+              {conGenerarOrdenes && (
+                <Button size="sm" onClick={() => setGenerando(pendiente.current ?? { clave: nuevaClaveDeOperacion(), filas: data.productos, parametros: parametrosDeOrdenes })} disabled={data.productos.length === 0}>
+                  <FilePlus2 />Generar órdenes en borrador
+                </Button>
               )}
               <Button asChild size="sm" variant="outline">
                 <a href={`${RUTA}/export?${consulta}`}><Download />CSV</a>
@@ -360,6 +405,29 @@ export function Reposicion() {
           </CardContent>
         </Card>
       )}
+      {generando && (
+        <DialogoGenerarOrdenes
+          key={generando.clave}
+          intento={generando}
+          reanudado={pendiente.current === generando}
+          rutaDeOrden={rutaDeOrden}
+          onCerrar={() => setGenerando(null)}
+          onCreadas={() => setRecarga((n) => n + 1)}
+          onEstado={(estado) => {
+            pendiente.current = estado === 'incierto' ? generando : null
+            if (estado === 'definitivo') borrarIntentoPendiente()
+            setHayPendiente(estado === 'incierto')
+          }}
+          onDescartar={() => {
+            pendiente.current = null
+            borrarIntentoPendiente()
+            setHayPendiente(false)
+            if (data) setGenerando({ clave: nuevaClaveDeOperacion(), filas: data.productos, parametros: parametrosDeOrdenes })
+            else setGenerando(null)
+          }}
+        />
+      )}
     </div>
   )
 }
+
