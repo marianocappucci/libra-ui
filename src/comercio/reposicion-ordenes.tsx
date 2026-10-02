@@ -70,7 +70,7 @@ export function DialogoGenerarOrdenes({ filas, parametros, rutaDeOrden, onCerrar
   parametros: ParametrosDeOrdenes
   rutaDeOrden?: (id: number) => string
   onCerrar: () => void
-  /** Se llama cuando el motor creó órdenes (o devolvió las de un reintento): la pantalla recarga la lista, que ya las cuenta como pedidas. */
+  /** Se llama tras toda respuesta buena del motor (con órdenes nuevas, las de un reintento o ninguna): la pantalla recarga la lista, que ya cuenta lo creado como pedido. */
   onCreadas: () => void
 }) {
   const { grupos, sinProveedor } = useMemo(() => resumenDeOrdenes(filas), [filas])
@@ -88,7 +88,8 @@ export function DialogoGenerarOrdenes({ filas, parametros, rutaDeOrden, onCerrar
         ...parametros, clave_operacion: clave.current, producto_ids: idsAPedir,
       })
       setResultado(r)
-      if (r.ordenes.length > 0) onCreadas()
+      // Se recarga tras CUALQUIER respuesta buena (también la de cero órdenes: si lo sugerido cambió, la lista de fondo ya está vieja).
+      onCreadas()
     } catch (err) {
       setError(mensajeDeError(err))
     } finally {

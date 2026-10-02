@@ -15,8 +15,8 @@
 // **Proveedor habitual (0.102.0, motor >= 0.33.0, ADR-021):** una columna «Proveedor» y un filtro por proveedor, sólo si el motor lo maneja
 // (la respuesta trae la clave `proveedor_id`; con uno anterior la pantalla es la de siempre).
 //
-// **Órdenes en borrador (0.105.0, motor >= 0.34.0, ADR-022):** el botón «Generar órdenes en borrador» (prop `conGenerarOrdenes`, sólo si el motor maneja
-// proveedores) crea una orden por proveedor habitual con lo que se ve; ver `reposicion-ordenes.tsx`. `rutaDeOrden` lleva a cada orden creada.
+// **Órdenes en borrador (0.105.0, motor >= 0.34.0, ADR-022):** el botón «Generar órdenes en borrador» (prop `conGenerarOrdenes`: el producto la enciende
+// sólo si su motor es >= 0.34.0 y quien mira puede escribir Compras) crea una orden por proveedor habitual con lo que se ve; ver `reposicion-ordenes.tsx`. `rutaDeOrden` lleva a cada orden creada.
 //
 // 🔴 **Los avisos por fila no son adorno.** `posible_quiebre` dice que la rotación de ese producto se estimó con
 // pocos días con stock y puede estar subestimada (se sugiere de menos); `sin_ventas` que no hay rotación, y por eso
@@ -111,7 +111,8 @@ function ordenar(productos: ReposicionProducto[], orden: { clave: ClaveOrden; se
 }
 
 export type ReposicionProps = {
-  /** El botón «Generar órdenes en borrador». Lo ofrece quien puede escribir Compras; aparece sólo si el motor maneja proveedores (>= 0.33.0). */
+  /** El botón «Generar órdenes en borrador». **Lo enciende el producto** y sólo si su motor tiene `POST /api/reportes/reposicion/ordenes` (>= 0.34.0) y quien
+   *  mira puede escribir Compras: la pantalla no puede saberlo desde los datos de la lista. */
   conGenerarOrdenes?: boolean
   /** A dónde lleva el número de cada orden creada. Sin esto, el número es texto. */
   rutaDeOrden?: (id: number) => string
@@ -131,7 +132,8 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
   // Una vez que el motor contestó con la clave `proveedor_id` maneja proveedores: se recuerda aunque una consulta posterior falle o venga vacía.
   const [conProveedor, setConProveedor] = useState(false)
-  const [generando, setGenerando] = useState(false)
+  // Las filas con que se abrió el diálogo de órdenes (una copia): recargar la lista de fondo, o que la recarga falle, no lo cierra ni le cambia lo que muestra.
+  const [generando, setGenerando] = useState<ReposicionProducto[] | null>(null)
   // Sube cuando se crean órdenes: la lista se vuelve a pedir (lo creado ya cuenta como «en camino»).
   const [recarga, setRecarga] = useState(0)
   // Lo último que contestó el motor, con la consulta a la que contestó: que `loading` y `error` se deriven de acá
@@ -298,8 +300,8 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
               {orden && (
                 <Button size="sm" variant="outline" onClick={() => setOrden(null)}>Orden por urgencia</Button>
               )}
-              {conGenerarOrdenes && conProveedor && (
-                <Button size="sm" onClick={() => setGenerando(true)} disabled={data.productos.length === 0}>
+              {conGenerarOrdenes && (
+                <Button size="sm" onClick={() => setGenerando(data.productos)} disabled={data.productos.length === 0}>
                   <FilePlus2 />Generar órdenes en borrador
                 </Button>
               )}
@@ -386,12 +388,12 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
           </CardContent>
         </Card>
       )}
-      {generando && data && (
+      {generando && (
         <DialogoGenerarOrdenes
-          filas={data.productos}
+          filas={generando}
           parametros={parametrosDeOrdenes}
           rutaDeOrden={rutaDeOrden}
-          onCerrar={() => setGenerando(false)}
+          onCerrar={() => setGenerando(null)}
           onCreadas={() => setRecarga((n) => n + 1)}
         />
       )}

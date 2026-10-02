@@ -55,13 +55,8 @@ const dialogo = () => screen.getByRole('dialog')
 const escrituras = () => pedidas().filter((p) => p.startsWith('POST '))
 
 describe('Reposición: generar órdenes en borrador', () => {
-  it('sin la prop no hay botón; con la prop pero sin que el motor maneje proveedores tampoco', async () => {
+  it('sin la prop no hay botón (lo enciende el producto, que sabe si su motor tiene el endpoint)', async () => {
     await abrir({})
-    expect(boton()).toBeNull()
-    cleanup()
-    prepararFetch()
-    const { proveedor_id: _p, ...sinClave } = DATA
-    await abrir({ conGenerarOrdenes: true }, { ...TODO, [RUTA]: sinClave })
     expect(boton()).toBeNull()
   })
 
@@ -167,5 +162,30 @@ describe('Reposición: generar órdenes en borrador', () => {
     expect(await within(dialogo()).findByRole('alert')).toHaveTextContent(/falta la migración del motor/)
     await user.click(within(dialogo()).getByRole('button', { name: 'Cancelar' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  it('si la recarga de la lista falla después de crear, el diálogo con el resultado y los enlaces sigue ahí', async () => {
+    const user = userEvent.setup()
+    await abrir()
+    const original = fetchMock.getMockImplementation()!
+    await user.click(boton()!)
+    fetchMock.mockImplementation((entrada: RequestInfo | URL, init?: RequestInit) => {
+      if (String(entrada).startsWith(`${RUTA}?`)) return Promise.resolve(json({ detail: 'caído' }, 500))      // la recarga falla
+      return original(entrada, init)
+    })
+    await user.click(within(dialogo()).getByRole('button', { name: 'Crear 2 órdenes' }))
+    expect(await within(dialogo()).findByRole('link', { name: 'OC-000041' })).toBeTruthy()
+    await new Promise((r) => setTimeout(r, 50))
+    expect(within(dialogo()).getByRole('link', { name: 'OC-000042' })).toBeTruthy()      // sigue ahí aunque la lista de fondo se haya vaciado
+  })
+
+  it('una respuesta con cero órdenes (lo sugerido cambió) también recarga la lista', async () => {
+    const user = userEvent.setup()
+    await abrir({ conGenerarOrdenes: true }, { ...TODO, [`POST ${ORDENES}`]: { ordenes: [], sin_proveedor: [], omitidos: [1, 2, 3], repetida: false } })
+    await user.click(boton()!)
+    const antes = pedidas().filter((p) => p.startsWith(`GET ${RUTA}?`)).length
+    await user.click(within(dialogo()).getByRole('button', { name: 'Crear 2 órdenes' }))
+    expect(await within(dialogo()).findByText(/No había nada para crear/)).toBeTruthy()
+    await waitFor(() => expect(pedidas().filter((p) => p.startsWith(`GET ${RUTA}?`)).length).toBeGreaterThan(antes))
   })
 })
