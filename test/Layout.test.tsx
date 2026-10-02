@@ -402,3 +402,26 @@ describe('el inset se puede encoger', () => {
     expect(inset!.className).toContain('min-w-0')
   })
 })
+
+// El botón suelto de modo claro / oscuro (ADR-009): el humano avisó que el selector no se veía porque vivía dos clics adentro del menú
+// del usuario. Tiene que estar a la vista, sin abrir nada, y alternar con un clic.
+describe('el botón de modo claro / oscuro', () => {
+  it('🔴 está a la vista sin abrir ningún menú y alterna el modo con un clic', async () => {
+    window.localStorage.clear()
+    document.documentElement.className = ''
+    const user = userEvent.setup()
+    montar({ role: 'admin', name: 'Ana' })
+    const boton = screen.getByRole('button', { name: 'Cambiar a modo oscuro' })
+    await user.click(boton)
+    expect(document.documentElement.classList.contains('dark')).toBe(true)
+    expect(window.localStorage.getItem('libra.modo')).toBe('oscuro')
+    await user.click(screen.getByRole('button', { name: 'Cambiar a modo claro' }))
+    expect(document.documentElement.classList.contains('dark')).toBe(false)
+    expect(window.localStorage.getItem('libra.modo')).toBe('claro')
+  })
+
+  it('lo ve también un visitante de la demo y quien no es admin', () => {
+    montar({ role: 'staff', name: 'Pedro' })
+    expect(screen.getByRole('button', { name: /Cambiar a modo/ })).toBeInTheDocument()
+  })
+})
