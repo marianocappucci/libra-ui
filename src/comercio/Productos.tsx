@@ -260,20 +260,26 @@ export function Productos({
   }, [conParametrosDeReposicion])
 
   // ¿El motor maneja proveedores? Se sondea con el primer producto para que el selector esté también en el alta. Un sondeo pendiente no se cancela
-  // porque la lista cambie (una búsqueda que la vacía); uno que falla se reintenta —con la lista de ese momento— hasta 3 veces.
+  // porque la lista cambie (una búsqueda que la vacía). Si falla, se reintenta con la PRÓXIMA lista (no de inmediato, para no martillar un servidor
+  // caído); si la lista ya había cambiado mientras estaba en vuelo, esa lista nueva es la próxima y se sondea ahora.
   const sondeando = useRef(false)
-  const [sondeosFallidos, setSondeosFallidos] = useState(0)
+  const listaActual = useRef(productos)
+  listaActual.current = productos
+  const [reintentoDelSondeo, setReintentoDelSondeo] = useState(0)
   useEffect(() => {
-    if (!conParametrosDeReposicion || conProveedorHabitual !== undefined || motorConProveedor.current || sondeando.current
-      || productos.length === 0 || sondeosFallidos >= 3) return
+    if (!conParametrosDeReposicion || conProveedorHabitual !== undefined || motorConProveedor.current || sondeando.current || productos.length === 0) return
     sondeando.current = true
-    api.get<ParametrosLeidos>(`/api/productos/${productos[0].id}/reposicion`)
+    const lista = productos
+    api.get<ParametrosLeidos>(`/api/productos/${lista[0].id}/reposicion`)
       .then((d) => {
         sondeando.current = false
         if (d && typeof d === 'object' && 'proveedor_id' in d) { motorConProveedor.current = true; setMotorConProveedorSt(true) }
       })
-      .catch(() => { sondeando.current = false; setSondeosFallidos((n) => n + 1) })
-  }, [conParametrosDeReposicion, conProveedorHabitual, productos, sondeosFallidos])
+      .catch(() => {
+        sondeando.current = false
+        if (listaActual.current !== lista) setReintentoDelSondeo((n) => n + 1)
+      })
+  }, [conParametrosDeReposicion, conProveedorHabitual, productos, reintentoDelSondeo])
 
   function describeError(err: unknown): string {
     if (err instanceof ApiError) return err.detail

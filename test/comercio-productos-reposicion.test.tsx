@@ -577,7 +577,7 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     await waitFor(() => expect(selectorProveedor()).toBeTruthy())
   })
 
-  it('si la lista cambia mientras el sondeo está en vuelo y éste falla, se reintenta con la lista actual (hasta 3 veces)', async () => {
+  it('si la lista cambia mientras el sondeo está en vuelo y éste falla, se reintenta con la lista actual', async () => {
     let intentos = 0
     let soltarPrimero: () => void = () => {}
     const primero = new Promise<void>((r) => { soltarPrimero = r })
@@ -601,5 +601,15 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     await waitFor(() => expect(intentos).toBe(2))
     await user.click(screen.getByRole('button', { name: /Nuevo producto/ }))
     await waitFor(() => expect(selectorProveedor()).toBeTruthy())
+  })
+
+  it('un sondeo que falla no se reintenta de inmediato ni en ráfaga: espera a la próxima lista', async () => {
+    let intentos = 0
+    responder({ ...base, '/api/proveedores': LISTA, [`GET ${RUTA}`]: () => { intentos += 1; return { status: 500, detail: 'caído' } } })
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await screen.findByText('Yerba')
+    await waitFor(() => expect(intentos).toBe(1))
+    await new Promise((r) => setTimeout(r, 200))
+    expect(intentos).toBe(1)
   })
 })
