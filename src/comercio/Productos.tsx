@@ -16,7 +16,7 @@
 // el mismo para los dos (`build_productos_router` de LibraCommerce), que
 // acepta la unión de los campos y aplica los defaults históricos a los que no
 // se mandan.
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -191,6 +191,8 @@ export function Productos({
   const [repoTecho, setRepoTecho] = useState('')
   const [repoOriginal, setRepoOriginal] = useState<ParametrosReposicion>({ plazo_entrega_dias: null, stock_maximo: null })
   const [repoEstado, setRepoEstado] = useState<EstadoReposicion>('sin')
+  // Cada apertura del diálogo numera su lectura: la respuesta de un producto anterior que llega tarde no pisa a la del actual.
+  const repoLectura = useRef(0)
 
   const conEstacion = Boolean(estaciones && estaciones.length > 0)
 
@@ -251,6 +253,7 @@ export function Productos({
     setRepoTecho('')
     setRepoOriginal({ plazo_entrega_dias: null, stock_maximo: null })
     setRepoEstado(conParametrosDeReposicion ? 'listo' : 'sin')
+    repoLectura.current += 1
     setDialogOpen(true)
   }
 
@@ -276,17 +279,19 @@ export function Productos({
     setRepoTecho('')
     setRepoOriginal({ plazo_entrega_dias: null, stock_maximo: null })
     setRepoEstado(conParametrosDeReposicion ? 'cargando' : 'sin')
+    const lectura = ++repoLectura.current
     setDialogOpen(true)
     if (conParametrosDeReposicion) {
       api.get<ParametrosReposicion>(`/api/productos/${producto.id}/reposicion`)
         .then((d) => {
+          if (lectura !== repoLectura.current) return
           const original = { plazo_entrega_dias: d?.plazo_entrega_dias ?? null, stock_maximo: d?.stock_maximo ?? null }
           setRepoOriginal(original)
           setRepoPlazo(original.plazo_entrega_dias === null ? '' : String(original.plazo_entrega_dias))
           setRepoTecho(original.stock_maximo === null ? '' : String(original.stock_maximo))
           setRepoEstado('listo')
         })
-        .catch(() => setRepoEstado('error'))
+        .catch(() => { if (lectura === repoLectura.current) setRepoEstado('error') })
     }
   }
 
@@ -334,6 +339,8 @@ export function Productos({
       } else {
         const creado = await api.post<Producto>('/api/productos', payload)
         id = creado?.id
+        // Ya existe: si falla el plazo/techo y se reintenta, el diálogo pasa a editar ESE producto y no crea otro.
+        if (creado && repoAMandar) setEditingProducto(creado)
       }
       guardado = true
       if (repoAMandar && id !== undefined) await api.put(`/api/productos/${id}/reposicion`, repoAMandar)

@@ -154,4 +154,55 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     await waitFor(() => expect(pedidas()).toContain('PUT /api/productos/9/reposicion'))
     expect(cuerpoDe('PUT /api/productos/9/reposicion')).toEqual({ plazo_entrega_dias: 4, stock_maximo: null })
   })
+
+  it('si el alta se guarda pero falla el plazo/techo, reintentar edita el producto creado y no crea otro', async () => {
+    let intentos = 0
+    responder({
+      ...base, 'POST /api/productos': { id: 9, nombre: 'Nuevo' }, 'PUT /api/productos/9': { id: 9 },
+      'PUT /api/productos/9/reposicion': () => (++intentos === 1 ? { status: 422, detail: 'techo inválido' } : PROPIOS),
+    })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await screen.findByText('Yerba')
+    await user.click(screen.getByRole('button', { name: /Nuevo producto/ }))
+    fireEvent.change(within(dialogo()).getByLabelText('Nombre'), { target: { value: 'Nuevo' } })
+    fireEvent.change(plazo(), { target: { value: '4' } })
+    await user.click(within(dialogo()).getByRole('button', { name: 'Crear producto' }))
+    expect(await within(dialogo()).findByText(/El producto se guardó, pero no se pudieron guardar/)).toBeTruthy()
+    await user.click(within(dialogo()).getByRole('button', { name: 'Guardar cambios' }))
+    await waitFor(() => expect(pedidas().filter((p) => p === 'PUT /api/productos/9/reposicion')).toHaveLength(2))
+    expect(pedidas().filter((p) => p === 'POST /api/productos')).toHaveLength(1)
+    expect(pedidas()).toContain('PUT /api/productos/9')
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  it('la lectura lenta de un producto anterior no pisa los campos del que se abrió después', async () => {
+    let soltarA: (v: unknown) => void = () => {}
+    const lentaA = new Promise((r) => { soltarA = r })
+    const OTRO = producto(2, 'Azúcar', { stock_minimo: 0 })
+    const { fetchMock } = await import('./helpers-pantallas')
+    responder({
+      '/api/productos': [YERBA, OTRO], '/api/productos/categorias': [],
+      'GET /api/productos/2/reposicion': { ...PROPIOS, producto_id: 2, plazo_entrega_dias: 21, stock_maximo: null },
+    })
+    const base_impl = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation((entrada: RequestInfo | URL, init?: RequestInit) => {
+      if (String(entrada) === RUTA && (init?.method ?? 'GET') === 'GET') {
+        return lentaA.then((v) => new Response(JSON.stringify(v), { status: 200, headers: { 'content-type': 'application/json' } }))
+      }
+      return base_impl(entrada, init)
+    })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await screen.findByText('Azúcar')
+    await user.click(screen.getAllByLabelText('Editar producto')[0])      // Yerba: su lectura queda colgada
+    await user.click(within(dialogo()).getByRole('button', { name: 'Cancelar' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await user.click(screen.getAllByLabelText('Editar producto')[1])      // Azúcar
+    await waitFor(() => expect(plazo().value).toBe('21'))
+    soltarA({ ...PROPIOS, plazo_entrega_dias: 7, stock_maximo: 40 })      // llega tarde la de Yerba
+    await new Promise((r) => setTimeout(r, 50))
+    expect(plazo().value).toBe('21')
+    expect(techo().value).toBe('')
+  })
 })
