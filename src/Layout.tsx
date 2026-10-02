@@ -108,6 +108,28 @@ function SelectorDeModo() {
   )
 }
 
+/** El botón suelto de modo (ADR-009): un clic alterna claro / oscuro, sin abrir el menú del usuario. Con «igual que el sistema» muestra y
+ *  alterna a partir del modo que está rigiendo ahora. El menú del usuario sigue ofreciendo las tres opciones. */
+function BotonDeModo() {
+  const [modo, setModo] = useState<Modo>(leerModo)
+  useEffect(() => suscribirseAlModo(setModo), [])
+  const oscuro = typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
+  const Icono = oscuro ? Sun : Moon
+  const destino: Modo = oscuro ? 'claro' : 'oscuro'
+  return (
+    <button
+      type="button"
+      data-modo={modo}
+      aria-label={oscuro ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+      title={oscuro ? 'Modo claro' : 'Modo oscuro'}
+      onClick={() => fijarModo(destino)}
+      className="flex size-9 shrink-0 items-center justify-center rounded-md hover:bg-sidebar-accent"
+    >
+      <Icono className="size-4" />
+    </button>
+  )
+}
+
 export function createLayout<TUser = { role?: string; name?: string }>({
   productName, productInitial, navItems, navSections,
   icon: HeaderIcon, logo, wordmarkClassName, homeTo, accountTo,
@@ -330,11 +352,12 @@ export function createLayout<TUser = { role?: string; name?: string }>({
               El boton de salir suelto se va: quedaba un icono sin rotulo, y era
               la accion mas destructiva de las tres. Adentro del menu tiene
               nombre y hay que abrir para llegar. */}
+          <div className="flex items-center gap-1 group-data-[collapsible=icon]:flex-col">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-sidebar-accent group-data-[collapsible=icon]:justify-center"
+                className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-sidebar-accent group-data-[collapsible=icon]:flex-none group-data-[collapsible=icon]:justify-center"
               >
                 <Avatar className="h-8 w-8">
                   <AvatarFallback>{user && getUserName ? initials(getUserName(user)) : (user as { name?: string } | null)?.name ? initials((user as { name: string }).name) : '?'}</AvatarFallback>
@@ -388,6 +411,8 @@ export function createLayout<TUser = { role?: string; name?: string }>({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          <BotonDeModo />
+          </div>
 
           {/* Fuera del menu: si viviera adentro, cerrarlo desmontaria el dialogo
               en el mismo gesto que lo abre. */}
