@@ -141,7 +141,9 @@ function leerParametrosReposicion(plazo: string, techo: string, minimo: number):
   }
   let maximo: number | null = null
   if (t !== '') {
-    if (!/^\d+(\.\d+)?$/.test(t) || Number(t) <= 0) return { error: 'El stock máximo tiene que ser mayor que 0 (o vacío, sin techo).' }
+    if (!/^\d+(\.\d+)?$/.test(t) || !Number.isFinite(Number(t)) || Number(t) <= 0) {
+      return { error: 'El stock máximo tiene que ser mayor que 0 (o vacío, sin techo).' }
+    }
     maximo = Number(t)
     if (minimo > 0 && maximo < minimo) return { error: `El stock máximo no puede ser menor que el stock mínimo (${minimo}).` }
   }

@@ -104,6 +104,7 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     ['techo 0', '', '0', /mayor que 0/],
     ['techo negativo', '', '-3', /mayor que 0/],
     ['techo con texto', '', 'mucho', /mayor que 0/],
+    ['techo tan grande que no es un número finito (iría como null y borraría el techo)', '', '9'.repeat(400), /mayor que 0/],
     ['techo menor que el mínimo', '', '5', /no puede ser menor que el stock mínimo \(10\)/],
   ])('%s: se avisa y NO se escribe nada, ni siquiera el producto', async (_n, valorPlazo, valorTecho, mensaje) => {
     responder({ ...base, [`GET ${RUTA}`]: SIN_PROPIOS, 'PUT /api/productos/1': { id: 1 }, [`PUT ${RUTA}`]: PROPIOS })
