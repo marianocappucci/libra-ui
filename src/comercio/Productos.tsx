@@ -260,18 +260,20 @@ export function Productos({
   }, [conParametrosDeReposicion])
 
   // ¿El motor maneja proveedores? Se sondea con el primer producto para que el selector esté también en el alta. Un sondeo pendiente no se cancela
-  // porque la lista cambie (una búsqueda que la vacía), y uno que falló se reintenta con la próxima lista.
+  // porque la lista cambie (una búsqueda que la vacía); uno que falla se reintenta —con la lista de ese momento— hasta 3 veces.
   const sondeando = useRef(false)
+  const [sondeosFallidos, setSondeosFallidos] = useState(0)
   useEffect(() => {
-    if (!conParametrosDeReposicion || conProveedorHabitual !== undefined || motorConProveedor.current || sondeando.current || productos.length === 0) return
+    if (!conParametrosDeReposicion || conProveedorHabitual !== undefined || motorConProveedor.current || sondeando.current
+      || productos.length === 0 || sondeosFallidos >= 3) return
     sondeando.current = true
     api.get<ParametrosLeidos>(`/api/productos/${productos[0].id}/reposicion`)
       .then((d) => {
+        sondeando.current = false
         if (d && typeof d === 'object' && 'proveedor_id' in d) { motorConProveedor.current = true; setMotorConProveedorSt(true) }
       })
-      .catch(() => {})
-      .finally(() => { sondeando.current = false })
-  }, [conParametrosDeReposicion, conProveedorHabitual, productos])
+      .catch(() => { sondeando.current = false; setSondeosFallidos((n) => n + 1) })
+  }, [conParametrosDeReposicion, conProveedorHabitual, productos, sondeosFallidos])
 
   function describeError(err: unknown): string {
     if (err instanceof ApiError) return err.detail

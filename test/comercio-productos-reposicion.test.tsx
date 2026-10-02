@@ -576,4 +576,30 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     await user.click(screen.getByRole('button', { name: /Nuevo producto/ }))
     await waitFor(() => expect(selectorProveedor()).toBeTruthy())
   })
+
+  it('si la lista cambia mientras el sondeo está en vuelo y éste falla, se reintenta con la lista actual (hasta 3 veces)', async () => {
+    let intentos = 0
+    let soltarPrimero: () => void = () => {}
+    const primero = new Promise<void>((r) => { soltarPrimero = r })
+    responder({ ...base, '/api/proveedores': LISTA })
+    const original = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation((entrada: RequestInfo | URL, init?: RequestInit) => {
+      if (String(entrada) === RUTA && (init?.method ?? 'GET') === 'GET') {
+        intentos += 1
+        if (intentos === 1) return primero.then(() => new Response(JSON.stringify({ detail: 'caído' }), { status: 500, headers: { 'content-type': 'application/json' } }))
+        return Promise.resolve(new Response(JSON.stringify(CON_PROV), { status: 200, headers: { 'content-type': 'application/json' } }))
+      }
+      return original(entrada, init)
+    })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await screen.findByText('Yerba')
+    await waitFor(() => expect(intentos).toBe(1))
+    await user.type(screen.getByPlaceholderText(/Buscar/), 'Yer{Enter}')            // llega otra lista con el primero todavía en vuelo
+    await new Promise((r) => setTimeout(r, 30))
+    soltarPrimero()                                                                    // y el primero falla
+    await waitFor(() => expect(intentos).toBe(2))
+    await user.click(screen.getByRole('button', { name: /Nuevo producto/ }))
+    await waitFor(() => expect(selectorProveedor()).toBeTruthy())
+  })
 })
