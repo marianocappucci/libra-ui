@@ -216,6 +216,13 @@ describe('los colores ampliados (ADR-009)', () => {
     expect(validarTema({ posEncabezadoFin: '#fde68a' }).errores.posEncabezadoFin).toMatch(/texto de la franja/)
   })
 
+  it('Codex: un inicio claro solo se valida contra el final de siempre, y un fondo de barra cuyo hover pierde contraste se rechaza', () => {
+    expect(validarTema({ posEncabezadoInicio: '#fde68a' }).errores.posEncabezadoInicio).toMatch(/texto de la franja/)
+    expect(validarTema({ posEncabezadoInicio: '#fde68a', posEncabezadoFin: '#f59e0b' }).errores).toEqual({})
+    expect(validarTema({ barraLateralFondo: '#767676' }).errores.barraLateralFondo).toMatch(/pasar el mouse/)
+    expect(validarTema({ barraLateralFondo: '#0f172a' }).errores).toEqual({})
+  })
+
   it('aplicar un tema vacío limpia TODAS las variables, incluidas las derivadas', () => {
     const el = limpio()
     aplicarTema({ acento: '#0f766e', barraLateralFondo: '#0f172a', exito: '#047857', posEncabezadoInicio: '#1e3a8a' }, el)
