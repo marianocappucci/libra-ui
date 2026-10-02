@@ -347,4 +347,30 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     expect(await within(dialogo()).findByText(/no ve el costo de este producto/)).toBeTruthy()
     expect(pedidas().filter((p) => p.startsWith('PUT '))).toHaveLength(0)
   })
+
+  it('sin precio_costo en los productos no hay columna «Precio costo» ni «NaN», y el formulario no ofrece el costo ni el margen', async () => {
+    const { precio_costo: _costo, ...sinCosto } = YERBA
+    responder({ '/api/productos': [sinCosto], '/api/productos/categorias': [], [`GET ${RUTA}`]: PROPIOS })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await screen.findByText('Yerba')
+    expect(screen.queryByText('Precio costo')).toBeNull()
+    expect(document.body.textContent).not.toMatch(/NaN/)
+    expect(screen.getByText('Precio venta')).toBeTruthy()
+    await user.click(screen.getAllByLabelText('Editar producto')[0])
+    expect(within(dialogo()).queryByLabelText('Precio de costo')).toBeNull()
+    expect(within(dialogo()).getByLabelText('Precio de venta')).toBeTruthy()
+    expect(within(dialogo()).queryByText(/Margen/)).toBeNull()
+  })
+
+  it('con costo, la columna y el campo siguen estando (el cambio es sólo para quien no lo recibe)', async () => {
+    responder({ ...base, [`GET ${RUTA}`]: PROPIOS })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await screen.findByText('Yerba')
+    expect(screen.getByText('Precio costo')).toBeTruthy()
+    await user.click(screen.getAllByLabelText('Editar producto')[0])
+    expect(within(dialogo()).getByLabelText('Precio de costo')).toBeTruthy()
+    expect(within(dialogo()).getByText(/Margen/)).toBeTruthy()
+  })
 })
