@@ -560,4 +560,20 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     await user.click(screen.getByRole('button', { name: /Nuevo producto/ }))
     await waitFor(() => expect(selectorProveedor()).toBeTruthy())
   })
+
+  it('un sondeo que falló se reintenta con la próxima lista y el selector del alta aparece', async () => {
+    let intentos = 0
+    responder({
+      ...base, '/api/proveedores': LISTA,
+      [`GET ${RUTA}`]: () => (++intentos === 1 ? { status: 500, detail: 'caído' } : CON_PROV),
+    })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await screen.findByText('Yerba')
+    await waitFor(() => expect(intentos).toBe(1))
+    await user.type(screen.getByPlaceholderText(/Buscar/), 'Yer{Enter}')            // recarga la lista
+    await waitFor(() => expect(intentos).toBe(2))
+    await user.click(screen.getByRole('button', { name: /Nuevo producto/ }))
+    await waitFor(() => expect(selectorProveedor()).toBeTruthy())
+  })
 })

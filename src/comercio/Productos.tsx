@@ -259,17 +259,19 @@ export function Productos({
     return () => { vigente = false }
   }, [conParametrosDeReposicion])
 
-  // ¿El motor maneja proveedores? Se sondea con el primer producto para que el selector esté también en el alta. El resultado se guarda aunque
-  // la lista cambie mientras tanto (una búsqueda que la vacía no cancela el sondeo): sólo depende del id del primer producto.
-  const primerProductoId = productos[0]?.id
+  // ¿El motor maneja proveedores? Se sondea con el primer producto para que el selector esté también en el alta. Un sondeo pendiente no se cancela
+  // porque la lista cambie (una búsqueda que la vacía), y uno que falló se reintenta con la próxima lista.
+  const sondeando = useRef(false)
   useEffect(() => {
-    if (!conParametrosDeReposicion || conProveedorHabitual !== undefined || motorConProveedor.current || primerProductoId === undefined) return
-    api.get<ParametrosLeidos>(`/api/productos/${primerProductoId}/reposicion`)
+    if (!conParametrosDeReposicion || conProveedorHabitual !== undefined || motorConProveedor.current || sondeando.current || productos.length === 0) return
+    sondeando.current = true
+    api.get<ParametrosLeidos>(`/api/productos/${productos[0].id}/reposicion`)
       .then((d) => {
         if (d && typeof d === 'object' && 'proveedor_id' in d) { motorConProveedor.current = true; setMotorConProveedorSt(true) }
       })
       .catch(() => {})
-  }, [conParametrosDeReposicion, conProveedorHabitual, primerProductoId])
+      .finally(() => { sondeando.current = false })
+  }, [conParametrosDeReposicion, conProveedorHabitual, productos])
 
   function describeError(err: unknown): string {
     if (err instanceof ApiError) return err.detail
