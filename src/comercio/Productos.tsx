@@ -197,6 +197,8 @@ export function Productos({
   const repoLectura = useRef(0)
   // Los valores del producto tal como se abrió el diálogo de edición (para saber si el usuario tocó algo del producto o sólo del plazo/techo).
   const valoresIniciales = useRef<Valores | null>(null)
+  // El producto que se edita llegó SIN `precio_costo` (el rol no tiene `costos.ver`): el 0 del formulario es de relleno y nunca se guarda.
+  const costoOculto = useRef(false)
 
   const conEstacion = Boolean(estaciones && estaciones.length > 0)
 
@@ -253,6 +255,7 @@ export function Productos({
     setEditingProducto(null)
     form.reset(EMPTY_VALUES)
     valoresIniciales.current = null
+    costoOculto.current = false
     setFormError(null)
     setRepoPlazo('')
     setRepoTecho('')
@@ -283,6 +286,7 @@ export function Productos({
     }
     form.reset(iniciales)
     valoresIniciales.current = iniciales
+    costoOculto.current = producto.precio_costo === undefined || producto.precio_costo === null
     setFormError(null)
     setRepoPlazo('')
     setRepoTecho('')
@@ -351,6 +355,12 @@ export function Productos({
         const iniciales = valoresIniciales.current
         const productoSinCambios = repoAMandar !== null && iniciales !== null &&
           (Object.keys(values) as (keyof Valores)[]).every((k) => String(values[k]) === String(iniciales[k]))
+        // Sin ver el costo no se puede guardar el producto: el 0 de relleno pisaría el costo real. Sólo se guarda lo de reposición.
+        if (!productoSinCambios && costoOculto.current) {
+          setFormError('Tu rol no ve el costo de este producto, así que no puede editar el producto: sólo el plazo de entrega y el stock máximo.')
+          setSaving(false)
+          return
+        }
         if (!productoSinCambios) {
           await api.put<Producto>(`/api/productos/${editingProducto.id}`, payload)
           guardado = true

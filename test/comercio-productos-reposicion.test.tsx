@@ -330,4 +330,21 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     expect(pedidas()).not.toContain('PUT /api/productos/1')
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   })
+
+  it('sin ver el costo, si además se cambia algo del producto NO se guarda nada (el 0 de relleno pisaría el costo real)', async () => {
+    const { precio_costo: _costo, ...sinCosto } = YERBA
+    responder({
+      '/api/productos': [sinCosto], '/api/productos/categorias': [], [`GET ${RUTA}`]: PROPIOS, [`PUT ${RUTA}`]: PROPIOS,
+      'PUT /api/productos/1': { id: 1 },
+    })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    await waitFor(() => expect(plazo().value).toBe('7'))
+    fireEvent.change(within(dialogo()).getByLabelText('Nombre'), { target: { value: 'Yerba 2' } })
+    fireEvent.change(techo(), { target: { value: '45' } })
+    await guardar(user)
+    expect(await within(dialogo()).findByText(/no ve el costo de este producto/)).toBeTruthy()
+    expect(pedidas().filter((p) => p.startsWith('PUT '))).toHaveLength(0)
+  })
 })
