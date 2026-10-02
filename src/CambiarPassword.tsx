@@ -81,7 +81,7 @@ export function CambiarPassword({ open, onOpenChange }: {
 
         {error && <p className="text-sm text-destructive">{error}</p>}
         {listo && (
-          <p className="text-sm text-emerald-600 dark:text-emerald-400">
+          <p className="text-sm text-exito">
             Listo. La próxima vez entrá con la contraseña nueva.
           </p>
         )}

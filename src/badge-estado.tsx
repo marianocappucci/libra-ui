@@ -5,8 +5,8 @@
 // es solido y se ve (1 px, no `border-transparent`), y el fondo es ese mismo
 // tono mucho mas suave. Antes de esto cada producto resolvia sus estados a
 // mano y convivian tres estilos distintos en la misma tabla: variantes solidas
-// de shadcn (`Cobrada` en negro), tintes sin borde (`bg-emerald-500/15`) y
-// solidos de color (`bg-emerald-600 text-white`).
+// de shadcn (`Cobrada` en negro), tintes sin borde (`bg-exito/15`) y
+// solidos de color (`bg-exito text-white`).
 //
 // Por que 10% en claro y 15% en oscuro: son las intensidades que se eligieron
 // mirando las tres opciones (6 / 10 / 16) sobre fondo blanco. `bg-<tono>/10`
@@ -30,7 +30,7 @@ import { cn } from '@/lib/utils'
 // Cada entrada nombra el mismo token de color en `border-` y en `text-` — que
 // sean iguales ES la regla, y hay un guard en los tests que lo sostiene.
 export const TONOS_ESTADO = {
-  ok: 'border-emerald-700 text-emerald-700 bg-emerald-700/10 dark:border-emerald-400 dark:text-emerald-400 dark:bg-emerald-400/15',
+  ok: 'border-exito text-exito bg-exito/10',
   atencion: 'border-amber-800 text-amber-800 bg-amber-800/10 dark:border-amber-400 dark:text-amber-400 dark:bg-amber-400/15',
   negativo: 'border-red-700 text-red-700 bg-red-700/10 dark:border-red-400 dark:text-red-400 dark:bg-red-400/15',
   curso: 'border-blue-700 text-blue-700 bg-blue-700/10 dark:border-blue-400 dark:text-blue-400 dark:bg-blue-400/15',

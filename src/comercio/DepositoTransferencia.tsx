@@ -103,7 +103,7 @@ export function DepositoTransferencia({ rutaDeDepositos = '/depositos', conHisto
 
       {error && <p className="text-sm text-destructive">{error}</p>}
       {ok && (
-        <p className="text-sm text-emerald-600 dark:text-emerald-400">
+        <p className="text-sm text-exito">
           Transferencia realizada correctamente.
           {resultado && <> Quedó: {resultado.origen.nombre} {resultado.origen.stock}, {resultado.destino.nombre} {resultado.destino.stock}.</>}
         </p>

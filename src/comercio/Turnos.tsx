@@ -33,7 +33,7 @@ function DiferenciaBadge({ esperado, declarado }: { esperado: number | null; dec
   if (esperado === null || declarado === null) return <span className="text-muted-foreground">—</span>
   const dif = Math.round((declarado - esperado) * 100) / 100
   if (dif > 0.01) {
-    return <span className="inline-flex items-center gap-1 font-medium text-emerald-600 dark:text-emerald-400"><ArrowUpCircle className="size-4" />+{formatoMoneda(dif)}</span>
+    return <span className="inline-flex items-center gap-1 font-medium text-exito"><ArrowUpCircle className="size-4" />+{formatoMoneda(dif)}</span>
   }
   if (dif < -0.01) {
     return <span className="inline-flex items-center gap-1 font-medium text-destructive"><ArrowDownCircle className="size-4" />−{formatoMoneda(Math.abs(dif))}</span>
@@ -196,7 +196,7 @@ export function Turnos({ esAdmin = false, conCaja = false }: TurnosProps = {}) {
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle className="flex items-center gap-2"><PlayCircle className="size-4 text-emerald-600" />Abrir turno</DialogTitle>
+                <DialogTitle className="flex items-center gap-2"><PlayCircle className="size-4 text-exito" />Abrir turno</DialogTitle>
               </DialogHeader>
               <div className="grid gap-3">
                 <p className="text-sm text-muted-foreground">Registrá el efectivo en caja al inicio del turno. Se usa para calcular la diferencia al cierre.</p>
@@ -228,10 +228,10 @@ export function Turnos({ esAdmin = false, conCaja = false }: TurnosProps = {}) {
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       {turnoActivo && (
-        <Card className="border-emerald-600/40">
+        <Card className="border-exito/40">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              <span className="inline-block size-2.5 rounded-full bg-emerald-500" />Turno abierto
+              <span className="inline-block size-2.5 rounded-full bg-exito" />Turno abierto
             </CardTitle>
             <CardDescription>Desde {fechaHora(turnoActivo.apertura)} — fondo inicial {formatoMoneda(turnoActivo.monto_inicial)}</CardDescription>
           </CardHeader>

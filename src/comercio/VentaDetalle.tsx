@@ -313,7 +313,7 @@ export function VentaDetalle({
                           <Badge variant="outline">{etiquetaDeMedio(p.medio)}</Badge>
                           <span className="font-medium">{formatoMoneda(p.monto)}</span>
                         </div>
-                        {p.referencia && <p className="flex items-center gap-1 text-xs text-muted-foreground"><CheckCircle2 className="size-3.5 text-emerald-600" />Ref: {p.referencia}</p>}
+                        {p.referencia && <p className="flex items-center gap-1 text-xs text-muted-foreground"><CheckCircle2 className="size-3.5 text-exito" />Ref: {p.referencia}</p>}
                       </div>
                     ))}
                     <div className="mt-1 flex justify-between border-t pt-1.5 font-semibold">
@@ -333,7 +333,7 @@ export function VentaDetalle({
                             </p>
                           </>
                         ) : qrEstado === 'acreditado' ? (
-                          <p className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                          <p className="flex items-center gap-1.5 text-xs font-medium text-exito">
                             <CheckCircle2 className="size-3.5" />Pago acreditado.
                           </p>
                         ) : (
@@ -354,8 +354,8 @@ export function VentaDetalle({
             <div className="grid gap-2 sm:grid-cols-2">
               {detalle.factura_display && (
                 <p className="flex items-center gap-2 rounded-md border bg-muted/50 p-3 text-sm">
-                  <ReceiptText className="size-4 text-emerald-600" />Factura generada: {rutaDeFactura
-                    ? <Link to={rutaDeFactura(detalle.factura_id as number)} className="font-semibold text-emerald-600 hover:underline dark:text-emerald-400">{detalle.factura_display}</Link>
+                  <ReceiptText className="size-4 text-exito" />Factura generada: {rutaDeFactura
+                    ? <Link to={rutaDeFactura(detalle.factura_id as number)} className="font-semibold text-exito hover:underline">{detalle.factura_display}</Link>
                     : <span className="font-semibold">{detalle.factura_display}</span>}
                 </p>
               )}
@@ -396,7 +396,7 @@ export function VentaDetalle({
                       <td colSpan={3} className="p-3 text-right text-muted-foreground">
                         Promoción {promo.nombre}{promo.veces > 1 ? ` × ${promo.veces}` : ''}
                       </td>
-                      <td className="p-3 text-right text-emerald-700 dark:text-emerald-400">− {formatoMoneda(promo.ahorro)}</td>
+                      <td className="p-3 text-right text-exito">− {formatoMoneda(promo.ahorro)}</td>
                     </tr>
                   ))}
                   {descuentoRestante > 0 && (

@@ -185,7 +185,7 @@ export function EgresoDetalle() {
       ) : (
         <>
           {egreso.estado === 'pagado' && (
-            <p className="flex items-center gap-2 rounded-md border border-emerald-600/30 bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-400">
+            <p className="flex items-center gap-2 rounded-md border border-exito/40 bg-exito/10 p-3 text-sm text-exito">
               <CheckCircle2 className="size-4 shrink-0" /><strong>Pagado completo</strong> — {formatCurrency(totalPagado)}
             </p>
           )}
@@ -253,7 +253,7 @@ export function EgresoDetalle() {
                 <p className="text-base"><span className="text-muted-foreground">Total:</span> <span className="font-bold text-destructive">{formatCurrency(egreso.total)}</span></p>
                 {pagos.length > 0 && (
                   <>
-                    <p><span className="text-muted-foreground">Pagado:</span> <span className="text-emerald-600 dark:text-emerald-400">{formatCurrency(totalPagado)}</span></p>
+                    <p><span className="text-muted-foreground">Pagado:</span> <span className="text-exito">{formatCurrency(totalPagado)}</span></p>
                     {pendiente > 0 && <p><span className="text-muted-foreground">Pendiente:</span> <span className="font-semibold text-destructive">{formatCurrency(pendiente)}</span></p>}
                   </>
                 )}

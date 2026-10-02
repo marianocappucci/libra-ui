@@ -689,7 +689,7 @@ export function Productos({
                     )}
                   />
                   {margen !== null && (
-                    <p className={`flex w-full items-center gap-1.5 text-sm ${margen >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
+                    <p className={`flex w-full items-center gap-1.5 text-sm ${margen >= 0 ? 'text-exito' : 'text-destructive'}`}>
                       <TrendingUp className="size-4 shrink-0" />Margen: <strong>{margen.toFixed(1)}%</strong>
                     </p>
                   )}

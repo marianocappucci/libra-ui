@@ -215,7 +215,7 @@ export function TesoreriaDetalle() {
       header: () => <div className="text-right">Monto</div>,
       cell: ({ row }) => {
         const positivo = row.original.tipo === 'ingreso' || row.original.tipo === 'transferencia_entrada'
-        return <div className={`text-right font-semibold ${positivo ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>{positivo ? '+' : '−'} {formatCurrency(row.original.monto)}</div>
+        return <div className={`text-right font-semibold ${positivo ? 'text-exito' : 'text-destructive'}`}>{positivo ? '+' : '−'} {formatCurrency(row.original.monto)}</div>
       },
     },
     {
@@ -283,7 +283,7 @@ export function TesoreriaDetalle() {
             )}
             <Dialog open={movOpen} onOpenChange={setMovOpen}>
               <DialogTrigger asChild>
-                <Button size="sm" className="bg-emerald-600 text-white hover:bg-emerald-600/90" onClick={abrirMovimiento}>
+                <Button size="sm" className="bg-exito text-exito-foreground hover:bg-exito/90" onClick={abrirMovimiento}>
                   <Plus />Movimiento
                 </Button>
               </DialogTrigger>
@@ -402,7 +402,7 @@ export function TesoreriaDetalle() {
             <Card>
               <CardContent className="py-3 text-center">
                 <p className="text-sm text-muted-foreground">Saldo actual</p>
-                <p className={`text-xl font-bold ${cuenta.saldo >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>{formatCurrency(cuenta.saldo)}</p>
+                <p className={`text-xl font-bold ${cuenta.saldo >= 0 ? 'text-exito' : 'text-destructive'}`}>{formatCurrency(cuenta.saldo)}</p>
               </CardContent>
             </Card>
           </div>

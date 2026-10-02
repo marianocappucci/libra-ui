@@ -323,7 +323,7 @@ export function Clientes({ conConsultaCuit = true }: { conConsultaCuit?: boolean
                   )}
                 />
                 {consultaMsg && (
-                  <p className={`flex w-full items-center gap-1.5 text-sm ${consultaMsg.tipo === 'ok' ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
+                  <p className={`flex w-full items-center gap-1.5 text-sm ${consultaMsg.tipo === 'ok' ? 'text-exito' : 'text-destructive'}`}>
                     {consultaMsg.tipo === 'ok' ? <CheckCircle2 className="size-4 shrink-0" /> : <XCircle className="size-4 shrink-0" />}
                     {consultaMsg.texto}
                   </p>

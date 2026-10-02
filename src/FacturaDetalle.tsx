@@ -437,9 +437,9 @@ export function FacturaDetalle({
 
           {[1, 6, 11].includes(detalle.factura.tipo) && (
             detalle.cobros.length > 0 ? (
-              <div className={`flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm ${detalle.pendiente <= 0 ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/40' : 'border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40'}`}>
+              <div className={`flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm ${detalle.pendiente <= 0 ? 'border-exito/40 bg-exito/10' : 'border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40'}`}>
                 <span className="flex items-center gap-2">
-                  {detalle.pendiente <= 0 ? <CheckCircle2 className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" /> : <CircleDollarSign className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />}
+                  {detalle.pendiente <= 0 ? <CheckCircle2 className="size-4 shrink-0 text-exito" /> : <CircleDollarSign className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />}
                   {detalle.pendiente <= 0 ? (
                     <span><strong>Cobrado completo</strong> — {formatCurrency(detalle.total_cobrado)}{detalle.cobros.length > 1 && <span className="text-muted-foreground"> ({detalle.cobros.length} pagos)</span>}</span>
                   ) : (
@@ -460,8 +460,8 @@ export function FacturaDetalle({
           )}
 
           {detalle.cobros.length > 0 && (
-            <Card className="border-l-4 border-l-emerald-600">
-              <CardHeader className="py-2"><CardTitle className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400"><ListChecks className="size-4" />Cobros registrados</CardTitle></CardHeader>
+            <Card className="border-l-4 border-l-exito">
+              <CardHeader className="py-2"><CardTitle className="flex items-center gap-2 text-sm text-exito"><ListChecks className="size-4" />Cobros registrados</CardTitle></CardHeader>
               <CardContent className="grid gap-1 py-2 text-sm">
                 {detalle.cobros.map((c) => (
                   <div key={c.id} className="flex flex-wrap items-center justify-between gap-2 border-b py-1 last:border-0">
@@ -470,7 +470,7 @@ export function FacturaDetalle({
                       {c.medio_pago && <Badge variant="outline" className="ml-2">{medioLabel(c.medio_pago)}</Badge>}
                       {c.referencia && <span className="ml-1">({c.referencia})</span>}
                     </span>
-                    <span className="font-medium text-emerald-700 dark:text-emerald-400">+ {formatCurrency(c.monto)}</span>
+                    <span className="font-medium text-exito">+ {formatCurrency(c.monto)}</span>
                   </div>
                 ))}
               </CardContent>
@@ -478,8 +478,8 @@ export function FacturaDetalle({
           )}
 
           {estaAutorizada(detalle.factura) ? (
-            <div className="flex items-center gap-2 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm dark:border-emerald-900 dark:bg-emerald-950/40">
-              <CheckCircle2 className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+            <div className="flex items-center gap-2 rounded-md border border-exito/40 bg-exito/10 p-3 text-sm">
+              <CheckCircle2 className="size-4 shrink-0 text-exito" />
               <span><strong>Comprobante autorizado por ARCA</strong> — CAE: <span className="font-mono">{detalle.factura.cae}</span> · Vence: <strong>{detalle.factura.cae_vto}</strong></span>
             </div>
           ) : (

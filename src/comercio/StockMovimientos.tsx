@@ -104,7 +104,7 @@ export function StockMovimientos({
       header: () => <div className="text-center">Cantidad</div>,
       cell: ({ row }) => {
         const c = row.original.cantidad
-        return <div className={`text-center font-semibold ${c > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>{c > 0 ? '+' : ''}{formatEntero(c)}</div>
+        return <div className={`text-center font-semibold ${c > 0 ? 'text-exito' : 'text-destructive'}`}>{c > 0 ? '+' : ''}{formatEntero(c)}</div>
       },
     },
     { accessorKey: 'referencia', header: 'Referencia', cell: ({ row }) => row.original.referencia || '—' },

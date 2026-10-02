@@ -210,7 +210,7 @@ export function Cajas({ sucursales, conActivarDesactivar = false, verMovimientos
             <Card key={c.id} className={c.activo ? undefined : 'opacity-50'}>
               <CardContent className="grid gap-2 pt-6">
                 <div className="flex items-start justify-between gap-2">
-                  <p className="flex items-center gap-2 font-semibold"><Wallet className="size-4 text-emerald-600 dark:text-emerald-400" />{c.nombre}</p>
+                  <p className="flex items-center gap-2 font-semibold"><Wallet className="size-4 text-exito" />{c.nombre}</p>
                   <div className="flex gap-1">
                     {!!c.es_default && <BadgeEstado tono="ok">Por defecto</BadgeEstado>}
                     {!c.activo && <BadgeEstado tono="neutro">Inactiva</BadgeEstado>}

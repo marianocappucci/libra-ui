@@ -35,7 +35,8 @@ describe('el catálogo', () => {
   })
 
   it('el valor por defecto de cada color pasa su propia validación', () => {
-    const defectos = Object.fromEntries(COLORES_DE_TEMA.map((d) => [d.clave, d.porDefecto]))
+    // Los de `defectoPorProducto` son sólo una referencia para la vista previa: el valor de siempre lo declara cada producto.
+    const defectos = Object.fromEntries(COLORES_DE_TEMA.filter((d) => !d.defectoPorProducto).map((d) => [d.clave, d.porDefecto]))
     const { tema, errores } = validarTema(defectos)
     expect(errores).toEqual({})
     expect(tema).toEqual(defectos)
@@ -168,5 +169,58 @@ describe('cargarTema', () => {
     await cargarTema({ elemento: el })
     expect(fondo(el)).toBe('#fdf2f8')
     vi.restoreAllMocks()
+  })
+})
+
+describe('los colores ampliados (ADR-009)', () => {
+  const limpio = () => {
+    const el = document.createElement('div')
+    return el
+  }
+
+  it('el acento fija --primary, el anillo y el sidebar-primary, y calcula el texto de los botones', () => {
+    const el = limpio()
+    aplicarTema({ acento: '#0f766e' }, el)
+    for (const v of ['--primary', '--ring', '--sidebar-primary']) expect(el.style.getPropertyValue(v)).toBe('#0f766e')
+    expect(el.style.getPropertyValue('--primary-foreground')).toBe('#ffffff')
+    expect(el.style.getPropertyValue('--sidebar-primary-foreground')).toBe('#ffffff')
+  })
+
+  it('un acento casi negro (se pierde en modo oscuro) o casi blanco (se pierde en claro) se rechaza', () => {
+    expect(validarTema({ acento: '#171717' }).errores.acento).toMatch(/no se distingue del fondo/)
+    expect(validarTema({ acento: '#fafafa' }).errores.acento).toMatch(/no se distingue del fondo/)
+  })
+
+  it('la barra lateral calcula el texto y deriva el hover y el borde', () => {
+    const el = limpio()
+    aplicarTema({ barraLateralFondo: '#0f172a' }, el)
+    expect(el.style.getPropertyValue('--sidebar')).toBe('#0f172a')
+    expect(el.style.getPropertyValue('--sidebar-foreground')).toBe('#ffffff')
+    expect(el.style.getPropertyValue('--sidebar-accent-foreground')).toBe('#ffffff')
+    // Mezcla con el texto: más claro que el fondo, y el borde más que el hover.
+    expect(luminancia(el.style.getPropertyValue('--sidebar-accent'))).toBeGreaterThan(luminancia('#0f172a'))
+    expect(luminancia(el.style.getPropertyValue('--sidebar-border'))).toBeGreaterThan(luminancia(el.style.getPropertyValue('--sidebar-accent')))
+  })
+
+  it('el éxito conserva el texto blanco mientras llegue a 3:1 y se rechaza si se pierde en un modo', () => {
+    const el = limpio()
+    aplicarTema({ exito: '#059669' }, el)
+    expect(el.style.getPropertyValue('--libra-exito-texto')).toBe('#ffffff')
+    expect(validarTema({ exito: '#bbf7d0' }).errores.exito).toBeTruthy()
+    expect(validarTema({ exito: '#052e16' }).errores.exito).toBeTruthy()
+  })
+
+  it('el final de la franja del POS tiene que leerse con el texto del inicio', () => {
+    expect(validarTema({ posEncabezadoInicio: '#1e3a8a', posEncabezadoFin: '#fde68a' }).errores.posEncabezadoFin).toMatch(/texto de la franja/)
+    expect(validarTema({ posEncabezadoInicio: '#1e3a8a', posEncabezadoFin: '#7c3aed' }).errores).toEqual({})
+    expect(validarTema({ posEncabezadoFin: '#fde68a' }).errores.posEncabezadoFin).toMatch(/texto de la franja/)
+  })
+
+  it('aplicar un tema vacío limpia TODAS las variables, incluidas las derivadas', () => {
+    const el = limpio()
+    aplicarTema({ acento: '#0f766e', barraLateralFondo: '#0f172a', exito: '#047857', posEncabezadoInicio: '#1e3a8a' }, el)
+    expect(el.getAttribute('style')).toBeTruthy()
+    aplicarTema({}, el)
+    expect((el.getAttribute('style') ?? '').trim()).toBe('')
   })
 })

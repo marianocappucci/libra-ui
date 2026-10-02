@@ -16,9 +16,9 @@
 // `topbar: false`; la opcion se elimina en vez de invertir su default para no
 // dejar una variante que nadie usa -- si la barra vuelve alguna vez, vuelve
 // para los seis productos a la vez.
-import { useState, type ReactNode, type ComponentType } from 'react'
+import { useEffect, useState, type ReactNode, type ComponentType } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { KeyRound, LogOut, UserRound } from 'lucide-react'
+import { Check, KeyRound, LogOut, Monitor, Moon, Sun, UserRound } from 'lucide-react'
 import { useAuth as useAuthDefault } from './AuthContext'
 import {
   Sidebar,
@@ -47,6 +47,7 @@ import {
 import { CambiarPassword } from './CambiarPassword'
 import type { ProductLogo } from './branding'
 import { cn } from './utils'
+import { fijarModo, leerModo, suscribirseAlModo, type Modo } from './modo'
 
 export type NavChild<TUser> = {
   to: string
@@ -80,6 +81,31 @@ function initials(name: string): string {
     .slice(0, 2)
     .join('')
     .toUpperCase()
+}
+
+const MODOS_EN_MENU: { modo: Modo; texto: string; Icono: ComponentType }[] = [
+  { modo: 'claro', texto: 'Claro', Icono: Sun },
+  { modo: 'oscuro', texto: 'Oscuro', Icono: Moon },
+  { modo: 'sistema', texto: 'Igual que el sistema', Icono: Monitor },
+]
+
+/** El selector de modo claro / oscuro (ADR-009): una preferencia de quien mira, guardada en el navegador. */
+function SelectorDeModo() {
+  const [modo, setModo] = useState<Modo>(leerModo)
+  useEffect(() => suscribirseAlModo(setModo), [])
+  return (
+    <>
+      <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">Modo de pantalla</DropdownMenuLabel>
+      {MODOS_EN_MENU.map(({ modo: m, texto, Icono }) => (
+        <DropdownMenuItem key={m} onSelect={() => fijarModo(m)} aria-checked={modo === m} role="menuitemradio">
+          <Icono />
+          {texto}
+          {modo === m && <Check className="ml-auto" />}
+        </DropdownMenuItem>
+      ))}
+      <DropdownMenuSeparator />
+    </>
+  )
 }
 
 export function createLayout<TUser = { role?: string; name?: string }>({
@@ -352,6 +378,7 @@ export function createLayout<TUser = { role?: string; name?: string }>({
                   <NavLink to={accountTo}><UserRound />Mi cuenta</NavLink>
                 </DropdownMenuItem>
               )}
+              <SelectorDeModo />
               <DropdownMenuItem onSelect={() => setCambiandoPassword(true)}>
                 <KeyRound />Cambiar contraseña
               </DropdownMenuItem>

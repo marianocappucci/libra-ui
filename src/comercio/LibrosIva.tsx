@@ -157,7 +157,7 @@ export function LibrosIva() {
       accessorKey: 'iva_pct', header: () => <div className="text-right">IVA %</div>, size: 80, minSize: 70,
       cell: ({ row }) => <div className="truncate text-right text-muted-foreground">{alicuota(row.original)}%</div>,
     },
-    { accessorKey: 'iva_monto', header: () => <div className="text-right">IVA $</div>, size: 100, minSize: 85, cell: ({ row }) => <div className="truncate text-right font-semibold text-emerald-600 dark:text-emerald-400">{formatCurrency(row.original.iva_monto)}</div> },
+    { accessorKey: 'iva_monto', header: () => <div className="text-right">IVA $</div>, size: 100, minSize: 85, cell: ({ row }) => <div className="truncate text-right font-semibold text-exito">{formatCurrency(row.original.iva_monto)}</div> },
     { accessorKey: 'total', header: () => <div className="text-right">Total</div>, size: 110, minSize: 90, cell: ({ row }) => <div className="truncate text-right font-semibold">{formatCurrency(row.original.total)}</div> },
   ], [])
 
@@ -232,11 +232,11 @@ export function LibrosIva() {
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <Card><CardHeader><CardDescription>Comprobantes</CardDescription><CardTitle className="text-2xl">{data.resumen_c.cbtes}</CardTitle></CardHeader></Card>
               <Card><CardHeader><CardDescription>Neto gravado</CardDescription><CardTitle className="text-2xl">{formatCurrency(data.resumen_c.neto)}</CardTitle></CardHeader></Card>
-              <Card><CardHeader><CardDescription>IVA crédito fiscal</CardDescription><CardTitle className="text-2xl text-emerald-600 dark:text-emerald-400">{formatCurrency(data.resumen_c.iva)}</CardTitle></CardHeader></Card>
+              <Card><CardHeader><CardDescription>IVA crédito fiscal</CardDescription><CardTitle className="text-2xl text-exito">{formatCurrency(data.resumen_c.iva)}</CardTitle></CardHeader></Card>
               <Card><CardHeader><CardDescription>Total</CardDescription><CardTitle className="text-2xl">{formatCurrency(data.resumen_c.total)}</CardTitle></CardHeader></Card>
             </div>
 
-            <ResumenPorTasa resumen={data.resumen_c} ivaColorClass="text-emerald-600 dark:text-emerald-400" />
+            <ResumenPorTasa resumen={data.resumen_c} ivaColorClass="text-exito" />
 
             <Card>
               <CardHeader className="flex items-center justify-between space-y-0">

@@ -147,7 +147,7 @@ export function Tesoreria() {
       header: () => <div className="text-right">Monto</div>,
       cell: ({ row }) => {
         const positivo = row.original.tipo === 'ingreso' || row.original.tipo === 'transferencia_entrada'
-        return <div className={`text-right font-semibold ${positivo ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>{positivo ? '+' : '−'} {formatCurrency(row.original.monto)}</div>
+        return <div className={`text-right font-semibold ${positivo ? 'text-exito' : 'text-destructive'}`}>{positivo ? '+' : '−'} {formatCurrency(row.original.monto)}</div>
       },
     },
   ], [])

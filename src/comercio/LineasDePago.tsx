@@ -187,7 +187,7 @@ export function LineasDePago({
         </Button>
         <span className="text-sm">
           {Math.abs(falta) < 0.005 ? (
-            <span className="font-semibold text-emerald-600 dark:text-emerald-400">Pago exacto</span>
+            <span className="font-semibold text-exito">Pago exacto</span>
           ) : falta > 0 ? (
             <span className="font-semibold text-destructive">Falta {formatCurrency(falta)}</span>
           ) : (

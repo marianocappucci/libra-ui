@@ -233,7 +233,7 @@ export function ResguardoExternoCard({ basePath = '/api/config', navegar = irA }
   if (vinculo) {
     const alDia = subida?.al_dia === true
     return (
-      <Card className={`sm:col-span-2 ${!subida ? '' : alDia ? 'border-emerald-500/40' : 'border-amber-500/60'}`}>
+      <Card className={`sm:col-span-2 ${!subida ? '' : alDia ? 'border-exito/40' : 'border-amber-500/60'}`}>
         <CardHeader>
           <CardTitle className={`flex items-center gap-2 text-base ${subida && !alDia ? 'text-amber-600 dark:text-amber-400' : ''}`}>
             <Cloud className="size-4" />
@@ -277,7 +277,7 @@ export function ResguardoExternoCard({ basePath = '/api/config', navegar = irA }
 
   if (subida) {
     return (
-      <Card className={`sm:col-span-2 ${subida.al_dia ? 'border-emerald-500/40' : 'border-amber-500/60'}`}>
+      <Card className={`sm:col-span-2 ${subida.al_dia ? 'border-exito/40' : 'border-amber-500/60'}`}>
         <CardHeader>
           <CardTitle className={`flex items-center gap-2 text-base ${subida.al_dia ? '' : 'text-amber-600 dark:text-amber-400'}`}>
             <Database className="size-4" />
