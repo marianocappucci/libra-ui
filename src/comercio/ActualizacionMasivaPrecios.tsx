@@ -102,7 +102,7 @@ export function ActualizacionMasivaPrecios() {
         }
         return (
           <div className="text-right">
-            {formatCurrency(l.venta_actual)} → <span className="font-semibold text-emerald-600 dark:text-emerald-400">{formatCurrency(l.venta_nueva)}</span>
+            {formatCurrency(l.venta_actual)} → <span className="font-semibold text-exito">{formatCurrency(l.venta_nueva)}</span>
           </div>
         )
       },

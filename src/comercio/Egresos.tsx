@@ -212,8 +212,8 @@ export function Egresos() {
               <span className="shrink-0 rounded-lg bg-muted p-2 text-muted-foreground"><ArrowUpCircle /></span>
             </CardContent></Card>
             <Card><CardContent className="flex items-start justify-between gap-3">
-              <div className="min-w-0 [&_p]:truncate"><CardDescription>Pagado</CardDescription><p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(resumen.pagado)}</p></div>
-              <span className="shrink-0 rounded-lg bg-emerald-500/10 p-2 text-emerald-600 dark:text-emerald-400"><CheckCircle2 /></span>
+              <div className="min-w-0 [&_p]:truncate"><CardDescription>Pagado</CardDescription><p className="text-2xl font-bold text-exito">{formatCurrency(resumen.pagado)}</p></div>
+              <span className="shrink-0 rounded-lg bg-exito/10 p-2 text-exito"><CheckCircle2 /></span>
             </CardContent></Card>
             <Card><CardContent className="flex items-start justify-between gap-3">
               <div className="min-w-0 [&_p]:truncate"><CardDescription>Pendiente / Parcial</CardDescription><p className="text-2xl font-bold text-destructive">{formatCurrency(resumen.pendiente)}</p></div>

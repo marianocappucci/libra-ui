@@ -307,7 +307,7 @@ export function Ventas({
       minSize: 100,
       cell: ({ row }) => row.original.factura_display
         ? rutaDeFactura
-          ? <Link to={rutaDeFactura(row.original.factura_id as number)} onClick={(e) => e.stopPropagation()} className="inline-flex w-full items-center gap-1 truncate text-sm font-medium text-emerald-600 hover:underline dark:text-emerald-400" title={row.original.factura_display}><ReceiptText className="size-3.5 shrink-0" /><span className="truncate">{row.original.factura_display}</span></Link>
+          ? <Link to={rutaDeFactura(row.original.factura_id as number)} onClick={(e) => e.stopPropagation()} className="inline-flex w-full items-center gap-1 truncate text-sm font-medium text-exito hover:underline" title={row.original.factura_display}><ReceiptText className="size-3.5 shrink-0" /><span className="truncate">{row.original.factura_display}</span></Link>
           : <span className="inline-flex w-full items-center gap-1 truncate text-sm font-medium" title={row.original.factura_display}><ReceiptText className="size-3.5 shrink-0" /><span className="truncate">{row.original.factura_display}</span></span>
         : row.original.estado !== 'anulada'
           ? <BadgeEstado tono="atencion">Sin facturar</BadgeEstado>

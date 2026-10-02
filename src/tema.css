@@ -36,3 +36,27 @@
 [data-sidebar="menu-sub-button"][data-active="true"] svg {
   color: var(--libra-menu-activo-texto);
 }
+
+/* ---- Colores ampliados (ADR-009, `v0.97.0`) ----------------------------------------------------------------------------------- */
+
+/* Éxito y encabezado del POS tienen defecto acá. El acento (`--primary`) y la barra lateral (`--sidebar`) NO: su defecto es el de cada
+   producto (lo declara su `index.css`, con su versión clara y oscura) y `aplicarTema` sólo los pisa cuando se elige uno. */
+:root {
+  --libra-exito: #059669;
+  --libra-exito-texto: #ffffff;
+  --libra-pos-encabezado-inicio: #0284c7;
+  --libra-pos-encabezado-fin: #4f46e5;
+  --libra-pos-encabezado-texto: #ffffff;
+}
+
+/* `bg-exito`, `text-exito`, `border-exito/40`, `text-exito-foreground`: el éxito como un color más de Tailwind, no un verde fijo. */
+@theme inline {
+  --color-exito: var(--libra-exito);
+  --color-exito-foreground: var(--libra-exito-texto);
+}
+
+/* La franja del encabezado del POS. */
+.libra-pos-encabezado {
+  background-image: linear-gradient(to right, var(--libra-pos-encabezado-inicio), var(--libra-pos-encabezado-fin));
+  color: var(--libra-pos-encabezado-texto);
+}

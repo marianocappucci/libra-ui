@@ -1018,7 +1018,7 @@ export function Vencimientos({ puedeMover = true, puedeMarcar = true }: { puedeM
         </div>
       )}
 
-      {aviso && <p role="status" className="rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm">{aviso.texto}</p>}
+      {aviso && <p role="status" className="rounded-md border border-exito/40 bg-exito/10 p-3 text-sm">{aviso.texto}</p>}
 
       <ProductosQueVencen
         productos={productos} errorDeProductos={errorDeProductos} puedeMarcar={puedeMarcar} version={versionDeMarcas}

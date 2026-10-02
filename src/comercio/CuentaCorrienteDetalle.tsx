@@ -230,7 +230,7 @@ export function CuentaCorrienteDetalle({ esAdmin = false, conRecibos = false }: 
       accessorKey: 'monto',
       header: () => <div className="text-right">Monto</div>,
       cell: ({ row }) => (
-        <div className={`text-right font-semibold ${row.original.tipo === 'debito' ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-400'}`}>
+        <div className={`text-right font-semibold ${row.original.tipo === 'debito' ? 'text-destructive' : 'text-exito'}`}>
           {row.original.tipo === 'debito' ? '+' : '−'} {formatCurrency(row.original.monto)}
         </div>
       ),
@@ -277,7 +277,7 @@ export function CuentaCorrienteDetalle({ esAdmin = false, conRecibos = false }: 
           <div className="flex flex-wrap gap-2">
             <Dialog open={pagoOpen} onOpenChange={setPagoOpen}>
               <DialogTrigger asChild>
-                <Button size="sm" className="bg-emerald-600 text-white hover:bg-emerald-600/90" onClick={abrirPago}>
+                <Button size="sm" className="bg-exito text-exito-foreground hover:bg-exito/90" onClick={abrirPago}>
                   <CircleDollarSign />Registrar pago
                 </Button>
               </DialogTrigger>
@@ -367,8 +367,8 @@ export function CuentaCorrienteDetalle({ esAdmin = false, conRecibos = false }: 
         <>
           <div className="grid gap-4 sm:grid-cols-3">
             <Card><CardHeader><CardDescription>Total cargado</CardDescription><CardTitle className="text-xl text-destructive">{formatCurrency(totales.cargado)}</CardTitle></CardHeader></Card>
-            <Card><CardHeader><CardDescription>Total abonado</CardDescription><CardTitle className="text-xl text-emerald-600 dark:text-emerald-400">{formatCurrency(totales.abonado)}</CardTitle></CardHeader></Card>
-            <Card><CardHeader><CardDescription>Saldo actual</CardDescription><CardTitle className={saldo > 0 ? 'text-xl text-amber-600 dark:text-amber-400' : 'text-xl text-emerald-600 dark:text-emerald-400'}>{formatCurrency(saldo)}</CardTitle></CardHeader></Card>
+            <Card><CardHeader><CardDescription>Total abonado</CardDescription><CardTitle className="text-xl text-exito">{formatCurrency(totales.abonado)}</CardTitle></CardHeader></Card>
+            <Card><CardHeader><CardDescription>Saldo actual</CardDescription><CardTitle className={saldo > 0 ? 'text-xl text-amber-600 dark:text-amber-400' : 'text-xl text-exito'}>{formatCurrency(saldo)}</CardTitle></CardHeader></Card>
           </div>
 
           <Card>

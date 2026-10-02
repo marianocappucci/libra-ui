@@ -211,7 +211,7 @@ export function Caja() {
           <div className={
             row.original.anulado
               ? 'text-right font-semibold text-muted-foreground line-through'
-              : `text-right font-semibold ${row.original.tipo === 'ingreso' ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`
+              : `text-right font-semibold ${row.original.tipo === 'ingreso' ? 'text-exito' : 'text-destructive'}`
           }>
             {row.original.tipo === 'ingreso' ? '+' : '−'} {formatoMoneda(row.original.monto)}
           </div>
@@ -301,10 +301,10 @@ export function Caja() {
 
       {resumen && (
         <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
-          <Card><CardContent className="flex items-start justify-between gap-3"><div className="min-w-0 [&_p]:truncate"><CardDescription>Saldo actual</CardDescription><p className={resumen.saldo_total >= 0 ? 'text-2xl font-bold text-emerald-600 dark:text-emerald-400' : 'text-2xl font-bold text-destructive'}>{formatoMoneda(resumen.saldo_total)}</p></div><span className="shrink-0 rounded-lg bg-primary/10 p-2 text-primary"><PiggyBank /></span></CardContent></Card>
-          <Card><CardContent className="flex items-start justify-between gap-3"><div className="min-w-0 [&_p]:truncate"><CardDescription>Ingresos del período</CardDescription><p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">+ {formatoMoneda(resumen.ingresos)}</p></div><span className="shrink-0 rounded-lg bg-emerald-500/10 p-2 text-emerald-600 dark:text-emerald-400"><ArrowDownCircle /></span></CardContent></Card>
+          <Card><CardContent className="flex items-start justify-between gap-3"><div className="min-w-0 [&_p]:truncate"><CardDescription>Saldo actual</CardDescription><p className={resumen.saldo_total >= 0 ? 'text-2xl font-bold text-exito' : 'text-2xl font-bold text-destructive'}>{formatoMoneda(resumen.saldo_total)}</p></div><span className="shrink-0 rounded-lg bg-primary/10 p-2 text-primary"><PiggyBank /></span></CardContent></Card>
+          <Card><CardContent className="flex items-start justify-between gap-3"><div className="min-w-0 [&_p]:truncate"><CardDescription>Ingresos del período</CardDescription><p className="text-2xl font-bold text-exito">+ {formatoMoneda(resumen.ingresos)}</p></div><span className="shrink-0 rounded-lg bg-exito/10 p-2 text-exito"><ArrowDownCircle /></span></CardContent></Card>
           <Card><CardContent className="flex items-start justify-between gap-3"><div className="min-w-0 [&_p]:truncate"><CardDescription>Egresos del período</CardDescription><p className="text-2xl font-bold text-destructive">− {formatoMoneda(resumen.egresos)}</p></div><span className="shrink-0 rounded-lg bg-destructive/10 p-2 text-destructive"><ArrowUpCircle /></span></CardContent></Card>
-          <Card><CardContent className="flex items-start justify-between gap-3"><div className="min-w-0 [&_p]:truncate"><CardDescription>Resultado del período</CardDescription><p className={resumen.saldo_periodo >= 0 ? 'text-2xl font-bold text-emerald-600 dark:text-emerald-400' : 'text-2xl font-bold text-destructive'}>{resumen.saldo_periodo >= 0 ? '+' : ''}{formatoMoneda(resumen.saldo_periodo)}</p></div><span className="shrink-0 rounded-lg bg-primary/10 p-2 text-primary"><Wallet /></span></CardContent></Card>
+          <Card><CardContent className="flex items-start justify-between gap-3"><div className="min-w-0 [&_p]:truncate"><CardDescription>Resultado del período</CardDescription><p className={resumen.saldo_periodo >= 0 ? 'text-2xl font-bold text-exito' : 'text-2xl font-bold text-destructive'}>{resumen.saldo_periodo >= 0 ? '+' : ''}{formatoMoneda(resumen.saldo_periodo)}</p></div><span className="shrink-0 rounded-lg bg-primary/10 p-2 text-primary"><Wallet /></span></CardContent></Card>
         </div>
       )}
 

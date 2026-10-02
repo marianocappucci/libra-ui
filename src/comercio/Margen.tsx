@@ -47,7 +47,7 @@ function etiquetaDePeriodo(periodo: string, agrupacion: MargenAgrupacion): strin
 }
 
 function colorDelMargen(c: MargenCifras): string {
-  return c.margen < 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-400'
+  return c.margen < 0 ? 'text-destructive' : 'text-exito'
 }
 
 /** Lo que falta saber de un costo, o `null` si es el de la venta. */
@@ -187,7 +187,7 @@ export function Margen() {
                   <p className={`text-2xl font-bold ${colorDelMargen(data.resumen)}`}>{moneda(data.resumen.margen)}</p>
                   <CardDescription>{porcentaje(data.resumen.margen_pct)} sobre el ingreso</CardDescription>
                 </div>
-                <span className="shrink-0 rounded-lg bg-emerald-500/10 p-2 text-emerald-600 dark:text-emerald-400"><TrendingUp /></span>
+                <span className="shrink-0 rounded-lg bg-exito/10 p-2 text-exito"><TrendingUp /></span>
               </CardContent>
             </Card>
             <Card>

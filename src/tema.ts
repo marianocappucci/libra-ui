@@ -9,7 +9,18 @@
 // elegido NO se elige: se calcula (`textoSobre`) para que el contraste cumpla WCAG AA.
 
 /** Las claves de los colores editables. */
-export const CLAVES_DE_TEMA = ['menuActivoFondo', 'menuActivoBorde'] as const
+
+import { iniciarModo } from './modo'
+
+export const CLAVES_DE_TEMA = [
+  'acento',
+  'barraLateralFondo',
+  'exito',
+  'posEncabezadoInicio',
+  'posEncabezadoFin',
+  'menuActivoFondo',
+  'menuActivoBorde',
+] as const
 export type ClaveDeTema = (typeof CLAVES_DE_TEMA)[number]
 
 /** Un valor por clave, en `#rrggbb`. Parcial: lo que falta usa el defecto. */
@@ -21,15 +32,78 @@ export type DefinicionDeColor = {
   etiqueta: string
   /** Qué cambia, en una línea. */
   ayuda: string
-  /** La variable CSS que se fija (`tema.css` declara su defecto). */
+  /** La variable CSS que se fija (`tema.css` declara su defecto, salvo si `defectoPorProducto`). */
   variable: string
-  /** El valor de siempre, `#rrggbb` en minúsculas. */
+  /** Otras variables que reciben el mismo color (p. ej. el anillo de foco sigue al acento). */
+  tambien?: readonly string[]
+  /** El valor de siempre, `#rrggbb` en minúsculas. Si `defectoPorProducto`, es sólo una referencia para la vista previa. */
   porDefecto: string
+  /** El «valor de siempre» depende del producto (lo declara su `index.css`): mientras no se elija uno, no se toca la variable. */
+  defectoPorProducto?: boolean
   /** Si el color lleva texto encima: la variable CSS donde se guarda el texto calculado y el piso de contraste. */
-  textoSobre?: { variable: string; contrasteMinimo: number }
+  textoSobre?: {
+    variable: string
+    contrasteMinimo: number
+    /** Otras variables que reciben el mismo texto calculado. */
+    tambien?: readonly string[]
+    /** Usa texto blanco mientras llegue al mínimo (botones y franjas de color: así el defecto de siempre sigue en blanco). */
+    prefiereBlanco?: boolean
+  }
+  /** Si el color es de superficie (barra lateral): variables derivadas (hover, borde) que se mezclan con el texto calculado. */
+  derivadas?: readonly { variable: string; mezcla: number }[]
+  /** Si el color se usa como texto o ícono sobre la página: debe distinguirse del fondo claro Y del oscuro (contraste mínimo). */
+  legibleSobrePagina?: number
 }
 
 export const COLORES_DE_TEMA: readonly DefinicionDeColor[] = [
+  {
+    clave: 'acento',
+    etiqueta: 'Acento principal',
+    ayuda: 'Botones principales, enlaces destacados y el anillo de foco. Vale igual en modo claro y oscuro.',
+    variable: '--primary',
+    tambien: ['--ring', '--sidebar-primary'],
+    porDefecto: '#171717',
+    defectoPorProducto: true,
+    textoSobre: { variable: '--primary-foreground', tambien: ['--sidebar-primary-foreground'], contrasteMinimo: 4.5 },
+    legibleSobrePagina: 3,
+  },
+  {
+    clave: 'barraLateralFondo',
+    etiqueta: 'Barra lateral: fondo',
+    ayuda: 'El fondo del menú lateral. El texto, los íconos, el borde y el color al pasar el mouse se calculan solos.',
+    variable: '--sidebar',
+    porDefecto: '#fafafa',
+    defectoPorProducto: true,
+    textoSobre: { variable: '--sidebar-foreground', tambien: ['--sidebar-accent-foreground'], contrasteMinimo: 4.5 },
+    derivadas: [
+      { variable: '--sidebar-accent', mezcla: 0.08 },
+      { variable: '--sidebar-border', mezcla: 0.14 },
+    ],
+  },
+  {
+    clave: 'exito',
+    etiqueta: 'Color de éxito',
+    ayuda: 'Montos a favor, estados «cobrada» o «pagada» y el botón de confirmar. Tiene que verse sobre fondo claro y oscuro.',
+    variable: '--libra-exito',
+    porDefecto: '#059669',
+    textoSobre: { variable: '--libra-exito-texto', contrasteMinimo: 3, prefiereBlanco: true },
+    legibleSobrePagina: 3,
+  },
+  {
+    clave: 'posEncabezadoInicio',
+    etiqueta: 'Encabezado del POS: inicio',
+    ayuda: 'El color de la izquierda de la franja superior del punto de venta. Iguales inicio y fin dan un color liso.',
+    variable: '--libra-pos-encabezado-inicio',
+    porDefecto: '#0284c7',
+    textoSobre: { variable: '--libra-pos-encabezado-texto', contrasteMinimo: 3, prefiereBlanco: true },
+  },
+  {
+    clave: 'posEncabezadoFin',
+    etiqueta: 'Encabezado del POS: fin',
+    ayuda: 'El color de la derecha de esa franja.',
+    variable: '--libra-pos-encabezado-fin',
+    porDefecto: '#4f46e5',
+  },
   {
     clave: 'menuActivoFondo',
     etiqueta: 'Ítem activo del menú: fondo',
@@ -79,12 +153,27 @@ export function contraste(a: string, b: string): number {
   return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
 }
 
+const FONDO_CLARO = '#ffffff'
+const FONDO_OSCURO = '#0a0a0a'
 const TEXTO_OSCURO = '#0f172a'
 const TEXTO_CLARO = '#ffffff'
 
 /** El texto (oscuro o claro) que mejor se lee sobre ese fondo. */
 export function textoSobre(fondo: string): string {
   return contraste(fondo, TEXTO_OSCURO) >= contraste(fondo, TEXTO_CLARO) ? TEXTO_OSCURO : TEXTO_CLARO
+}
+
+/** Mezcla `a` con `b` en la proporción `t` de `b` (0 = a, 1 = b), en `#rrggbb`. */
+export function mezclar(a: string, b: string, t: number): string {
+  const x = normalizarHex(a)
+  const y = normalizarHex(b)
+  if (!x || !y) throw new Error(`no es un color: ${a} / ${b}`)
+  const c = (i: number) => Math.round(parseInt(x.slice(i, i + 2), 16) * (1 - t) + parseInt(y.slice(i, i + 2), 16) * t)
+  return `#${[1, 3, 5].map((i) => c(i).toString(16).padStart(2, '0')).join('')}`
+}
+
+function textoPara(def: DefinicionDeColor, fondo: string): string {
+  return def.textoSobre?.prefiereBlanco && contraste(fondo, TEXTO_CLARO) >= def.textoSobre.contrasteMinimo ? TEXTO_CLARO : textoSobre(fondo)
 }
 
 export type ResultadoDeTema = {
@@ -112,13 +201,30 @@ export function validarTema(crudo: unknown): ResultadoDeTema {
       continue
     }
     if (def.textoSobre) {
-      const mejor = contraste(hex, textoSobre(hex))
+      const mejor = contraste(hex, textoPara(def, hex))
       if (mejor < def.textoSobre.contrasteMinimo) {
         errores[clave] = `ningún texto se lee sobre ese fondo (contraste ${mejor.toFixed(1)}, mínimo ${def.textoSobre.contrasteMinimo})`
         continue
       }
     }
+    if (def.legibleSobrePagina) {
+      const peor = Math.min(contraste(hex, FONDO_CLARO), contraste(hex, FONDO_OSCURO))
+      if (peor < def.legibleSobrePagina) {
+        errores[clave] = `no se distingue del fondo de la página (contraste ${peor.toFixed(1)}, mínimo ${def.legibleSobrePagina}, en claro y en oscuro)`
+        continue
+      }
+    }
     tema[def.clave] = hex
+  }
+  // La franja del POS lleva UN texto, calculado sobre el inicio: el fin tiene que leerse con ese mismo texto.
+  if (tema.posEncabezadoFin) {
+    const inicio = COLORES_DE_TEMA.find((d) => d.clave === 'posEncabezadoInicio')!
+    const texto = tema.posEncabezadoInicio ? textoPara(inicio, tema.posEncabezadoInicio) : TEXTO_CLARO
+    const c = contraste(tema.posEncabezadoFin, texto)
+    if (c < (inicio.textoSobre?.contrasteMinimo ?? 3)) {
+      errores.posEncabezadoFin = `el texto de la franja no se lee sobre este final (contraste ${c.toFixed(1)}); probá un color más cercano al inicio`
+      delete tema.posEncabezadoFin
+    }
   }
   return { tema, errores }
 }
@@ -128,14 +234,18 @@ export function validarTema(crudo: unknown): ResultadoDeTema {
 export function aplicarTema(tema: Tema, elemento: HTMLElement = document.documentElement): void {
   const { tema: limpio } = validarTema(tema)
   for (const def of COLORES_DE_TEMA) {
+    const variables = [def.variable, ...(def.tambien ?? [])]
+    const deTexto = def.textoSobre ? [def.textoSobre.variable, ...(def.textoSobre.tambien ?? [])] : []
+    const propias = [...variables, ...deTexto, ...(def.derivadas ?? []).map((d) => d.variable)]
     const valor = limpio[def.clave]
-    if (valor) {
-      elemento.style.setProperty(def.variable, valor)
-      if (def.textoSobre) elemento.style.setProperty(def.textoSobre.variable, textoSobre(valor))
-    } else {
-      elemento.style.removeProperty(def.variable)
-      if (def.textoSobre) elemento.style.removeProperty(def.textoSobre.variable)
+    if (!valor) {
+      for (const v of propias) elemento.style.removeProperty(v)
+      continue
     }
+    for (const v of variables) elemento.style.setProperty(v, valor)
+    const texto = textoPara(def, valor)
+    for (const v of deTexto) elemento.style.setProperty(v, texto)
+    for (const d of def.derivadas ?? []) elemento.style.setProperty(d.variable, mezclar(valor, texto, d.mezcla))
   }
 }
 
@@ -176,6 +286,7 @@ export async function cargarTema(
   { url = '/api/tema', tiempoMs = 3000, elemento }: { url?: string; tiempoMs?: number; elemento?: HTMLElement } = {},
 ): Promise<Tema> {
   if (typeof window === 'undefined') return {}
+  iniciarModo()
   const guardado = leerCache()
   aplicarTema(guardado, elemento)
 

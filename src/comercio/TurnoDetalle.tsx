@@ -18,7 +18,7 @@ function DiferenciaBadge({ esperado, declarado }: { esperado: number | null; dec
   if (esperado === null || declarado === null) return <span className="text-muted-foreground">—</span>
   const dif = Math.round((declarado - esperado) * 100) / 100
   if (dif > 0.01) {
-    return <span className="inline-flex items-center gap-1 font-medium text-emerald-600 dark:text-emerald-400"><ArrowUpCircle className="size-4" />+{formatoMoneda(dif)}</span>
+    return <span className="inline-flex items-center gap-1 font-medium text-exito"><ArrowUpCircle className="size-4" />+{formatoMoneda(dif)}</span>
   }
   if (dif < -0.01) {
     return <span className="inline-flex items-center gap-1 font-medium text-destructive"><ArrowDownCircle className="size-4" />−{formatoMoneda(Math.abs(dif))}</span>

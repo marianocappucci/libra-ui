@@ -308,7 +308,7 @@ export function Stock({
       minSize: 95,
       cell: ({ row }) => {
         const p = row.original
-        const cls = p.stock_actual <= 0 ? 'text-destructive' : (p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo) ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'
+        const cls = p.stock_actual <= 0 ? 'text-destructive' : (p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo) ? 'text-amber-600 dark:text-amber-400' : 'text-exito'
         return <div className={`truncate text-center text-base font-bold ${cls}`}>{formatEntero(p.stock_actual)}</div>
       },
     },
@@ -359,7 +359,7 @@ export function Stock({
       accessorKey: 'cantidad',
       header: 'Cantidad',
       cell: ({ row }) => (
-        <span className={row.original.cantidad >= 0 ? 'font-semibold text-emerald-600 dark:text-emerald-400' : 'font-semibold text-destructive'}>
+        <span className={row.original.cantidad >= 0 ? 'font-semibold text-exito' : 'font-semibold text-destructive'}>
           {row.original.cantidad >= 0 ? '+' : ''}{formatEntero(row.original.cantidad)}
         </span>
       ),
@@ -439,7 +439,7 @@ export function Stock({
           <div className="grid gap-4">
             <div className="flex gap-4">
               <div className="text-center">
-                <div className={`text-3xl font-bold ${stockBase <= 0 ? 'text-destructive' : (editing?.stock_minimo ?? 0) > 0 && stockBase <= (editing?.stock_minimo ?? 0) ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                <div className={`text-3xl font-bold ${stockBase <= 0 ? 'text-destructive' : (editing?.stock_minimo ?? 0) > 0 && stockBase <= (editing?.stock_minimo ?? 0) ? 'text-amber-600 dark:text-amber-400' : 'text-exito'}`}>
                   {formatEntero(stockBase)}
                 </div>
                 <div className="text-sm text-muted-foreground">Stock actual ({editing?.unidad})</div>
@@ -514,7 +514,7 @@ export function Stock({
             </div>
             {formError && <p className="text-sm text-destructive">{formError}</p>}
             {resultado !== null && (
-              <p className={`text-sm ${resultado < 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-400'}`}>
+              <p className={`text-sm ${resultado < 0 ? 'text-destructive' : 'text-exito'}`}>
                 Stock resultante: {resultado.toFixed(3)} {editing?.unidad}
               </p>
             )}

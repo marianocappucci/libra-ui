@@ -103,9 +103,9 @@ export function Reportes() {
               <CardContent className="flex items-start justify-between gap-3">
                 <div className="min-w-0 [&_p]:truncate">
                   <CardDescription>Total vendido</CardDescription>
-                  <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(data.resumen.ventas_total)}</p>
+                  <p className="text-2xl font-bold text-exito">{formatCurrency(data.resumen.ventas_total)}</p>
                 </div>
-                <span className="shrink-0 rounded-lg bg-emerald-500/10 p-2 text-emerald-600 dark:text-emerald-400"><DollarSign /></span>
+                <span className="shrink-0 rounded-lg bg-exito/10 p-2 text-exito"><DollarSign /></span>
               </CardContent>
             </Card>
             <Card>
@@ -171,7 +171,7 @@ export function Reportes() {
 
             <Card>
               <CardHeader className="flex items-center justify-between space-y-0">
-                <CardTitle className="flex items-center gap-2 text-base"><PieChart className="size-4 text-emerald-600 dark:text-emerald-400" />Medios de pago</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-base"><PieChart className="size-4 text-exito" />Medios de pago</CardTitle>
                 <Button asChild size="sm" variant="outline"><a href={`/reportes/export/medios?desde=${desde}&hasta=${hasta}`}><Download />CSV</a></Button>
               </CardHeader>
               <CardContent>
@@ -191,7 +191,7 @@ export function Reportes() {
                               <span className="font-semibold">{formatCurrency(m.total)}</span>
                             </div>
                             <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                              <div className="h-full rounded-full bg-emerald-500" style={{ width: `${p}%` }} />
+                              <div className="h-full rounded-full bg-exito" style={{ width: `${p}%` }} />
                             </div>
                             <span className="text-xs text-muted-foreground">{m.operaciones} operaciones · {p}%</span>
                           </li>
@@ -258,7 +258,7 @@ export function Reportes() {
                           <tr key={c.tipo} className="border-b last:border-0">
                             <td className="p-3 capitalize">{c.tipo}</td>
                             <td className="p-3 text-right">{c.cantidad}</td>
-                            <td className={`p-3 text-right font-semibold ${c.tipo === 'ingreso' ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>{formatCurrency(c.total)}</td>
+                            <td className={`p-3 text-right font-semibold ${c.tipo === 'ingreso' ? 'text-exito' : 'text-destructive'}`}>{formatCurrency(c.total)}</td>
                           </tr>
                         ))}
                       </tbody>

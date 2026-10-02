@@ -401,7 +401,7 @@ export function ListaPrecioDetalle({ conQuiebres = false, conVigencias = false, 
       cell: ({ row }) => {
         const precio = Number(precios[row.original.id]) || row.original.precio_venta
         const label = margenPct(precio, row.original.precio_costo)
-        const cls = label === '—' ? 'text-muted-foreground' : precio >= row.original.precio_costo ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'
+        const cls = label === '—' ? 'text-muted-foreground' : precio >= row.original.precio_costo ? 'text-exito' : 'text-destructive'
         return <div className={`truncate text-right text-sm ${cls}`}>{label}</div>
       },
     },

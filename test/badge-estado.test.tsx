@@ -54,8 +54,12 @@ describe('el criterio visual de la pastilla de estado', () => {
   // nuevo entra al guard solo, sin que nadie se acuerde de agregarlo.
   const tonos = Object.keys(TONOS_ESTADO) as TonoEstado[]
 
-  it.each(tonos)('🔴 «%s» — la fuente, el borde y el fondo son el mismo color', (tono) => {
+  it.each(tonos.filter((t) => t !== 'ok'))('🔴 «%s» — la fuente, el borde y el fondo son el mismo color', (tono) => {
     expect(incumplimientos(TONOS_ESTADO[tono])).toEqual([])
+  })
+
+  it('🔴 «ok» usa el color de éxito del tema (ADR-009): UN token que ya vale en claro y en oscuro, sin pares dark:', () => {
+    expect(TONOS_ESTADO.ok).toBe('border-exito text-exito bg-exito/10')
   })
 
   it('el control — el juez detecta cada forma de romper la regla', () => {
@@ -86,8 +90,8 @@ describe('BadgeEstado', () => {
   it('rendea el texto del estado con las clases de su tono', () => {
     render(<BadgeEstado tono="ok">Cobrada</BadgeEstado>)
     const pastilla = screen.getByText('Cobrada')
-    expect(pastilla.className).toContain('border-emerald-700')
-    expect(pastilla.className).toContain('text-emerald-700')
+    expect(pastilla.className).toContain('border-exito')
+    expect(pastilla.className).toContain('text-exito')
   })
 
   it('conserva las clases que le agrega el producto', () => {

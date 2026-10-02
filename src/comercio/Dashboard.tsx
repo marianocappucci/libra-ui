@@ -114,10 +114,10 @@ export function Dashboard({
               <CardContent className="flex items-start justify-between gap-3">
                 <div className="min-w-0 [&_p]:truncate">
                   <CardDescription>Cobrado este mes</CardDescription>
-                  <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(data.cobrado_mes)}</p>
+                  <p className="text-2xl font-bold text-exito">{formatCurrency(data.cobrado_mes)}</p>
                   <CardDescription>Ingresos en caja</CardDescription>
                 </div>
-                <span className="shrink-0 rounded-lg bg-emerald-500/10 p-2 text-emerald-600 dark:text-emerald-400"><ArrowDownCircle /></span>
+                <span className="shrink-0 rounded-lg bg-exito/10 p-2 text-exito"><ArrowDownCircle /></span>
               </CardContent>
             </Card>
             <Card>
@@ -134,12 +134,12 @@ export function Dashboard({
               <CardContent className="flex items-start justify-between gap-3">
                 <div className="min-w-0 [&_p]:truncate">
                   <CardDescription>Saldo total en caja</CardDescription>
-                  <p className={data.saldo_total >= 0 ? 'text-2xl font-bold text-emerald-600 dark:text-emerald-400' : 'text-2xl font-bold text-destructive'}>
+                  <p className={data.saldo_total >= 0 ? 'text-2xl font-bold text-exito' : 'text-2xl font-bold text-destructive'}>
                     {formatCurrency(data.saldo_total)}
                   </p>
                   <CardDescription>Histórico acumulado</CardDescription>
                 </div>
-                <span className={`shrink-0 rounded-lg p-2 ${data.saldo_total >= 0 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-destructive/10 text-destructive'}`}><Wallet /></span>
+                <span className={`shrink-0 rounded-lg p-2 ${data.saldo_total >= 0 ? 'bg-exito/10 text-exito' : 'bg-destructive/10 text-destructive'}`}><Wallet /></span>
               </CardContent>
             </Card>
           </div>
@@ -163,7 +163,7 @@ export function Dashboard({
               <CardContent>
                 {data.facturas_sin_cobrar.length === 0 ? (
                   <p className="flex flex-col items-center gap-2 py-4 text-center text-sm text-muted-foreground">
-                    <CheckCircle2 className="size-6 text-emerald-500" />Todas las facturas están cobradas.
+                    <CheckCircle2 className="size-6 text-exito" />Todas las facturas están cobradas.
                   </p>
                 ) : (
                   <ul className="divide-y">
@@ -236,7 +236,7 @@ export function Dashboard({
                         <p className="font-medium">{m.concepto}</p>
                         <p className="truncate text-muted-foreground">{fecha(m.fecha)}{m.referencia ? ` — ${m.referencia}` : ''}</p>
                       </div>
-                      <span className={`shrink-0 font-medium ${m.tipo === 'ingreso' ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
+                      <span className={`shrink-0 font-medium ${m.tipo === 'ingreso' ? 'text-exito' : 'text-destructive'}`}>
                         {m.tipo === 'ingreso' ? '+' : '−'} {formatCurrency(m.monto)}
                       </span>
                     </li>
