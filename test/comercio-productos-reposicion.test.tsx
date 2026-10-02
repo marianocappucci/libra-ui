@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { Productos } from '../src/comercio/Productos'
 import type { Producto } from '../src/comercio/tipos'
-import { cuerpoDe, montar, pedidas, prepararFetch, responder } from './helpers-pantallas'
+import { cuerpoDe, fetchMock, montar, pedidas, prepararFetch, responder } from './helpers-pantallas'
 
 const producto = (id: number, nombre: string, extra: Partial<Producto> = {}): Producto => ({
   id, codigo: `P${id}`, nombre, descripcion: '', precio_venta: 100, precio_costo: 60, unidad: 'u', categoria: '', stock_minimo: 0,
@@ -289,5 +289,27 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     expect(await within(dialogo()).findByText(/techo inválido/)).toBeTruthy()
     expect(within(dialogo()).queryByText(/El producto se guardó/)).toBeNull()
     expect(pedidas()).not.toContain('PUT /api/productos/1')
+  })
+
+  it('si el producto se guardó y falla el plazo/techo, deshacer el cambio del producto y reintentar vuelve a guardarlo (no queda el primer cambio)', async () => {
+    let intentos = 0
+    responder({
+      ...base, [`GET ${RUTA}`]: PROPIOS, 'PUT /api/productos/1': { id: 1 },
+      [`PUT ${RUTA}`]: () => (++intentos === 1 ? { status: 422, detail: 'techo inválido' } : PROPIOS),
+    })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    await waitFor(() => expect(plazo().value).toBe('7'))
+    fireEvent.change(within(dialogo()).getByLabelText('Nombre'), { target: { value: 'Yerba 2' } })
+    fireEvent.change(plazo(), { target: { value: '9' } })
+    await guardar(user)
+    expect(await within(dialogo()).findByText(/El producto se guardó, pero/)).toBeTruthy()
+    fireEvent.change(within(dialogo()).getByLabelText('Nombre'), { target: { value: 'Yerba' } })   // vuelve al nombre original
+    await guardar(user)
+    await waitFor(() => expect(puts()).toHaveLength(2))
+    const guardados = fetchMock.mock.calls.filter((c) => c[1] && (c[1] as RequestInit).method === 'PUT' && String(c[0]) === '/api/productos/1')
+    expect(guardados).toHaveLength(2)
+    expect(JSON.parse(String((guardados[1][1] as RequestInit).body)).nombre).toBe('Yerba')
   })
 })

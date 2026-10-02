@@ -352,6 +352,9 @@ export function Productos({
         if (!productoSinCambios) {
           await api.put<Producto>(`/api/productos/${editingProducto.id}`, payload)
           guardado = true
+          // Lo que ya quedó en el servidor es la base para comparar si hay que reintentar: si el plazo/techo falla y el usuario deshace
+          // su cambio al producto, ese deshacer tiene que guardarse.
+          valoresIniciales.current = { ...values }
         }
       } else {
         const creado = await api.post<Producto>('/api/productos', payload)
