@@ -220,8 +220,9 @@ export function Productos({
   const sinCosto = productos.length > 0 && productos.every((p) => p.precio_costo === undefined || p.precio_costo === null)
   // El producto que se está editando llegó sin costo: el campo «Precio de costo» y el margen no se ofrecen (el 0 sería inventado).
   const costoOcultoEnForm = editingProducto !== null && (editingProducto.precio_costo === undefined || editingProducto.precio_costo === null)
-  // El selector de proveedor: al editar, si el GET de ese producto lo trajo; en el alta, si el motor ya se sondeó (puede terminar con el diálogo abierto).
-  const proveedorDisponible = conProveedorHabitual !== false && (repoConProveedor || (editingProducto === null && motorConProveedorSt))
+  // El selector de proveedor: si el GET de este producto lo trajo, o si el motor ya se sondeó (el sondeo puede terminar con el diálogo abierto, y
+  // el diálogo pasa a editar el producto recién creado si falla el plazo/techo: el selector tiene que seguir ahí para reintentar con el mismo proveedor).
+  const proveedorDisponible = conProveedorHabitual !== false && (repoConProveedor || motorConProveedorSt)
 
   const conEstacion = Boolean(estaciones && estaciones.length > 0)
 

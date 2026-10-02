@@ -486,4 +486,36 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     soltar(CON_PROV)
     await waitFor(() => expect(selectorProveedor()).toBeTruthy())
   })
+
+  it('con el sondeo tardío, un alta cuyo plazo/techo falla conserva el proveedor elegido al reintentar', async () => {
+    let soltar: (v: unknown) => void = () => {}
+    const lenta = new Promise((r) => { soltar = r })
+    let intentos = 0
+    responder({
+      ...base, '/api/proveedores': LISTA, 'POST /api/productos': { id: 9, nombre: 'Nuevo' }, 'PUT /api/productos/9': { id: 9 },
+      'PUT /api/productos/9/reposicion': () => (++intentos === 1 ? { status: 422, detail: 'techo inválido' } : CON_PROV),
+    })
+    const original = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation((entrada: RequestInfo | URL, init?: RequestInit) => {
+      if (String(entrada) === RUTA && (init?.method ?? 'GET') === 'GET') {
+        return lenta.then((v) => new Response(JSON.stringify(v), { status: 200, headers: { 'content-type': 'application/json' } }))
+      }
+      return original(entrada, init)
+    })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await screen.findByText('Yerba')
+    await user.click(screen.getByRole('button', { name: /Nuevo producto/ }))
+    soltar(CON_PROV)                                                          // el sondeo termina con el diálogo abierto
+    await waitFor(() => expect(selectorProveedor()).toBeTruthy())
+    fireEvent.change(within(dialogo()).getByLabelText('Nombre'), { target: { value: 'Nuevo' } })
+    await user.selectOptions(selectorProveedor(), '8')
+    await user.click(within(dialogo()).getByRole('button', { name: 'Crear producto' }))
+    expect(await within(dialogo()).findByText(/El producto se guardó, pero/)).toBeTruthy()
+    expect(selectorProveedor().value).toBe('8')                               // el selector sigue ahí, con lo elegido
+    await user.click(within(dialogo()).getByRole('button', { name: 'Guardar cambios' }))
+    await waitFor(() => expect(pedidas().filter((p) => p === 'PUT /api/productos/9/reposicion')).toHaveLength(2))
+    const envios = fetchMock.mock.calls.filter((c) => (c[1] as RequestInit | undefined)?.method === 'PUT' && String(c[0]) === '/api/productos/9/reposicion')
+    expect(JSON.parse(String((envios[1][1] as RequestInit).body)).proveedor_id).toBe(8)
+  })
 })
