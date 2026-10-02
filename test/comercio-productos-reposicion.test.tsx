@@ -206,4 +206,29 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     expect(plazo().value).toBe('21')
     expect(techo().value).toBe('')
   })
+
+  it('no se puede guardar mientras se leen el plazo y el techo (sin verlos no se valida el mínimo contra el máximo)', async () => {
+    let soltar: (v: unknown) => void = () => {}
+    const lenta = new Promise((r) => { soltar = r })
+    const { fetchMock } = await import('./helpers-pantallas')
+    responder({ ...base, 'PUT /api/productos/1': { id: 1 } })
+    const sin_lectura = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation((entrada: RequestInfo | URL, init?: RequestInit) => {
+      if (String(entrada) === RUTA && (init?.method ?? 'GET') === 'GET') {
+        return lenta.then((v) => new Response(JSON.stringify(v), { status: 200, headers: { 'content-type': 'application/json' } }))
+      }
+      return sin_lectura(entrada, init)
+    })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    const boton = within(dialogo()).getByRole('button', { name: 'Guardar cambios' }) as HTMLButtonElement
+    expect(boton.disabled).toBe(true)
+    fireEvent.submit(boton.closest('form')!)
+    await new Promise((r) => setTimeout(r, 30))
+    expect(pedidas().filter((p) => p.startsWith('PUT '))).toHaveLength(0)
+    soltar(PROPIOS)
+    await waitFor(() => expect(boton.disabled).toBe(false))
+    expect(plazo().value).toBe('7')
+  })
 })

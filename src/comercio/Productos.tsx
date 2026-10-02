@@ -298,6 +298,8 @@ export function Productos({
   }
 
   async function handleSubmit(values: Valores) {
+    // No se guarda mientras se leen el plazo y el techo: sin verlos no se puede validar el mínimo contra el máximo que ya había.
+    if (repoEstado === 'cargando') return
     setSaving(true)
     setFormError(null)
     // Se manda sólo lo que este producto edita: lo que no se manda toma el
@@ -753,7 +755,7 @@ export function Productos({
                       </Button>
                     )}
                     <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
-                    <Button type="submit" disabled={saving}>
+                    <Button type="submit" disabled={saving || repoEstado === 'cargando'}>
                       {saving ? 'Guardando…' : editingProducto ? 'Guardar cambios' : 'Crear producto'}
                     </Button>
                   </DialogFooter>
