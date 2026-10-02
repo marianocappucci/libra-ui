@@ -207,6 +207,15 @@ export function validarTema(crudo: unknown): ResultadoDeTema {
         continue
       }
     }
+    if (def.derivadas && def.textoSobre) {
+      // Los colores derivados (hover, borde) se mezclan hacia el texto: el texto tiene que seguir leyéndose sobre el más claro/oscuro.
+      const texto = textoPara(def, hex)
+      const peor = Math.min(...def.derivadas.map((d) => contraste(mezclar(hex, texto, d.mezcla), texto)))
+      if (peor < def.textoSobre.contrasteMinimo) {
+        errores[clave] = `el texto no se lee sobre el color al pasar el mouse (contraste ${peor.toFixed(1)}, mínimo ${def.textoSobre.contrasteMinimo}); elegí un fondo más claro u oscuro`
+        continue
+      }
+    }
     if (def.legibleSobrePagina) {
       const peor = Math.min(contraste(hex, FONDO_CLARO), contraste(hex, FONDO_OSCURO))
       if (peor < def.legibleSobrePagina) {
@@ -216,14 +225,20 @@ export function validarTema(crudo: unknown): ResultadoDeTema {
     }
     tema[def.clave] = hex
   }
-  // La franja del POS lleva UN texto, calculado sobre el inicio: el fin tiene que leerse con ese mismo texto.
-  if (tema.posEncabezadoFin) {
-    const inicio = COLORES_DE_TEMA.find((d) => d.clave === 'posEncabezadoInicio')!
-    const texto = tema.posEncabezadoInicio ? textoPara(inicio, tema.posEncabezadoInicio) : TEXTO_CLARO
-    const c = contraste(tema.posEncabezadoFin, texto)
-    if (c < (inicio.textoSobre?.contrasteMinimo ?? 3)) {
-      errores.posEncabezadoFin = `el texto de la franja no se lee sobre este final (contraste ${c.toFixed(1)}); probá un color más cercano al inicio`
-      delete tema.posEncabezadoFin
+  // La franja del POS lleva UN texto, calculado sobre el inicio: inicio y fin (el elegido o el de siempre) tienen que leerse con él.
+  if (tema.posEncabezadoInicio || tema.posEncabezadoFin) {
+    const inicioDef = COLORES_DE_TEMA.find((d) => d.clave === 'posEncabezadoInicio')!
+    const finDef = COLORES_DE_TEMA.find((d) => d.clave === 'posEncabezadoFin')!
+    const inicio = tema.posEncabezadoInicio ?? inicioDef.porDefecto
+    const fin = tema.posEncabezadoFin ?? finDef.porDefecto
+    const texto = textoPara(inicioDef, inicio)
+    const minimo = inicioDef.textoSobre?.contrasteMinimo ?? 3
+    const c = contraste(fin, texto)
+    if (c < minimo) {
+      // El error va en la clave que se está tocando: si se eligió el inicio, el que desentona es el fin de siempre.
+      const clave = tema.posEncabezadoFin ? 'posEncabezadoFin' : 'posEncabezadoInicio'
+      errores[clave] = `el texto de la franja no se lee sobre el ${tema.posEncabezadoFin ? 'final' : 'final de siempre'} (contraste ${c.toFixed(1)}, mínimo ${minimo}); elegí también un final que combine`
+      delete tema[clave]
     }
   }
   return { tema, errores }
