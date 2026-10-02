@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
-  CLAVES_DE_TEMA, CLAVE_DE_CACHE_DEL_TEMA, COLORES_DE_TEMA, aplicarTema, cargarTema, contraste, luminancia, normalizarHex, textoSobre, validarTema,
+  CLAVES_DE_TEMA, CLAVE_DE_CACHE_DEL_TEMA, COLORES_DE_TEMA, ajustarContraste, aplicarTema, cargarTema, contraste, luminancia, normalizarHex, textoSobre, validarTema,
 } from '../src/tema'
 
 describe('colores', () => {
@@ -227,6 +227,25 @@ describe('los colores ampliados (ADR-009)', () => {
     const el = limpio()
     aplicarTema({ acento: '#0f766e', barraLateralFondo: '#0f172a', exito: '#047857', posEncabezadoInicio: '#1e3a8a' }, el)
     expect(el.getAttribute('style')).toBeTruthy()
+    aplicarTema({}, el)
+    expect((el.getAttribute('style') ?? '').trim()).toBe('')
+  })
+})
+
+describe('el éxito como texto (ADR-009, pasada visual en oscuro)', () => {
+  it('ajustarContraste llega al mínimo contra el fondo de cada modo y no toca lo que ya llega', () => {
+    expect(contraste(ajustarContraste('#059669', '#ffffff', 4.5), '#ffffff')).toBeGreaterThanOrEqual(4.5)
+    expect(contraste(ajustarContraste('#059669', '#162420', 4.5), '#162420')).toBeGreaterThanOrEqual(4.5)
+    expect(ajustarContraste('#000000', '#ffffff', 4.5)).toBe('#000000')
+  })
+
+  it('aplicar el éxito fija las dos variantes de texto y un tema vacío las limpia', () => {
+    const el = document.createElement('div')
+    aplicarTema({ exito: '#059669' }, el)
+    const claro = el.style.getPropertyValue('--libra-exito-como-texto-claro')
+    const oscuro = el.style.getPropertyValue('--libra-exito-como-texto-oscuro')
+    expect(contraste(claro, '#ffffff')).toBeGreaterThanOrEqual(4.5)
+    expect(contraste(oscuro, '#162420')).toBeGreaterThanOrEqual(4.5)
     aplicarTema({}, el)
     expect((el.getAttribute('style') ?? '').trim()).toBe('')
   })

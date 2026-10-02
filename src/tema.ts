@@ -53,6 +53,9 @@ export type DefinicionDeColor = {
   derivadas?: readonly { variable: string; mezcla: number }[]
   /** Si el color se usa como texto o ícono sobre la página: debe distinguirse del fondo claro Y del oscuro (contraste mínimo). */
   legibleSobrePagina?: number
+  /** Variantes del color para usarlo como TEXTO (no como fondo) en cada modo: se ajustan hasta llegar a 4,5:1 contra el fondo de ese modo, así
+   *  el texto de éxito se lee en los dos aunque el color elegido sea el mismo. */
+  comoTexto?: { claro: string; oscuro: string }
 }
 
 export const COLORES_DE_TEMA: readonly DefinicionDeColor[] = [
@@ -88,6 +91,7 @@ export const COLORES_DE_TEMA: readonly DefinicionDeColor[] = [
     porDefecto: '#059669',
     textoSobre: { variable: '--libra-exito-texto', contrasteMinimo: 3, prefiereBlanco: true },
     legibleSobrePagina: 3,
+    comoTexto: { claro: '--libra-exito-como-texto-claro', oscuro: '--libra-exito-como-texto-oscuro' },
   },
   {
     clave: 'posEncabezadoInicio',
@@ -172,6 +176,21 @@ export function mezclar(a: string, b: string, t: number): string {
   return `#${[1, 3, 5].map((i) => c(i).toString(16).padStart(2, '0')).join('')}`
 }
 
+/** El fondo contra el que se mide un texto en cada modo (la tarjeta, y el tinte de éxito que se le pone encima en oscuro). */
+const FONDO_TEXTO_CLARO = '#ffffff'
+const FONDO_TEXTO_OSCURO = '#162420'
+
+/** Acerca `hex` al negro (fondo claro) o al blanco (fondo oscuro) de a poco hasta que el contraste contra `fondo` llegue a `minimo`. Si ya
+ *  llega, lo devuelve igual. */
+export function ajustarContraste(hex: string, fondo: string, minimo: number): string {
+  const hacia = luminancia(fondo) > 0.5 ? '#000000' : '#ffffff'
+  for (let t = 0; t <= 1.0001; t += 0.05) {
+    const c = mezclar(hex, hacia, Math.min(t, 1))
+    if (contraste(c, fondo) >= minimo) return c
+  }
+  return hacia
+}
+
 function textoPara(def: DefinicionDeColor, fondo: string): string {
   return def.textoSobre?.prefiereBlanco && contraste(fondo, TEXTO_CLARO) >= def.textoSobre.contrasteMinimo ? TEXTO_CLARO : textoSobre(fondo)
 }
@@ -251,7 +270,10 @@ export function aplicarTema(tema: Tema, elemento: HTMLElement = document.documen
   for (const def of COLORES_DE_TEMA) {
     const variables = [def.variable, ...(def.tambien ?? [])]
     const deTexto = def.textoSobre ? [def.textoSobre.variable, ...(def.textoSobre.tambien ?? [])] : []
-    const propias = [...variables, ...deTexto, ...(def.derivadas ?? []).map((d) => d.variable)]
+    const propias = [
+      ...variables, ...deTexto, ...(def.derivadas ?? []).map((d) => d.variable),
+      ...(def.comoTexto ? [def.comoTexto.claro, def.comoTexto.oscuro] : []),
+    ]
     const valor = limpio[def.clave]
     if (!valor) {
       for (const v of propias) elemento.style.removeProperty(v)
@@ -261,6 +283,10 @@ export function aplicarTema(tema: Tema, elemento: HTMLElement = document.documen
     const texto = textoPara(def, valor)
     for (const v of deTexto) elemento.style.setProperty(v, texto)
     for (const d of def.derivadas ?? []) elemento.style.setProperty(d.variable, mezclar(valor, texto, d.mezcla))
+    if (def.comoTexto) {
+      elemento.style.setProperty(def.comoTexto.claro, ajustarContraste(valor, FONDO_TEXTO_CLARO, 4.5))
+      elemento.style.setProperty(def.comoTexto.oscuro, ajustarContraste(valor, FONDO_TEXTO_OSCURO, 4.5))
+    }
   }
 }
 
