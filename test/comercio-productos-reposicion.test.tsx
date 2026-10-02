@@ -2,6 +2,7 @@
 // (`conParametrosDeReposicion`), que se leen y se guardan aparte del producto (`/api/productos/{id}/reposicion`, ADR-020 del motor).
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useEffect, useState } from 'react'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { Productos } from '../src/comercio/Productos'
@@ -517,5 +518,22 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     await waitFor(() => expect(pedidas().filter((p) => p === 'PUT /api/productos/9/reposicion')).toHaveLength(2))
     const envios = fetchMock.mock.calls.filter((c) => (c[1] as RequestInit | undefined)?.method === 'PUT' && String(c[0]) === '/api/productos/9/reposicion')
     expect(JSON.parse(String((envios[1][1] as RequestInit).body)).proveedor_id).toBe(8)
+  })
+
+  it('si la prop llega después del montaje (la sesión se carga de forma asíncrona), los proveedores se cargan igual y el selector aparece', async () => {
+    responder({ ...base, [`GET ${RUTA}`]: CON_PROV, '/api/proveedores': LISTA })
+    function Tardia() {
+      const [activa, setActiva] = useState(false)
+      useEffect(() => { const t = setTimeout(() => setActiva(true), 30); return () => clearTimeout(t) }, [])
+      return <Productos conParametrosDeReposicion={activa} />
+    }
+    const user = userEvent.setup()
+    montar('/productos', <Tardia />)
+    await screen.findByText('Yerba')
+    await waitFor(() => expect(pedidas()).toContain('GET /api/proveedores'))
+    await waitFor(() => expect(pedidas()).toContain(`GET ${RUTA}`))          // el sondeo también corre
+    await editar(user)
+    await waitFor(() => expect(selectorProveedor().value).toBe('7'))
+    expect(within(selectorProveedor()).getByRole('option', { name: 'Mayorista Sur' })).toBeTruthy()      // la lista completa, no sólo el actual
   })
 })

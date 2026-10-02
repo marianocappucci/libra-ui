@@ -241,7 +241,6 @@ export function Productos({
   useEffect(() => {
     loadProductos()
     api.get<CategoriaProducto[]>('/api/productos/categorias').then(setCategorias).catch(() => {})
-    if (conParametrosDeReposicion) api.get<Proveedor[]>('/api/proveedores').then((l) => { if (Array.isArray(l)) setProveedoresLista(l) }).catch(() => {})
     api.get<string[]>('/api/productos/unidades').then((u) => { if (Array.isArray(u) && u.length > 0) setUnidades(u) }).catch(() => {})
     if (conStockTotal) {
       api.get<{ productos: { id: number; stock_actual: number }[] }>('/api/stock')
@@ -250,6 +249,27 @@ export function Productos({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // La prop puede llegar DESPUÉS del montaje (VentaLibra la decide con la sesión, que se carga de forma asíncrona): por eso estos dos efectos
+  // dependen de ella y no corren sólo al montar.
+  useEffect(() => {
+    if (!conParametrosDeReposicion) return
+    let vigente = true
+    api.get<Proveedor[]>('/api/proveedores').then((l) => { if (vigente && Array.isArray(l)) setProveedoresLista(l) }).catch(() => {})
+    return () => { vigente = false }
+  }, [conParametrosDeReposicion])
+
+  // ¿El motor maneja proveedores? Se sondea con el primer producto para que el selector esté también en el alta.
+  useEffect(() => {
+    if (!conParametrosDeReposicion || conProveedorHabitual !== undefined || motorConProveedor.current || productos.length === 0) return
+    let vigente = true
+    api.get<ParametrosLeidos>(`/api/productos/${productos[0].id}/reposicion`)
+      .then((d) => {
+        if (vigente && d && typeof d === 'object' && 'proveedor_id' in d) { motorConProveedor.current = true; setMotorConProveedorSt(true) }
+      })
+      .catch(() => {})
+    return () => { vigente = false }
+  }, [conParametrosDeReposicion, conProveedorHabitual, productos])
 
   function describeError(err: unknown): string {
     if (err instanceof ApiError) return err.detail
@@ -264,12 +284,6 @@ export function Productos({
       const lista = await api.get<Producto[]>(path)
       if (lista.some((p) => typeof p.vence === 'boolean')) setBackendConVence(true)
       setProductos(lista)
-      // ¿El motor maneja proveedores? Se sondea con el primer producto para que el selector esté también en el alta.
-      if (conParametrosDeReposicion && conProveedorHabitual === undefined && !motorConProveedor.current && lista.length > 0) {
-        api.get<ParametrosLeidos>(`/api/productos/${lista[0].id}/reposicion`)
-          .then((d) => { if (d && typeof d === 'object' && 'proveedor_id' in d) { motorConProveedor.current = true; setMotorConProveedorSt(true) } })
-          .catch(() => {})
-      }
     } catch (err) {
       setError(describeError(err))
     } finally {
@@ -299,6 +313,10 @@ export function Productos({
     repoLectura.current += 1
     setDialogOpen(true)
   }
+
+  // Las columnas se memorizan con una lista corta de dependencias: el botón de editar llama a la versión MÁS NUEVA de `abrirEditar` (que lee
+  // las props de reposición y de proveedor de este render), no a la del primero.
+  const abrirEditarActual = useRef<(p: Producto) => void>(() => {})
 
   function abrirEditar(producto: Producto) {
     setEditingProducto(producto)
@@ -355,6 +373,8 @@ export function Productos({
         .catch(() => { if (lectura === repoLectura.current) setRepoEstado('error') })
     }
   }
+
+  abrirEditarActual.current = abrirEditar
 
   async function handleSubmit(values: Valores) {
     // No se guarda mientras se leen el plazo y el techo: sin verlos no se puede validar el mínimo contra el máximo que ya había.
@@ -540,7 +560,7 @@ export function Productos({
                 <Link to={rutaDeReceta(row.original.id)}><ClipboardList /></Link>
               </Button>
             )}
-            <Button size="icon" variant="outline" title="Editar producto" aria-label="Editar producto" onClick={() => abrirEditar(row.original)}><Pencil /></Button>
+            <Button size="icon" variant="outline" title="Editar producto" aria-label="Editar producto" onClick={() => abrirEditarActual.current(row.original)}><Pencil /></Button>
             {conDetalle && (
               <Button size="icon" variant="outline" title="Gestionar códigos y variantes" aria-label="Gestionar códigos y variantes" onClick={() => setDetalle(row.original)}><Barcode /></Button>
             )}
