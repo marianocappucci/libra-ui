@@ -538,4 +538,16 @@ describe('Reposición: estacionalidad (motor >= 0.35.0, ADR-023)', () => {
     expect(nombresEnTabla()[0]).toBe('Harina')
     expect(nombresEnTabla().at(-1)).toBe('Sal')
   })
+
+  it('apagar el ajuste con la tabla ordenada por «Estacional» vuelve al orden por urgencia del motor', async () => {
+    const user = userEvent.setup()
+    await abrir(tabla(AJUSTADA))
+    await user.click(await screen.findByRole('button', { name: /^Estacional/ }))
+    expect(nombresEnTabla()[0]).toBe('Yerba')
+    responder(tabla({ ...CON_EST, productos: [SAL, YERBA, HARINA] }))                       // el motor devuelve ahora su orden de urgencia
+    await user.click(screen.getByLabelText('Ajustar por estacionalidad'))
+    await waitFor(() => expect(screen.queryByRole('button', { name: /^Estacional/ })).toBeNull())
+    expect(nombresEnTabla()).toEqual(['Sal', 'Yerba', 'Harina'])                            // sin un orden escondido por una columna que ya no está
+  })
 })
+

@@ -295,7 +295,11 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
         </label>
         {conEstacionalidad && (
           <label className="flex items-center gap-2 pt-7 text-sm" title="Proyecta con lo que pasó hace un año: lo que se vendió después de una ventana como la de ahora">
-            <input type="checkbox" checked={estacionalidad} onChange={(e) => setEstacionalidad(e.target.checked)} className="size-4" />
+            <input type="checkbox" checked={estacionalidad} onChange={(e) => {
+              setEstacionalidad(e.target.checked)
+              // Al apagarlo la columna desaparece: un orden por ella quedaría activo sin que se vea (y sin su flecha).
+              if (!e.target.checked && orden?.clave === 'factor_estacional') setOrden(null)
+            }} className="size-4" />
             Ajustar por estacionalidad
           </label>
         )}
