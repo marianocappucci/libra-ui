@@ -199,6 +199,10 @@ export function Productos({
   const valoresIniciales = useRef<Valores | null>(null)
   // El producto que se edita llegó SIN `precio_costo` (el rol no tiene `costos.ver`): el 0 del formulario es de relleno y nunca se guarda.
   const costoOculto = useRef(false)
+  // Ningún producto de la lista trae `precio_costo`: el rol no ve costos y la columna sobraría (se mostraría «NaN»).
+  const sinCosto = productos.length > 0 && productos.every((p) => p.precio_costo === undefined || p.precio_costo === null)
+  // El producto que se está editando llegó sin costo: el campo «Precio de costo» y el margen no se ofrecen (el 0 sería inventado).
+  const costoOcultoEnForm = editingProducto !== null && (editingProducto.precio_costo === undefined || editingProducto.precio_costo === null)
 
   const conEstacion = Boolean(estaciones && estaciones.length > 0)
 
@@ -447,7 +451,8 @@ export function Productos({
     cols.push(
       { accessorKey: 'unidad', header: 'Unidad', size: 70, minSize: 64, cell: ({ row }) => <span className="block truncate">{row.original.unidad}</span> },
       { accessorKey: 'precio_venta', header: () => <div className="text-right">Precio venta</div>, size: 114, minSize: 100, cell: ({ row }) => <div className="truncate text-right">{formatCurrency(row.original.precio_venta)}</div> },
-      { accessorKey: 'precio_costo', header: () => <div className="text-right">Precio costo</div>, size: 114, minSize: 100, cell: ({ row }) => <div className="truncate text-right text-muted-foreground">{formatCurrency(row.original.precio_costo)}</div> },
+      // Sin `precio_costo` en ninguno de los productos (el rol no tiene `costos.ver`) no hay columna: no se muestra un «NaN».
+      ...(sinCosto ? [] : [{ accessorKey: 'precio_costo', header: () => <div className="text-right">Precio costo</div>, size: 114, minSize: 100, cell: ({ row }) => <div className="truncate text-right text-muted-foreground">{formatCurrency(row.original.precio_costo)}</div> } as ColumnDef<Producto>]),
       ...(conStockTotal ? [{
         // 🔑 «Stock total» y no «Stock»: es la suma de TODOS los depósitos; con varias sucursales un «Stock: 10» se lee
         // como «hay 10 acá». El reparto está en la pantalla de Stock.
@@ -500,7 +505,7 @@ export function Productos({
     )
     return cols
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conTipo, conEstacion, conVendible, rutaDeReceta, conDetalle, conStockTotal, conEliminar, stockTotal])
+  }, [conTipo, conEstacion, conVendible, rutaDeReceta, conDetalle, conStockTotal, conEliminar, stockTotal, sinCosto])
 
   // Un servicio no tiene inventario: no se marca. Si ya estaba marcado (o se marcó antes de cambiar el tipo) el interruptor
   // sigue habilitado, para poder desmarcarlo: el backend rechaza (409) guardar un servicio marcado.
@@ -651,19 +656,21 @@ export function Productos({
                       </FormItem>
                     )}
                   />
-                  <FormField
-                    control={form.control}
-                    name="precio_costo"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Precio de costo</FormLabel>
-                        <FormControl>
-                          <Input type="number" step="0.01" {...field} value={field.value as number} className="w-32" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  {!costoOcultoEnForm && (
+                    <FormField
+                      control={form.control}
+                      name="precio_costo"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Precio de costo</FormLabel>
+                          <FormControl>
+                            <Input type="number" step="0.01" {...field} value={field.value as number} className="w-32" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
                   <FormField
                     control={form.control}
                     name="stock_minimo"
@@ -716,7 +723,7 @@ export function Productos({
                       </FormItem>
                     )}
                   />
-                  {margen !== null && (
+                  {margen !== null && !costoOcultoEnForm && (
                     <p className={`flex w-full items-center gap-1.5 text-sm ${margen >= 0 ? 'text-exito' : 'text-destructive'}`}>
                       <TrendingUp className="size-4 shrink-0" />Margen: <strong>{margen.toFixed(1)}%</strong>
                     </p>

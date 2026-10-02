@@ -297,7 +297,7 @@ export function Reposicion() {
                           )}
                         </td>
                         <td className="p-3">{p.codigo || '—'}</td>
-                        <td className={`p-3 text-right ${p.stock <= 0 ? 'text-destructive' : ''}`}>
+                        <td className={`min-w-36 p-3 text-right ${p.stock <= 0 ? 'text-destructive' : ''}`}>
                           {numero(p.stock)}
                           {(p.vencido ?? 0) > 0 && (
                             <span className="block text-xs text-amber-600 dark:text-amber-400">
