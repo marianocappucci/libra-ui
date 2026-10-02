@@ -490,3 +490,52 @@ describe('Reposición: proveedor habitual (motor >= 0.33.0, ADR-021)', () => {
     expect(screen.getByRole('button', { name: /^Proveedor/ })).toBeTruthy()      // la columna sí: viene en los datos
   })
 })
+
+describe('Reposición: estacionalidad (motor >= 0.35.0, ADR-023)', () => {
+  const CON_EST: ReposicionData = { ...DATA, estacionalidad: false }
+  const AJUSTADA: ReposicionData = {
+    ...DATA, estacionalidad: true,
+    productos: [{ ...YERBA, factor_estacional: 3 }, { ...HARINA, factor_estacional: 0.5 }, { ...SAL, factor_estacional: null }],
+  }
+  const tabla = (data: ReposicionData) => ({ ...TODO, [RUTA]: data })
+
+  it('con un motor que no la maneja no hay interruptor ni columna', async () => {
+    await abrir()
+    expect(screen.queryByLabelText('Ajustar por estacionalidad')).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Estacional/ })).toBeNull()
+  })
+
+  it('con un motor que la maneja aparece el interruptor (apagado) y todavía no la columna', async () => {
+    await abrir(tabla(CON_EST))
+    const interruptor = await screen.findByLabelText('Ajustar por estacionalidad')
+    expect(interruptor).not.toBeChecked()
+    expect(screen.queryByRole('button', { name: /^Estacional/ })).toBeNull()
+  })
+
+  it('encenderlo manda estacionalidad=true y, cuando el motor ajusta, aparece la columna con ×factor y un guion donde no hay historia', async () => {
+    const user = userEvent.setup()
+    await abrir(tabla(CON_EST))
+    responder(tabla(AJUSTADA))
+    await user.click(await screen.findByLabelText('Ajustar por estacionalidad'))
+    await waitFor(() => expect(ultimaConsulta()).toBe(pide('&estacionalidad=true')))
+    expect(await screen.findByRole('button', { name: /^Estacional/ })).toBeTruthy()
+    expect(texto(fila('Yerba'))).toContain('×3')
+    expect(texto(fila('Harina'))).toContain('×0,5')
+    expect(fila('Sal').querySelector('td[title]')?.getAttribute('title')).toBe('Sin historia de hace un año: no se ajustó')
+    // Apagarlo vuelve a la consulta de siempre.
+    responder(tabla(CON_EST))
+    await user.click(screen.getByLabelText('Ajustar por estacionalidad'))
+    await waitFor(() => expect(ultimaConsulta()).toBe(pide()))
+  })
+
+  it('la columna ordena por el factor y lo que no tiene va siempre al final', async () => {
+    const user = userEvent.setup()
+    await abrir(tabla(AJUSTADA))
+    await user.click(await screen.findByRole('button', { name: /^Estacional/ }))
+    expect(nombresEnTabla()[0]).toBe('Yerba')                  // numérica: la primera vez, de mayor a menor (×3, ×0,5) y sin factor al final
+    expect(nombresEnTabla().at(-1)).toBe('Sal')
+    await user.click(screen.getByRole('button', { name: /^Estacional/ }))
+    expect(nombresEnTabla()[0]).toBe('Harina')
+    expect(nombresEnTabla().at(-1)).toBe('Sal')
+  })
+})

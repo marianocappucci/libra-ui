@@ -694,6 +694,8 @@ export type ReposicionProducto = {
   /** El proveedor habitual del producto (motor >= 0.33.0, ADR-021). Faltan con un motor anterior; `null` sin proveedor definido. */
   proveedor_id?: number | null
   proveedor?: string | null
+  /** El ajuste estacional de esta fila (motor >= 0.35.0, ADR-023): `null` si no hay historia de hace un año para ajustar (o el ajuste está apagado). */
+  factor_estacional?: number | null
 }
 
 export type ReposicionResumen = { productos: number; a_pedir: number; posible_quiebre: number; sin_ventas: number }
@@ -703,6 +705,8 @@ export type ReposicionData = {
   sucursal_id: number | null; categoria: string | null; producto_id: number | null; solo_a_pedir: boolean
   /** El proveedor por el que se filtró (motor >= 0.33.0). La clave misma dice que el motor maneja proveedores: falta con uno anterior. */
   proveedor_id?: number | null
+  /** Si la consulta pidió el ajuste por estacionalidad. La clave misma dice que el motor la maneja: falta con uno anterior. */
+  estacionalidad?: boolean
   resumen: ReposicionResumen
   /** En orden de urgencia: menor cobertura primero, después mayor `sugerido`; sin rotación al final. */
   productos: ReposicionProducto[]

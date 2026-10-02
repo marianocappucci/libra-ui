@@ -11,6 +11,8 @@ import type { ReposicionProducto } from './tipos'
 export type ParametrosDeOrdenes = {
   dias_rotacion: number; dias_cobertura: number; plazo_entrega_dias: number
   sucursal_id?: number; categoria?: string; proveedor_id?: number
+  /** El ajuste estacional de la consulta: las órdenes se calculan con el mismo que se ve. */
+  estacionalidad?: boolean
 }
 
 /** El pedido entero de un intento: lo que se vio, con qué parámetros y con qué clave. */
