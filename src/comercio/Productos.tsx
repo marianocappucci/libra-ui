@@ -29,7 +29,7 @@ import { api, ApiError } from '../api-client'
 import { anchoColumnaAcciones, DataTable, sortableHeader } from '../data-table'
 import { BadgeEstado } from '../badge-estado'
 import { TituloPantalla } from '../titulo-pantalla'
-import { UNIDADES, type CategoriaProducto, type Estacion, type Producto, type Proveedor } from './tipos'
+import { UNIDADES, type CategoriaProducto, type Estacion, type MinimosPorSucursal, type Producto, type Proveedor } from './tipos'
 import { ProductoCodigosVariantes } from './ProductoCodigosVariantes'
 import { formatEntero } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
@@ -118,7 +118,9 @@ export type ProductosProps = {
   conVencimientos?: boolean
   /** «Plazo de entrega» y «Stock máximo» propios del producto, que usa la **reposición sugerida** (`GET`/`PUT
    *  /api/productos/{id}/reposicion`, `libracommerce.web.reposicion_router.build_reposicion_parametros_router`, ADR-020 del motor). **Opt-in
-   *  por prop** (por defecto no se muestra): el backend tiene que montar ese router. Se guardan aparte del producto, después de él. */
+   *  por prop** (por defecto no se muestra): el backend tiene que montar ese router. Se guardan aparte del producto, después de él.
+   *  La misma prop enciende **«Mínimo por sucursal»** (`GET /api/productos/{id}/reposicion/minimos`, `PUT .../minimos/{sucursal_id}`; ADR-010): sólo al
+   *  editar, sólo si el motor lo maneja (si el `GET` da 404, 405 o 503 la sección no aparece) y sólo con dos o más sucursales. */
   conParametrosDeReposicion?: boolean
   /** El selector «Proveedor habitual» dentro de «Reposición sugerida» (motor >= 0.33.0, ADR-021). **Por defecto se decide solo**: aparece si el
    *  motor devuelve `proveedor_id` en `GET /api/productos/{id}/reposicion` (se sondea con el primer producto de la lista, así también está en el
@@ -133,6 +135,81 @@ type ParametrosReposicion = { plazo_entrega_dias: number | null; stock_maximo: n
 type ParametrosLeidos = ParametrosReposicion & { proveedor_id?: number | null; proveedor?: string | null }
 const SIN_PROVEEDOR = '__sin__'
 type EstadoReposicion = 'sin' | 'cargando' | 'listo' | 'error'
+
+/** Una fila de «Mínimo por sucursal»: el texto del campo, el mínimo PROPIO que había (`null` = usa el global) y el texto con el que se cargó. Se manda sólo lo que
+ *  cambió, y «cambió» es que el TEXTO cambió: un valor sin tocar no se vuelve a parsear (ni a redondear) y nunca se reescribe. */
+type MinimoEditable = { sucursal_id: number; sucursal: string; texto: string; original: number | null; textoOriginal: string }
+const esNumero = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+/** El número como decimal para el campo, sin notación científica (`String(1e-7)` da «1e-7», que la validación del campo no acepta). Si el decimal no
+ *  representa el mismo número (1e-21 a 20 decimales sería «0»), se deja el texto de siempre: el campo nunca muestra un valor distinto del guardado. */
+function textoDecimal(n: number): string {
+  const t = String(n)
+  if (!/e/i.test(t)) return t
+  const decimal = n.toLocaleString('en-US', { useGrouping: false, maximumFractionDigits: 20 })
+  return Number(decimal) === n ? decimal : t
+}
+
+/** Lee la respuesta de `GET .../reposicion/minimos`: `{ producto_id, sucursales: [{ sucursal_id, sucursal, stock_minimo (EFECTIVO), stock_minimo_propio,
+ *  stock_minimo_global }] }` o, tolerante, la lista de sucursales sola. El valor propio es `stock_minimo` SÓLO con `stock_minimo_propio === true`: si no, es el
+ *  global ya resuelto y no se muestra como propio (el campo va vacío). El global sale de las filas (`stock_minimo_global`, igual en todas); sin él cae al
+ *  mínimo del producto. Una fila sin `sucursal_id` numérico se descarta. */
+function leerMinimosPorSucursal(d: unknown, minimoDelProducto: number): { global: number; filas: MinimoEditable[] } {
+  const objeto = d !== null && typeof d === 'object' && !Array.isArray(d) ? (d as Partial<MinimosPorSucursal>) : null
+  const lista: unknown[] = Array.isArray(d) ? d : Array.isArray(objeto?.sucursales) ? objeto.sucursales : []
+  const filas: MinimoEditable[] = []
+  let global: number | null = null
+  for (const x of lista) {
+    if (x === null || typeof x !== 'object') continue
+    const f = x as Record<string, unknown>
+    if (!esNumero(f.sucursal_id)) continue
+    if (global === null && esNumero(f.stock_minimo_global)) global = f.stock_minimo_global
+    const propio = f.stock_minimo_propio === true && esNumero(f.stock_minimo) ? f.stock_minimo : null
+    filas.push({
+      sucursal_id: f.sucursal_id,
+      sucursal: typeof f.sucursal === 'string' && f.sucursal.trim() !== '' ? f.sucursal : `Sucursal ${f.sucursal_id}`,
+      texto: propio === null ? '' : textoDecimal(propio),
+      original: propio,
+      textoOriginal: propio === null ? '' : textoDecimal(propio),
+    })
+  }
+  return { global: global ?? minimoDelProducto, filas }
+}
+
+/** El tope del motor para un mínimo por sucursal (`erp.reposicion.MAX_STOCK_MINIMO`). */
+const MAX_MINIMO_SUCURSAL = 1_000_000_000
+
+/** Valida los campos de «Mínimo por sucursal» (vacío = sin mínimo propio, `null`; nunca 0) y devuelve sólo las filas que cambiaron. Valida TODAS las filas, no
+ *  sólo las que cambiaron, contra el tope del motor y contra `techo`, el stock máximo que va a quedar tras el guardado (`null` = sin techo, o no se sabe cuál
+ *  es): así un valor inválido en la última sucursal no deja las primeras guardadas. */
+function leerMinimosAMandar(filas: MinimoEditable[], techo: number | null):
+  { error: string } | { cambios: { fila: MinimoEditable; valor: number | null }[] } {
+  const cambios: { fila: MinimoEditable; valor: number | null }[] = []
+  for (const fila of filas) {
+    if (fila.texto === fila.textoOriginal) {
+      // Sin tocar: no se parsea ni se manda; sólo cuenta contra el techo final (el valor guardado, tal cual).
+      if (fila.original !== null && techo !== null && fila.original > techo) {
+        return { error: `El mínimo de «${fila.sucursal}» (${fila.original}) no puede ser mayor que el stock máximo (${techo}).` }
+      }
+      continue
+    }
+    const t = fila.texto.trim().replace(',', '.')
+    let valor: number | null = null
+    if (t !== '') {
+      if (!/^\d+(\.\d+)?$/.test(t) || !Number.isFinite(Number(t))) {
+        return { error: `El mínimo de «${fila.sucursal}» tiene que ser un número mayor o igual que 0 (o vacío, para usar el global).` }
+      }
+      valor = Number(t)
+      if (valor > MAX_MINIMO_SUCURSAL) {
+        return { error: `El mínimo de «${fila.sucursal}» no puede pasar de ${MAX_MINIMO_SUCURSAL.toLocaleString('es-AR')}.` }
+      }
+      if (techo !== null && valor > techo) {
+        return { error: `El mínimo de «${fila.sucursal}» (${valor}) no puede ser mayor que el stock máximo (${techo}).` }
+      }
+    }
+    if (valor !== fila.original) cambios.push({ fila, valor })
+  }
+  return { cambios }
+}
 
 /** Valida los dos campos de texto (vacío = sin valor propio). Devuelve el error, o los valores a mandar. */
 function leerParametrosReposicion(plazo: string, techo: string, minimo: number):
@@ -201,6 +278,11 @@ export function Productos({
   const [repoTecho, setRepoTecho] = useState('')
   const [repoOriginal, setRepoOriginal] = useState<ParametrosReposicion>({ plazo_entrega_dias: null, stock_maximo: null })
   const [repoEstado, setRepoEstado] = useState<EstadoReposicion>('sin')
+  // Mínimo por sucursal del producto que se edita (sólo en edición: el alta no tiene id todavía). `sin` = no aplica (otra o ninguna sucursal, o un motor
+  // que no lo maneja); `error` = no se pudo leer y no se toca.
+  const [minimos, setMinimos] = useState<MinimoEditable[]>([])
+  const [minimosGlobal, setMinimosGlobal] = useState(0)
+  const [minimosEstado, setMinimosEstado] = useState<EstadoReposicion>('sin')
   // Proveedor habitual (motor >= 0.33.0): el selector sólo aparece si el motor lo devolvió. `''` = sin proveedor.
   const [repoConProveedor, setRepoConProveedor] = useState(false)
   const [repoProveedor, setRepoProveedor] = useState('')
@@ -237,6 +319,10 @@ export function Productos({
   const precioVenta = Number(form.watch('precio_venta')) || 0
   const precioCosto = Number(form.watch('precio_costo')) || 0
   const margen = precioCosto > 0 && precioVenta > 0 ? ((precioVenta - precioCosto) / precioCosto) * 100 : null
+  // El global que ven las sucursales sin mínimo propio: el «Stock mínimo» del formulario tal como está escrito (si no es un número, el que leyó el motor).
+  const textoMinimoGlobal = String(form.watch('stock_minimo') ?? '').trim()
+  const minimoGlobalVisible = textoMinimoGlobal !== '' && Number.isFinite(Number(textoMinimoGlobal)) && Number(textoMinimoGlobal) >= 0
+    ? Number(textoMinimoGlobal) : minimosGlobal
 
   useEffect(() => {
     loadProductos()
@@ -320,6 +406,8 @@ export function Productos({
     setRepoProveedorOriginal('')
     setRepoProveedorNombre('')
     setRepoEstado(conParametrosDeReposicion ? 'listo' : 'sin')
+    setMinimos([])
+    setMinimosEstado('sin')
     repoLectura.current += 1
     setDialogOpen(true)
   }
@@ -359,9 +447,26 @@ export function Productos({
     setRepoProveedorOriginal('')
     setRepoProveedorNombre('')
     setRepoEstado(conParametrosDeReposicion ? 'cargando' : 'sin')
+    setMinimos([])
+    setMinimosEstado(conParametrosDeReposicion ? 'cargando' : 'sin')
     const lectura = ++repoLectura.current
     setDialogOpen(true)
     if (conParametrosDeReposicion) {
+      api.get<unknown>(`/api/productos/${producto.id}/reposicion/minimos`)
+        .then((d) => {
+          if (lectura !== repoLectura.current) return
+          const leidos = leerMinimosPorSucursal(d, producto.stock_minimo)
+          // Con una sola sucursal (o ninguna) no hay nada que distinguir del global: la sección no se ofrece.
+          if (leidos.filas.length < 2) { setMinimosEstado('sin'); return }
+          setMinimos(leidos.filas)
+          setMinimosGlobal(leidos.global)
+          setMinimosEstado('listo')
+        })
+        // 404 / 405 / 503: el motor no maneja el mínimo por sucursal (sin el router, o sin la migración 0005), y el formulario es el de siempre. Cualquier otro error se dice.
+        .catch((err) => {
+          if (lectura !== repoLectura.current) return
+          setMinimosEstado(err instanceof ApiError && (err.status === 404 || err.status === 405 || err.status === 503) ? 'sin' : 'error')
+        })
       api.get<ParametrosLeidos>(`/api/productos/${producto.id}/reposicion`)
         .then((d) => {
           if (lectura !== repoLectura.current) return
@@ -387,8 +492,9 @@ export function Productos({
   abrirEditarActual.current = abrirEditar
 
   async function handleSubmit(values: Valores) {
-    // No se guarda mientras se leen el plazo y el techo: sin verlos no se puede validar el mínimo contra el máximo que ya había.
-    if (repoEstado === 'cargando') return
+    // No se guarda mientras se leen el plazo y el techo ni los mínimos por sucursal: sin verlos no se puede validar el mínimo contra el máximo que ya había
+    // (bajar el techo por debajo de un mínimo propio que todavía no llegó guardaría el producto y recién después recibiría el 422).
+    if (repoEstado === 'cargando' || minimosEstado === 'cargando') return
     setSaving(true)
     setFormError(null)
     // Se manda sólo lo que este producto edita: lo que no se manda toma el
@@ -414,6 +520,8 @@ export function Productos({
     if (conVence && values.vence !== (editingProducto?.vence === true)) payload.vence = values.vence
     // Plazo y techo se validan ANTES de escribir nada: un valor inválido no deja el producto a medias.
     let repoAMandar: (ParametrosReposicion & { proveedor_id?: number | null }) | null = null
+    // El techo que va a quedar tras el guardado (el del formulario, lo haya tocado o no); `null` si no hay o no se pudo leer la reposición.
+    let techoFinal: number | null = null
     if (conParametrosDeReposicion && repoEstado === 'listo') {
       const leidos = leerParametrosReposicion(repoPlazo, repoTecho, Number(values.stock_minimo) || 0)
       if ('error' in leidos) {
@@ -422,24 +530,44 @@ export function Productos({
         return
       }
       const v = leidos.valores
+      techoFinal = v.stock_maximo
       // El proveedor viaja sólo si el motor lo maneja Y el usuario lo cambió (un motor anterior rechaza claves de más, y no tocarlo lo deja como estaba).
       const proveedorCambio = proveedorDisponible && repoProveedor !== repoProveedorOriginal
       if (v.plazo_entrega_dias !== repoOriginal.plazo_entrega_dias || v.stock_maximo !== repoOriginal.stock_maximo || proveedorCambio) {
         repoAMandar = proveedorCambio ? { ...v, proveedor_id: repoProveedor === '' ? null : Number(repoProveedor) } : v
       }
     }
+    // Lo mismo con los mínimos por sucursal: independientes del plazo y el techo, y de si se pudo leer la reposición.
+    let minimosAMandar: { fila: MinimoEditable; valor: number | null }[] = []
+    if (editingProducto && minimosEstado === 'listo') {
+      const leidos = leerMinimosAMandar(minimos, techoFinal)
+      if ('error' in leidos) {
+        setFormError(leidos.error)
+        setSaving(false)
+        return
+      }
+      minimosAMandar = leidos.cambios
+    }
+    // Este guardado pertenece al diálogo con el que empezó (la misma numeración que protege las lecturas): si mientras tanto se cerró y se abrió otro producto,
+    // lo que vuelve de la red no toca el estado del otro diálogo.
+    const sesion = repoLectura.current
+    const vigente = () => sesion === repoLectura.current
     let guardado = false
+    // Dónde falló, para decirlo: el producto, la reposición (plazo/techo/proveedor) o el mínimo de una sucursal.
+    // (`as`: las funciones de abajo la reasignan y TypeScript no sigue esas asignaciones al estrechar el tipo.)
+    let etapa = 'producto' as 'producto' | 'reposicion' | 'minimo'
+    let sucursalEnCurso = ''
     try {
       let id = editingProducto?.id
       if (editingProducto) {
-        // Si sólo cambió el plazo o el techo, el producto no se vuelve a guardar: quien puede decidir la reposición (el depósito) no siempre
-        // puede editar el producto, y un guardado del producto que no cambia nada no tiene por qué fallarle ni escribir de más.
+        // Si sólo cambió la reposición (plazo, techo, proveedor o un mínimo por sucursal), el producto no se vuelve a guardar: quien puede decidir la
+        // reposición (el depósito) no siempre puede editar el producto, y un guardado del producto que no cambia nada no tiene por qué fallarle ni escribir de más.
         const iniciales = valoresIniciales.current
-        const productoSinCambios = repoAMandar !== null && iniciales !== null &&
+        const productoSinCambios = (repoAMandar !== null || minimosAMandar.length > 0) && iniciales !== null &&
           (Object.keys(values) as (keyof Valores)[]).every((k) => String(values[k]) === String(iniciales[k]))
         // Sin ver el costo no se puede guardar el producto: el 0 de relleno pisaría el costo real. Sólo se guarda lo de reposición.
         if (!productoSinCambios && costoOculto.current) {
-          setFormError('Tu rol no ve el costo de este producto, así que no puede editar el producto: sólo el plazo de entrega y el stock máximo.')
+          setFormError('Tu rol no ve el costo de este producto, así que no puede editar el producto: sólo la reposición (plazo de entrega, stock máximo y mínimos por sucursal).')
           setSaving(false)
           return
         }
@@ -448,25 +576,62 @@ export function Productos({
           guardado = true
           // Lo que ya quedó en el servidor es la base para comparar si hay que reintentar: si el plazo/techo falla y el usuario deshace
           // su cambio al producto, ese deshacer tiene que guardarse.
-          valoresIniciales.current = { ...values }
+          if (vigente()) valoresIniciales.current = { ...values }
         }
       } else {
         const creado = await api.post<Producto>('/api/productos', payload)
         id = creado?.id
         guardado = true
         // Ya existe: si falla el plazo/techo y se reintenta, el diálogo pasa a editar ESE producto y no crea otro.
-        if (creado && repoAMandar) setEditingProducto(creado)
+        if (creado && repoAMandar && vigente()) setEditingProducto(creado)
       }
-      if (repoAMandar && id !== undefined) await api.put(`/api/productos/${id}/reposicion`, repoAMandar)
-      setDialogOpen(false)
+      const escribirReposicion = async () => {
+        if (!repoAMandar || id === undefined) return
+        etapa = 'reposicion'
+        await api.put(`/api/productos/${id}/reposicion`, repoAMandar)
+        // Ya quedó en el servidor: si lo que sigue falla y se reintenta, no se manda de nuevo.
+        if (!vigente()) return
+        setRepoOriginal({ plazo_entrega_dias: repoAMandar.plazo_entrega_dias, stock_maximo: repoAMandar.stock_maximo })
+        if ('proveedor_id' in repoAMandar) setRepoProveedorOriginal(repoProveedor)
+      }
+      const escribirMinimos = async () => {
+        if (id === undefined) return
+        // Una sucursal por pedido y sólo las que cambiaron. Las que ya quedaron guardadas pasan a ser la base: un reintento sigue por las que faltan.
+        for (const { fila, valor } of minimosAMandar) {
+          etapa = 'minimo'
+          sucursalEnCurso = fila.sucursal
+          await api.put(`/api/productos/${id}/reposicion/minimos/${fila.sucursal_id}`, { stock_minimo: valor })
+          // La base de comparación pasa a ser lo que quedó en el servidor, en número Y en texto: si el usuario devuelve el campo al texto viejo, eso es un cambio.
+          if (vigente()) {
+            setMinimos((prev) => prev.map((f) => (
+              f.sucursal_id === fila.sucursal_id ? { ...f, original: valor, textoOriginal: valor === null ? '' : textoDecimal(valor) } : f)))
+          }
+        }
+      }
+      // El motor no acepta un techo menor que algún mínimo por sucursal ni un mínimo mayor que el techo, y cada pedido se valida contra lo que ya está
+      // guardado: si el techo baja (o aparece), los mínimos van primero para que el techo nuevo no choque con los viejos; si no, el techo va primero.
+      const techoNuevo = repoAMandar?.stock_maximo ?? null
+      const techoBaja = techoNuevo !== null && (repoOriginal.stock_maximo === null || techoNuevo < repoOriginal.stock_maximo)
+      if (techoBaja) {
+        await escribirMinimos()
+        await escribirReposicion()
+      } else {
+        await escribirReposicion()
+        await escribirMinimos()
+      }
+      if (vigente()) setDialogOpen(false)
       await loadProductos()
     } catch (err) {
-      if (guardado) {
-        // El producto sí quedó guardado; sólo falló el plazo/techo. Se dice y el diálogo sigue abierto para reintentar.
-        setFormError(`El producto se guardó, pero no se pudieron guardar el plazo y el stock máximo: ${describeError(err)}`)
+      const detalle = describeError(err)
+      const falla = etapa === 'minimo'
+        ? `no se pudo guardar el mínimo de «${sucursalEnCurso}»: ${detalle}`
+        : `no se pudieron guardar el plazo y el stock máximo: ${detalle}`
+      if (guardado && etapa !== 'producto') {
+        // El producto sí quedó guardado; sólo falló lo que sigue. Se dice y el diálogo sigue abierto para reintentar.
+        if (vigente()) setFormError(`El producto se guardó, pero ${falla}`)
         await loadProductos()
-      } else {
-        setFormError(describeError(err))
+      } else if (vigente()) {
+        setFormError(etapa === 'minimo' ? `No se pudo guardar el mínimo de «${sucursalEnCurso}»: ${detalle}` : detalle)
       }
     } finally {
       setSaving(false)
@@ -774,18 +939,18 @@ export function Productos({
                           <div className="grid gap-2">
                             <Label htmlFor="repo-plazo">Plazo de entrega (días)</Label>
                             <Input id="repo-plazo" inputMode="numeric" placeholder="general" className="w-32" value={repoPlazo}
-                              disabled={repoEstado === 'cargando'} onChange={(e) => setRepoPlazo(e.target.value)} />
+                              disabled={repoEstado === 'cargando' || saving} onChange={(e) => setRepoPlazo(e.target.value)} />
                           </div>
                           <div className="grid gap-2">
                             <Label htmlFor="repo-techo">Stock máximo</Label>
                             <Input id="repo-techo" inputMode="decimal" placeholder="sin tope" className="w-32" value={repoTecho}
-                              disabled={repoEstado === 'cargando'} onChange={(e) => setRepoTecho(e.target.value)} />
+                              disabled={repoEstado === 'cargando' || saving} onChange={(e) => setRepoTecho(e.target.value)} />
                           </div>
                           {proveedorDisponible && (
                             <div className="grid gap-2">
                               <Label htmlFor="repo-proveedor">Proveedor habitual</Label>
                               <Select value={repoProveedor === '' ? SIN_PROVEEDOR : repoProveedor}
-                                onValueChange={(v) => setRepoProveedor(v === SIN_PROVEEDOR ? '' : v)} disabled={repoEstado === 'cargando'}>
+                                onValueChange={(v) => setRepoProveedor(v === SIN_PROVEEDOR ? '' : v)} disabled={repoEstado === 'cargando' || saving}>
                                 <SelectTrigger id="repo-proveedor" className="w-56"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value={SIN_PROVEEDOR}>Sin proveedor</SelectItem>
@@ -801,6 +966,32 @@ export function Productos({
                             Vacíos, la reposición usa el plazo general y no pone tope. El máximo cuenta lo que ya viene en camino y no puede ser menor que el stock mínimo.
                           </p>
                         </div>
+                      )}
+                    </fieldset>
+                  )}
+                  {conParametrosDeReposicion && editingProducto !== null && (minimosEstado === 'listo' || minimosEstado === 'error') && (
+                    <fieldset className="grid w-full gap-2 rounded-md border p-3" aria-label="Mínimo por sucursal">
+                      <legend className="px-1 text-sm font-medium">Mínimo por sucursal</legend>
+                      {minimosEstado === 'error' ? (
+                        <p role="status" className="text-xs text-muted-foreground">
+                          No se pudieron leer los mínimos por sucursal de este producto; no se van a modificar.
+                        </p>
+                      ) : (
+                        <>
+                          <div className="flex flex-wrap gap-4">
+                            {minimos.map((f) => (
+                              <div key={f.sucursal_id} className="grid gap-2">
+                                <Label htmlFor={`repo-minimo-${f.sucursal_id}`}>Mínimo en {f.sucursal}</Label>
+                                <Input id={`repo-minimo-${f.sucursal_id}`} inputMode="decimal" placeholder={`global: ${minimoGlobalVisible}`} className="w-32"
+                                  value={f.texto} disabled={saving}
+                                  onChange={(e) => setMinimos((prev) => prev.map((x) => (x.sucursal_id === f.sucursal_id ? { ...x, texto: e.target.value } : x)))} />
+                              </div>
+                            ))}
+                          </div>
+                          <p className="w-full text-xs text-muted-foreground">
+                            Vacío = usa el global: {minimoGlobalVisible}. Un mínimo propio vale sólo para esa sucursal en la reposición sugerida.
+                          </p>
+                        </>
                       )}
                     </fieldset>
                   )}
@@ -884,7 +1075,7 @@ export function Productos({
                       </Button>
                     )}
                     <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
-                    <Button type="submit" disabled={saving || repoEstado === 'cargando'}>
+                    <Button type="submit" disabled={saving || repoEstado === 'cargando' || minimosEstado === 'cargando'}>
                       {saving ? 'Guardando…' : editingProducto ? 'Guardar cambios' : 'Crear producto'}
                     </Button>
                   </DialogFooter>

@@ -135,6 +135,25 @@ describe('Reposición: lo que muestra', () => {
     // Harina no tiene nada en camino sin sucursal: no hay aviso.
     expect(texto(fila('Harina'))).not.toContain('sin sucursal')
   })
+
+  it('con una sucursal elegida, el mínimo propio de esa sucursal se dice con texto; el global y «toda la instancia» no llevan marca', async () => {
+    const user = userEvent.setup()
+    // Aunque el motor marque `propio` (no debería sin sucursal), sin sucursal elegida no hay nada que aclarar.
+    await abrir({ ...TODO, [RUTA]: { ...DATA, productos: [{ ...YERBA, stock_minimo_propio: true }, HARINA, SAL] } })
+    expect(texto(fila('Yerba'))).not.toContain('propio')
+
+    responder({
+      ...TODO,
+      [RUTA]: { ...DATA, sucursal_id: 2, productos: [{ ...YERBA, stock_minimo_propio: true }, { ...HARINA, stock_minimo_propio: false }, SAL] },
+    })
+    await user.selectOptions(await screen.findByLabelText('Sucursal'), '2')
+    await waitFor(() => expect(within(fila('Yerba')).getByText('propio de la sucursal')).toBeTruthy())
+    expect(within(fila('Yerba')).getByText('propio de la sucursal').closest('td')?.textContent).toBe('5propio de la sucursal')
+    // El global (`false`) y un motor anterior (sin la clave) no llevan marca: la celda es sólo el número.
+    expect(texto(fila('Harina'))).not.toContain('propio')
+    expect(texto(fila('Sal'))).not.toContain('propio')
+    expect(fila('Harina').textContent).toContain('0,25')
+  })
 })
 
 describe('Reposición: lo vencido', () => {

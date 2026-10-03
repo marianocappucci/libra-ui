@@ -22,6 +22,9 @@
 // **Órdenes en borrador (0.105.0, motor >= 0.34.0, ADR-022):** el botón «Generar órdenes en borrador» (prop `conGenerarOrdenes`: el producto la enciende
 // sólo si su motor es >= 0.34.0 y quien mira puede escribir Compras) crea una orden por proveedor habitual con lo que se ve; ver `reposicion-ordenes.tsx`. `rutaDeOrden` lleva a cada orden creada.
 //
+// **Mínimo por sucursal (0.108.0, ADR-010):** con una sucursal elegida, la fila trae `stock_minimo` ya resuelto y `stock_minimo_propio`: si es `true`, el mínimo
+// que se ve es el que ese producto tiene en esa sucursal (se carga en el formulario del producto, «Mínimo por sucursal») y la celda lo dice con texto; si no, es el global.
+//
 // 🔴 **Los avisos por fila no son adorno.** `posible_quiebre` dice que la rotación de ese producto se estimó con
 // pocos días con stock y puede estar subestimada (se sugiere de menos); `sin_ventas` que no hay rotación, y por eso
 // la cobertura es un guion y el producto sólo aparece si está bajo el mínimo; `en_camino_sin_sucursal`, que con una
@@ -413,7 +416,12 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
                             </span>
                           )}
                         </td>
-                        <td className="p-3 text-right">{numero(p.stock_minimo)}</td>
+                        <td className="p-3 text-right">
+                          {numero(p.stock_minimo)}
+                          {data.sucursal_id !== null && p.stock_minimo_propio === true && (
+                            <span className="block text-xs text-muted-foreground">propio de la sucursal</span>
+                          )}
+                        </td>
                         <td className="p-3 text-right">{numero(p.unidades_vendidas)}</td>
                         <td className="p-3 text-right">{numero(p.rotacion_diaria)}</td>
                         <td className="p-3 text-right">{p.cobertura_dias === null ? '—' : numero(p.cobertura_dias)}</td>
