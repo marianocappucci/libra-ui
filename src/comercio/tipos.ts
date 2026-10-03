@@ -696,7 +696,19 @@ export type ReposicionProducto = {
   proveedor?: string | null
   /** El ajuste estacional de esta fila (motor >= 0.35.0, ADR-023): `null` si no hay historia de hace un año para ajustar (o el ajuste está apagado). */
   factor_estacional?: number | null
+  /** `stock_minimo` ya viene resuelto: con una sucursal elegida, `true` si es el mínimo PROPIO de esa sucursal y `false` si es el global del producto
+   *  (mínimo por sucursal, ADR-010 de libra-ui). Falta con un motor anterior: se toma como `false`. */
+  stock_minimo_propio?: boolean
 }
+
+/** El mínimo de un producto en una sucursal (`GET /api/productos/{id}/reposicion/minimos`, ADR-024 del motor). `stock_minimo` es el EFECTIVO (el que usa la
+ *  reposición ahí): el propio si la sucursal lo tiene, si no el global. `stock_minimo_propio` dice cuál de los dos es; `stock_minimo_global` es la referencia
+ *  (la misma en todas las filas). Sólo con `stock_minimo_propio === true` el `stock_minimo` es un valor de la sucursal. */
+export type MinimoSucursal = {
+  sucursal_id: number; sucursal: string; stock_minimo: number; stock_minimo_propio: boolean; stock_minimo_global: number
+}
+/** Lo que devuelve ese `GET` (y lo que responde el `PUT .../minimos/{sucursal_id}`): una fila por sucursal activa. */
+export type MinimosPorSucursal = { producto_id: number; sucursales: MinimoSucursal[] }
 
 export type ReposicionResumen = { productos: number; a_pedir: number; posible_quiebre: number; sin_ventas: number }
 
