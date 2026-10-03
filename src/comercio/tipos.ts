@@ -675,6 +675,9 @@ export type ReposicionProducto = {
   /** La parte de `stock` que está en lotes ya vencidos y la sugerencia no cuenta (motor >= 0.31.0, ADR-019). Falta con un
    *  motor anterior: se toma como 0. */
   vencido?: number
+  /** Lo de los lotes que vencen dentro del horizonte (cobertura + plazo) y no alcanza a venderse antes de vencer (motor >= 0.37.0, ADR-025; ADR-011 de libra-ui). El motor ya
+   *  lo resta del stock que usa para sugerir; `stock` sigue siendo el real y `vencido` lo ya vencido: es aparte. 0 con la opción apagada. Falta con un motor anterior. */
+  por_vencer?: number
   /** Lo pedido a proveedores que todavía no llegó (órdenes abiertas, `draft` incluido). */
   en_camino: number
   /** La parte de `en_camino` que sale de órdenes sin sucursal: con una sucursal elegida se cuenta igual. */
@@ -719,6 +722,8 @@ export type ReposicionData = {
   proveedor_id?: number | null
   /** Si la consulta pidió el ajuste por estacionalidad. La clave misma dice que el motor la maneja: falta con uno anterior. */
   estacionalidad?: boolean
+  /** Si la consulta pidió descontar lo que vence dentro del horizonte (motor >= 0.37.0). La clave misma dice que el motor la maneja: falta con uno anterior. */
+  descontar_por_vencer?: boolean
   resumen: ReposicionResumen
   /** En orden de urgencia: menor cobertura primero, después mayor `sugerido`; sin rotación al final. */
   productos: ReposicionProducto[]

@@ -185,3 +185,33 @@ wiki (entidad `libra-ui` y `concepts/estandares-desarrollo`).
   - **`Reposicion.tsx`:** con una sucursal elegida, si la fila trae `stock_minimo_propio: true` la celda del mínimo agrega el texto «propio de la sucursal»
     (con texto, no sólo color). Sin sucursal o sin la clave (motor anterior) no hay marca.
 - Consecuencias: el motor sigue siendo la autoridad de la validación mínimo/techo (el kit la repite para no dejar un guardado a medias, y muestra el 422 tal cual si igual falla). Los mínimos no viajan en la lista de productos: se leen al abrir la edición.
+
+## ADR-011 — Reposición: «Descontar lo que vence en el horizonte» es un interruptor del motor, con su columna «Por vencer», y viaja en la consulta, el CSV y las órdenes
+
+- Estado: aceptada (pedido del humano, 2026-10-03)
+- Fecha: 2026-10-03 (`v0.109.0`)
+- Contexto: la reposición ya no cuenta como stock lo que está en lotes vencidos (`vencido`, motor 0.31.0), pero un lote que vence dentro del horizonte (días de cobertura más
+  plazo de entrega) y no alcanza a venderse antes de vencer también es mercadería que no va a estar para vender, y hoy se la toma como si sobrara. El motor (libracommerce >= 0.37.0,
+  ADR-025) lo resuelve: `GET /api/reportes/reposicion` (y su export CSV) acepta `descontar_por_vencer=true|false` (apagado por defecto), responde con el eco `descontar_por_vencer: boolean`
+  y cada fila trae `por_vencer: number` (0 con la opción apagada). El motor ya resta `por_vencer` del stock utilizable: `stock` sigue siendo el real y `vencido` lo ya vencido;
+  `por_vencer` es aparte. El CSV agrega la columna `por_vencer` al final. `POST /api/reportes/reposicion/ordenes` acepta el mismo `descontar_por_vencer`.
+- Decisión: el mismo patrón que la estacionalidad (0.107.0), sin prop nueva.
+  - **Interruptor «Descontar lo que vence en el horizonte»**, apagado por defecto, con la ayuda visible «Lo que no se alcanza a vender antes de vencer no cuenta como stock.» (enlazada con
+    `aria-describedby`; el nombre accesible del interruptor es sólo su rótulo). **Se ofrece sólo si el motor lo maneja:** la respuesta trae la clave `descontar_por_vencer` y, una vez vista,
+    se recuerda aunque una consulta posterior falle o venga vacía. No depende de ninguna prop de versión del motor (`conGenerarOrdenes` es de otra cosa: de un endpoint de escritura y de
+    un permiso, que la pantalla no puede saber desde los datos): la señal es la clave misma, como en la estacionalidad y el proveedor.
+  - **El valor viaja en tres lugares y siempre el que está en pantalla:** la consulta (`descontar_por_vencer=true` sólo si está prendido; apagado no se manda y el motor cae en su defecto),
+    el enlace del CSV (es la misma consulta) y los parámetros de las órdenes en borrador (`ParametrosDeOrdenes.descontar_por_vencer`, que se guarda con el intento pendiente y se reenvía
+    tal cual). Conviven con `estacionalidad`: se mandan los dos si están prendidos.
+  - **Columna «Por vencer»**, sólo cuando la respuesta es de una consulta con la opción prendida (`descontar_por_vencer === true`) **y** las filas traen `por_vencer`. Va pegada al
+    «Stock» (es lo que se le descuenta). Con texto: la cantidad y, debajo, «no cuenta como stock»; sin nada por vencer (0, o la fila sin la clave) un guion, no un 0. A diferencia de
+    «Vencido» (un aviso dentro de la celda del stock que se omite cuando es 0), esto es una columna entera con su orden, así que una celda vacía no sería legible: guion. El «Stock» no se
+    toca (sigue siendo el real). La explicación de la pantalla suma, sólo con la opción prendida, que tampoco cuenta lo que vence dentro del horizonte (con los días).
+  - **Ordenable** como las demás numéricas (la primera vez de mayor a menor); una fila sin `por_vencer` va siempre al final. **Apagar el interruptor limpia un orden por esa columna**
+    (hallazgo de Codex sobre la estacionalidad): la columna desaparece y un orden por ella quedaría activo, sin flecha y sin que se vea. Un orden por otra columna no se toca.
+  - **Tolerante con un motor anterior:** sin la clave `descontar_por_vencer` no hay interruptor ni columna, y la pantalla es la de siempre. Un motor que contesta el eco pero no manda
+    `por_vencer` en las filas no muestra columna y no se rompe.
+- Consecuencias: el cálculo (qué lotes cuentan, qué se alcanza a vender) es del motor; la pantalla no lo repite ni resta nada. Al encender o apagar la opción la lista se pide de nuevo
+  (cambia la consulta). **Un hallazgo que no se corrige acá:** el test de la estacionalidad «apagar el ajuste … limpia ese orden» arranca con el interruptor ya «prendido» sólo en
+  la respuesta simulada pero apagado en el estado de la pantalla, así que su primer clic en realidad lo enciende y el orden se limpia recién en el segundo; el de «Por vencer» prende de
+  verdad antes de ordenar. No se tocó la estacionalidad por no ampliar el alcance.

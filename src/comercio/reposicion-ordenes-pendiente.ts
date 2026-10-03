@@ -13,6 +13,8 @@ export type ParametrosDeOrdenes = {
   sucursal_id?: number; categoria?: string; proveedor_id?: number
   /** El ajuste estacional de la consulta: las órdenes se calculan con el mismo que se ve. */
   estacionalidad?: boolean
+  /** Descontar lo que vence dentro del horizonte (motor >= 0.37.0): las órdenes se calculan con la misma opción que se ve. */
+  descontar_por_vencer?: boolean
 }
 
 /** El pedido entero de un intento: lo que se vio, con qué parámetros y con qué clave. */

@@ -572,3 +572,153 @@ describe('Reposición: estacionalidad (motor >= 0.35.0, ADR-023)', () => {
     expect((await screen.findByRole('button', { name: /^Estacional/ })).closest('th')).toHaveAttribute('aria-sort', 'none')
   })
 })
+
+describe('Reposición: descontar lo que vence en el horizonte (motor >= 0.37.0, ADR-025; ADR-011 de libra-ui)', () => {
+  const ROTULO = 'Descontar lo que vence en el horizonte'
+  const APAGADA: ReposicionData = { ...DATA, descontar_por_vencer: false, productos: [YERBA, HARINA, SAL].map((p) => ({ ...p, por_vencer: 0 })) }
+  const DESCONTADA: ReposicionData = {
+    ...DATA, descontar_por_vencer: true,
+    productos: [{ ...YERBA, por_vencer: 4 }, { ...HARINA, por_vencer: 0.5 }, { ...SAL, por_vencer: 0 }],
+  }
+  const tabla = (data: ReposicionData) => ({ ...TODO, [RUTA]: data })
+  const columna = () => screen.queryByRole('button', { name: /^Por vencer/ })
+
+  it('con un motor que no la maneja no hay interruptor ni columna', async () => {
+    await abrir()
+    expect(screen.queryByLabelText(ROTULO)).toBeNull()
+    expect(columna()).toBeNull()
+  })
+
+  it('con un motor que la maneja aparece el interruptor, apagado, accesible por su etiqueta y con su ayuda; la columna todavía no', async () => {
+    await abrir(tabla(APAGADA))
+    const interruptor = await screen.findByLabelText(ROTULO)
+    expect(interruptor).toHaveAttribute('type', 'checkbox')
+    expect(interruptor).not.toBeChecked()
+    expect(interruptor).toHaveAccessibleDescription('Lo que no se alcanza a vender antes de vencer no cuenta como stock.')
+    expect(columna()).toBeNull()
+    expect(ultimaConsulta()).toBe(pide())                                       // apagado: el parámetro no viaja
+    expect(ultimaConsulta()).not.toContain('descontar_por_vencer')
+  })
+
+  it('encenderlo manda descontar_por_vencer=true y aparece la columna con la cantidad (y un guion donde no hay nada por vencer); apagarlo vuelve a la consulta de siempre', async () => {
+    const user = userEvent.setup()
+    await abrir(tabla(APAGADA))
+    responder(tabla(DESCONTADA))
+    await user.click(await screen.findByLabelText(ROTULO))
+    await waitFor(() => expect(ultimaConsulta()).toBe(pide('&descontar_por_vencer=true')))
+    expect(await screen.findByRole('button', { name: /^Por vencer/ })).toBeTruthy()
+    expect(texto(fila('Yerba'))).toContain('4no cuenta como stock')                 // con texto, no sólo color (spans separados: sin espacio en el textContent)
+    expect(texto(fila('Harina'))).toContain('0,5no cuenta como stock')
+    expect(texto(fila('Sal'))).not.toContain('no cuenta como stock')
+    // La columna va pegada al stock: Producto, Código, Stock, Por vencer, En camino…
+    const yerba = within(fila('Yerba')).getAllByRole('cell')
+    expect(yerba.slice(2, 5).map((c) => c.textContent)).toEqual(['2', '4no cuenta como stock', '10'])
+    expect(within(fila('Sal')).getAllByRole('cell')[3].textContent).toBe('—')
+    // El encabezado y su celda coinciden (no se corre una columna): cada título está sobre su dato.
+    const titulos = within(screen.getByRole('table')).getAllByRole('columnheader').map((th) => th.textContent)
+    expect(titulos.slice(2, 5)).toEqual(['Stock', 'Por vencer', 'En camino'])
+    expect(titulos).toHaveLength(yerba.length)
+    // El stock sigue siendo el real: lo por vencer no se resta en pantalla.
+    expect(within(fila('Yerba')).getAllByRole('cell')[2].textContent).toBe('2')
+    // La explicación suma lo que se descuenta, con el horizonte.
+    expect(texto(screen.getByText(/proyecta a los días de cobertura/))).toContain('ni lo que vence dentro del horizonte (18 días) y no se alcanza a vender antes de vencer')
+    responder(tabla(APAGADA))
+    await user.click(screen.getByLabelText(ROTULO))
+    await waitFor(() => expect(ultimaConsulta()).toBe(pide()))
+    await waitFor(() => expect(columna()).toBeNull())
+    expect(texto(screen.getByText(/proyecta a los días de cobertura/))).not.toContain('ni lo que vence')
+  })
+
+  it('la columna ordena por lo que vence (de mayor a menor la primera vez) y lo que no la trae va siempre al final', async () => {
+    const user = userEvent.setup()
+    await abrir(tabla({ ...DESCONTADA, productos: [{ ...SAL, por_vencer: 0 }, { ...YERBA, por_vencer: 4 }, { ...HARINA, por_vencer: 9 }] }))
+    await user.click(await screen.findByRole('button', { name: /^Por vencer/ }))
+    expect(nombresEnTabla()).toEqual(['Harina', 'Yerba', 'Sal'])
+    expect(screen.getByRole('button', { name: /^Por vencer/ }).closest('th')).toHaveAttribute('aria-sort', 'descending')
+    await user.click(screen.getByRole('button', { name: /^Por vencer/ }))
+    expect(nombresEnTabla()).toEqual(['Sal', 'Yerba', 'Harina'])
+  })
+
+  it('una fila sin `por_vencer` (clave ausente) va al final al ordenar, sin romper', async () => {
+    const user = userEvent.setup()
+    const { por_vencer: _quitada, ...sinClave } = { ...SAL, por_vencer: 0 }
+    await abrir(tabla({ ...DESCONTADA, productos: [sinClave, { ...YERBA, por_vencer: 4 }, { ...HARINA, por_vencer: 9 }] }))
+    await user.click(await screen.findByRole('button', { name: /^Por vencer/ }))
+    expect(nombresEnTabla()).toEqual(['Harina', 'Yerba', 'Sal'])
+    await user.click(screen.getByRole('button', { name: /^Por vencer/ }))
+    expect(nombresEnTabla()).toEqual(['Yerba', 'Harina', 'Sal'])
+    expect(within(fila('Sal')).getAllByRole('cell')[3].textContent).toBe('—')
+  })
+
+  it('apagar la opción con la tabla ordenada por «Por vencer» limpia ese orden: al volver a encenderla la columna no vuelve ordenada', async () => {
+    const user = userEvent.setup()
+    await abrir(tabla(APAGADA))
+    responder(tabla(DESCONTADA))
+    await user.click(await screen.findByLabelText(ROTULO))                                   // el interruptor queda realmente prendido
+    await user.click(await screen.findByRole('button', { name: /^Por vencer/ }))
+    expect(screen.getByRole('button', { name: /^Por vencer/ }).closest('th')).toHaveAttribute('aria-sort', 'descending')
+    responder(tabla({ ...APAGADA, productos: [SAL, YERBA, HARINA].map((p) => ({ ...p, por_vencer: 0 })) }))
+    await user.click(screen.getByLabelText(ROTULO))
+    await waitFor(() => expect(columna()).toBeNull())
+    expect(nombresEnTabla()).toEqual(['Sal', 'Yerba', 'Harina'])                            // el orden por urgencia del motor
+    expect(screen.queryByRole('button', { name: 'Orden por urgencia' })).toBeNull()         // y no queda un orden activo escondido
+    responder(tabla(DESCONTADA))
+    await user.click(screen.getByLabelText(ROTULO))
+    expect((await screen.findByRole('button', { name: /^Por vencer/ })).closest('th')).toHaveAttribute('aria-sort', 'none')
+    expect(screen.queryByRole('button', { name: 'Orden por urgencia' })).toBeNull()
+  })
+
+  it('apagar la opción NO limpia un orden por otra columna', async () => {
+    const user = userEvent.setup()
+    await abrir(tabla(APAGADA))
+    responder(tabla(DESCONTADA))
+    await user.click(await screen.findByLabelText(ROTULO))
+    await user.click(await screen.findByRole('button', { name: /^Mínimo/ }))
+    responder(tabla(APAGADA))
+    await user.click(screen.getByLabelText(ROTULO))
+    await waitFor(() => expect(columna()).toBeNull())
+    expect(screen.getByRole('button', { name: /^Mínimo/ }).closest('th')).toHaveAttribute('aria-sort', 'descending')
+  })
+
+  it('el CSV lleva el mismo valor que la lista: sin la opción no hay parámetro, con ella viaja', async () => {
+    const user = userEvent.setup()
+    await abrir(tabla(APAGADA))
+    expect(screen.getByRole('link', { name: /CSV/ }).getAttribute('href')).toBe(`${RUTA}/export?${consulta()}`)
+    responder(tabla(DESCONTADA))
+    await user.click(await screen.findByLabelText(ROTULO))
+    await waitFor(() => expect(screen.getByRole('link', { name: /CSV/ }).getAttribute('href')).toBe(`${RUTA}/export?${consulta('&descontar_por_vencer=true')}`))
+  })
+
+  it('un motor que contesta el eco pero no manda `por_vencer` en las filas: no aparece la columna y la pantalla no se rompe', async () => {
+    await abrir(tabla({ ...DATA, descontar_por_vencer: true }))
+    expect(await screen.findByLabelText(ROTULO)).toBeTruthy()
+    expect(columna()).toBeNull()
+    expect(nombresEnTabla()).toEqual(['Yerba', 'Harina', 'Sal'])
+  })
+
+  it('convive con la estacionalidad: los dos viajan juntos, las dos columnas aparecen y apagar una no toca a la otra', async () => {
+    const user = userEvent.setup()
+    const AMBAS: ReposicionData = {
+      ...DATA, estacionalidad: true, descontar_por_vencer: true,
+      productos: [{ ...YERBA, factor_estacional: 3, por_vencer: 4 }, { ...HARINA, factor_estacional: 0.5, por_vencer: 0 }, { ...SAL, factor_estacional: null, por_vencer: 0 }],
+    }
+    await abrir(tabla({ ...DATA, estacionalidad: false, descontar_por_vencer: false }))
+    responder(tabla({ ...AMBAS, descontar_por_vencer: false, estacionalidad: true }))
+    await user.click(await screen.findByLabelText('Ajustar por estacionalidad'))
+    await waitFor(() => expect(ultimaConsulta()).toBe(pide('&estacionalidad=true')))
+    responder(tabla(AMBAS))
+    await user.click(screen.getByLabelText(ROTULO))
+    await waitFor(() => expect(ultimaConsulta()).toBe(pide('&estacionalidad=true&descontar_por_vencer=true')))
+    expect(await screen.findByRole('button', { name: /^Por vencer/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^Estacional/ })).toBeTruthy()
+    expect(screen.getByLabelText('Ajustar por estacionalidad')).toBeChecked()
+    expect(screen.getByLabelText(ROTULO)).toBeChecked()
+    // Apagar «por vencer» deja la estacionalidad prendida y su orden en pie.
+    await user.click(screen.getByRole('button', { name: /^Estacional/ }))
+    responder(tabla({ ...AMBAS, descontar_por_vencer: false }))
+    await user.click(screen.getByLabelText(ROTULO))
+    await waitFor(() => expect(ultimaConsulta()).toBe(pide('&estacionalidad=true')))
+    await waitFor(() => expect(columna()).toBeNull())
+    expect(screen.getByRole('button', { name: /^Estacional/ }).closest('th')).toHaveAttribute('aria-sort', 'descending')
+  })
+})

@@ -19,6 +19,11 @@
 // que proyecta con lo que pasó hace un año, y una columna «Estacional» con el factor de cada producto (`×3`: hace un año, después de una ventana como la de ahora, se vendió el
 // triple por día; un guion = sin historia de hace un año, sin ajuste). Las órdenes en borrador se calculan con el mismo ajuste que se ve.
 //
+// **Descontar lo que vence en el horizonte (0.109.0, motor >= 0.37.0, ADR-025 del motor; ADR-011 de libra-ui):** un interruptor «Descontar lo que vence en el horizonte»
+// (sólo si el motor lo maneja: la respuesta trae la clave `descontar_por_vencer`; apagado por defecto) y una columna «Por vencer» sólo con la opción prendida: lo de los lotes que
+// vencen dentro del horizonte (cobertura + plazo) y no alcanza a venderse antes de vencer, que el motor ya restó del stock que usa para sugerir. Es el mismo patrón que la
+// estacionalidad y los dos interruptores conviven. Las órdenes en borrador llevan el mismo valor que se ve.
+//
 // **Órdenes en borrador (0.105.0, motor >= 0.34.0, ADR-022):** el botón «Generar órdenes en borrador» (prop `conGenerarOrdenes`: el producto la enciende
 // sólo si su motor es >= 0.34.0 y quien mira puede escribir Compras) crea una orden por proveedor habitual con lo que se ve; ver `reposicion-ordenes.tsx`. `rutaDeOrden` lleva a cada orden creada.
 //
@@ -81,7 +86,7 @@ function errorDelParametro(valor: string, max: number): string | null {
 
 type ClaveOrden =
   | 'nombre' | 'codigo' | 'stock' | 'en_camino' | 'stock_minimo' | 'unidades_vendidas' | 'rotacion_diaria'
-  | 'cobertura_dias' | 'sugerido' | 'motivo' | 'proveedor' | 'factor_estacional'
+  | 'cobertura_dias' | 'sugerido' | 'motivo' | 'proveedor' | 'factor_estacional' | 'por_vencer'
 
 const COLUMNAS: { orden: ClaveOrden; titulo: string; alinea: 'left' | 'right' }[] = [
   { orden: 'nombre', titulo: 'Producto', alinea: 'left' },
@@ -97,6 +102,7 @@ const COLUMNAS: { orden: ClaveOrden; titulo: string; alinea: 'left' | 'right' }[
 ]
 
 const COLUMNA_ESTACIONAL: { orden: ClaveOrden; titulo: string; alinea: 'left' | 'right' } = { orden: 'factor_estacional', titulo: 'Estacional', alinea: 'right' }
+const COLUMNA_POR_VENCER: { orden: ClaveOrden; titulo: string; alinea: 'left' | 'right' } = { orden: 'por_vencer', titulo: 'Por vencer', alinea: 'right' }
 const COLUMNA_PROVEEDOR: { orden: ClaveOrden; titulo: string; alinea: 'left' | 'right' } = { orden: 'proveedor', titulo: 'Proveedor', alinea: 'left' }
 
 /** Lo que se ordena de cada fila; `null` (sin código, sin cobertura, sin motivo) va siempre al final. */
@@ -105,6 +111,7 @@ function valorDeOrden(p: ReposicionProducto, clave: ClaveOrden): number | string
   if (clave === 'codigo') return p.codigo || null
   if (clave === 'proveedor') return p.proveedor || null
   if (clave === 'factor_estacional') return p.factor_estacional ?? null
+  if (clave === 'por_vencer') return p.por_vencer ?? null
   return p[clave]
 }
 
@@ -139,6 +146,9 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
   const [estacionalidad, setEstacionalidad] = useState(false)
   // Una vez que el motor contestó con la clave `estacionalidad` la maneja: se recuerda aunque una consulta posterior falle o venga vacía.
   const [conEstacionalidad, setConEstacionalidad] = useState(false)
+  const [descontarPorVencer, setDescontarPorVencer] = useState(false)
+  // Igual que `conEstacionalidad`: una vez que el motor contestó con la clave `descontar_por_vencer` la maneja.
+  const [conDescontarPorVencer, setConDescontarPorVencer] = useState(false)
   const [orden, setOrden] = useState<{ clave: ClaveOrden; sentido: 1 | -1 } | null>(null)
   const [sucursales, setSucursales] = useState<Sucursal[]>([])
   const [categorias, setCategorias] = useState<CategoriaProducto[]>([])
@@ -174,12 +184,13 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
       plazo_entrega_dias: String(Number(valores.plazo_entrega_dias)),
       solo_a_pedir: String(soloAPedir),
       ...(estacionalidad ? { estacionalidad: 'true' } : {}),
+      ...(descontarPorVencer ? { descontar_por_vencer: 'true' } : {}),
     })
     if (sucursal !== TODAS) q.set('sucursal_id', sucursal)
     if (categoria !== TODAS) q.set('categoria', categoria)
     if (proveedor !== TODAS) q.set('proveedor_id', proveedor)
     return q.toString()
-  }, [valido, valores, soloAPedir, estacionalidad, sucursal, categoria, proveedor])
+  }, [valido, valores, soloAPedir, estacionalidad, descontarPorVencer, sucursal, categoria, proveedor])
 
   // Sin sucursales o sin categorías (un producto sin sucursales, o un usuario sin permiso) la pantalla sigue: sólo
   // pierde ese filtro.
@@ -202,6 +213,7 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
         setRespuesta({ consulta, recarga, data, error: null })
         if (data && typeof data === 'object' && 'proveedor_id' in data) setConProveedor(true)
         if (data && typeof data === 'object' && 'estacionalidad' in data) setConEstacionalidad(true)
+        if (data && typeof data === 'object' && 'descontar_por_vencer' in data) setConDescontarPorVencer(true)
       })
       .catch((err) => {
         if (vigente) setRespuesta({ consulta, recarga, data: null, error: err instanceof ApiError ? err.detail : 'Error de conexión.' })
@@ -230,9 +242,13 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
     ...(categoria !== TODAS ? { categoria } : {}),
     ...(proveedor !== TODAS ? { proveedor_id: Number(proveedor) } : {}),
     ...(estacionalidad ? { estacionalidad: true } : {}),
+    ...(descontarPorVencer ? { descontar_por_vencer: true } : {}),
   }
   const conColumnaEstacional = data?.estacionalidad === true
-  const base = conProveedor ? [...COLUMNAS.slice(0, 2), COLUMNA_PROVEEDOR, ...COLUMNAS.slice(2)] : COLUMNAS
+  // Un motor que contesta el eco pero no manda `por_vencer` en las filas no tiene qué mostrar: sin columna (y sin romper).
+  const conColumnaPorVencer = data?.descontar_por_vencer === true && data.productos.some((p) => typeof p.por_vencer === 'number')
+  const conProveedorEnBase = conProveedor ? [...COLUMNAS.slice(0, 2), COLUMNA_PROVEEDOR, ...COLUMNAS.slice(2)] : COLUMNAS
+  const base = conColumnaPorVencer ? conProveedorEnBase.flatMap((c) => (c.orden === 'stock' ? [c, COLUMNA_POR_VENCER] : [c])) : conProveedorEnBase
   const columnas = conColumnaEstacional ? [...base.slice(0, base.findIndex((c) => c.orden === 'sugerido')), COLUMNA_ESTACIONAL, ...base.slice(base.findIndex((c) => c.orden === 'sugerido'))] : base
   // Lo que dice la ayuda son los controles, que son también lo que muestra la tabla (sólo se muestra la de esta consulta).
   const horizonte = valido ? Number(valores.dias_cobertura) + Number(valores.plazo_entrega_dias) : null
@@ -306,6 +322,19 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
             Ajustar por estacionalidad
           </label>
         )}
+        {conDescontarPorVencer && (
+          <div className="grid max-w-56 gap-1 pt-7">
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={descontarPorVencer} aria-describedby="reposicion-por-vencer-ayuda" onChange={(e) => {
+                setDescontarPorVencer(e.target.checked)
+                // Al apagarlo la columna desaparece: un orden por ella quedaría activo sin que se vea (y sin su flecha).
+                if (!e.target.checked && orden?.clave === 'por_vencer') setOrden(null)
+              }} className="size-4 shrink-0" />
+              Descontar lo que vence en el horizonte
+            </label>
+            <p id="reposicion-por-vencer-ayuda" className="text-xs text-muted-foreground">Lo que no se alcanza a vender antes de vencer no cuenta como stock.</p>
+          </div>
+        )}
       </div>
 
       {conGenerarOrdenes && hayPendiente && !generando && (
@@ -320,7 +349,9 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
         Se mira lo que se vendió en los últimos {valido ? valores.dias_rotacion : '…'} días y se proyecta a los días de
         cobertura más el plazo de entrega{horizonte !== null ? ` (${horizonte} días)` : ''}: sugerido = lo que se vendería en ese
         tiempo, menos lo que hay y lo que ya viene en camino. Si con eso no se llega al stock mínimo, se pide lo que falta
-        para llegar. Lo que está en lotes vencidos no cuenta como stock. Sólo sugiere: no genera ninguna orden de compra.
+        para llegar. Lo que está en lotes vencidos no cuenta como stock{descontarPorVencer && data?.descontar_por_vencer === true
+          ? `, ni lo que vence dentro del horizonte${horizonte !== null ? ` (${horizonte} días)` : ''} y no se alcanza a vender antes de vencer`
+          : ''}. Sólo sugiere: no genera ninguna orden de compra.
       </p>
 
       {valido && error && <p role="alert" className="text-sm text-destructive">{error}</p>}
@@ -408,6 +439,12 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
                             </span>
                           )}
                         </td>
+                        {conColumnaPorVencer && (
+                          <td className="p-3 text-right" title={(p.por_vencer ?? 0) > 0 ? 'Vence dentro del horizonte y no se alcanza a vender: no cuenta como stock' : undefined}>
+                            {(p.por_vencer ?? 0) > 0 ? numero(p.por_vencer ?? 0) : '—'}
+                            {(p.por_vencer ?? 0) > 0 && <span className="block text-xs text-amber-600 dark:text-amber-400">no cuenta como stock</span>}
+                          </td>
+                        )}
                         <td className="p-3 text-right">
                           {numero(p.en_camino)}
                           {data.sucursal_id !== null && p.en_camino_sin_sucursal > 0 && (

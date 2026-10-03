@@ -440,5 +440,29 @@ describe('Reposición: generar órdenes en borrador', () => {
     await waitFor(() => expect(escrituras()).toHaveLength(1))
     expect(cuerpoDe(`POST ${ORDENES}`)).toMatchObject({ estacionalidad: true })
   })
+
+  it('las órdenes se calculan con la misma opción de descontar lo que vence que se ve: descontar_por_vencer=true viaja en el pedido (junto con la estacionalidad)', async () => {
+    const user = userEvent.setup()
+    await abrir({ conGenerarOrdenes: true }, { ...TODO, [RUTA]: { ...DATA, estacionalidad: false, descontar_por_vencer: false } })
+    responder({ ...TODO, [RUTA]: { ...DATA, estacionalidad: true, descontar_por_vencer: false } })
+    await user.click(await screen.findByLabelText('Ajustar por estacionalidad'))
+    await waitFor(() => expect(pedidas().some((p) => p.includes('estacionalidad=true'))).toBe(true))
+    responder({ ...TODO, [RUTA]: { ...DATA, estacionalidad: true, descontar_por_vencer: true } })
+    await user.click(await screen.findByLabelText('Descontar lo que vence en el horizonte'))
+    await waitFor(() => expect(pedidas().some((p) => p.includes('descontar_por_vencer=true'))).toBe(true))
+    await user.click(await screen.findByRole('button', { name: /Generar órdenes en borrador/ }))
+    await user.click(within(dialogo()).getByRole('button', { name: 'Crear 2 órdenes' }))
+    await waitFor(() => expect(escrituras()).toHaveLength(1))
+    expect(cuerpoDe(`POST ${ORDENES}`)).toMatchObject({ estacionalidad: true, descontar_por_vencer: true })
+  })
+
+  it('con la opción apagada el pedido no lleva descontar_por_vencer', async () => {
+    const user = userEvent.setup()
+    await abrir({ conGenerarOrdenes: true }, { ...TODO, [RUTA]: { ...DATA, descontar_por_vencer: false } })
+    await user.click(await screen.findByRole('button', { name: /Generar órdenes en borrador/ }))
+    await user.click(within(dialogo()).getByRole('button', { name: 'Crear 2 órdenes' }))
+    await waitFor(() => expect(escrituras()).toHaveLength(1))
+    expect(cuerpoDe(`POST ${ORDENES}`)).not.toHaveProperty('descontar_por_vencer')
+  })
 })
 
