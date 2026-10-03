@@ -24,6 +24,10 @@
 // vencen dentro del horizonte (cobertura + plazo) y no alcanza a venderse antes de vencer, que el motor ya restó del stock que usa para sugerir. Es el mismo patrón que la
 // estacionalidad y los dos interruptores conviven. Las órdenes en borrador llevan el mismo valor que se ve.
 //
+// **Layout (0.110.0, ADR-012):** hallazgos de una verificación con Chromium real. Los tres interruptores son un solo bloque (`flex-wrap`, alineado con los campos); la tabla usa un
+// relleno lateral chico y «Sugerido» queda pegado al borde derecho si hay que desplazarla; las notas largas de las celdas angostas (`Nota`) se ven cortas, con el texto completo en
+// el `title` y para el lector de pantalla.
+//
 // **Órdenes en borrador (0.105.0, motor >= 0.34.0, ADR-022):** el botón «Generar órdenes en borrador» (prop `conGenerarOrdenes`: el producto la enciende
 // sólo si su motor es >= 0.34.0 y quien mira puede escribir Compras) crea una orden por proveedor habitual con lo que se ve; ver `reposicion-ordenes.tsx`. `rutaDeOrden` lleva a cada orden creada.
 //
@@ -54,6 +58,10 @@ import { DialogoGenerarOrdenes } from './reposicion-ordenes'
 import { borrarIntentoPendiente, leerIntentoPendiente, type IntentoDeOrdenes, type ParametrosDeOrdenes } from './reposicion-ordenes-pendiente'
 
 const RUTA = '/api/reportes/reposicion'
+/** El relleno de las celdas de la tabla (ADR-012): 6 px a los lados en vez de 12: con las 13 columnas (las dos opcionales, Estacional y Por vencer, prendidas) son unos 150 px menos de ancho y la tabla entra en 1440 px sin desplazarse. */
+const PAD = 'px-1.5 py-3'
+/** «Sugerido», la columna que importa, queda pegada al borde derecho si la tabla se desborda y hay que desplazarla (la pantalla es angosta o hay muchas columnas). */
+const FIJA = 'sticky right-0 bg-card'
 /** El valor de «Toda la instancia» y de «Todas las categorías» en su `Select` (uno de Radix no admite `''`). */
 const TODAS = '__todas__'
 
@@ -76,6 +84,21 @@ const etiquetaDelMotivo = (m: ReposicionMotivo | null) => (m ? ETIQUETA_DEL_MOTI
  *  de decimales más bajo que el suyo (una unidad de 6 decimales no puede mostrar 0,0004 como 0). */
 function numero(valor: number): string {
   return new Intl.NumberFormat('es-AR', { maximumFractionDigits: 10 }).format(valor)
+}
+
+/** Una nota corta a la vista y completa para todo lo demás: el texto largo en una celda angosta se apilaba en 4-7 líneas (ADR-012). A la vista va la forma corta, sin
+ *  partirse (`whitespace-nowrap`); el texto completo queda en el `title` (al pasar el mouse) y para el lector de pantalla (`sr-only`), y en el `textContent`.
+ *  `relative` es para que el `sr-only` (que es `absolute`) quede dentro del `overflow-x-auto` de la tabla y no agrande el scroll de la página.
+ *  Si el completo empieza con la forma corta («no cuenta» / «no cuenta como stock») sólo se oculta lo que sobra; si no, se oculta a los lectores la forma corta y se lee el completo. */
+function Nota({ corto, completo, className = '' }: { corto: string; completo: string; className?: string }) {
+  const prefijo = completo.startsWith(corto)
+  return (
+    <span title={completo} className={`${className} relative whitespace-nowrap`}>
+      {prefijo
+        ? <>{corto}<span className="sr-only">{completo.slice(corto.length)}</span></>
+        : <><span aria-hidden="true">{corto}</span><span className="sr-only">{completo}</span></>}
+    </span>
+  )
 }
 
 /** El motivo del rechazo de un parámetro, o `null` si vale: un entero de 1 hasta su tope, como en el motor. */
@@ -308,33 +331,40 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
             )}
           </div>
         ))}
-        <label className="flex items-center gap-2 pt-8 text-sm">
-          <input type="checkbox" checked={soloAPedir} onChange={(e) => setSoloAPedir(e.target.checked)} className="size-4" />
-          Sólo lo que hay que pedir
-        </label>
-        {conEstacionalidad && (
-          <label className="flex items-center gap-2 pt-7 text-sm" title="Proyecta con lo que pasó hace un año: lo que se vendió después de una ventana como la de ahora">
-            <input type="checkbox" checked={estacionalidad} onChange={(e) => {
-              setEstacionalidad(e.target.checked)
-              // Al apagarlo la columna desaparece: un orden por ella quedaría activo sin que se vea (y sin su flecha).
-              if (!e.target.checked && orden?.clave === 'factor_estacional') setOrden(null)
-            }} className="size-4" />
-            Ajustar por estacionalidad
-          </label>
-        )}
-        {conDescontarPorVencer && (
-          <div className="grid max-w-56 gap-1 pt-7">
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={descontarPorVencer} aria-describedby="reposicion-por-vencer-ayuda" onChange={(e) => {
-                setDescontarPorVencer(e.target.checked)
-                // Al apagarlo la columna desaparece: un orden por ella quedaría activo sin que se vea (y sin su flecha).
-                if (!e.target.checked && orden?.clave === 'por_vencer') setOrden(null)
-              }} className="size-4 shrink-0" />
-              Descontar lo que vence en el horizonte
+        {/* Los tres interruptores juntos (ADR-012): un solo bloque que salta de línea entero y se alinea con los campos (el rótulo invisible de arriba hace de la
+            fila de rótulos de los campos); adentro, `flex-wrap` con huecos parejos, sin paddings sueltos que desalineen unos de otros. */}
+        <div className="grid gap-2">
+          <span aria-hidden="true" className="invisible hidden text-sm leading-none sm:block">&nbsp;</span>
+          <div className="flex flex-wrap items-start gap-x-6 gap-y-2">
+            <label className="flex min-h-9 items-center gap-2 text-sm sm:whitespace-nowrap">
+              <input type="checkbox" checked={soloAPedir} onChange={(e) => setSoloAPedir(e.target.checked)} className="size-4 shrink-0" />
+              Sólo lo que hay que pedir
             </label>
-            <p id="reposicion-por-vencer-ayuda" className="text-xs text-muted-foreground">Lo que no se alcanza a vender antes de vencer no cuenta como stock.</p>
+            {conEstacionalidad && (
+              <label className="flex min-h-9 items-center gap-2 text-sm sm:whitespace-nowrap" title="Proyecta con lo que pasó hace un año: lo que se vendió después de una ventana como la de ahora">
+                <input type="checkbox" checked={estacionalidad} onChange={(e) => {
+                  setEstacionalidad(e.target.checked)
+                  // Al apagarlo la columna desaparece: un orden por ella quedaría activo sin que se vea (y sin su flecha).
+                  if (!e.target.checked && orden?.clave === 'factor_estacional') setOrden(null)
+                }} className="size-4 shrink-0" />
+                Ajustar por estacionalidad
+              </label>
+            )}
+            {conDescontarPorVencer && (
+              <div className="grid max-w-xs">
+                <label className="flex min-h-9 items-center gap-2 text-sm sm:whitespace-nowrap">
+                  <input type="checkbox" checked={descontarPorVencer} aria-describedby="reposicion-por-vencer-ayuda" onChange={(e) => {
+                    setDescontarPorVencer(e.target.checked)
+                    // Al apagarlo la columna desaparece: un orden por ella quedaría activo sin que se vea (y sin su flecha).
+                    if (!e.target.checked && orden?.clave === 'por_vencer') setOrden(null)
+                  }} className="size-4 shrink-0" />
+                  Descontar lo que vence en el horizonte
+                </label>
+                <p id="reposicion-por-vencer-ayuda" className="text-xs text-muted-foreground">Lo que no se alcanza a vender antes de vencer no cuenta como stock.</p>
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
       {conGenerarOrdenes && hayPendiente && !generando && (
@@ -401,7 +431,7 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
                           key={c.orden}
                           scope="col"
                           aria-sort={c.orden === orden?.clave ? (orden.sentido === 1 ? 'ascending' : 'descending') : 'none'}
-                          className={`p-3 font-medium ${c.alinea === 'right' ? 'text-right' : 'text-left'}`}
+                          className={`${PAD} font-medium ${c.alinea === 'right' ? 'text-right' : 'text-left'} ${c.orden === 'sugerido' ? FIJA : ''}`}
                         >
                           <button type="button" onClick={() => ordenarPor(c.orden)} className="font-medium hover:text-foreground">
                             {c.titulo}{c.orden === orden?.clave ? (orden.sentido === 1 ? ' ▲' : ' ▼') : ''}
@@ -413,64 +443,67 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
                   <tbody>
                     {productos.map((p) => (
                       <tr key={p.producto_id} className="border-b last:border-0">
-                        <td className="p-3">
+                        <td className={PAD}>
                           <span className="font-medium">{p.nombre}</span>
                           {p.categoria && <span className="ml-2 text-xs text-muted-foreground">{p.categoria}</span>}
                           {(p.sin_ventas || p.posible_quiebre) && (
                             <div className="mt-1 flex flex-wrap gap-1">
                               {p.sin_ventas && (
-                                <Badge variant="outline" className="whitespace-normal">Sin ventas en la ventana</Badge>
+                                <Badge variant="outline"><Nota corto="Sin ventas" completo="Sin ventas en la ventana" /></Badge>
                               )}
                               {p.posible_quiebre && (
-                                <Badge variant="outline" className="whitespace-normal border-amber-500/50 text-amber-600 dark:text-amber-400">
-                                  <AlertTriangle aria-hidden="true" />Posible quiebre: la rotación puede estar subestimada
+                                <Badge variant="outline" className="border-amber-500/50 text-amber-600 dark:text-amber-400">
+                                  <AlertTriangle aria-hidden="true" /><Nota corto="Posible quiebre" completo="Posible quiebre: la rotación puede estar subestimada" />
                                 </Badge>
                               )}
                             </div>
                           )}
                         </td>
-                        <td className="p-3">{p.codigo || '—'}</td>
-                        {conProveedor && <td className="p-3">{p.proveedor || '—'}</td>}
-                        <td className={`min-w-36 p-3 text-right ${p.stock <= 0 ? 'text-destructive' : ''}`}>
+                        <td className={`${PAD} whitespace-nowrap`}>{p.codigo || '—'}</td>
+                        {conProveedor && <td className={PAD}>{p.proveedor || '—'}</td>}
+                        <td className={`${PAD} text-right ${p.stock <= 0 ? 'text-destructive' : ''}`}>
                           {numero(p.stock)}
                           {(p.vencido ?? 0) > 0 && (
-                            <span className="block text-xs text-amber-600 dark:text-amber-400">
-                              incluye {numero(p.vencido ?? 0)} vencido, que no se cuenta para pedir
-                            </span>
+                            <Nota
+                              className="block text-xs text-amber-600 dark:text-amber-400"
+                              corto={`incl. ${numero(p.vencido ?? 0)} vencido`} completo={`incluye ${numero(p.vencido ?? 0)} vencido, que no se cuenta para pedir`}
+                            />
                           )}
                         </td>
                         {conColumnaPorVencer && (
-                          <td className="p-3 text-right" title={(p.por_vencer ?? 0) > 0 ? 'Vence dentro del horizonte y no se alcanza a vender: no cuenta como stock' : undefined}>
+                          <td className={`${PAD} text-right`} title={(p.por_vencer ?? 0) > 0 ? 'Vence dentro del horizonte y no se alcanza a vender: no cuenta como stock' : undefined}>
                             {(p.por_vencer ?? 0) > 0 ? numero(p.por_vencer ?? 0) : '—'}
-                            {(p.por_vencer ?? 0) > 0 && <span className="block text-xs text-amber-600 dark:text-amber-400">no cuenta como stock</span>}
+                            {(p.por_vencer ?? 0) > 0 && <Nota className="block text-xs text-amber-600 dark:text-amber-400" corto="no cuenta" completo="no cuenta como stock" />}
                           </td>
                         )}
-                        <td className="p-3 text-right">
+                        <td className={`${PAD} text-right`}>
                           {numero(p.en_camino)}
                           {data.sucursal_id !== null && p.en_camino_sin_sucursal > 0 && (
-                            <span className="block text-xs text-amber-600 dark:text-amber-400">
-                              incluye {numero(p.en_camino_sin_sucursal)} de órdenes sin sucursal, contadas en esta sucursal
-                            </span>
+                            <Nota
+                              className="block text-xs text-amber-600 dark:text-amber-400"
+                              corto={`incl. ${numero(p.en_camino_sin_sucursal)} sin sucursal`}
+                              completo={`incluye ${numero(p.en_camino_sin_sucursal)} de órdenes sin sucursal, contadas en esta sucursal`}
+                            />
                           )}
                         </td>
-                        <td className="p-3 text-right">
+                        <td className={`${PAD} text-right`}>
                           {numero(p.stock_minimo)}
                           {data.sucursal_id !== null && p.stock_minimo_propio === true && (
-                            <span className="block text-xs text-muted-foreground">propio de la sucursal</span>
+                            <Nota className="block text-xs text-muted-foreground" corto="propio" completo="propio de la sucursal" />
                           )}
                         </td>
-                        <td className="p-3 text-right">{numero(p.unidades_vendidas)}</td>
-                        <td className="p-3 text-right">{numero(p.rotacion_diaria)}</td>
-                        <td className="p-3 text-right">{p.cobertura_dias === null ? '—' : numero(p.cobertura_dias)}</td>
+                        <td className={`${PAD} text-right`}>{numero(p.unidades_vendidas)}</td>
+                        <td className={`${PAD} text-right`}>{numero(p.rotacion_diaria)}</td>
+                        <td className={`${PAD} text-right`}>{p.cobertura_dias === null ? '—' : numero(p.cobertura_dias)}</td>
                         {conColumnaEstacional && (
-                          <td className="p-3 text-right" title={p.factor_estacional == null ? 'Sin historia de hace un año: no se ajustó' : undefined}>
+                          <td className={`${PAD} text-right`} title={p.factor_estacional == null ? 'Sin historia de hace un año: no se ajustó' : undefined}>
                             {p.factor_estacional == null ? '—' : `×${numero(p.factor_estacional)}`}
                           </td>
                         )}
-                        <td className="p-3 text-right font-semibold">
+                        <td className={`${PAD} text-right font-semibold ${FIJA}`}>
                           {numero(p.sugerido)}{p.unidad && <> <span className="text-xs font-normal text-muted-foreground">{p.unidad}</span></>}
                         </td>
-                        <td className="p-3">{etiquetaDelMotivo(p.motivo)}</td>
+                        <td className={PAD}>{etiquetaDelMotivo(p.motivo)}</td>
                       </tr>
                     ))}
                   </tbody>

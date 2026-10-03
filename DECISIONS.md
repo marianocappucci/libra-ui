@@ -215,3 +215,44 @@ wiki (entidad `libra-ui` y `concepts/estandares-desarrollo`).
   (cambia la consulta). **Un hallazgo que no se corrige acá:** el test de la estacionalidad «apagar el ajuste … limpia ese orden» arranca con el interruptor ya «prendido» sólo en
   la respuesta simulada pero apagado en el estado de la pantalla, así que su primer clic en realidad lo enciende y el orden se limpia recién en el segundo; el de «Por vencer» prende de
   verdad antes de ordenar. No se tocó la estacionalidad por no ampliar el alcance.
+
+## ADR-012 — Reposición y producto: el error del formulario se ve, la tabla entra con las dos columnas opcionales y las notas largas se acortan
+
+- Estado: aceptada (hallazgos de una verificación de VentaLibra con Chromium real, 2026-10-03)
+- Fecha: 2026-10-03 (`v0.110.0`)
+- Contexto: los tests de jsdom no miden layout; una pasada con Chromium real sobre las pantallas de reposición (ADR-010, ADR-011) y del formulario del producto encontró cuatro defectos:
+  1. **El error del formulario del producto quedaba fuera de pantalla.** El diálogo scrollea y el mensaje es el primer hijo del formulario: con el foco abajo, en un celular el
+     mensaje quedaba con `top = -309 px` (a 390 px) y quien miraba el campo de «Mínimo por sucursal» creía que «Guardar» no había hecho nada.
+  2. **Con «Ajustar por estacionalidad» y «Descontar lo que vence en el horizonte» prendidos la tabla medía 1211 px contra 1134 del contenedor a 1440 px:** scroll horizontal, y
+     «Sugerido» (una de las columnas que importa) se cortaba («4 U»).
+  3. **La barra de interruptores:** `pt-8` en uno y `pt-7` en los otros dos desalineaban los checkboxes (4 y 10 px), el rótulo del tercero se partía en dos líneas por `max-w-56`, a >= 1920 px el
+     primero quedaba solo al final de la fila de arriba y los otros saltaban, y a 390 px el relleno metía ~50 px de aire entre cada uno.
+  4. **Notas largas en celdas angostas** que se apilaban en 3 a 7 líneas: la píldora «Posible quiebre: la rotación puede estar subestimada» (5 líneas, con el texto pisando el borde),
+     «no cuenta como stock» (4 líneas), «incluye N de órdenes sin sucursal, contadas en esta sucursal» (6-7) y «propio de la sucursal» (3).
+- Decisión:
+  - **El error del formulario es un `role="alert"` con `tabIndex={-1}`; al aparecer recibe el foco y se lo lleva a la vista** (`scrollIntoView({ block: 'center' })`, con `?.`: lo que no lo
+    implementa no se rompe). El estado del error es un objeto nuevo en cada fallo (`formFallo`), no un texto: repetir el mismo error (el texto no cambia) vuelve a llevarlo a la vista.
+    El foco en el mensaje (y no en el campo) es a propósito: el motivo puede venir del motor y no de un campo, y un `alert` con foco lo lee el lector de pantalla entero.
+  - **El campo que causó el error se marca** con `aria-invalid` y `aria-describedby` hacia el mensaje: los mínimos por sucursal (la sucursal del error de validación y la del 422 del `PUT`),
+    el plazo y el stock máximo. Un error sin campo (el del costo oculto, uno del producto) no marca ninguno. La marca se limpia al volver a guardar (junto con el mensaje).
+  - **Los tres interruptores son un solo bloque** (`flex flex-wrap items-start gap-x-6 gap-y-2`) hijo de la barra de filtros: salta de línea entero, y adentro cada rótulo mide `h-9` (la altura de
+    un campo) y no se parte (`whitespace-nowrap`). Un rótulo invisible arriba (`aria-hidden`, sólo desde `sm`) hace de la fila de rótulos de los campos, así quedan en la línea de los campos
+    cuando comparten fila, sin paddings fijos. La ayuda del tercero (`aria-describedby`, sin cambios) cuelga debajo con un ancho máximo `max-w-xs`, que ya no limita al rótulo.
+  - **La tabla gana ancho con un relleno lateral de 6 px (`px-1.5`) en lugar de 12** (constante `PAD`; son ~150 px con 13 columnas), y «Código» no se parte (`ACEITE-` / `9`). **«Sugerido» es
+    `sticky right-0 bg-card`** (encabezado y celdas): si igual hay que desplazar la tabla (pantalla angosta, o sucursal con avisos), queda a la vista. El orden y los nombres de las columnas y el
+    comportamiento de orden no cambian. Se eligió esto antes que reducir texto: no pierde información y no depende del ancho de los datos.
+  - **Las notas largas se ven cortas y completas a la vez** con un componente local, `Nota`: la forma corta a la vista, sin partirse; el texto completo en el `title` (al pasar el mouse) y en el
+    DOM como `sr-only` (lo lee el lector de pantalla; el `textContent` sigue teniendo el texto completo). Si el completo empieza con el corto («no cuenta» / «no cuenta como stock») sólo se oculta lo que sobra;
+    si no («+4 sin sucursal»), se oculta a los lectores el corto y se lee el completo. Formas: «Posible quiebre», «Sin ventas», «no cuenta», «+N sin sucursal», «propio» y, por ser el mismo
+    patrón, «incl. N vencido» en el stock (ese aviso también se apilaba en 4-5 líneas). `Nota` es `relative`: un `sr-only` es `absolute` y, sin un ancestro posicionado, se escapa del
+    `overflow-x-auto` de la tabla y agranda el scroll horizontal de toda la página (medido: 390 -> 551 px mientras no tuvo `relative`).
+- Consecuencias:
+  - Un test existente cambia con criterio: el de «propio de la sucursal» buscaba el texto por `getByText` (que mira el texto propio del elemento y ahora es «propio»); ahora lo busca por `getByTitle`.
+    Su comprobación del `textContent` de la celda (`5propio de la sucursal`) no cambió.
+  - **Medido** (Chromium real, pantalla real de libra-ui con `fetch` simulado y el marco del `Layout`, no VentaLibra completa): a 1440 px con las dos columnas opcionales la tabla pasó de 1237 px
+    (1211 en la verificación original) a 1134 = el contenedor, sin scroll horizontal; los tres checkboxes quedan a la misma `y` a 1280, 1440 y 1920 px y apilados a 390 px; con una sucursal elegida y
+    una fila con «+N sin sucursal» la tabla sigue 7 px más ancha que el contenedor (sólo se corta el final de «Motivo»; «Sugerido» está a la vista por ser `sticky`). A 1280 px la tabla (1100 px) no
+    entra en el contenedor (974 px) y se desplaza; «Sugerido» queda pegado.
+  - En 390 px «Sugerido» pegado ocupa ~75 de los ~356 px de la tabla y tapa lo que pasa por debajo mientras se desplaza: es el costo de tenerlo siempre a la vista.
+  - **Sin resolver** (no se tocó): «Por vencer» muestra la cantidad con los decimales que manda el motor (`23,572` sobre una unidad entera). La fila no trae la escala de la unidad; deducirla de los
+    decimales de «Stock» o «Sugerido» (que pueden ser enteros en una unidad que admite fracciones) redondearía un dato real. Si el motor ya redondea a la escala de la unidad, el defecto es suyo.
