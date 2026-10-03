@@ -325,6 +325,71 @@ describe('Productos: mínimo por sucursal', () => {
     expect(cuerpoDe(`PUT ${MINIMOS}/2`)).toEqual({ stock_minimo: 1000000000 })
   })
 
+  it('no se puede guardar mientras se leen los mínimos: bajar el techo por debajo de un mínimo propio que todavía no llegó no escribe nada', async () => {
+    let soltar: (v: unknown) => void = () => {}
+    const lenta = new Promise((r) => { soltar = r })
+    responder({ ...base, 'PUT /api/productos/1': { id: 1 }, [`PUT ${RUTA}`]: PARAMETROS })
+    const normal = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation((entrada: RequestInfo | URL, init?: RequestInit) => {
+      if (String(entrada) === MINIMOS && (init?.method ?? 'GET') === 'GET') {
+        return lenta.then((v) => new Response(JSON.stringify(v), { status: 200, headers: { 'content-type': 'application/json' } }))
+      }
+      return normal(entrada, init)
+    })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    // La reposición ya llegó (techo 40); los mínimos no.
+    await waitFor(() => expect((within(dialogo()).getByLabelText('Stock máximo') as HTMLInputElement).value).toBe('40'))
+    const boton = within(dialogo()).getByRole('button', { name: 'Guardar cambios' }) as HTMLButtonElement
+    expect(boton.disabled).toBe(true)
+    fireEvent.change(within(dialogo()).getByLabelText('Stock máximo'), { target: { value: '12' } })
+    fireEvent.submit(boton.closest('form')!)
+    await new Promise((r) => setTimeout(r, 30))
+    expect(escrituras()).toHaveLength(0)
+    soltar({ producto_id: 1, sucursales: [{ ...LEIDOS.sucursales[0], stock_minimo: 30 }, LEIDOS.sucursales[1]] })
+    await waitFor(() => expect(boton.disabled).toBe(false))
+    expect(centro().value).toBe('30')
+    // Ya con los mínimos a la vista, la validación del cliente corta antes de escribir.
+    await guardar(user)
+    expect(await within(dialogo()).findByText('El mínimo de «Centro» (30) no puede ser mayor que el stock máximo (12).')).toBeTruthy()
+    expect(escrituras()).toHaveLength(0)
+  })
+
+  it('un mínimo propio muy chico (1e-7) o enorme (1e21) se muestra como decimal, sin notación científica, y sin tocarlo no da error ni manda nada', async () => {
+    const user = userEvent.setup()
+    for (const [valor, texto] of [[1e-7, '0.0000001'], [1e21, '1000000000000000000000']] as const) {
+      cleanup()
+      prepararFetch()
+      responder({
+        ...base, [`GET ${RUTA}`]: { ...PARAMETROS, stock_maximo: null }, 'PUT /api/productos/1': { id: 1 },
+        [`GET ${MINIMOS}`]: { ...LEIDOS, sucursales: [{ ...LEIDOS.sucursales[0], stock_minimo: valor }, LEIDOS.sucursales[1]] },
+      })
+      montar('/productos', <Productos conParametrosDeReposicion />)
+      await editar(user)
+      await within(dialogo()).findByText('Mínimo por sucursal')
+      expect(centro().value).toBe(texto)
+      await guardar(user)
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+      expect(putsDeMinimos()).toHaveLength(0)
+    }
+  })
+
+  it('un mínimo propio de 1e-7 se puede cambiar y volver a escribir como decimal', async () => {
+    responder({
+      ...base, [`GET ${MINIMOS}`]: { ...LEIDOS, sucursales: [{ ...LEIDOS.sucursales[0], stock_minimo: 1e-7 }, LEIDOS.sucursales[1]] },
+      [`PUT ${MINIMOS}/1`]: {},
+    })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    await within(dialogo()).findByText('Mínimo por sucursal')
+    fireEvent.change(centro(), { target: { value: '0.0000002' } })
+    await guardar(user)
+    await waitFor(() => expect(putsDeMinimos()).toHaveLength(1))
+    expect(cuerpoDe(`PUT ${MINIMOS}/1`)).toEqual({ stock_minimo: 2e-7 })
+  })
+
   describe('mientras se guarda', () => {
     const OTRO = producto(2, 'Azúcar', { stock_minimo: 3 })
     const MINIMOS_OTRO = {

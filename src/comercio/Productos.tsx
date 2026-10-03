@@ -139,6 +139,11 @@ type EstadoReposicion = 'sin' | 'cargando' | 'listo' | 'error'
 /** Una fila de «Mínimo por sucursal»: el texto del campo y el mínimo PROPIO que había (`null` = usa el global), para mandar sólo lo que cambió. */
 type MinimoEditable = { sucursal_id: number; sucursal: string; texto: string; original: number | null }
 const esNumero = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+/** El número como decimal para el campo, nunca en notación científica (`String(1e-7)` da «1e-7», que la validación del campo no acepta). */
+function textoDecimal(n: number): string {
+  const t = String(n)
+  return /e/i.test(t) ? n.toLocaleString('en-US', { useGrouping: false, maximumFractionDigits: 20 }) : t
+}
 
 /** Lee la respuesta de `GET .../reposicion/minimos`: `{ producto_id, sucursales: [{ sucursal_id, sucursal, stock_minimo (EFECTIVO), stock_minimo_propio,
  *  stock_minimo_global }] }` o, tolerante, la lista de sucursales sola. El valor propio es `stock_minimo` SÓLO con `stock_minimo_propio === true`: si no, es el
@@ -158,7 +163,7 @@ function leerMinimosPorSucursal(d: unknown, minimoDelProducto: number): { global
     filas.push({
       sucursal_id: f.sucursal_id,
       sucursal: typeof f.sucursal === 'string' && f.sucursal.trim() !== '' ? f.sucursal : `Sucursal ${f.sucursal_id}`,
-      texto: propio === null ? '' : String(propio),
+      texto: propio === null ? '' : textoDecimal(propio),
       original: propio,
     })
   }
@@ -182,7 +187,8 @@ function leerMinimosAMandar(filas: MinimoEditable[], techo: number | null):
         return { error: `El mínimo de «${fila.sucursal}» tiene que ser un número mayor o igual que 0 (o vacío, para usar el global).` }
       }
       valor = Number(t)
-      if (valor > MAX_MINIMO_SUCURSAL) {
+      // El tope sólo se mira en lo que se cambió: lo que ya estaba guardado lo aceptó el motor.
+      if (valor > MAX_MINIMO_SUCURSAL && valor !== fila.original) {
         return { error: `El mínimo de «${fila.sucursal}» no puede pasar de ${MAX_MINIMO_SUCURSAL.toLocaleString('es-AR')}.` }
       }
       if (techo !== null && valor > techo) {
@@ -475,8 +481,9 @@ export function Productos({
   abrirEditarActual.current = abrirEditar
 
   async function handleSubmit(values: Valores) {
-    // No se guarda mientras se leen el plazo y el techo: sin verlos no se puede validar el mínimo contra el máximo que ya había.
-    if (repoEstado === 'cargando') return
+    // No se guarda mientras se leen el plazo y el techo ni los mínimos por sucursal: sin verlos no se puede validar el mínimo contra el máximo que ya había
+    // (bajar el techo por debajo de un mínimo propio que todavía no llegó guardaría el producto y recién después recibiría el 422).
+    if (repoEstado === 'cargando' || minimosEstado === 'cargando') return
     setSaving(true)
     setFormError(null)
     // Se manda sólo lo que este producto edita: lo que no se manda toma el
@@ -1053,7 +1060,7 @@ export function Productos({
                       </Button>
                     )}
                     <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
-                    <Button type="submit" disabled={saving || repoEstado === 'cargando'}>
+                    <Button type="submit" disabled={saving || repoEstado === 'cargando' || minimosEstado === 'cargando'}>
                       {saving ? 'Guardando…' : editingProducto ? 'Guardar cambios' : 'Crear producto'}
                     </Button>
                   </DialogFooter>

@@ -168,6 +168,10 @@ wiki (entidad `libra-ui` y `concepts/estandares-desarrollo`).
   - **Se valida todo antes de escribir nada.** Cada mínimo (de TODAS las filas, no sólo las que cambiaron) tiene que ser <= 1.000.000.000 (el tope del motor) y
     no pasar del stock máximo **final** del guardado (el del formulario, lo haya tocado o no; si no se pudo leer la reposición, esa comparación la hace el motor):
     con techo 40, Centro 5 y Norte 50 no se guarda Centro para fallar en Norte. El mensaje nombra la sucursal.
+  - **No se guarda mientras se leen los mínimos** (igual que la reposición): el botón «Guardar» espera a que el `GET` termine (o falle, o no aplique). Si no, bajar
+    el techo por debajo de un mínimo propio que todavía no llegó guardaría el producto y recién después recibiría el 422.
+  - **Los números se cargan como decimal, nunca en notación científica** (`1e-7` se ve «0.0000001»; el motor lo acepta y la validación del campo no admite
+    la `e`). El tope de 1.000.000.000 sólo se exige a lo que se cambió: lo que ya estaba guardado lo aceptó el motor.
   - **Un guardado pertenece a su diálogo.** Las respuestas que vuelven de la red sólo tocan el estado (originales, errores, cierre del diálogo) si el diálogo
     sigue siendo el mismo (la numeración que ya protege las lecturas): si se cierra y se abre otro producto mientras se guarda, la respuesta tardía no lo pisa ni lo cierra.
     Y mientras se guarda, los campos de reposición (plazo, techo, proveedor) y de mínimos quedan deshabilitados: lo escrito durante el guardado no se pierde
