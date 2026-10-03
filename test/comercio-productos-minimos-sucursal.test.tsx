@@ -3,7 +3,7 @@
 // que cambió (`{ stock_minimo: número | null }`; `null` borra el propio y vuelve al global). Un campo vacío es `null`, nunca 0.
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { Productos } from '../src/comercio/Productos'
 import type { Producto } from '../src/comercio/tipos'
@@ -698,5 +698,105 @@ describe('Productos: mínimo por sucursal', () => {
       expect(await within(dialogo()).findByText(/no ve el costo de este producto/)).toBeTruthy()
       expect(escrituras()).toHaveLength(0)
     })
+  })
+})
+
+// El error del formulario se ve (ADR-012): el diálogo scrollea y el mensaje está arriba; en un celular quien mira el campo de abajo creía que «Guardar» no hizo
+// nada (el mensaje quedaba 309 px fuera de la pantalla). Medido en Chromium real a 390 px.
+describe('Productos: el error del formulario se lleva a la vista y marca el campo', () => {
+  async function conErrorDeMinimo(user: ReturnType<typeof userEvent.setup>) {
+    responder({ ...base, [`PUT ${RUTA}`]: PARAMETROS, [`PUT ${MINIMOS}/1`]: {}, [`PUT ${MINIMOS}/2`]: {} })
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    await within(dialogo()).findByText('Mínimo por sucursal')
+    await waitFor(() => expect((within(dialogo()).getByLabelText('Stock máximo') as HTMLInputElement).value).toBe('40'))
+    fireEvent.change(norte(), { target: { value: '50' } })   // el techo vigente es 40
+  }
+
+  it('el mensaje es un alert, recibe el foco y se lleva a la vista (scrollIntoView sobre ese mismo elemento)', async () => {
+    const espia = vi.spyOn(Element.prototype, 'scrollIntoView').mockClear()
+    const user = userEvent.setup()
+    await conErrorDeMinimo(user)
+    await guardar(user)
+    const alerta = await within(dialogo()).findByRole('alert')
+    expect(alerta.textContent).toBe('El mínimo de «Norte» (50) no puede ser mayor que el stock máximo (40).')
+    expect(document.activeElement).toBe(alerta)
+    expect(espia).toHaveBeenCalledTimes(1)
+    expect(espia.mock.contexts[0]).toBe(alerta)
+    espia.mockRestore()
+  })
+
+  it('repetir el mismo error vuelve a llevarlo a la vista (el texto no cambia, pero quien miraba el campo de abajo tiene que ver que Guardar respondió)', async () => {
+    const espia = vi.spyOn(Element.prototype, 'scrollIntoView').mockClear()
+    const user = userEvent.setup()
+    await conErrorDeMinimo(user)
+    await guardar(user)
+    await within(dialogo()).findByRole('alert')
+    // El usuario mira el campo de abajo: el foco sale del mensaje.
+    norte().focus()
+    expect(document.activeElement).toBe(norte())
+    await guardar(user)
+    await waitFor(() => expect(espia).toHaveBeenCalledTimes(2))
+    expect(document.activeElement).toBe(within(dialogo()).getByRole('alert'))
+    espia.mockRestore()
+  })
+
+  it('el campo que causó el error queda aria-invalid y apunta al mensaje con aria-describedby; los otros no', async () => {
+    const user = userEvent.setup()
+    await conErrorDeMinimo(user)
+    expect(norte()).not.toHaveAttribute('aria-invalid')
+    await guardar(user)
+    const alerta = await within(dialogo()).findByRole('alert')
+    expect(alerta.id).not.toBe('')
+    expect(norte()).toHaveAttribute('aria-invalid', 'true')
+    expect(norte()).toHaveAccessibleDescription(alerta.textContent!)
+    expect(centro()).not.toHaveAttribute('aria-invalid')
+    expect(centro()).not.toHaveAttribute('aria-describedby')
+    expect(within(dialogo()).getByLabelText('Stock máximo')).not.toHaveAttribute('aria-invalid')
+  })
+
+  it('un error del plazo o del techo marca ese campo, no los mínimos', async () => {
+    const user = userEvent.setup()
+    responder(base)
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    await within(dialogo()).findByText('Mínimo por sucursal')
+    await waitFor(() => expect((within(dialogo()).getByLabelText('Stock máximo') as HTMLInputElement).value).toBe('40'))
+    fireEvent.change(within(dialogo()).getByLabelText('Plazo de entrega (días)'), { target: { value: 'abc' } })
+    await guardar(user)
+    await within(dialogo()).findByRole('alert')
+    expect(within(dialogo()).getByLabelText('Plazo de entrega (días)')).toHaveAttribute('aria-invalid', 'true')
+    expect(within(dialogo()).getByLabelText('Stock máximo')).not.toHaveAttribute('aria-invalid')
+    expect(norte()).not.toHaveAttribute('aria-invalid')
+  })
+
+  it('el 422 del motor sobre el mínimo de una sucursal marca el campo de esa sucursal', async () => {
+    const detail = 'stock_minimo (30) no puede ser mayor que el stock máximo de reposición del producto (25)'
+    responder({ ...base, [`PUT ${MINIMOS}/2`]: { status: 422, detail } })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    await within(dialogo()).findByText('Mínimo por sucursal')
+    fireEvent.change(norte(), { target: { value: '30' } })
+    await guardar(user)
+    const alerta = await within(dialogo()).findByRole('alert')
+    expect(alerta.textContent).toBe(`No se pudo guardar el mínimo de «Norte»: ${detail}`)
+    expect(document.activeElement).toBe(alerta)
+    expect(norte()).toHaveAttribute('aria-invalid', 'true')
+    expect(centro()).not.toHaveAttribute('aria-invalid')
+  })
+
+  it('al volver a guardar la marca se mueve con el error: el campo corregido deja de estar aria-invalid y lo está el nuevo', async () => {
+    const user = userEvent.setup()
+    await conErrorDeMinimo(user)
+    await guardar(user)
+    await within(dialogo()).findByRole('alert')
+    expect(norte()).toHaveAttribute('aria-invalid', 'true')
+    fireEvent.change(norte(), { target: { value: '30' } })
+    fireEvent.change(centro(), { target: { value: 'abc' } })
+    await guardar(user)
+    await waitFor(() => expect(centro()).toHaveAttribute('aria-invalid', 'true'))
+    expect(norte()).not.toHaveAttribute('aria-invalid')
+    expect(within(dialogo()).getByRole('alert').textContent).toMatch(/«Centro»/)
   })
 })

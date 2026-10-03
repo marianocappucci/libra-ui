@@ -147,8 +147,9 @@ describe('Reposición: lo que muestra', () => {
       [RUTA]: { ...DATA, sucursal_id: 2, productos: [{ ...YERBA, stock_minimo_propio: true }, { ...HARINA, stock_minimo_propio: false }, SAL] },
     })
     await user.selectOptions(await screen.findByLabelText('Sucursal'), '2')
-    await waitFor(() => expect(within(fila('Yerba')).getByText('propio de la sucursal')).toBeTruthy())
-    expect(within(fila('Yerba')).getByText('propio de la sucursal').closest('td')?.textContent).toBe('5propio de la sucursal')
+    // A la vista dice «propio» (la celda es angosta); el texto completo está en el `title` y para el lector de pantalla (ADR-012).
+    await waitFor(() => expect(within(fila('Yerba')).getByTitle('propio de la sucursal')).toBeTruthy())
+    expect(within(fila('Yerba')).getByTitle('propio de la sucursal').closest('td')?.textContent).toBe('5propio de la sucursal')
     // El global (`false`) y un motor anterior (sin la clave) no llevan marca: la celda es sólo el número.
     expect(texto(fila('Harina'))).not.toContain('propio')
     expect(texto(fila('Sal'))).not.toContain('propio')
@@ -727,5 +728,100 @@ describe('Reposición: descontar lo que vence en el horizonte (motor >= 0.37.0, 
     await waitFor(() => expect(ultimaConsulta()).toBe(pide('&estacionalidad=true')))
     await waitFor(() => expect(columna()).toBeNull())
     expect(screen.getByRole('button', { name: /^Estacional/ }).closest('th')).toHaveAttribute('aria-sort', 'descending')
+  })
+})
+
+// Defectos de UI hallados con Chromium real (ADR-012): la barra de interruptores desalineada, la tabla más ancha que su contenedor y las notas largas apiladas en celdas angostas.
+// jsdom no mide, así que acá se prueba la estructura (lo que hace posible el layout); las medidas están en el ADR.
+describe('Reposición: layout de la barra y de la tabla (ADR-012)', () => {
+  const ROTULO = 'Descontar lo que vence en el horizonte'
+  const AMBAS: ReposicionData = {
+    ...DATA, estacionalidad: true, descontar_por_vencer: true, sucursal_id: 2,
+    productos: [{ ...YERBA, factor_estacional: 3, por_vencer: 4, vencido: 6, stock_minimo_propio: true }, { ...HARINA, factor_estacional: 0.5, por_vencer: 0 }, { ...SAL, factor_estacional: null, por_vencer: 0 }],
+  }
+  const tabla = { ...TODO, [RUTA]: AMBAS }
+
+  it('los tres interruptores son un solo bloque flex-wrap, sin los campos de adentro, con la misma altura y sin rellenos sueltos (pt-7 / pt-8 los desalineaban)', async () => {
+    await abrir(tabla)
+    const rotulos = ['Sólo lo que hay que pedir', 'Ajustar por estacionalidad', ROTULO]
+    const cajas = rotulos.map((r) => screen.getByLabelText(r))
+    const bloque = cajas[0].closest('.flex-wrap')!
+    for (const c of cajas) expect(c.closest('.flex-wrap')).toBe(bloque)
+    expect(bloque.querySelectorAll('input[type=checkbox]')).toHaveLength(3)
+    expect(bloque.querySelector('input:not([type=checkbox])')).toBeNull()                 // ningún campo ni select adentro
+    expect(screen.getByLabelText('Días de rotación').closest('.flex-wrap')).not.toBe(bloque)
+    for (const c of cajas) {
+      const rotulo = c.closest('label')!
+      expect(rotulo.className).not.toMatch(/(^|\s)pt-\d/)                                  // sin rellenos arriba que desalineen
+      expect(rotulo.className).toMatch(/(^|\s)h-9(\s|$)/)                                   // la misma altura que un campo, así quedan en la misma línea
+      expect(rotulo.className).toContain('whitespace-nowrap')                                // el rótulo no se parte en 2 líneas por un ancho máximo
+    }
+    // La ayuda no limita el ancho del rótulo (`max-w-56`) y sigue enlazada con aria-describedby.
+    expect(bloque.querySelector('.max-w-56')).toBeNull()
+    expect(screen.getByLabelText(ROTULO)).toHaveAccessibleDescription('Lo que no se alcanza a vender antes de vencer no cuenta como stock.')
+    // El bloque cuelga de la barra de filtros, como cada campo (un solo hijo de la barra, no tres sueltos).
+    expect(bloque.parentElement?.parentElement).toBe(screen.getByLabelText('Días de rotación').parentElement?.parentElement)
+  })
+
+  it('sin los interruptores opcionales (motor anterior) queda «Sólo lo que hay que pedir» en el mismo bloque', async () => {
+    await abrir()
+    const bloque = screen.getByLabelText('Sólo lo que hay que pedir').closest('.flex-wrap')!
+    expect(bloque.querySelectorAll('input[type=checkbox]')).toHaveLength(1)
+  })
+
+  it('«Sugerido» queda pegado al borde derecho (sticky, con fondo) en su encabezado y en cada celda, sin cambiar el orden de las columnas', async () => {
+    await abrir(tabla)
+    await screen.findByRole('button', { name: /^Por vencer/ })
+    const th = within(screen.getByRole('table')).getAllByRole('columnheader')
+    expect(th.map((x) => x.textContent)).toEqual([
+      'Producto', 'Código', 'Stock', 'Por vencer', 'En camino', 'Mínimo', 'Vendido en la ventana', 'Rotación diaria', 'Cobertura (días)', 'Estacional', 'Sugerido', 'Motivo',
+    ])
+    const i = th.findIndex((x) => x.textContent === 'Sugerido')
+    for (const celda of [th[i], ...['Yerba', 'Harina', 'Sal'].map((n) => within(fila(n)).getAllByRole('cell')[i])]) {
+      expect(celda.className).toMatch(/(^|\s)sticky(\s|$)/)
+      expect(celda.className).toMatch(/(^|\s)right-0(\s|$)/)
+      expect(celda.className).toMatch(/(^|\s)bg-card(\s|$)/)
+    }
+    // Ninguna otra columna lo es.
+    expect(th.filter((x) => /sticky/.test(x.className))).toHaveLength(1)
+    expect(within(fila('Yerba')).getAllByRole('cell').filter((x) => /sticky/.test(x.className))).toHaveLength(1)
+  })
+
+  it('las celdas de la tabla usan un relleno lateral chico (px-1.5) para que entren las 12 columnas', async () => {
+    await abrir(tabla)
+    await screen.findByRole('button', { name: /^Por vencer/ })
+    for (const celda of [...screen.getAllByRole('columnheader'), ...within(fila('Yerba')).getAllByRole('cell')]) {
+      expect(celda.className).toContain('px-1.5')
+      expect(celda.className).not.toMatch(/(^|\s)p-3(\s|$)/)
+    }
+  })
+
+  it('las notas largas de las celdas angostas se ven cortas, en una línea, y el texto completo está en el title y en el DOM para el lector de pantalla', async () => {
+    await abrir(tabla)
+    await screen.findByRole('button', { name: /^Por vencer/ })
+    const yerba = fila('Yerba')
+    const casos: { corto: string; completo: string }[] = [
+      { corto: 'Posible quiebre', completo: 'Posible quiebre: la rotación puede estar subestimada' },
+      { corto: 'no cuenta', completo: 'no cuenta como stock' },
+      { corto: '+4 sin sucursal', completo: 'incluye 4 de órdenes sin sucursal, contadas en esta sucursal' },
+      { corto: 'propio', completo: 'propio de la sucursal' },
+      { corto: 'incl. 6 vencido', completo: 'incluye 6 vencido, que no se cuenta para pedir' },
+    ]
+    for (const { corto, completo } of casos) {
+      const nota = within(yerba).getByTitle(completo)
+      expect(nota.className).toContain('whitespace-nowrap')
+      expect(nota.className).toContain('relative')                                         // el sr-only (absolute) no se escapa del scroll de la tabla
+      // Lo que se ve es la forma corta; el texto completo está entero en el DOM (lo lee el lector de pantalla y lo cuentan los tests por textContent).
+      const visible = Array.from(nota.children).filter((c) => !c.classList.contains('sr-only')).map((c) => c.textContent).join('') || nota.firstChild?.textContent
+      expect(visible).toBe(corto)
+      expect(texto(nota)).toContain(completo)
+      expect(nota.querySelector('.sr-only')).toBeTruthy()
+    }
+    // «Sin ventas» también: la píldora ya no parte su texto en varias líneas.
+    const sinVentas = within(fila('Sal')).getByTitle('Sin ventas en la ventana')
+    expect(sinVentas.className).toContain('whitespace-nowrap')
+    expect(texto(sinVentas)).toBe('Sin ventas en la ventana')
+    // Y las píldoras ya no fuerzan `whitespace-normal` (era lo que apilaba el texto hasta pisar el borde).
+    expect(yerba.querySelector('.whitespace-normal')).toBeNull()
   })
 })

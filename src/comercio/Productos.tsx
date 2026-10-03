@@ -175,6 +175,11 @@ function leerMinimosPorSucursal(d: unknown, minimoDelProducto: number): { global
   return { global: global ?? minimoDelProducto, filas }
 }
 
+/** El `id` del campo de mínimo de una sucursal: lo usan el `<Input>` y el error de validación (`aria-invalid` / `aria-describedby`). */
+const idDelMinimo = (sucursalId: number) => `repo-minimo-${sucursalId}`
+/** El `id` del mensaje de error del formulario del producto (el campo en falla lo señala con `aria-describedby`). */
+const ID_ERROR_FORM = 'producto-form-error'
+
 /** El tope del motor para un mínimo por sucursal (`erp.reposicion.MAX_STOCK_MINIMO`). */
 const MAX_MINIMO_SUCURSAL = 1_000_000_000
 
@@ -182,13 +187,13 @@ const MAX_MINIMO_SUCURSAL = 1_000_000_000
  *  sólo las que cambiaron, contra el tope del motor y contra `techo`, el stock máximo que va a quedar tras el guardado (`null` = sin techo, o no se sabe cuál
  *  es): así un valor inválido en la última sucursal no deja las primeras guardadas. */
 function leerMinimosAMandar(filas: MinimoEditable[], techo: number | null):
-  { error: string } | { cambios: { fila: MinimoEditable; valor: number | null }[] } {
+  { error: string; campo: string } | { cambios: { fila: MinimoEditable; valor: number | null }[] } {
   const cambios: { fila: MinimoEditable; valor: number | null }[] = []
   for (const fila of filas) {
     if (fila.texto === fila.textoOriginal) {
       // Sin tocar: no se parsea ni se manda; sólo cuenta contra el techo final (el valor guardado, tal cual).
       if (fila.original !== null && techo !== null && fila.original > techo) {
-        return { error: `El mínimo de «${fila.sucursal}» (${fila.original}) no puede ser mayor que el stock máximo (${techo}).` }
+        return { error: `El mínimo de «${fila.sucursal}» (${fila.original}) no puede ser mayor que el stock máximo (${techo}).`, campo: idDelMinimo(fila.sucursal_id) }
       }
       continue
     }
@@ -196,14 +201,14 @@ function leerMinimosAMandar(filas: MinimoEditable[], techo: number | null):
     let valor: number | null = null
     if (t !== '') {
       if (!/^\d+(\.\d+)?$/.test(t) || !Number.isFinite(Number(t))) {
-        return { error: `El mínimo de «${fila.sucursal}» tiene que ser un número mayor o igual que 0 (o vacío, para usar el global).` }
+        return { error: `El mínimo de «${fila.sucursal}» tiene que ser un número mayor o igual que 0 (o vacío, para usar el global).`, campo: idDelMinimo(fila.sucursal_id) }
       }
       valor = Number(t)
       if (valor > MAX_MINIMO_SUCURSAL) {
-        return { error: `El mínimo de «${fila.sucursal}» no puede pasar de ${MAX_MINIMO_SUCURSAL.toLocaleString('es-AR')}.` }
+        return { error: `El mínimo de «${fila.sucursal}» no puede pasar de ${MAX_MINIMO_SUCURSAL.toLocaleString('es-AR')}.`, campo: idDelMinimo(fila.sucursal_id) }
       }
       if (techo !== null && valor > techo) {
-        return { error: `El mínimo de «${fila.sucursal}» (${valor}) no puede ser mayor que el stock máximo (${techo}).` }
+        return { error: `El mínimo de «${fila.sucursal}» (${valor}) no puede ser mayor que el stock máximo (${techo}).`, campo: idDelMinimo(fila.sucursal_id) }
       }
     }
     if (valor !== fila.original) cambios.push({ fila, valor })
@@ -213,23 +218,23 @@ function leerMinimosAMandar(filas: MinimoEditable[], techo: number | null):
 
 /** Valida los dos campos de texto (vacío = sin valor propio). Devuelve el error, o los valores a mandar. */
 function leerParametrosReposicion(plazo: string, techo: string, minimo: number):
-  { error: string } | { valores: ParametrosReposicion } {
+  { error: string; campo: string } | { valores: ParametrosReposicion } {
   const p = plazo.trim()
   const t = techo.trim().replace(',', '.')
   let plazoDias: number | null = null
   if (p !== '') {
     if (!/^\d+$/.test(p) || Number(p) < 1 || Number(p) > MAX_PLAZO_REPOSICION) {
-      return { error: `El plazo de entrega tiene que ser un entero entre 1 y ${MAX_PLAZO_REPOSICION} días (o vacío, para usar el general).` }
+      return { error: `El plazo de entrega tiene que ser un entero entre 1 y ${MAX_PLAZO_REPOSICION} días (o vacío, para usar el general).`, campo: 'repo-plazo' }
     }
     plazoDias = Number(p)
   }
   let maximo: number | null = null
   if (t !== '') {
     if (!/^\d+(\.\d+)?$/.test(t) || !Number.isFinite(Number(t)) || Number(t) <= 0) {
-      return { error: 'El stock máximo tiene que ser mayor que 0 (o vacío, sin techo).' }
+      return { error: 'El stock máximo tiene que ser mayor que 0 (o vacío, sin techo).', campo: 'repo-techo' }
     }
     maximo = Number(t)
-    if (minimo > 0 && maximo < minimo) return { error: `El stock máximo no puede ser menor que el stock mínimo (${minimo}).` }
+    if (minimo > 0 && maximo < minimo) return { error: `El stock máximo no puede ser menor que el stock mínimo (${minimo}).`, campo: 'repo-techo' }
   }
   return { valores: { plazo_entrega_dias: plazoDias, stock_maximo: maximo } }
 }
@@ -267,7 +272,20 @@ export function Productos({
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingProducto, setEditingProducto] = useState<Producto | null>(null)
   const [saving, setSaving] = useState(false)
-  const [formError, setFormError] = useState<string | null>(null)
+  // El error del formulario (validación o guardado) y, si se sabe cuál, el `id` del campo que lo causó. Cada error es un objeto nuevo: repetir el mismo texto
+  // vuelve a llevarlo a la vista. El diálogo scrollea y el mensaje está arriba: sin traerlo, quien mira el campo de abajo cree que «Guardar» no hizo nada.
+  const [formFallo, setFormFallo] = useState<{ mensaje: string; campo: string | null } | null>(null)
+  const formError = formFallo?.mensaje ?? null
+  const formErrorRef = useRef<HTMLParagraphElement>(null)
+  useEffect(() => {
+    if (formFallo === null) return
+    formErrorRef.current?.focus({ preventScroll: true })
+    formErrorRef.current?.scrollIntoView?.({ block: 'center' })
+  }, [formFallo])
+  /** `aria-invalid` y `aria-describedby` del campo que causó el error del formulario. */
+  const marcaDelCampo = (id: string) => (
+    formFallo?.campo === id ? { 'aria-invalid': true as const, 'aria-describedby': ID_ERROR_FORM } : {}
+  )
   // Opt-in por datos: una vez que algún producto trajo `vence` (aun uno que no vence: `false`) el backend lo maneja, y se
   // recuerda aunque una búsqueda posterior devuelva una lista vacía.
   const [backendConVence, setBackendConVence] = useState(false)
@@ -397,7 +415,7 @@ export function Productos({
     form.reset(EMPTY_VALUES)
     valoresIniciales.current = null
     costoOculto.current = false
-    setFormError(null)
+    setFormFallo(null)
     setRepoPlazo('')
     setRepoTecho('')
     setRepoOriginal({ plazo_entrega_dias: null, stock_maximo: null })
@@ -438,7 +456,7 @@ export function Productos({
     form.reset(iniciales)
     valoresIniciales.current = iniciales
     costoOculto.current = producto.precio_costo === undefined || producto.precio_costo === null
-    setFormError(null)
+    setFormFallo(null)
     setRepoPlazo('')
     setRepoTecho('')
     setRepoOriginal({ plazo_entrega_dias: null, stock_maximo: null })
@@ -496,7 +514,7 @@ export function Productos({
     // (bajar el techo por debajo de un mínimo propio que todavía no llegó guardaría el producto y recién después recibiría el 422).
     if (repoEstado === 'cargando' || minimosEstado === 'cargando') return
     setSaving(true)
-    setFormError(null)
+    setFormFallo(null)
     // Se manda sólo lo que este producto edita: lo que no se manda toma el
     // default histórico en el backend (tipo=producto, estación vacía,
     // vendible). Así un producto sin `conTipo` no cambia el tipo al editar.
@@ -525,7 +543,7 @@ export function Productos({
     if (conParametrosDeReposicion && repoEstado === 'listo') {
       const leidos = leerParametrosReposicion(repoPlazo, repoTecho, Number(values.stock_minimo) || 0)
       if ('error' in leidos) {
-        setFormError(leidos.error)
+        setFormFallo({ mensaje: leidos.error, campo: leidos.campo })
         setSaving(false)
         return
       }
@@ -542,7 +560,7 @@ export function Productos({
     if (editingProducto && minimosEstado === 'listo') {
       const leidos = leerMinimosAMandar(minimos, techoFinal)
       if ('error' in leidos) {
-        setFormError(leidos.error)
+        setFormFallo({ mensaje: leidos.error, campo: leidos.campo })
         setSaving(false)
         return
       }
@@ -557,6 +575,7 @@ export function Productos({
     // (`as`: las funciones de abajo la reasignan y TypeScript no sigue esas asignaciones al estrechar el tipo.)
     let etapa = 'producto' as 'producto' | 'reposicion' | 'minimo'
     let sucursalEnCurso = ''
+    let sucursalIdEnCurso: number | null = null
     try {
       let id = editingProducto?.id
       if (editingProducto) {
@@ -567,7 +586,7 @@ export function Productos({
           (Object.keys(values) as (keyof Valores)[]).every((k) => String(values[k]) === String(iniciales[k]))
         // Sin ver el costo no se puede guardar el producto: el 0 de relleno pisaría el costo real. Sólo se guarda lo de reposición.
         if (!productoSinCambios && costoOculto.current) {
-          setFormError('Tu rol no ve el costo de este producto, así que no puede editar el producto: sólo la reposición (plazo de entrega, stock máximo y mínimos por sucursal).')
+          setFormFallo({ mensaje: 'Tu rol no ve el costo de este producto, así que no puede editar el producto: sólo la reposición (plazo de entrega, stock máximo y mínimos por sucursal).', campo: null })
           setSaving(false)
           return
         }
@@ -600,6 +619,7 @@ export function Productos({
         for (const { fila, valor } of minimosAMandar) {
           etapa = 'minimo'
           sucursalEnCurso = fila.sucursal
+          sucursalIdEnCurso = fila.sucursal_id
           await api.put(`/api/productos/${id}/reposicion/minimos/${fila.sucursal_id}`, { stock_minimo: valor })
           // La base de comparación pasa a ser lo que quedó en el servidor, en número Y en texto: si el usuario devuelve el campo al texto viejo, eso es un cambio.
           if (vigente()) {
@@ -628,10 +648,13 @@ export function Productos({
         : `no se pudieron guardar el plazo y el stock máximo: ${detalle}`
       if (guardado && etapa !== 'producto') {
         // El producto sí quedó guardado; sólo falló lo que sigue. Se dice y el diálogo sigue abierto para reintentar.
-        if (vigente()) setFormError(`El producto se guardó, pero ${falla}`)
+        if (vigente()) setFormFallo({ mensaje: `El producto se guardó, pero ${falla}`, campo: etapa === 'minimo' && sucursalIdEnCurso !== null ? idDelMinimo(sucursalIdEnCurso) : null })
         await loadProductos()
       } else if (vigente()) {
-        setFormError(etapa === 'minimo' ? `No se pudo guardar el mínimo de «${sucursalEnCurso}»: ${detalle}` : detalle)
+        setFormFallo({
+          mensaje: etapa === 'minimo' ? `No se pudo guardar el mínimo de «${sucursalEnCurso}»: ${detalle}` : detalle,
+          campo: etapa === 'minimo' && sucursalIdEnCurso !== null ? idDelMinimo(sucursalIdEnCurso) : null,
+        })
       }
     } finally {
       setSaving(false)
@@ -773,7 +796,9 @@ export function Productos({
               </DialogHeader>
               <Form {...form}>
                 <form className="flex flex-wrap items-start gap-3" onSubmit={form.handleSubmit(handleSubmit)}>
-                  {formError && <p className="w-full text-sm text-destructive">{formError}</p>}
+                  {formError && (
+                    <p ref={formErrorRef} id={ID_ERROR_FORM} role="alert" tabIndex={-1} className="w-full text-sm text-destructive outline-none">{formError}</p>
+                  )}
                   <FormField
                     control={form.control}
                     name="nombre"
@@ -938,12 +963,12 @@ export function Productos({
                         <div className="flex flex-wrap gap-4">
                           <div className="grid gap-2">
                             <Label htmlFor="repo-plazo">Plazo de entrega (días)</Label>
-                            <Input id="repo-plazo" inputMode="numeric" placeholder="general" className="w-32" value={repoPlazo}
+                            <Input id="repo-plazo" inputMode="numeric" placeholder="general" className="w-32" value={repoPlazo} {...marcaDelCampo('repo-plazo')}
                               disabled={repoEstado === 'cargando' || saving} onChange={(e) => setRepoPlazo(e.target.value)} />
                           </div>
                           <div className="grid gap-2">
                             <Label htmlFor="repo-techo">Stock máximo</Label>
-                            <Input id="repo-techo" inputMode="decimal" placeholder="sin tope" className="w-32" value={repoTecho}
+                            <Input id="repo-techo" inputMode="decimal" placeholder="sin tope" className="w-32" value={repoTecho} {...marcaDelCampo('repo-techo')}
                               disabled={repoEstado === 'cargando' || saving} onChange={(e) => setRepoTecho(e.target.value)} />
                           </div>
                           {proveedorDisponible && (
@@ -981,8 +1006,8 @@ export function Productos({
                           <div className="flex flex-wrap gap-4">
                             {minimos.map((f) => (
                               <div key={f.sucursal_id} className="grid gap-2">
-                                <Label htmlFor={`repo-minimo-${f.sucursal_id}`}>Mínimo en {f.sucursal}</Label>
-                                <Input id={`repo-minimo-${f.sucursal_id}`} inputMode="decimal" placeholder={`global: ${minimoGlobalVisible}`} className="w-32"
+                                <Label htmlFor={idDelMinimo(f.sucursal_id)}>Mínimo en {f.sucursal}</Label>
+                                <Input id={idDelMinimo(f.sucursal_id)} {...marcaDelCampo(idDelMinimo(f.sucursal_id))} inputMode="decimal" placeholder={`global: ${minimoGlobalVisible}`} className="w-32"
                                   value={f.texto} disabled={saving}
                                   onChange={(e) => setMinimos((prev) => prev.map((x) => (x.sucursal_id === f.sucursal_id ? { ...x, texto: e.target.value } : x)))} />
                               </div>
