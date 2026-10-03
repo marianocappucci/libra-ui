@@ -179,7 +179,8 @@ wiki (entidad `libra-ui` y `concepts/estandares-desarrollo`).
     sigue siendo el mismo (la numeración que ya protege las lecturas): si se cierra y se abre otro producto mientras se guarda, la respuesta tardía no lo pisa ni lo cierra.
     Y mientras se guarda, los campos de reposición (plazo, techo, proveedor) y de mínimos quedan deshabilitados: lo escrito durante el guardado no se pierde
     ni se compara contra una base que ya cambió.
-  - **Fallo parcial:** lo que ya quedó guardado (plazo/techo, sucursales anteriores) pasa a ser la base de comparación, así que el reintento sigue por las
+  - **Fallo parcial:** lo que ya quedó guardado (plazo/techo, sucursales anteriores) pasa a ser la base de comparación (el número y el texto de cada fila: si el
+    usuario devuelve una sucursal ya guardada a su valor viejo, eso es un cambio y se vuelve a mandar), así que el reintento sigue por las
     que faltan, y el mensaje dice cuál sucursal falló y si el producto se guardó.
   - **`Reposicion.tsx`:** con una sucursal elegida, si la fila trae `stock_minimo_propio: true` la celda del mínimo agrega el texto «propio de la sucursal»
     (con texto, no sólo color). Sin sucursal o sin la clave (motor anterior) no hay marca.

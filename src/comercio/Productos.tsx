@@ -601,7 +601,11 @@ export function Productos({
           etapa = 'minimo'
           sucursalEnCurso = fila.sucursal
           await api.put(`/api/productos/${id}/reposicion/minimos/${fila.sucursal_id}`, { stock_minimo: valor })
-          if (vigente()) setMinimos((prev) => prev.map((f) => (f.sucursal_id === fila.sucursal_id ? { ...f, original: valor } : f)))
+          // La base de comparación pasa a ser lo que quedó en el servidor, en número Y en texto: si el usuario devuelve el campo al texto viejo, eso es un cambio.
+          if (vigente()) {
+            setMinimos((prev) => prev.map((f) => (
+              f.sucursal_id === fila.sucursal_id ? { ...f, original: valor, textoOriginal: valor === null ? '' : textoDecimal(valor) } : f)))
+          }
         }
       }
       // El motor no acepta un techo menor que algún mínimo por sucursal ni un mínimo mayor que el techo, y cada pedido se valida contra lo que ya está

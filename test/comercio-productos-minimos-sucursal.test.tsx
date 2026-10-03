@@ -495,6 +495,30 @@ describe('Productos: mínimo por sucursal', () => {
     })
   })
 
+  it.each([
+    ['cambiada de 4 a 10', '10', { stock_minimo: 10 }],
+    ['vaciada (borrado del propio)', '', { stock_minimo: null }],
+  ])('si una sucursal %s se guardó y otra falla, devolver la primera a su valor viejo y reintentar la vuelve a mandar (el servidor conserva lo nuevo)', async (_n, nuevo, cuerpoNuevo) => {
+    responder({ ...base, [`PUT ${MINIMOS}/1`]: {}, [`PUT ${MINIMOS}/2`]: { status: 422, detail: 'mínimo inválido' } })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    await within(dialogo()).findByText('Mínimo por sucursal')
+    fireEvent.change(centro(), { target: { value: nuevo } })   // Centro: 4 -> nuevo (se guarda)
+    fireEvent.change(norte(), { target: { value: '8' } })      // Norte falla con un 422
+    await guardar(user)
+    expect(await within(dialogo()).findByText('No se pudo guardar el mínimo de «Norte»: mínimo inválido')).toBeTruthy()
+    expect(cuerpoDe(`PUT ${MINIMOS}/1`)).toEqual(cuerpoNuevo)
+
+    fireEvent.change(centro(), { target: { value: '4' } })     // el usuario la devuelve al valor con el que se abrió el diálogo
+    fireEvent.change(norte(), { target: { value: '' } })       // y deja de intentar Norte
+    responder({ ...base, [`PUT ${MINIMOS}/1`]: {} })
+    await guardar(user)
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(putsDeMinimos()).toEqual([`PUT ${MINIMOS}/1`, `PUT ${MINIMOS}/2`, `PUT ${MINIMOS}/1`])
+    expect(cuerpoDe(`PUT ${MINIMOS}/1`, pedidas().lastIndexOf(`PUT ${MINIMOS}/1`))).toEqual({ stock_minimo: 4 })
+  })
+
   it('si el producto sí se guardó y falla un mínimo, lo dice, deja el diálogo abierto y el reintento no vuelve a guardar el producto', async () => {
     responder({ ...base, 'PUT /api/productos/1': { id: 1 }, [`PUT ${MINIMOS}/2`]: { status: 500, detail: 'se cayó' } })
     const user = userEvent.setup()
