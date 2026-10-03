@@ -212,14 +212,14 @@ describe('Productos: mínimo por sucursal', () => {
     expect(putsDeMinimos()).toEqual([`PUT ${MINIMOS}/1`, `PUT ${MINIMOS}/2`, `PUT ${MINIMOS}/2`])
   })
 
-  it('un mínimo mayor que el techo del producto: el 422 del motor se muestra tal cual, con el nombre de la sucursal', async () => {
-    const detail = 'stock_minimo (50) no puede ser mayor que el stock máximo de reposición del producto (40)'
+  it('si el motor rechaza un mínimo igual (el techo cambió desde otra sesión), el 422 se muestra tal cual, con el nombre de la sucursal', async () => {
+    const detail = 'stock_minimo (30) no puede ser mayor que el stock máximo de reposición del producto (25)'
     responder({ ...base, [`PUT ${MINIMOS}/2`]: { status: 422, detail } })
     const user = userEvent.setup()
     montar('/productos', <Productos conParametrosDeReposicion />)
     await editar(user)
     await within(dialogo()).findByText('Mínimo por sucursal')
-    fireEvent.change(norte(), { target: { value: '50' } })
+    fireEvent.change(norte(), { target: { value: '30' } })
     await guardar(user)
     expect(await within(dialogo()).findByText(`No se pudo guardar el mínimo de «Norte»: ${detail}`)).toBeTruthy()
   })
@@ -263,6 +263,136 @@ describe('Productos: mínimo por sucursal', () => {
     await guardar(user)
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(pedidas().indexOf(`PUT ${RUTA}`)).toBeLessThan(pedidas().indexOf(`PUT ${MINIMOS}/1`))
+  })
+
+  it('un mínimo mayor que el techo FINAL se rechaza antes de escribir nada: ni siquiera se guarda la sucursal anterior que estaba bien', async () => {
+    responder({ ...base, [`PUT ${RUTA}`]: PARAMETROS, [`PUT ${MINIMOS}/1`]: {}, [`PUT ${MINIMOS}/2`]: {} })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    await within(dialogo()).findByText('Mínimo por sucursal')
+    await waitFor(() => expect((within(dialogo()).getByLabelText('Stock máximo') as HTMLInputElement).value).toBe('40'))
+    fireEvent.change(centro(), { target: { value: '5' } })
+    fireEvent.change(norte(), { target: { value: '50' } })   // el techo vigente es 40
+    await guardar(user)
+    expect(await within(dialogo()).findByText('El mínimo de «Norte» (50) no puede ser mayor que el stock máximo (40).')).toBeTruthy()
+    expect(escrituras()).toHaveLength(0)
+  })
+
+  it('el techo que cuenta es el que quedaría tras el guardado: si en el mismo guardado se sube, el mínimo mayor que el viejo es válido; si se baja, el que lo pasa no', async () => {
+    const user = userEvent.setup()
+    responder({ ...base, [`PUT ${RUTA}`]: PARAMETROS, [`PUT ${MINIMOS}/2`]: {} })
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    await within(dialogo()).findByText('Mínimo por sucursal')
+    await waitFor(() => expect((within(dialogo()).getByLabelText('Stock máximo') as HTMLInputElement).value).toBe('40'))
+    fireEvent.change(within(dialogo()).getByLabelText('Stock máximo'), { target: { value: '60' } })
+    fireEvent.change(norte(), { target: { value: '50' } })
+    await guardar(user)
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(cuerpoDe(`PUT ${MINIMOS}/2`)).toEqual({ stock_minimo: 50 })
+
+    cleanup()
+    prepararFetch()
+    responder({ ...base, [`PUT ${RUTA}`]: PARAMETROS, [`PUT ${MINIMOS}/2`]: {} })
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    await within(dialogo()).findByText('Mínimo por sucursal')
+    await waitFor(() => expect((within(dialogo()).getByLabelText('Stock máximo') as HTMLInputElement).value).toBe('40'))
+    fireEvent.change(within(dialogo()).getByLabelText('Stock máximo'), { target: { value: '20' } })
+    fireEvent.change(norte(), { target: { value: '30' } })
+    await guardar(user)
+    expect(await within(dialogo()).findByText('El mínimo de «Norte» (30) no puede ser mayor que el stock máximo (20).')).toBeTruthy()
+    expect(escrituras()).toHaveLength(0)
+  })
+
+  it('el tope del motor (1.000.000.000) se valida en el cliente, en cualquier fila, antes de escribir nada', async () => {
+    responder({ ...base, [`PUT ${MINIMOS}/1`]: {}, [`PUT ${MINIMOS}/2`]: {}, [`GET ${RUTA}`]: { ...PARAMETROS, stock_maximo: null } })
+    const user = userEvent.setup()
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    await within(dialogo()).findByText('Mínimo por sucursal')
+    await waitFor(() => expect((within(dialogo()).getByLabelText('Stock máximo') as HTMLInputElement).value).toBe(''))
+    fireEvent.change(centro(), { target: { value: '5' } })
+    fireEvent.change(norte(), { target: { value: '1000000001' } })
+    await guardar(user)
+    expect(await within(dialogo()).findByText(/El mínimo de «Norte» no puede pasar de 1\.000\.000\.000/)).toBeTruthy()
+    expect(escrituras()).toHaveLength(0)
+    // Justo en el tope sí se guarda.
+    fireEvent.change(norte(), { target: { value: '1000000000' } })
+    await guardar(user)
+    await waitFor(() => expect(putsDeMinimos()).toHaveLength(2))
+    expect(cuerpoDe(`PUT ${MINIMOS}/2`)).toEqual({ stock_minimo: 1000000000 })
+  })
+
+  describe('mientras se guarda', () => {
+    const OTRO = producto(2, 'Azúcar', { stock_minimo: 3 })
+    const MINIMOS_OTRO = {
+      producto_id: 2, sucursales: [
+        { sucursal_id: 1, sucursal: 'Centro', stock_minimo: 1, stock_minimo_propio: true, stock_minimo_global: 3 },
+        { sucursal_id: 2, sucursal: 'Norte', stock_minimo: 3, stock_minimo_propio: false, stock_minimo_global: 3 },
+      ],
+    }
+    /** Un `fetch` donde el PUT de `ruta` queda colgado hasta que se llama a `soltar`. */
+    function colgar(ruta: string, tabla: Record<string, unknown>) {
+      responder(tabla)
+      const normal = fetchMock.getMockImplementation()!
+      let soltar: () => void = () => {}
+      const espera = new Promise<void>((r) => { soltar = r })
+      fetchMock.mockImplementation(async (entrada: RequestInfo | URL, init?: RequestInit) => {
+        if (String(entrada) === ruta && init?.method === 'PUT') {
+          await espera
+          return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } })
+        }
+        return normal(entrada, init)
+      })
+      return soltar
+    }
+
+    it('los campos de reposición y de mínimos quedan deshabilitados (lo escrito después no se perdería ni se compararía contra otra base)', async () => {
+      const soltar = colgar(`${MINIMOS}/2`, { ...base })
+      const user = userEvent.setup()
+      montar('/productos', <Productos conParametrosDeReposicion />)
+      await editar(user)
+      await within(dialogo()).findByText('Mínimo por sucursal')
+      fireEvent.change(norte(), { target: { value: '8' } })
+      await guardar(user)
+      await waitFor(() => expect(norte().disabled).toBe(true))
+      expect(centro().disabled).toBe(true)
+      expect((within(dialogo()).getByLabelText('Plazo de entrega (días)') as HTMLInputElement).disabled).toBe(true)
+      expect((within(dialogo()).getByLabelText('Stock máximo') as HTMLInputElement).disabled).toBe(true)
+      soltar()
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    })
+
+    it('si se cierra el diálogo y se abre otro producto mientras se guarda, la respuesta tardía no cierra ni pisa al nuevo (ni sus originales: guardarlo sin tocar no manda nada)', async () => {
+      const soltar = colgar(`${MINIMOS}/2`, {
+        ...base, '/api/productos': [YERBA, OTRO],
+        '/api/productos/2/reposicion': { ...PARAMETROS, producto_id: 2 }, '/api/productos/2/reposicion/minimos': MINIMOS_OTRO,
+        'PUT /api/productos/2': { id: 2 }, '/api/productos/2/reposicion/minimos/2': {},
+      })
+      const user = userEvent.setup()
+      montar('/productos', <Productos conParametrosDeReposicion />)
+      await screen.findByText('Yerba')
+      await user.click(screen.getAllByLabelText('Editar producto')[0])
+      await within(dialogo()).findByText('Mínimo por sucursal')
+      fireEvent.change(norte(), { target: { value: '8' } })
+      await guardar(user)                                               // el PUT de Norte (producto 1) queda colgado
+      await waitFor(() => expect(norte().disabled).toBe(true))
+      await user.click(within(dialogo()).getByRole('button', { name: /Cancelar/ }))
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+      await user.click(screen.getAllByLabelText('Editar producto')[1])
+      await within(dialogo()).findByText('Mínimo por sucursal')
+      expect(norte().value).toBe('')
+      soltar()                                                          // llega la respuesta del guardado de Yerba
+      await waitFor(() => expect(pedidas().filter((p) => p === 'GET /api/productos').length).toBeGreaterThan(1))
+      await new Promise((r) => setTimeout(r, 30))
+      expect(screen.queryByRole('dialog')).not.toBeNull()               // no cerró el diálogo de Azúcar
+      expect(norte().value).toBe('')
+      await guardar(user)
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+      expect(putsDeMinimos()).toEqual([`PUT ${MINIMOS}/2`])             // sólo el de Yerba: Azúcar no cambió nada
+    })
   })
 
   it('si el producto sí se guardó y falla un mínimo, lo dice, deja el diálogo abierto y el reintento no vuelve a guardar el producto', async () => {
