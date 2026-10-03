@@ -278,16 +278,26 @@ wiki (entidad `libra-ui` y `concepts/estandares-desarrollo`).
     nada editable y el diálogo no ofrece «Guardar cambios» (sólo «Cancelar»). **El alta no cambia** (`conAlta` es lo que la apaga): el formulario de «Nuevo producto» es siempre editable, y si el alta
     falla en la reposición y el diálogo pasa a editar el producto recién creado, ese segundo paso ya es de sólo lectura y reintenta sólo la reposición.
   - **401/403 en castellano, en el único `describeError` de la pantalla** (el que usan el guardado del diálogo, el listado y «Eliminar»): 403 = «No tenés permiso para hacer esto.»; 401 = «Tu sesión venció.
-    Volvé a iniciar sesión.». Se reemplaza sólo el `detail` **genérico en inglés**; se conserva el que ya viene redactado: un objeto con `mensaje` (los Términos
-    pendientes, que distingue «faltan permisos» de «falta aceptar el contrato») y un texto en castellano (el 403 de «No tenés permiso para marcar o desmarcar productos que vencen.», que dice
-    qué permiso falta: pisarlo con el genérico perdería información; un test existente lo exige). «En castellano» es una heurística (acentos, «ñ», o una palabra suelta como «no», «tu», «para»):
-    un `detail` inglés con una de esas palabras se vería crudo. Cualquier otro status conserva el `detail` del backend. Es un helper local de Productos y no del cliente (`api-client.ts`): ~75 pantallas muestran `err.detail` y cambiarlas
-    todas excede esto; si se quiere para toda la familia, el lugar es `ApiError`.
+    Volvé a iniciar sesión.». Se reemplaza sólo el `detail` **genérico**, por una **lista explícita y cerrada** (`DETALLES_GENERICOS`)
+    comparada normalizada (minúsculas, espacios de más y punto final fuera): `forbidden` (403) y `not authenticated` (401) son los de `libraauth` (`session_auth.py`) y los de FastAPI por
+    defecto; se suman `unauthorized`, `not enough permissions`, `could not validate credentials`, `operation not permitted`, `permission denied` y `access denied`. Un `detail` vacío
+    (un 401/403 sin cuerpo) también cuenta como genérico. **Todo lo demás se muestra tal cual**, en castellano o no, porque lo dijo el backend a propósito: un permiso puntual («No tenés permiso
+    para marcar o desmarcar productos que vencen.», que un test existente exige), «Acceso denegado», «Credenciales incorrectas», el objeto con `mensaje` (los Términos pendientes, que distingue «faltan
+    permisos» de «falta aceptar el contrato») y cualquier otro status. **«No permissions» no está en la lista a propósito:** no es un genérico conocido de la familia, y agregar frases a ojo es lo
+    que hacía fallar a la primera versión (una heurística «¿está en castellano?» que reemplazaba «Acceso denegado» y dejaba pasar inglés). Si aparece un genérico nuevo, se agrega a la lista con su test.
   - **Encabezado de la Reposición:** el título tenía como hijos directos del `flex` el icono, el número, la palabra «producto» y el resumen: cada pedazo de texto era una columna. Ahora son dos hijos:
     «icono + N producto(s)» (`whitespace-nowrap`) y el resumen (`leading-snug`), con `flex-wrap`: el resumen baja entero a la línea de abajo en vez de apretarse al lado.
   - **Rótulo «Vence»:** `leading-snug` sobre el `leading-none` del `Label` del kit (que es para rótulos de una línea).
+  - **El foco vuelve a la fila al cerrar la edición** (hallazgo de la revisión de Codex). El diálogo de edición se abre por el `onClick` del botón de la fila y Radix devuelve el foco al `DialogTrigger`:
+    con `conAlta={false}` no hay ninguno y el foco se perdía (y con `conAlta` volvía a «Nuevo producto», que no abrió nada). `DialogContent` ahora tiene `onCloseAutoFocus`: si el diálogo lo abrió una fila,
+    se hace `preventDefault()` y el foco va al botón que lo abrió; si ese botón ya no está (el guardado recarga la tabla: «Cargando…» y botones nuevos), al botón del **mismo producto** (`data-editar-producto`);
+    si la tabla todavía se está recargando, a «Nuevo producto» (si existe) o al contenedor de la tabla (`tabIndex={-1}`) y, cuando la tabla vuelve, al botón de ese producto (sólo si el foco sigue en esa reserva
+    o en ningún lado: no se lo roba a quien ya fue a otra parte). Si el producto ya no está, queda en la reserva. El alta no cambia: la maneja Radix con su trigger.
 - Consecuencias:
   - Los productos que no pasan las props nuevas no cambian (los tests existentes del depósito sin `conEdicionDelProducto` pasan sin tocarse).
   - **No verificado en navegador** (jsdom no mide layout ni pinta): los dos cosméticos se probaron por la estructura de clases; hay que mirarlos con Chromium a 390 px. Un `disabled` en el `Select` de Radix
     se probó por el atributo del disparador, no abriéndolo.
+  - **`conEdicionDelProducto={false}` solo NO impide crear:** para que el usuario no pueda crear NI editar el producto hay que pasar **las dos**, `conAlta={false}` y `conEdicionDelProducto={false}`.
+  - **Cómo se verificó el layout:** a 390 px sólo **por clases** (`whitespace-nowrap`, `flex-wrap`, `leading-snug`; los tests están rotulados «estructural»): jsdom no mide ni pinta, y el stub de `Select` sólo
+    reenvía `disabled`. Hay que mirarlo a ojo con Chromium en la verificación del navegador. El foco se probó con el Dialog **real** de Radix (`comercio-productos-foco.test.tsx`), no con el stub.
   - Quien monta la pantalla decide las dos props desde la sesión (`productos.escribir`); el servidor sigue siendo quien autoriza (un 403 igual se dice bien).

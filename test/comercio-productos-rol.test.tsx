@@ -81,7 +81,7 @@ describe('Productos: conEdicionDelProducto', () => {
     expect(within(dialogo()).queryByText('Tu rol sólo puede cargar la reposición de este producto.')).toBeNull()
   })
 
-  it('con conEdicionDelProducto={false} el producto va de sólo lectura (con la nota visible) y la reposición sigue editable', async () => {
+  it('con conEdicionDelProducto={false} el producto va de sólo lectura (con la nota visible) y la reposición sigue editable (estructural en los Select: el stub sólo reenvía `disabled`)', async () => {
     responder(deposito)
     const user = userEvent.setup()
     montar('/productos', <Productos conParametrosDeReposicion conVencimientos conTipo conEdicionDelProducto={false} />)
@@ -90,7 +90,7 @@ describe('Productos: conEdicionDelProducto', () => {
     await waitFor(() => expect(en('Plazo de entrega (días)').disabled).toBe(false))
     expect(within(dialogo()).getByText('Tu rol sólo puede cargar la reposición de este producto.')).toBeTruthy()
     for (const campo of ['Nombre', 'Código', 'Categoría', 'Precio de venta', 'Stock mínimo', 'Descripción']) expect(en(campo).disabled).toBe(true)
-    // Los selectores (unidad, tipo) y los interruptores (Vence, Producto activo).
+    // Los selectores (unidad, tipo; estructural: el stub de Select reenvía `disabled`, no prueba el Select de Radix) y los interruptores (Vence, Producto activo).
     for (const rotulo of ['Unidad', 'Tipo']) expect((within(dialogo()).getByLabelText(rotulo) as HTMLButtonElement).disabled).toBe(true)
     for (const nombre of [/Vence/, 'Producto activo']) expect((within(dialogo()).getByRole('switch', { name: nombre }) as HTMLButtonElement).disabled).toBe(true)
     // La reposición: plazo, techo y mínimos por sucursal.
@@ -207,22 +207,38 @@ describe('Productos: los errores 401/403 se dicen en castellano', () => {
     expect((await within(dialogo()).findByRole('alert')).textContent).toBe('Ya existe un producto con ese código.')
   })
 
-  it('un 403 con un `detail` ya redactado en castellano por el backend lo conserva (dice qué permiso falta)', async () => {
-    responder({ ...base, 'PUT /api/productos/1': { status: 403, detail: 'No tenés permiso para marcar o desmarcar productos que vencen.' } })
-    const user = userEvent.setup()
-    montar('/productos', <Productos />)
-    await editar(user)
-    await guardar(user)
-    expect((await within(dialogo()).findByRole('alert')).textContent).toBe('No tenés permiso para marcar o desmarcar productos que vencen.')
-  })
-
-  it.each(['forbidden', 'Forbidden', 'Not enough permissions', 'Could not validate credentials', 'Operation not permitted'])('el `detail` genérico en inglés «%s» se reemplaza', async (detail) => {
+  it.each([
+    ['forbidden'], ['Forbidden'], ['Forbidden.'], ['  FORBIDDEN '], ['Not enough permissions'], ['Could not validate credentials'], ['Operation not permitted'],
+    ['permission denied'], ['Access   denied!'], ['Unauthorized'], [''],
+  ])('el `detail` genérico de un 403 «%s» (lista explícita, normalizado) se reemplaza', async (detail) => {
     responder({ ...base, 'PUT /api/productos/1': { status: 403, detail } })
     const user = userEvent.setup()
     montar('/productos', <Productos />)
     await editar(user)
     await guardar(user)
     expect((await within(dialogo()).findByRole('alert')).textContent).toBe('No tenés permiso para hacer esto.')
+  })
+
+  it.each([['not authenticated'], ['Not authenticated'], ['Unauthorized.'], ['']])('el `detail` genérico de un 401 «%s» se dice como sesión vencida', async (detail) => {
+    responder({ ...base, 'PUT /api/productos/1': { status: 401, detail } })
+    const user = userEvent.setup()
+    montar('/productos', <Productos />)
+    await editar(user)
+    await guardar(user)
+    expect((await within(dialogo()).findByRole('alert')).textContent).toBe('Tu sesión venció. Volvé a iniciar sesión.')
+  })
+
+  it.each([
+    [403, 'Acceso denegado'], [401, 'Credenciales incorrectas'], [403, 'No tenés permiso para marcar o desmarcar productos que vencen.'],
+    // Fuera de la lista a propósito: no es un genérico conocido de la familia, lo dijo el backend y se muestra tal cual (en castellano o no).
+    [403, 'No permissions'], [403, 'Forbidden for this tenant'], [401, 'Token expired'],
+  ])('un %s con un `detail` que NO es un genérico conocido («%s») se muestra tal cual', async (status, detail) => {
+    responder({ ...base, 'PUT /api/productos/1': { status, detail } })
+    const user = userEvent.setup()
+    montar('/productos', <Productos />)
+    await editar(user)
+    await guardar(user)
+    expect((await within(dialogo()).findByRole('alert')).textContent).toBe(detail)
   })
 
   it('un 403 con `detail` estructurado (los Términos pendientes) conserva el mensaje del backend', async () => {
@@ -235,18 +251,17 @@ describe('Productos: los errores 401/403 se dicen en castellano', () => {
   })
 })
 
-describe('Layout en pantallas angostas (390 px)', () => {
-  it('el rótulo «Vence (maneja lotes y fecha de vencimiento)» tiene interlineado propio: el `leading-none` del rótulo pegaba sus dos líneas', async () => {
+describe('Layout en pantallas angostas (390 px) (estructural: jsdom no mide; se mira a ojo en el navegador)', () => {
+  it('(estructural) el rótulo «Vence (maneja lotes y fecha de vencimiento)» lleva la clase `leading-snug`', async () => {
     responder(base)
     const user = userEvent.setup()
     montar('/productos', <Productos conVencimientos />)
     await editar(user)
     const rotulo = within(dialogo()).getByText('Vence (maneja lotes y fecha de vencimiento)')
     expect(rotulo.className).toContain('leading-snug')
-    expect(rotulo.className).not.toContain('leading-none')
   })
 
-  it('el encabezado de la lista de Reposición: «1 producto» es un solo bloque que no se parte, y el resumen es otro que envuelve', async () => {
+  it('(estructural) el encabezado de la lista de Reposición: «1 producto» es un solo bloque que no se parte, y el resumen es otro que envuelve', async () => {
     const DATA: ReposicionData = {
       dias_rotacion: 30, dias_cobertura: 15, plazo_entrega_dias: 3, sucursal_id: null, categoria: null, producto_id: null, solo_a_pedir: true,
       resumen: { productos: 1, a_pedir: 1, posible_quiebre: 0, sin_ventas: 0 },

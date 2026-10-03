@@ -136,7 +136,8 @@ export type ProductosProps = {
    *  y stock mínimo). **Por defecto `true`**. Con `false`, **al editar**, esos campos se ven de sólo lectura (`disabled`, con una nota visible que lo dice) y quedan
    *  editables únicamente los de reposición (plazo, stock máximo, proveedor habitual y mínimos por sucursal), que necesitan `conParametrosDeReposicion`; el guardado
    *  manda sólo eso y nunca `PUT /api/productos/{id}`. Es el rol que decide la reposición pero no edita el producto (el depósito de VentaLibra). El alta no cambia. Sin
-   *  `conParametrosDeReposicion` no hay nada editable y el diálogo no ofrece «Guardar cambios». */
+   *  `conParametrosDeReposicion` no hay nada editable y el diálogo no ofrece «Guardar cambios».
+   *  **Sola NO impide crear:** para que el usuario no pueda crear NI editar el producto hay que pasar las dos, `conAlta={false}` y `conEdicionDelProducto={false}`. */
   conEdicionDelProducto?: boolean
 }
 
@@ -253,8 +254,18 @@ function leerParametrosReposicion(plazo: string, techo: string, minimo: number):
 
 const AYUDA_VENCE =
   'Marcalo si el producto es perecedero: vas a poder cargar lote y fecha al recibir compras y verlo en “Vencimientos y lotes”.'
-/** ¿El `detail` del backend ya está en castellano? Un acento, «ñ», signos de apertura o una palabra suelta que el inglés de un 401/403 no usa («forbidden», «not enough permissions»). */
-const estaEnCastellano = (texto: string) => /[áéíóúñ¿¡]|\b(no|tu|tus|el|la|los|las|de|del|para|que|sin|con|por|una?|se|es|hay|necesit\w*|permiso)\b/i.test(texto)
+/** Los `detail` GENÉRICOS que el backend manda en un 401/403 (en minúsculas, sin puntuación final): `forbidden` (403) y `not authenticated` (401) son los de `libraauth`
+ *  (`session_auth.py`) y los de FastAPI por defecto; el resto, los de uso común que una dependencia de seguridad puede soltar. **Lista explícita y cerrada**: cualquier otro
+ *  texto (en castellano o no) lo dijo el backend a propósito y se muestra tal cual. «No permissions» no está: no es un genérico conocido de la familia. */
+const DETALLES_GENERICOS = new Set([
+  'forbidden', 'not authenticated', 'unauthorized', 'not enough permissions', 'could not validate credentials',
+  'operation not permitted', 'permission denied', 'access denied',
+])
+/** ¿Es un `detail` genérico (o vacío: un 401/403 sin cuerpo no dice nada)? Se compara normalizado: minúsculas, sin espacios de más y sin punto final. */
+const esDetalleGenerico = (texto: string) => {
+  const n = texto.toLowerCase().replace(/\s+/g, ' ').trim().replace(/[.!\s]+$/, '')
+  return n === '' || DETALLES_GENERICOS.has(n)
+}
 const AYUDA_SOLO_REPOSICION = 'Tu rol sólo puede cargar la reposición de este producto.'
 const ID_AYUDA_SOLO_REPOSICION = 'producto-solo-reposicion'
 const AYUDA_VENCE_SERVICIO = 'Un servicio no tiene inventario: no puede tener lotes ni vencimiento.'
@@ -286,6 +297,13 @@ export function Productos({
   const [detalle, setDetalle] = useState<Producto | null>(null)
   const [stockTotal, setStockTotal] = useState<Record<number, number>>({})
   const [confirmDelete, setConfirmDelete] = useState<Producto | null>(null)
+  // A dónde vuelve el foco al cerrar el diálogo de EDICIÓN. El diálogo se abre por `onClick` del botón de la fila, no por un `DialogTrigger`: Radix devuelve el foco al
+  // trigger, y con `conAlta={false}` no hay ninguno (o es otro botón): el foco se perdía y quien navega con teclado volvía al principio de la página.
+  const volverA = useRef<{ id: number; boton: HTMLElement | null } | null>(null)
+  const raizRef = useRef<HTMLDivElement>(null)
+  const tablaRef = useRef<HTMLDivElement>(null)
+  // El producto al que hay que devolverle el foco cuando la tabla vuelva (el guardado la recarga y el botón de la fila deja de existir un rato), y dónde quedó el foco mientras.
+  const focoPendiente = useRef<{ id: number; reserva: HTMLElement | null } | null>(null)
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingProducto, setEditingProducto] = useState<Producto | null>(null)
@@ -405,12 +423,12 @@ export function Productos({
 
   function describeError(err: unknown): string {
     if (err instanceof ApiError) {
-      // El `detail` genérico de un 401/403 llega en inglés y pelado («forbidden», «not authenticated») y no dice qué hacer: se reemplaza. Se conserva el que
-      // ya viene redactado para quien mira: el de un permiso puntual del backend («No tenés permiso para marcar productos que vencen.») y el objeto con `mensaje`
-      // (los Términos pendientes, que distingue «faltan permisos» de «falta aceptar el contrato»). Cualquier otro status conserva siempre su `detail`.
-      const redactado = (err.detailData !== null && typeof err.detailData === 'object') || estaEnCastellano(err.detail)
-      if (err.status === 403 && !redactado) return 'No tenés permiso para hacer esto.'
-      if (err.status === 401 && !redactado) return 'Tu sesión venció. Volvé a iniciar sesión.'
+      // El `detail` genérico de un 401/403 llega en inglés y pelado («forbidden», «not authenticated») y no dice qué hacer: se reemplaza (ver `DETALLES_GENERICOS`).
+      // Todo lo demás se conserva tal cual: un permiso puntual («No tenés permiso para marcar productos que vencen.»), el objeto con `mensaje` (los Términos
+      // pendientes, que distingue «faltan permisos» de «falta aceptar el contrato») y cualquier otro status.
+      const generico = (err.detailData === undefined || typeof err.detailData === 'string') && esDetalleGenerico(err.detail)
+      if (err.status === 403 && generico) return 'No tenés permiso para hacer esto.'
+      if (err.status === 401 && generico) return 'Tu sesión venció. Volvé a iniciar sesión.'
       return err.detail
     }
     return 'Error de conexión.'
@@ -437,6 +455,7 @@ export function Productos({
   }
 
   function abrirNuevo() {
+    volverA.current = null   // el alta vuelve al `DialogTrigger` (Radix)
     setEditingProducto(null)
     form.reset(EMPTY_VALUES)
     valoresIniciales.current = null
@@ -458,9 +477,10 @@ export function Productos({
 
   // Las columnas se memorizan con una lista corta de dependencias: el botón de editar llama a la versión MÁS NUEVA de `abrirEditar` (que lee
   // las props de reposición y de proveedor de este render), no a la del primero.
-  const abrirEditarActual = useRef<(p: Producto) => void>(() => {})
+  const abrirEditarActual = useRef<(p: Producto, boton?: HTMLElement | null) => void>(() => {})
 
-  function abrirEditar(producto: Producto) {
+  function abrirEditar(producto: Producto, boton: HTMLElement | null = null) {
+    volverA.current = { id: producto.id, boton }
     setEditingProducto(producto)
     const iniciales: Valores = {
       nombre: producto.nombre,
@@ -785,7 +805,7 @@ export function Productos({
                 <Link to={rutaDeReceta(row.original.id)}><ClipboardList /></Link>
               </Button>
             )}
-            <Button size="icon" variant="outline" title="Editar producto" aria-label="Editar producto" onClick={() => abrirEditarActual.current(row.original)}><Pencil /></Button>
+            <Button size="icon" variant="outline" title="Editar producto" aria-label="Editar producto" data-editar-producto={row.original.id} onClick={(e) => abrirEditarActual.current(row.original, e.currentTarget)}><Pencil /></Button>
             {conDetalle && (
               <Button size="icon" variant="outline" title="Gestionar códigos y variantes" aria-label="Gestionar códigos y variantes" onClick={() => setDetalle(row.original)}><Barcode /></Button>
             )}
@@ -800,6 +820,31 @@ export function Productos({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conTipo, conEstacion, conVendible, rutaDeReceta, conDetalle, conStockTotal, conEliminar, stockTotal, sinCosto])
 
+  /** Radix devuelve el foco al `DialogTrigger`; la edición no tiene (se abre por `onClick`) y con `conAlta={false}` ni siquiera existe «Nuevo producto». Se devuelve al botón de la
+   *  fila que lo abrió; si la fila se volvió a dibujar, a ese mismo producto; si la tabla se está recargando, a «Nuevo producto» (si existe) o a la tabla, y cuando vuelve se lo
+   *  pasa al botón. El alta no pasa por acá: la maneja Radix con su trigger. */
+  function devolverElFoco(e: Event) {
+    const destino = volverA.current
+    if (destino === null) return
+    volverA.current = null
+    e.preventDefault()
+    if (destino.boton?.isConnected) { destino.boton.focus(); return }
+    const botonActual = tablaRef.current?.querySelector<HTMLElement>(`[data-editar-producto="${destino.id}"]`)
+    if (botonActual) { botonActual.focus(); return }
+    const reserva = raizRef.current?.querySelector<HTMLElement>('[data-nuevo-producto]') ?? tablaRef.current
+    reserva?.focus()
+    focoPendiente.current = { id: destino.id, reserva }
+  }
+  useEffect(() => {
+    const pendiente = focoPendiente.current
+    if (loading || pendiente === null) return
+    focoPendiente.current = null
+    // Sólo si el foco sigue en la reserva (o en ningún lado): si quien navega ya fue a otra parte, no se lo roba.
+    const activo = document.activeElement
+    if (activo !== null && activo !== document.body && activo !== pendiente.reserva) return
+    tablaRef.current?.querySelector<HTMLElement>(`[data-editar-producto="${pendiente.id}"]`)?.focus()
+  }, [loading, productos])
+
   // Un servicio no tiene inventario: no se marca. Si ya estaba marcado (o se marcó antes de cambiar el tipo) el interruptor
   // sigue habilitado, para poder desmarcarlo: el backend rechaza (409) guardar un servicio marcado.
   const esServicio = form.watch('tipo') === 'servicio'
@@ -809,7 +854,7 @@ export function Productos({
   const sinNadaQueGuardar = soloReposicion && !conParametrosDeReposicion
 
   return (
-    <div className="grid gap-4">
+    <div ref={raizRef} className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <TituloPantalla icono={Package}>Productos</TituloPantalla>
         <div className="flex items-center gap-2">
@@ -817,10 +862,10 @@ export function Productos({
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             {conAlta && (
               <DialogTrigger asChild>
-                <Button onClick={abrirNuevo}><Plus />Nuevo producto</Button>
+                <Button data-nuevo-producto onClick={abrirNuevo}><Plus />Nuevo producto</Button>
               </DialogTrigger>
             )}
-            <DialogContent className="sm:max-w-2xl">
+            <DialogContent className="sm:max-w-2xl" onCloseAutoFocus={devolverElFoco}>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <Package className="size-4" />{editingProducto ? 'Editar producto' : 'Nuevo producto'}
@@ -1167,16 +1212,18 @@ export function Productos({
 
       <Card>
         <CardContent>
-          {loading ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">Cargando…</p>
-          ) : (
-            <DataTable
-              columns={columns}
-              data={productos}
-              emptyMessage={q ? `No se encontraron productos para "${q}".` : 'No hay productos registrados aún.'}
-              getRowClassName={(p) => !p.activo ? 'opacity-60' : undefined}
-            />
-          )}
+          <div ref={tablaRef} tabIndex={-1} className="outline-none">
+            {loading ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">Cargando…</p>
+            ) : (
+              <DataTable
+                columns={columns}
+                data={productos}
+                emptyMessage={q ? `No se encontraron productos para "${q}".` : 'No hay productos registrados aún.'}
+                getRowClassName={(p) => !p.activo ? 'opacity-60' : undefined}
+              />
+            )}
+          </div>
         </CardContent>
       </Card>
 
