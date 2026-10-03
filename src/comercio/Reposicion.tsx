@@ -336,12 +336,12 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
         <div className="grid gap-2">
           <span aria-hidden="true" className="invisible hidden text-sm leading-none sm:block">&nbsp;</span>
           <div className="flex flex-wrap items-start gap-x-6 gap-y-2">
-            <label className="flex h-9 items-center gap-2 whitespace-nowrap text-sm">
+            <label className="flex min-h-9 items-center gap-2 text-sm sm:whitespace-nowrap">
               <input type="checkbox" checked={soloAPedir} onChange={(e) => setSoloAPedir(e.target.checked)} className="size-4 shrink-0" />
               Sólo lo que hay que pedir
             </label>
             {conEstacionalidad && (
-              <label className="flex h-9 items-center gap-2 whitespace-nowrap text-sm" title="Proyecta con lo que pasó hace un año: lo que se vendió después de una ventana como la de ahora">
+              <label className="flex min-h-9 items-center gap-2 text-sm sm:whitespace-nowrap" title="Proyecta con lo que pasó hace un año: lo que se vendió después de una ventana como la de ahora">
                 <input type="checkbox" checked={estacionalidad} onChange={(e) => {
                   setEstacionalidad(e.target.checked)
                   // Al apagarlo la columna desaparece: un orden por ella quedaría activo sin que se vea (y sin su flecha).
@@ -352,7 +352,7 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
             )}
             {conDescontarPorVencer && (
               <div className="grid max-w-xs">
-                <label className="flex h-9 items-center gap-2 whitespace-nowrap text-sm">
+                <label className="flex min-h-9 items-center gap-2 text-sm sm:whitespace-nowrap">
                   <input type="checkbox" checked={descontarPorVencer} aria-describedby="reposicion-por-vencer-ayuda" onChange={(e) => {
                     setDescontarPorVencer(e.target.checked)
                     // Al apagarlo la columna desaparece: un orden por ella quedaría activo sin que se vea (y sin su flecha).
@@ -481,7 +481,7 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
                           {data.sucursal_id !== null && p.en_camino_sin_sucursal > 0 && (
                             <Nota
                               className="block text-xs text-amber-600 dark:text-amber-400"
-                              corto={`+${numero(p.en_camino_sin_sucursal)} sin sucursal`}
+                              corto={`incl. ${numero(p.en_camino_sin_sucursal)} sin sucursal`}
                               completo={`incluye ${numero(p.en_camino_sin_sucursal)} de órdenes sin sucursal, contadas en esta sucursal`}
                             />
                           )}

@@ -753,8 +753,9 @@ describe('Reposición: layout de la barra y de la tabla (ADR-012)', () => {
     for (const c of cajas) {
       const rotulo = c.closest('label')!
       expect(rotulo.className).not.toMatch(/(^|\s)pt-\d/)                                  // sin rellenos arriba que desalineen
-      expect(rotulo.className).toMatch(/(^|\s)h-9(\s|$)/)                                   // la misma altura que un campo, así quedan en la misma línea
-      expect(rotulo.className).toContain('whitespace-nowrap')                                // el rótulo no se parte en 2 líneas por un ancho máximo
+      expect(rotulo.className).toMatch(/(^|\s)min-h-9(\s|$)/)                               // al menos la altura de un campo (así quedan en la misma línea) y más si se parte en pantallas estrechas
+      expect(rotulo.className).toContain('sm:whitespace-nowrap')                             // no se parte en 2 líneas por un ancho máximo desde `sm`; en pantallas estrechas puede partirse en vez de desbordar
+      expect(rotulo.className).not.toMatch(/(^|\s)whitespace-nowrap/)                        // y NO es nowrap a secas (desbordaría a 390 px)
     }
     // La ayuda no limita el ancho del rótulo (`max-w-56`) y sigue enlazada con aria-describedby.
     expect(bloque.querySelector('.max-w-56')).toBeNull()
@@ -803,7 +804,7 @@ describe('Reposición: layout de la barra y de la tabla (ADR-012)', () => {
     const casos: { corto: string; completo: string }[] = [
       { corto: 'Posible quiebre', completo: 'Posible quiebre: la rotación puede estar subestimada' },
       { corto: 'no cuenta', completo: 'no cuenta como stock' },
-      { corto: '+4 sin sucursal', completo: 'incluye 4 de órdenes sin sucursal, contadas en esta sucursal' },
+      { corto: 'incl. 4 sin sucursal', completo: 'incluye 4 de órdenes sin sucursal, contadas en esta sucursal' },
       { corto: 'propio', completo: 'propio de la sucursal' },
       { corto: 'incl. 6 vencido', completo: 'incluye 6 vencido, que no se cuenta para pedir' },
     ]
