@@ -560,13 +560,20 @@ describe('Reposición: estacionalidad (motor >= 0.35.0, ADR-023)', () => {
 
   it('apagar el ajuste con la tabla ordenada por «Estacional» limpia ese orden: al volver a encenderlo la columna no vuelve ordenada', async () => {
     const user = userEvent.setup()
-    await abrir(tabla(AJUSTADA))
+    const DEL_MOTOR = [SAL, YERBA, HARINA]                                                  // el orden por urgencia del motor
+    await abrir(tabla(CON_EST))
+    responder(tabla({ ...AJUSTADA, productos: [{ ...SAL, factor_estacional: null }, { ...YERBA, factor_estacional: 3 }, { ...HARINA, factor_estacional: 0.5 }] }))
+    await user.click(await screen.findByLabelText('Ajustar por estacionalidad'))            // el interruptor queda realmente prendido
+    expect(screen.getByLabelText('Ajustar por estacionalidad')).toBeChecked()
     await user.click(await screen.findByRole('button', { name: /^Estacional/ }))
     expect(screen.getByRole('button', { name: /^Estacional/ }).closest('th')).toHaveAttribute('aria-sort', 'descending')
-    responder(tabla({ ...CON_EST, productos: [SAL, YERBA, HARINA] }))
-    await user.click(screen.getByLabelText('Ajustar por estacionalidad'))
+    expect(nombresEnTabla()).toEqual(['Yerba', 'Harina', 'Sal'])                            // ordenada por factor: distinta del orden del motor
+    responder(tabla({ ...CON_EST, productos: DEL_MOTOR }))
+    await user.click(screen.getByLabelText('Ajustar por estacionalidad'))                   // este clic lo APAGA
     await waitFor(() => expect(screen.queryByRole('button', { name: /^Estacional/ })).toBeNull())
+    expect(screen.getByLabelText('Ajustar por estacionalidad')).not.toBeChecked()
     expect(nombresEnTabla()).toEqual(['Sal', 'Yerba', 'Harina'])                            // el orden por urgencia del motor
+    expect(screen.queryByRole('button', { name: 'Orden por urgencia' })).toBeNull()         // y no queda un orden activo escondido
     responder(tabla(AJUSTADA))
     await user.click(screen.getByLabelText('Ajustar por estacionalidad'))
     expect((await screen.findByRole('button', { name: /^Estacional/ })).closest('th')).toHaveAttribute('aria-sort', 'none')
