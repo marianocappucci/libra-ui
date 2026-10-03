@@ -375,6 +375,41 @@ describe('Productos: mínimo por sucursal', () => {
     }
   })
 
+  it('un mínimo propio que no cabe en un decimal (1e-21) se muestra tal cual, sin tocarlo NO se reescribe (ni como 0), y editado a 5 manda 5', async () => {
+    const user = userEvent.setup()
+    responder({
+      ...base, [`GET ${RUTA}`]: { ...PARAMETROS, stock_maximo: null }, 'PUT /api/productos/1': { id: 1 }, [`PUT ${MINIMOS}/1`]: {},
+      [`GET ${MINIMOS}`]: { ...LEIDOS, sucursales: [{ ...LEIDOS.sucursales[0], stock_minimo: 1e-21 }, LEIDOS.sucursales[1]] },
+    })
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    await within(dialogo()).findByText('Mínimo por sucursal')
+    expect(Number(centro().value)).toBe(1e-21)   // no «0»
+    await guardar(user)
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(putsDeMinimos()).toHaveLength(0)
+
+    await user.click(screen.getAllByLabelText('Editar producto')[0])
+    await within(dialogo()).findByText('Mínimo por sucursal')
+    fireEvent.change(centro(), { target: { value: '5' } })
+    await guardar(user)
+    await waitFor(() => expect(putsDeMinimos()).toEqual([`PUT ${MINIMOS}/1`]))
+    expect(cuerpoDe(`PUT ${MINIMOS}/1`)).toEqual({ stock_minimo: 5 })
+  })
+
+  it('el cambio es del TEXTO: aunque se edite y se vuelva al texto original no hay PUT;', async () => {
+    const user = userEvent.setup()
+    responder({ ...base, 'PUT /api/productos/1': { id: 1 }, [`PUT ${RUTA}`]: PARAMETROS })
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    await within(dialogo()).findByText('Mínimo por sucursal')
+    fireEvent.change(centro(), { target: { value: '9' } })
+    fireEvent.change(centro(), { target: { value: '4' } })
+    await guardar(user)
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(putsDeMinimos()).toHaveLength(0)
+  })
+
   it('un mínimo propio de 1e-7 se puede cambiar y volver a escribir como decimal', async () => {
     responder({
       ...base, [`GET ${MINIMOS}`]: { ...LEIDOS, sucursales: [{ ...LEIDOS.sucursales[0], stock_minimo: 1e-7 }, LEIDOS.sucursales[1]] },

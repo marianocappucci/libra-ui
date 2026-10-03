@@ -136,13 +136,17 @@ type ParametrosLeidos = ParametrosReposicion & { proveedor_id?: number | null; p
 const SIN_PROVEEDOR = '__sin__'
 type EstadoReposicion = 'sin' | 'cargando' | 'listo' | 'error'
 
-/** Una fila de «Mínimo por sucursal»: el texto del campo y el mínimo PROPIO que había (`null` = usa el global), para mandar sólo lo que cambió. */
-type MinimoEditable = { sucursal_id: number; sucursal: string; texto: string; original: number | null }
+/** Una fila de «Mínimo por sucursal»: el texto del campo, el mínimo PROPIO que había (`null` = usa el global) y el texto con el que se cargó. Se manda sólo lo que
+ *  cambió, y «cambió» es que el TEXTO cambió: un valor sin tocar no se vuelve a parsear (ni a redondear) y nunca se reescribe. */
+type MinimoEditable = { sucursal_id: number; sucursal: string; texto: string; original: number | null; textoOriginal: string }
 const esNumero = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
-/** El número como decimal para el campo, nunca en notación científica (`String(1e-7)` da «1e-7», que la validación del campo no acepta). */
+/** El número como decimal para el campo, sin notación científica (`String(1e-7)` da «1e-7», que la validación del campo no acepta). Si el decimal no
+ *  representa el mismo número (1e-21 a 20 decimales sería «0»), se deja el texto de siempre: el campo nunca muestra un valor distinto del guardado. */
 function textoDecimal(n: number): string {
   const t = String(n)
-  return /e/i.test(t) ? n.toLocaleString('en-US', { useGrouping: false, maximumFractionDigits: 20 }) : t
+  if (!/e/i.test(t)) return t
+  const decimal = n.toLocaleString('en-US', { useGrouping: false, maximumFractionDigits: 20 })
+  return Number(decimal) === n ? decimal : t
 }
 
 /** Lee la respuesta de `GET .../reposicion/minimos`: `{ producto_id, sucursales: [{ sucursal_id, sucursal, stock_minimo (EFECTIVO), stock_minimo_propio,
@@ -165,6 +169,7 @@ function leerMinimosPorSucursal(d: unknown, minimoDelProducto: number): { global
       sucursal: typeof f.sucursal === 'string' && f.sucursal.trim() !== '' ? f.sucursal : `Sucursal ${f.sucursal_id}`,
       texto: propio === null ? '' : textoDecimal(propio),
       original: propio,
+      textoOriginal: propio === null ? '' : textoDecimal(propio),
     })
   }
   return { global: global ?? minimoDelProducto, filas }
@@ -180,6 +185,13 @@ function leerMinimosAMandar(filas: MinimoEditable[], techo: number | null):
   { error: string } | { cambios: { fila: MinimoEditable; valor: number | null }[] } {
   const cambios: { fila: MinimoEditable; valor: number | null }[] = []
   for (const fila of filas) {
+    if (fila.texto === fila.textoOriginal) {
+      // Sin tocar: no se parsea ni se manda; sólo cuenta contra el techo final (el valor guardado, tal cual).
+      if (fila.original !== null && techo !== null && fila.original > techo) {
+        return { error: `El mínimo de «${fila.sucursal}» (${fila.original}) no puede ser mayor que el stock máximo (${techo}).` }
+      }
+      continue
+    }
     const t = fila.texto.trim().replace(',', '.')
     let valor: number | null = null
     if (t !== '') {
@@ -187,8 +199,7 @@ function leerMinimosAMandar(filas: MinimoEditable[], techo: number | null):
         return { error: `El mínimo de «${fila.sucursal}» tiene que ser un número mayor o igual que 0 (o vacío, para usar el global).` }
       }
       valor = Number(t)
-      // El tope sólo se mira en lo que se cambió: lo que ya estaba guardado lo aceptó el motor.
-      if (valor > MAX_MINIMO_SUCURSAL && valor !== fila.original) {
+      if (valor > MAX_MINIMO_SUCURSAL) {
         return { error: `El mínimo de «${fila.sucursal}» no puede pasar de ${MAX_MINIMO_SUCURSAL.toLocaleString('es-AR')}.` }
       }
       if (techo !== null && valor > techo) {
