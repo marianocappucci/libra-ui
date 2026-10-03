@@ -393,12 +393,15 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
       ) : (
         <Card>
           <CardHeader className="flex flex-wrap items-center justify-between gap-2 space-y-0">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <TrendingDown className="size-4 text-primary" />
-              {data.resumen.productos} producto{data.resumen.productos !== 1 ? 's' : ''}
+            {/* Dos hijos y no cuatro: con el icono, el número y «producto» sueltos dentro del flex cada pedazo era una columna y «1 producto» se partía en dos líneas (390 px). */}
+            <CardTitle className="flex flex-wrap items-center gap-x-2 gap-y-1 text-base">
+              <span className="flex items-center gap-2 whitespace-nowrap">
+                <TrendingDown className="size-4 shrink-0 text-primary" />
+                {data.resumen.productos} producto{data.resumen.productos !== 1 ? 's' : ''}
+              </span>
               {data.resumen.productos > 0 && (
-                <span className="text-sm font-normal text-muted-foreground">
-                  {' · '}{data.resumen.a_pedir} a pedir · {data.resumen.posible_quiebre} con posible quiebre · {data.resumen.sin_ventas} sin ventas
+                <span className="text-sm font-normal leading-snug text-muted-foreground">
+                  {'· '}{data.resumen.a_pedir} a pedir · {data.resumen.posible_quiebre} con posible quiebre · {data.resumen.sin_ventas} sin ventas
                 </span>
               )}
             </CardTitle>

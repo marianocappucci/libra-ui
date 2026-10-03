@@ -256,3 +256,38 @@ wiki (entidad `libra-ui` y `concepts/estandares-desarrollo`).
   - En 390 px «Sugerido» pegado ocupa ~75 de los ~356 px de la tabla y tapa lo que pasa por debajo mientras se desplaza: es el costo de tenerlo siempre a la vista.
   - **Sin resolver** (no se tocó): «Por vencer» muestra la cantidad con los decimales que manda el motor (`23,572` sobre una unidad entera). La fila no trae la escala de la unidad; deducirla de los
     decimales de «Stock» o «Sugerido» (que pueden ser enteros en una unidad que admite fracciones) redondearía un dato real. Si el motor ya redondea a la escala de la unidad, el defecto es suyo.
+
+## ADR-013 — Productos según el rol: `conAlta`, `conEdicionDelProducto`, 401/403 en castellano y dos cosméticos de móvil
+
+- Estado: aceptada (hallazgos de la verificación de VentaLibra con Chromium real y el rol depósito, 2026-10-03)
+- Fecha: 2026-10-03 (`v0.111.0`)
+- Contexto: el rol depósito de VentaLibra no tiene `productos.escribir` ni `costos.ver` pero sí decide la reposición. La pantalla de Productos le mostraba lo que no podía usar:
+  1. **«Nuevo producto» se ofrecía a quien no puede crear:** el `POST` daba 403 y el diálogo mostraba el `detail` crudo, «forbidden».
+  2. **El formulario completo se ofrecía a quien sólo puede reponer:** nombre, precios, etc. editables; recién al guardar el kit lo frenaba con «Tu rol no ve el costo de este producto…».
+  3. **Un 401/403 se mostraba tal como lo manda el backend** (`forbidden`, `not authenticated`: inglés pelado, sin decir qué hacer).
+  4. **Dos cosméticos a 390 px:** el encabezado de la lista de la **Reposición sugerida** (no de Productos) partía «1 producto» en dos líneas, con el icono descentrado y el resumen en otra columna; y el rótulo
+     «Vence (maneja lotes y fecha de vencimiento)» del diálogo de producto tenía las dos líneas pegadas.
+- Decisión:
+  - **`conAlta` (por defecto `true`)**: con `false` no se dibuja el botón «Nuevo producto», que es el único punto de alta de la pantalla (el `Dialog` sigue montado: lo usa la edición). Las
+    `acciones` del producto son suyas y no se tocan; «Gestionar códigos y variantes» (`conDetalle`) tampoco: agrega códigos y variantes a un producto que ya existe y lo apaga quien lo monta.
+  - **`conEdicionDelProducto` (por defecto `true`)**: con `false`, **al editar**, los campos del producto (nombre, código, categoría, unidad, tipo, estación, precios, stock mínimo, descripción y los
+    interruptores «Vendible», «Vence» y «Producto activo») van `disabled` (el estilo de deshabilitado del kit: `disabled:opacity-50`, sin `readOnly` propio) y una nota visible, «Tu rol sólo puede cargar
+    la reposición de este producto.», dice por qué. Siguen editables las secciones de reposición (plazo, stock máximo, proveedor habitual y mínimos por sucursal), que dependen de `conParametrosDeReposicion`.
+    **El guardado reusa la rama que ya existía** (`productoSinCambios`: no se hace `PUT /api/productos/{id}`, sólo la reposición); con la prop apagada esa rama vale siempre, porque los campos no se pueden
+    cambiar. La regla vigente no cambia: sin ver el costo el producto no se re-guarda. Si no hay nada que escribir, «Guardar cambios» cierra sin pedir nada. Sin `conParametrosDeReposicion` no queda
+    nada editable y el diálogo no ofrece «Guardar cambios» (sólo «Cancelar»). **El alta no cambia** (`conAlta` es lo que la apaga): el formulario de «Nuevo producto» es siempre editable, y si el alta
+    falla en la reposición y el diálogo pasa a editar el producto recién creado, ese segundo paso ya es de sólo lectura y reintenta sólo la reposición.
+  - **401/403 en castellano, en el único `describeError` de la pantalla** (el que usan el guardado del diálogo, el listado y «Eliminar»): 403 = «No tenés permiso para hacer esto.»; 401 = «Tu sesión venció.
+    Volvé a iniciar sesión.». Se reemplaza sólo el `detail` **genérico en inglés**; se conserva el que ya viene redactado: un objeto con `mensaje` (los Términos
+    pendientes, que distingue «faltan permisos» de «falta aceptar el contrato») y un texto en castellano (el 403 de «No tenés permiso para marcar o desmarcar productos que vencen.», que dice
+    qué permiso falta: pisarlo con el genérico perdería información; un test existente lo exige). «En castellano» es una heurística (acentos, «ñ», o una palabra suelta como «no», «tu», «para»):
+    un `detail` inglés con una de esas palabras se vería crudo. Cualquier otro status conserva el `detail` del backend. Es un helper local de Productos y no del cliente (`api-client.ts`): ~75 pantallas muestran `err.detail` y cambiarlas
+    todas excede esto; si se quiere para toda la familia, el lugar es `ApiError`.
+  - **Encabezado de la Reposición:** el título tenía como hijos directos del `flex` el icono, el número, la palabra «producto» y el resumen: cada pedazo de texto era una columna. Ahora son dos hijos:
+    «icono + N producto(s)» (`whitespace-nowrap`) y el resumen (`leading-snug`), con `flex-wrap`: el resumen baja entero a la línea de abajo en vez de apretarse al lado.
+  - **Rótulo «Vence»:** `leading-snug` sobre el `leading-none` del `Label` del kit (que es para rótulos de una línea).
+- Consecuencias:
+  - Los productos que no pasan las props nuevas no cambian (los tests existentes del depósito sin `conEdicionDelProducto` pasan sin tocarse).
+  - **No verificado en navegador** (jsdom no mide layout ni pinta): los dos cosméticos se probaron por la estructura de clases; hay que mirarlos con Chromium a 390 px. Un `disabled` en el `Select` de Radix
+    se probó por el atributo del disparador, no abriéndolo.
+  - Quien monta la pantalla decide las dos props desde la sesión (`productos.escribir`); el servidor sigue siendo quien autoriza (un 403 igual se dice bien).
