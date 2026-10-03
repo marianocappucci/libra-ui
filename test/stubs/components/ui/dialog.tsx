@@ -34,7 +34,9 @@ export function Dialog({ open, onOpenChange, children }: DialogProps) {
 // `role="dialog"` para que los tests lo encuentren por rol de accesibilidad.
 // Solo se rendea con `open`: asi un test que busca algo del dialogo sin
 // haberlo abierto falla, que es el comportamiento real.
-export function DialogContent(props: ComponentProps<'div'>) {
+export function DialogContent({ onCloseAutoFocus: _f, ...props }: ComponentProps<'div'> & { onCloseAutoFocus?: (e: Event) => void }) {
+  // `onCloseAutoFocus` es de Radix (a dónde vuelve el foco al cerrar): este stub no mueve el foco, y no se pasa al `<div>` (React avisaría por la prop desconocida).
+  // Lo prueba `comercio-productos-foco.test.tsx` con el Dialog real de Radix.
   const { open } = useContext(DialogCtx)
   if (!open) return null
   return <div role="dialog" {...props} />

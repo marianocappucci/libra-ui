@@ -263,7 +263,7 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     fireEvent.change(within(dialogo()).getByLabelText('Nombre'), { target: { value: 'Yerba 2' } })
     fireEvent.change(plazo(), { target: { value: '9' } })
     await guardar(user)
-    expect(await within(dialogo()).findByText(/forbidden/)).toBeTruthy()
+    expect(await within(dialogo()).findByText('No tenés permiso para hacer esto.')).toBeTruthy()
     expect(pedidas()).toContain('PUT /api/productos/1')
     expect(puts()).toHaveLength(0)
   })

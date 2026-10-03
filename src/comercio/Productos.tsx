@@ -8,6 +8,9 @@
 // link a la receta. Todo lo demás —el formulario, el margen en vivo, el
 // datalist de categorías, el borrado— era el mismo código.
 //
+// **Según el rol (0.111.0, ADR-013):** `conAlta={false}` quita «Nuevo producto» y `conEdicionDelProducto={false}` deja el producto de sólo lectura y editable sólo la reposición
+// (el depósito de VentaLibra). Un 401/403 se dice en castellano (`describeError`).
+//
 // ## Lo que cada producto decide
 //
 // Cada diferencia es una prop, no un `if producto`. Sin props se obtiene el
@@ -126,6 +129,16 @@ export type ProductosProps = {
    *  motor devuelve `proveedor_id` en `GET /api/productos/{id}/reposicion` (se sondea con el primer producto de la lista, así también está en el
    *  alta). `true` lo fuerza (para un producto que pina el motor y quiere el selector aun con el catálogo vacío) y `false` lo apaga. */
   conProveedorHabitual?: boolean
+  /** El botón «Nuevo producto» (el alta). **Por defecto `true`**: los productos que no la pasan no cambian. Con `false` la pantalla no ofrece ningún punto de alta
+   *  (quien no tiene `productos.escribir`, como el depósito de VentaLibra, recibiría un 403 al crear); la edición y el resto de la pantalla siguen. */
+  conAlta?: boolean
+  /** Si quien mira puede editar los campos del PRODUCTO (nombre, código, categoría, unidad, precios, tipo, estación, «Vendible», «Vence», «Producto activo», descripción
+   *  y stock mínimo). **Por defecto `true`**. Con `false`, **al editar**, esos campos se ven de sólo lectura (`disabled`, con una nota visible que lo dice) y quedan
+   *  editables únicamente los de reposición (plazo, stock máximo, proveedor habitual y mínimos por sucursal), que necesitan `conParametrosDeReposicion`; el guardado
+   *  manda sólo eso y nunca `PUT /api/productos/{id}`. Es el rol que decide la reposición pero no edita el producto (el depósito de VentaLibra). El alta no cambia. Sin
+   *  `conParametrosDeReposicion` no hay nada editable y el diálogo no ofrece «Guardar cambios».
+   *  **Sola NO impide crear:** para que el usuario no pueda crear NI editar el producto hay que pasar las dos, `conAlta={false}` y `conEdicionDelProducto={false}`. */
+  conEdicionDelProducto?: boolean
 }
 
 /** Los topes del motor (`erp.reposicion.MAX_PLAZO_ENTREGA_DIAS`). */
@@ -241,6 +254,20 @@ function leerParametrosReposicion(plazo: string, techo: string, minimo: number):
 
 const AYUDA_VENCE =
   'Marcalo si el producto es perecedero: vas a poder cargar lote y fecha al recibir compras y verlo en “Vencimientos y lotes”.'
+/** Los `detail` GENÉRICOS que el backend manda en un 401/403 (en minúsculas, sin puntuación final): `forbidden` (403) y `not authenticated` (401) son los de `libraauth`
+ *  (`session_auth.py`) y los de FastAPI por defecto; el resto, los de uso común que una dependencia de seguridad puede soltar. **Lista explícita y cerrada**: cualquier otro
+ *  texto (en castellano o no) lo dijo el backend a propósito y se muestra tal cual. «No permissions» no está: no es un genérico conocido de la familia. */
+const DETALLES_GENERICOS = new Set([
+  'forbidden', 'not authenticated', 'unauthorized', 'not enough permissions', 'could not validate credentials',
+  'operation not permitted', 'permission denied', 'access denied',
+])
+/** ¿Es un `detail` genérico (o vacío: un 401/403 sin cuerpo no dice nada)? Se compara normalizado: minúsculas, sin espacios de más y sin punto final. */
+const esDetalleGenerico = (texto: string) => {
+  const n = texto.toLowerCase().replace(/\s+/g, ' ').trim().replace(/[.!\s]+$/, '')
+  return n === '' || DETALLES_GENERICOS.has(n)
+}
+const AYUDA_SOLO_REPOSICION = 'Tu rol sólo puede cargar la reposición de este producto.'
+const ID_AYUDA_SOLO_REPOSICION = 'producto-solo-reposicion'
 const AYUDA_VENCE_SERVICIO = 'Un servicio no tiene inventario: no puede tener lotes ni vencimiento.'
 
 export function Productos({
@@ -256,6 +283,8 @@ export function Productos({
   conVencimientos,
   conParametrosDeReposicion = false,
   conProveedorHabitual,
+  conAlta = true,
+  conEdicionDelProducto = true,
 }: ProductosProps) {
   const [productos, setProductos] = useState<Producto[]>([])
   const [loading, setLoading] = useState(true)
@@ -268,6 +297,13 @@ export function Productos({
   const [detalle, setDetalle] = useState<Producto | null>(null)
   const [stockTotal, setStockTotal] = useState<Record<number, number>>({})
   const [confirmDelete, setConfirmDelete] = useState<Producto | null>(null)
+  // A dónde vuelve el foco al cerrar el diálogo de EDICIÓN. El diálogo se abre por `onClick` del botón de la fila, no por un `DialogTrigger`: Radix devuelve el foco al
+  // trigger, y con `conAlta={false}` no hay ninguno (o es otro botón): el foco se perdía y quien navega con teclado volvía al principio de la página.
+  const volverA = useRef<{ id: number; boton: HTMLElement | null } | null>(null)
+  const raizRef = useRef<HTMLDivElement>(null)
+  const tablaRef = useRef<HTMLDivElement>(null)
+  // El producto al que hay que devolverle el foco cuando la tabla vuelva (el guardado la recarga y el botón de la fila deja de existir un rato), y dónde quedó el foco mientras.
+  const focoPendiente = useRef<{ id: number; reserva: HTMLElement | null } | null>(null)
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingProducto, setEditingProducto] = useState<Producto | null>(null)
@@ -386,7 +422,15 @@ export function Productos({
   }, [conParametrosDeReposicion, conProveedorHabitual, productos, reintentoDelSondeo])
 
   function describeError(err: unknown): string {
-    if (err instanceof ApiError) return err.detail
+    if (err instanceof ApiError) {
+      // El `detail` genérico de un 401/403 llega en inglés y pelado («forbidden», «not authenticated») y no dice qué hacer: se reemplaza (ver `DETALLES_GENERICOS`).
+      // Todo lo demás se conserva tal cual: un permiso puntual («No tenés permiso para marcar productos que vencen.»), el objeto con `mensaje` (los Términos
+      // pendientes, que distingue «faltan permisos» de «falta aceptar el contrato») y cualquier otro status.
+      const generico = (err.detailData === undefined || typeof err.detailData === 'string') && esDetalleGenerico(err.detail)
+      if (err.status === 403 && generico) return 'No tenés permiso para hacer esto.'
+      if (err.status === 401 && generico) return 'Tu sesión venció. Volvé a iniciar sesión.'
+      return err.detail
+    }
     return 'Error de conexión.'
   }
 
@@ -411,6 +455,7 @@ export function Productos({
   }
 
   function abrirNuevo() {
+    volverA.current = null   // el alta vuelve al `DialogTrigger` (Radix)
     setEditingProducto(null)
     form.reset(EMPTY_VALUES)
     valoresIniciales.current = null
@@ -432,9 +477,10 @@ export function Productos({
 
   // Las columnas se memorizan con una lista corta de dependencias: el botón de editar llama a la versión MÁS NUEVA de `abrirEditar` (que lee
   // las props de reposición y de proveedor de este render), no a la del primero.
-  const abrirEditarActual = useRef<(p: Producto) => void>(() => {})
+  const abrirEditarActual = useRef<(p: Producto, boton?: HTMLElement | null) => void>(() => {})
 
-  function abrirEditar(producto: Producto) {
+  function abrirEditar(producto: Producto, boton: HTMLElement | null = null) {
+    volverA.current = { id: producto.id, boton }
     setEditingProducto(producto)
     const iniciales: Valores = {
       nombre: producto.nombre,
@@ -582,8 +628,9 @@ export function Productos({
         // Si sólo cambió la reposición (plazo, techo, proveedor o un mínimo por sucursal), el producto no se vuelve a guardar: quien puede decidir la
         // reposición (el depósito) no siempre puede editar el producto, y un guardado del producto que no cambia nada no tiene por qué fallarle ni escribir de más.
         const iniciales = valoresIniciales.current
-        const productoSinCambios = (repoAMandar !== null || minimosAMandar.length > 0) && iniciales !== null &&
-          (Object.keys(values) as (keyof Valores)[]).every((k) => String(values[k]) === String(iniciales[k]))
+        // Quien no edita el producto (`conEdicionDelProducto={false}`) usa esta misma rama siempre: sus campos están deshabilitados, así que no hay nada que comparar.
+        const productoSinCambios = !conEdicionDelProducto || ((repoAMandar !== null || minimosAMandar.length > 0) && iniciales !== null &&
+          (Object.keys(values) as (keyof Valores)[]).every((k) => String(values[k]) === String(iniciales[k])))
         // Sin ver el costo no se puede guardar el producto: el 0 de relleno pisaría el costo real. Sólo se guarda lo de reposición.
         if (!productoSinCambios && costoOculto.current) {
           setFormFallo({ mensaje: 'Tu rol no ve el costo de este producto, así que no puede editar el producto: sólo la reposición (plazo de entrega, stock máximo y mínimos por sucursal).', campo: null })
@@ -758,7 +805,7 @@ export function Productos({
                 <Link to={rutaDeReceta(row.original.id)}><ClipboardList /></Link>
               </Button>
             )}
-            <Button size="icon" variant="outline" title="Editar producto" aria-label="Editar producto" onClick={() => abrirEditarActual.current(row.original)}><Pencil /></Button>
+            <Button size="icon" variant="outline" title="Editar producto" aria-label="Editar producto" data-editar-producto={row.original.id} onClick={(e) => abrirEditarActual.current(row.original, e.currentTarget)}><Pencil /></Button>
             {conDetalle && (
               <Button size="icon" variant="outline" title="Gestionar códigos y variantes" aria-label="Gestionar códigos y variantes" onClick={() => setDetalle(row.original)}><Barcode /></Button>
             )}
@@ -773,22 +820,52 @@ export function Productos({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conTipo, conEstacion, conVendible, rutaDeReceta, conDetalle, conStockTotal, conEliminar, stockTotal, sinCosto])
 
+  /** Radix devuelve el foco al `DialogTrigger`; la edición no tiene (se abre por `onClick`) y con `conAlta={false}` ni siquiera existe «Nuevo producto». Se devuelve al botón de la
+   *  fila que lo abrió; si la fila se volvió a dibujar, a ese mismo producto; si la tabla se está recargando, a «Nuevo producto» (si existe) o a la tabla, y cuando vuelve se lo
+   *  pasa al botón. El alta no pasa por acá: la maneja Radix con su trigger. */
+  function devolverElFoco(e: Event) {
+    const destino = volverA.current
+    if (destino === null) return
+    volverA.current = null
+    e.preventDefault()
+    if (destino.boton?.isConnected) { destino.boton.focus(); return }
+    const botonActual = tablaRef.current?.querySelector<HTMLElement>(`[data-editar-producto="${destino.id}"]`)
+    if (botonActual) { botonActual.focus(); return }
+    const reserva = raizRef.current?.querySelector<HTMLElement>('[data-nuevo-producto]') ?? tablaRef.current
+    reserva?.focus()
+    focoPendiente.current = { id: destino.id, reserva }
+  }
+  useEffect(() => {
+    const pendiente = focoPendiente.current
+    if (loading || pendiente === null) return
+    focoPendiente.current = null
+    // Sólo si el foco sigue en la reserva (o en ningún lado): si quien navega ya fue a otra parte, no se lo roba.
+    const activo = document.activeElement
+    if (activo !== null && activo !== document.body && activo !== pendiente.reserva) return
+    tablaRef.current?.querySelector<HTMLElement>(`[data-editar-producto="${pendiente.id}"]`)?.focus()
+  }, [loading, productos])
+
   // Un servicio no tiene inventario: no se marca. Si ya estaba marcado (o se marcó antes de cambiar el tipo) el interruptor
   // sigue habilitado, para poder desmarcarlo: el backend rechaza (409) guardar un servicio marcado.
   const esServicio = form.watch('tipo') === 'servicio'
   const venceAhora = form.watch('vence')
+  // Edición de quien sólo puede cargar reposición: los campos del producto van de sólo lectura (el alta no cambia).
+  const soloReposicion = !conEdicionDelProducto && editingProducto !== null
+  const sinNadaQueGuardar = soloReposicion && !conParametrosDeReposicion
 
   return (
-    <div className="grid gap-4">
+    <div ref={raizRef} className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <TituloPantalla icono={Package}>Productos</TituloPantalla>
         <div className="flex items-center gap-2">
           {acciones}
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={abrirNuevo}><Plus />Nuevo producto</Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-2xl">
+            {conAlta && (
+              <DialogTrigger asChild>
+                <Button data-nuevo-producto onClick={abrirNuevo}><Plus />Nuevo producto</Button>
+              </DialogTrigger>
+            )}
+            <DialogContent className="sm:max-w-2xl" onCloseAutoFocus={devolverElFoco}>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <Package className="size-4" />{editingProducto ? 'Editar producto' : 'Nuevo producto'}
@@ -799,6 +876,9 @@ export function Productos({
                   {formError && (
                     <p ref={formErrorRef} id={ID_ERROR_FORM} role="alert" tabIndex={-1} className="w-full text-sm text-destructive outline-none">{formError}</p>
                   )}
+                  {soloReposicion && (
+                    <p id={ID_AYUDA_SOLO_REPOSICION} className="w-full text-sm text-muted-foreground">{AYUDA_SOLO_REPOSICION}</p>
+                  )}
                   <FormField
                     control={form.control}
                     name="nombre"
@@ -806,7 +886,7 @@ export function Productos({
                       <FormItem>
                         <FormLabel>Nombre</FormLabel>
                         <FormControl>
-                          <Input {...field} className="w-48" />
+                          <Input {...field} className="w-48" disabled={soloReposicion} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -819,7 +899,7 @@ export function Productos({
                       <FormItem>
                         <FormLabel>Código</FormLabel>
                         <FormControl>
-                          <Input {...field} className="w-32" placeholder={codigoAutogenerado ? 'Autogenerado' : undefined} />
+                          <Input {...field} className="w-32" placeholder={codigoAutogenerado ? 'Autogenerado' : undefined} disabled={soloReposicion} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -832,7 +912,7 @@ export function Productos({
                       <FormItem>
                         <FormLabel>Categoría</FormLabel>
                         <FormControl>
-                          <Input {...field} className="w-40" list="categorias-producto" placeholder="Elegir o escribir…" />
+                          <Input {...field} className="w-40" list="categorias-producto" placeholder="Elegir o escribir…" disabled={soloReposicion} />
                         </FormControl>
                         <datalist id="categorias-producto">
                           {categorias.map((c) => <option key={c.id} value={c.nombre} />)}
@@ -847,7 +927,7 @@ export function Productos({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Unidad</FormLabel>
-                        <Select value={field.value} onValueChange={field.onChange}>
+                        <Select value={field.value} onValueChange={field.onChange} disabled={soloReposicion}>
                           <FormControl>
                             <SelectTrigger className="w-28">
                               <SelectValue />
@@ -868,7 +948,7 @@ export function Productos({
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Tipo</FormLabel>
-                          <Select value={field.value} onValueChange={field.onChange}>
+                          <Select value={field.value} onValueChange={field.onChange} disabled={soloReposicion}>
                             <FormControl>
                               <SelectTrigger className="w-32">
                                 <SelectValue />
@@ -894,6 +974,7 @@ export function Productos({
                           <Select
                             value={field.value || SIN_ESTACION}
                             onValueChange={(v) => field.onChange(v === SIN_ESTACION ? '' : v)}
+                            disabled={soloReposicion}
                           >
                             <FormControl>
                               <SelectTrigger className="w-40">
@@ -918,7 +999,7 @@ export function Productos({
                       <FormItem>
                         <FormLabel>Precio de venta</FormLabel>
                         <FormControl>
-                          <Input type="number" step="0.01" {...field} value={field.value as number} className="w-32" />
+                          <Input type="number" step="0.01" {...field} value={field.value as number} className="w-32" disabled={soloReposicion} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -932,7 +1013,7 @@ export function Productos({
                         <FormItem>
                           <FormLabel>Precio de costo</FormLabel>
                           <FormControl>
-                            <Input type="number" step="0.01" {...field} value={field.value as number} className="w-32" />
+                            <Input type="number" step="0.01" {...field} value={field.value as number} className="w-32" disabled={soloReposicion} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -946,7 +1027,7 @@ export function Productos({
                       <FormItem>
                         <FormLabel>Stock mínimo</FormLabel>
                         <FormControl>
-                          <Input type="number" step="0.01" {...field} value={field.value as number} className="w-28" />
+                          <Input type="number" step="0.01" {...field} value={field.value as number} className="w-28" disabled={soloReposicion} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1027,7 +1108,7 @@ export function Productos({
                       <FormItem className="w-full">
                         <FormLabel>Descripción</FormLabel>
                         <FormControl>
-                          <Input {...field} />
+                          <Input {...field} disabled={soloReposicion} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1045,7 +1126,7 @@ export function Productos({
                       render={({ field }) => (
                         <FormItem className="flex w-full flex-row items-center gap-2 space-y-0">
                           <FormControl>
-                            <Switch checked={field.value} onCheckedChange={field.onChange} />
+                            <Switch checked={field.value} onCheckedChange={field.onChange} disabled={soloReposicion} />
                           </FormControl>
                           <div className="grid gap-0.5">
                             <FormLabel className="!mt-0">Vendible</FormLabel>
@@ -1065,10 +1146,10 @@ export function Productos({
                       render={({ field }) => (
                         <FormItem className="flex w-full flex-row items-center gap-2 space-y-0">
                           <FormControl>
-                            <Switch checked={field.value} onCheckedChange={field.onChange} disabled={esServicio && !venceAhora} />
+                            <Switch checked={field.value} onCheckedChange={field.onChange} disabled={soloReposicion || (esServicio && !venceAhora)} />
                           </FormControl>
                           <div className="grid gap-0.5">
-                            <FormLabel className="!mt-0">Vence (maneja lotes y fecha de vencimiento)</FormLabel>
+                            <FormLabel className="!mt-0 leading-snug">Vence (maneja lotes y fecha de vencimiento)</FormLabel>
                             <p className="text-xs text-muted-foreground">
                               {esServicio
                                 ? `${AYUDA_VENCE_SERVICIO}${venceAhora ? ' Desmarcalo para poder guardarlo.' : ''}`
@@ -1086,7 +1167,7 @@ export function Productos({
                       render={({ field }) => (
                         <FormItem className="flex w-full flex-row items-center gap-2 space-y-0">
                           <FormControl>
-                            <Switch checked={field.value} onCheckedChange={field.onChange} />
+                            <Switch checked={field.value} onCheckedChange={field.onChange} disabled={soloReposicion} />
                           </FormControl>
                           <FormLabel className="!mt-0">Producto activo</FormLabel>
                         </FormItem>
@@ -1100,9 +1181,11 @@ export function Productos({
                       </Button>
                     )}
                     <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
-                    <Button type="submit" disabled={saving || repoEstado === 'cargando' || minimosEstado === 'cargando'}>
-                      {saving ? 'Guardando…' : editingProducto ? 'Guardar cambios' : 'Crear producto'}
-                    </Button>
+                    {!sinNadaQueGuardar && (
+                      <Button type="submit" disabled={saving || repoEstado === 'cargando' || minimosEstado === 'cargando'}>
+                        {saving ? 'Guardando…' : editingProducto ? 'Guardar cambios' : 'Crear producto'}
+                      </Button>
+                    )}
                   </DialogFooter>
                 </form>
               </Form>
@@ -1129,16 +1212,18 @@ export function Productos({
 
       <Card>
         <CardContent>
-          {loading ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">Cargando…</p>
-          ) : (
-            <DataTable
-              columns={columns}
-              data={productos}
-              emptyMessage={q ? `No se encontraron productos para "${q}".` : 'No hay productos registrados aún.'}
-              getRowClassName={(p) => !p.activo ? 'opacity-60' : undefined}
-            />
-          )}
+          <div ref={tablaRef} tabIndex={-1} className="outline-none">
+            {loading ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">Cargando…</p>
+            ) : (
+              <DataTable
+                columns={columns}
+                data={productos}
+                emptyMessage={q ? `No se encontraron productos para "${q}".` : 'No hay productos registrados aún.'}
+                getRowClassName={(p) => !p.activo ? 'opacity-60' : undefined}
+              />
+            )}
+          </div>
         </CardContent>
       </Card>
 
