@@ -61,6 +61,12 @@ describe('Reposición: generar órdenes en borrador', () => {
     expect(boton()).toBeNull()
   })
 
+  it('la fila de botones del encabezado envuelve: en un móvil «Generar» y «CSV» no ensanchan la página (0.112.2)', async () => {
+    await abrir()
+    // jsdom no mide el layout: se fija la clase que lo garantiza (medido en Chromium a 390, 360 y 320 px: sin `flex-wrap` la fila desbordaba 368 a 539 px).
+    expect(boton()!.parentElement!.className).toContain('flex-wrap')
+  })
+
   it('el resumen agrupa por proveedor con los productos y sus cantidades, y avisa lo que no tiene proveedor', async () => {
     const user = userEvent.setup()
     await abrir()
