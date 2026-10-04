@@ -88,8 +88,8 @@ export type VentaDetalleAccionesExtraCtx = {
 }
 
 // Cada artículo de la tabla como bloque en un móvil: las celdas de cantidad, precio y subtotal pasan a una línea «etiqueta … valor» (la etiqueta sale del `data-label`). Los totales, uno por línea.
-const FILA_MOVIL = 'max-sm:flex max-sm:justify-between max-sm:gap-4 max-sm:p-0 max-sm:pt-1 max-sm:font-normal max-sm:text-muted-foreground max-sm:before:content-[attr(data-label)]'
-const TOTAL_MOVIL = 'max-sm:flex max-sm:justify-between max-sm:gap-4 max-sm:px-3 max-sm:py-1'
+const FILA_MOVIL = 'max-lg:flex max-lg:justify-between max-lg:gap-4 max-lg:p-0 max-lg:pt-1 max-lg:font-normal max-lg:text-muted-foreground max-lg:before:content-[attr(data-label)]'
+const TOTAL_MOVIL = 'max-lg:flex max-lg:justify-between max-lg:gap-4 max-lg:px-3 max-lg:py-1'
 
 export type VentaDetalleProps = {
   /** Si la sesión puede anular ventas (los productos: rol admin). */
@@ -412,10 +412,10 @@ export function VentaDetalle({
           <Card>
             <CardHeader><CardTitle className="text-base">Artículos vendidos</CardTitle></CardHeader>
             <CardContent className="p-0">
-              {/* Sin scroll horizontal: desde `sm` es la tabla; en un móvil (medido en Chromium: 386 px de mínimo contra los ~340 de la tarjeta) cada artículo es un bloque con su
+              {/* Sin scroll horizontal: desde `lg` (1024 px) es la tabla; en un móvil (medido en Chromium: 386 px de mínimo contra los ~340 de la tarjeta) cada artículo es un bloque con su
                   etiqueta (`data-label`, que sale por CSS) y los totales van uno por línea. */}
-              <table className="w-full text-sm max-sm:block">
-                <thead className="border-b text-muted-foreground max-sm:hidden">
+              <table className="w-full text-sm max-lg:block">
+                <thead className="border-b text-muted-foreground max-lg:hidden">
                   <tr>
                     <th className="p-3 text-left font-medium">Descripción</th>
                     <th className="p-3 text-right font-medium">Cant.</th>
@@ -423,32 +423,32 @@ export function VentaDetalle({
                     <th className="p-3 text-right font-medium">Subtotal</th>
                   </tr>
                 </thead>
-                <tbody className="max-sm:block">
+                <tbody className="max-lg:block">
                   {detalle.items.map((it, i) => (
-                    <tr key={i} className="border-b last:border-0 max-sm:block max-sm:p-3">
-                      <td className="p-3 max-sm:block max-sm:break-words max-sm:p-0 max-sm:font-medium">{it.nombre}</td>
+                    <tr key={i} className="border-b last:border-0 max-lg:block max-lg:p-3">
+                      <td className="p-3 max-lg:block max-lg:break-words max-lg:p-0 max-lg:font-medium">{it.nombre}</td>
                       <td data-label="Cantidad" className={`p-3 text-right ${FILA_MOVIL}`}>{it.qty}</td>
                       <td data-label="Precio unit." className={`p-3 text-right ${FILA_MOVIL}`}>{formatoMoneda(it.precio)}</td>
                       <td data-label="Subtotal" className={`p-3 text-right font-medium ${FILA_MOVIL}`}>{formatoMoneda(it.subtotal)}</td>
                     </tr>
                   ))}
                 </tbody>
-                <tfoot className="font-medium max-sm:block">
-                  <tr className={TOTAL_MOVIL}><td colSpan={3} className="p-3 text-right text-muted-foreground max-sm:p-0">Subtotal</td><td className="p-3 text-right max-sm:p-0">{formatoMoneda(detalle.subtotal)}</td></tr>
+                <tfoot className="font-medium max-lg:block">
+                  <tr className={TOTAL_MOVIL}><td colSpan={3} className="p-3 text-right text-muted-foreground max-lg:p-0">Subtotal</td><td className="p-3 text-right max-lg:p-0">{formatoMoneda(detalle.subtotal)}</td></tr>
                   {/* Las promociones aplicadas van una por fila. El `descuento` de la venta YA las incluye,
                       así que «Descuento» muestra sólo lo que quede (uno manual): no se cuenta dos veces. */}
                   {(detalle.promociones ?? []).map((promo, i) => (
                     <tr key={`promo-${i}`} className={TOTAL_MOVIL}>
-                      <td colSpan={3} className="p-3 text-right text-muted-foreground max-sm:p-0 max-sm:text-left">
+                      <td colSpan={3} className="p-3 text-right text-muted-foreground max-lg:p-0 max-lg:text-left">
                         Promoción {promo.nombre}{promo.veces > 1 ? ` × ${promo.veces}` : ''}
                       </td>
-                      <td className="p-3 text-right text-exito max-sm:p-0">− {formatoMoneda(promo.ahorro)}</td>
+                      <td className="p-3 text-right text-exito max-lg:p-0">− {formatoMoneda(promo.ahorro)}</td>
                     </tr>
                   ))}
                   {descuentoRestante > 0 && (
-                    <tr className={TOTAL_MOVIL}><td colSpan={3} className="p-3 text-right text-muted-foreground max-sm:p-0">Descuento</td><td className="p-3 text-right text-destructive max-sm:p-0">− {formatoMoneda(descuentoRestante)}</td></tr>
+                    <tr className={TOTAL_MOVIL}><td colSpan={3} className="p-3 text-right text-muted-foreground max-lg:p-0">Descuento</td><td className="p-3 text-right text-destructive max-lg:p-0">− {formatoMoneda(descuentoRestante)}</td></tr>
                   )}
-                  <tr className={`text-base ${TOTAL_MOVIL}`}><td colSpan={3} className="p-3 text-right font-semibold max-sm:p-0">TOTAL</td><td className="p-3 text-right font-semibold text-primary max-sm:p-0">{formatoMoneda(detalle.total)}</td></tr>
+                  <tr className={`text-base ${TOTAL_MOVIL}`}><td colSpan={3} className="p-3 text-right font-semibold max-lg:p-0">TOTAL</td><td className="p-3 text-right font-semibold text-primary max-lg:p-0">{formatoMoneda(detalle.total)}</td></tr>
                 </tfoot>
               </table>
             </CardContent>

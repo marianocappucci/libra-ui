@@ -123,14 +123,14 @@ const claseDeCantidad = (n: number) => (n < 0 ? 'font-medium text-destructive' :
 /** Un producto como tarjeta: lo que la tabla reparte en columnas, apilado, para cuando la tabla no entra en el ancho que hay (nunca se scrollea de costado). */
 function TarjetaDeStock({ p, depositos, acciones }: { p: StockItem; depositos: DepositoColumna[]; acciones: ReactNode }) {
   const e = estadoStock(p)
-  const clase = p.stock_actual <= 0 ? 'text-destructive' : (p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo) ? 'text-amber-600 dark:text-amber-400' : 'text-exito'
+  const clase = p.stock_actual <= 0 ? 'text-destructive' : (p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo) ? 'text-amber-800 dark:text-amber-400' : 'text-exito'
   const aparte = [p.codigo, p.categoria].filter(Boolean).join(' · ')
   return (
-    <li className="grid min-w-0 gap-2 rounded-md border p-3">
+    <li className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 rounded-md border p-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="break-words font-medium">{p.nombre}</p>
-          {aparte && <p className="break-words text-xs text-muted-foreground">{aparte}</p>}
+          <p className="font-medium [overflow-wrap:anywhere]">{p.nombre}</p>
+          {aparte && <p className="text-xs text-muted-foreground [overflow-wrap:anywhere]">{aparte}</p>}
         </div>
         <BadgeEstado tono={e.tono}>{e.label}</BadgeEstado>
       </div>
@@ -143,8 +143,9 @@ function TarjetaDeStock({ p, depositos, acciones }: { p: StockItem; depositos: D
           {depositos.map((d) => {
             const n = p.por_deposito?.[String(d.id)] ?? 0
             return (
-              <li key={d.id} className="max-w-full truncate rounded-md border px-2 py-0.5 text-xs" title={`${d.nombre}: ${formatEntero(n)}`}>
-                {d.nombre}: <span className={`tabular-nums ${claseDeCantidad(n)}`}>{formatEntero(n)}</span>
+              <li key={d.id} className="flex min-w-0 max-w-full items-baseline gap-1 rounded-md border px-2 py-0.5 text-xs" title={`${d.nombre}: ${formatEntero(n)}`}>
+                <span className="truncate">{d.nombre}:</span>
+                <span className={`shrink-0 tabular-nums ${claseDeCantidad(n)}`}>{formatEntero(n)}</span>
               </li>
             )
           })}
@@ -383,7 +384,7 @@ export function Stock({
       minSize: 95,
       cell: ({ row }) => {
         const p = row.original
-        const cls = p.stock_actual <= 0 ? 'text-destructive' : (p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo) ? 'text-amber-600 dark:text-amber-400' : 'text-exito'
+        const cls = p.stock_actual <= 0 ? 'text-destructive' : (p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo) ? 'text-amber-800 dark:text-amber-400' : 'text-exito'
         return <div className={`truncate text-center text-base font-bold ${cls}`}>{formatEntero(p.stock_actual)}</div>
       },
     },
@@ -423,7 +424,7 @@ export function Stock({
     {
       accessorKey: 'producto_nombre',
       header: 'Producto',
-      meta: { className: 'whitespace-normal break-words' },
+      meta: { className: 'whitespace-normal [overflow-wrap:anywhere]' },
       cell: ({ row }) => (
         <button type="button" className="font-semibold hover:underline" onClick={() => verMovimientos(row.original.producto_id)}>
           {row.original.producto_nombre}
@@ -441,12 +442,12 @@ export function Stock({
       ),
     },
     ...(conDepositos ? [{
-      id: 'deposito', header: 'Depósito', meta: { className: 'whitespace-normal break-words' },
+      id: 'deposito', header: 'Depósito', meta: { className: 'whitespace-normal [overflow-wrap:anywhere]' },
       cell: ({ row }: { row: { original: MovimientoStock } }) => (
         <span className="text-muted-foreground">{depositos.find((d) => d.id === row.original.deposito_id)?.nombre ?? '—'}</span>
       ),
     } as ColumnDef<MovimientoStock>] : []),
-    { accessorKey: 'referencia', header: 'Referencia', meta: { className: 'whitespace-normal break-words' }, cell: ({ row }) => <span className="text-muted-foreground">{row.original.referencia || '—'}</span> },
+    { accessorKey: 'referencia', header: 'Referencia', meta: { className: 'whitespace-normal [overflow-wrap:anywhere]' }, cell: ({ row }) => <span className="text-muted-foreground">{row.original.referencia || '—'}</span> },
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [depositos])
 
@@ -471,7 +472,7 @@ export function Stock({
 
       {alertas.length > 0 && (
         <div className="flex min-w-0 items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-900 dark:bg-amber-950/40">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-800 dark:text-amber-400" />
           {/* `min-w-0` en el aviso (es un ítem de la grilla de la pantalla: sin él su mínimo es el ancho de la pastilla más larga y arrastra a toda la página, medido a 390 y 768 px) y en el contenedor de las pastillas, que topan con `max-w-full` + `truncate`. */}
           <div className="min-w-0">
             <strong>{alertas.length} producto{alertas.length > 1 ? 's' : ''} con stock bajo mínimo:</strong>{' '}
@@ -541,7 +542,7 @@ export function Stock({
           <div className="grid gap-4">
             <div className="flex gap-4">
               <div className="text-center">
-                <div className={`text-3xl font-bold ${stockBase <= 0 ? 'text-destructive' : (editing?.stock_minimo ?? 0) > 0 && stockBase <= (editing?.stock_minimo ?? 0) ? 'text-amber-600 dark:text-amber-400' : 'text-exito'}`}>
+                <div className={`text-3xl font-bold ${stockBase <= 0 ? 'text-destructive' : (editing?.stock_minimo ?? 0) > 0 && stockBase <= (editing?.stock_minimo ?? 0) ? 'text-amber-800 dark:text-amber-400' : 'text-exito'}`}>
                   {formatEntero(stockBase)}
                 </div>
                 <div className="text-sm text-muted-foreground">Stock actual ({editing?.unidad})</div>
@@ -659,7 +660,7 @@ export function Stock({
                 ) : (
                   <ul className="grid gap-2">
                     {movimientos.map((m) => (
-                      <li key={m.id} className="grid min-w-0 gap-1 rounded-md border p-3 text-sm">
+                      <li key={m.id} className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1 rounded-md border p-3 text-sm">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-xs text-muted-foreground">{formatearFecha(m.fecha)}</span>
                           <TipoBadge tipo={m.tipo} />
@@ -667,8 +668,8 @@ export function Stock({
                             {m.cantidad >= 0 ? '+' : ''}{formatEntero(m.cantidad)}
                           </span>
                         </div>
-                        <button type="button" className="break-words text-left font-semibold hover:underline" onClick={() => verMovimientos(m.producto_id)}>{m.producto_nombre}</button>
-                        <p className="break-words text-xs text-muted-foreground">
+                        <button type="button" className="text-left font-semibold [overflow-wrap:anywhere] hover:underline" onClick={() => verMovimientos(m.producto_id)}>{m.producto_nombre}</button>
+                        <p className="text-xs text-muted-foreground [overflow-wrap:anywhere]">
                           {[conDepositos ? (depositos.find((d) => d.id === m.deposito_id)?.nombre ?? null) : null, m.referencia || null].filter(Boolean).join(' · ') || '—'}
                         </p>
                       </li>

@@ -51,9 +51,28 @@ describe('Stock: tabla o tarjetas según el ancho', () => {
     const grupos = screen.getAllByLabelText('Stock por depósito')
     expect(grupos).toHaveLength(2)
     // Cada depósito con su cantidad, y el total y el estado de cada producto.
-    expect(within(grupos[1]).getByText(/Central:/).textContent).toContain('2')   // Yerba (Sal va primero: A a Z)
+    const central = within(grupos[1]).getByText('Central:').closest('li')!   // Yerba (Sal va primero: A a Z)
+    expect(central.textContent).toBe('Central:2')
     expect(screen.getAllByText('Bajo mínimo').length).toBeGreaterThan(0)
     expect(screen.getByText('OK')).toBeTruthy()
+  })
+
+  it('en tarjetas un depósito de nombre largo no ensancha la página: columna minmax(0,1fr), el nombre se trunca y la cantidad no (0.114.2)', async () => {
+    // Medido en Chromium (390 px, 3 o más depósitos con uno de 64 caracteres): el chip aportaba su texto completo al mínimo de una columna `auto` y la página llegaba a 509 px.
+    await abrir(400)
+    const tarjeta = screen.getAllByLabelText('Stock por depósito')[0].closest('li')!
+    expect(tarjeta.className).toContain('grid-cols-[minmax(0,1fr)]')
+    const chip = screen.getAllByText(/Sucursal Centro Comercial Paseo del Bosque Local 214:/)[0].closest('li')!
+    expect(chip.className).toContain('flex')
+    expect(chip.querySelector('.truncate')!.textContent).toBe('Sucursal Centro Comercial Paseo del Bosque Local 214:')
+    expect(chip.querySelector('.shrink-0')!.textContent).toBe('0')   // la cantidad siempre se ve
+  })
+
+  it('el total «Bajo mínimo» no es ámbar 600 (3,2:1 sobre blanco): amber-800, como la pastilla de estado', async () => {
+    await abrir(400)
+    const total = screen.getAllByText('3').find((e) => e.tagName === 'STRONG')!
+    expect(total.className).toContain('text-amber-800')
+    expect(total.className).not.toContain('text-amber-600')
   })
 
   it('en tarjetas se puede ordenar y las acciones siguen estando', async () => {
@@ -110,12 +129,20 @@ describe('Stock: el historial de movimientos', () => {
     expect(screen.getByText(/Sucursal Centro Comercial Paseo del Bosque Local 214 · Merma: Quemado/)).toBeTruthy()
   })
 
+  it('angosto: la lista parte una referencia sin espacios (overflow-wrap:anywhere) y su columna es minmax(0,1fr)', async () => {
+    await abrirHistorial(400)
+    const li = screen.getByText(/Merma: Quemado/).closest('li')!
+    expect(li.className).toContain('grid-cols-[minmax(0,1fr)]')
+    expect(screen.getByText(/Merma: Quemado/).className).toContain('[overflow-wrap:anywhere]')
+  })
+
   it('ancho: una tabla cuyas columnas de texto largo hacen wrap (no nowrap)', async () => {
     await abrirHistorial(1600)
     const tablas = screen.getAllByRole('table')
     const historial = tablas[tablas.length - 1]
     const celda = within(historial).getByText(NOMBRE_LARGO).closest('td')!
     expect(celda.className).toContain('whitespace-normal')
+    expect(celda.className).toContain('[overflow-wrap:anywhere]')   // `break-words` no baja el mínimo de la columna: un token largo (una URL pegada) la ensanchaba
     expect(celda.className).not.toContain('whitespace-nowrap')
   })
 })
