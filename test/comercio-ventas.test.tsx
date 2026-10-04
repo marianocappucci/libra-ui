@@ -627,13 +627,13 @@ describe('VentaDetalle', () => {
       expect(document.activeElement).toBe(alerta)
     })
 
-    it('la tabla de artículos no scrollea de costado en un móvil: bloques bajo `sm` con la etiqueta de cada dato', async () => {
+    it('la tabla de artículos no scrollea de costado en un móvil: bloques bajo `lg` con la etiqueta de cada dato', async () => {
       // jsdom no mide el layout: se fijan las clases que lo garantizan (medido en Chromium: el mínimo de la tabla era 386 px contra los ~340 de la tarjeta a 390 px).
       responder({ ...BASE, '/api/ventas/21': CON_CAE })
       montarDetalle(21)
       const tabla = (await screen.findByText('Descripción')).closest('table')!
-      expect(tabla.className).toContain('max-sm:block')
-      expect(tabla.querySelector('thead')!.className).toContain('max-sm:hidden')
+      expect(tabla.className).toContain('max-lg:block')
+      expect(tabla.querySelector('thead')!.className).toContain('max-lg:hidden')
       const etiquetas = [...tabla.querySelectorAll('tbody td[data-label]')].map((td) => td.getAttribute('data-label'))
       expect(etiquetas).toEqual(['Cantidad', 'Precio unit.', 'Subtotal'])
     })
