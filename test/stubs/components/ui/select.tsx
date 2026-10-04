@@ -2,14 +2,14 @@
 // Rendea HTML semantico y reenvia props; no imita estilos ni estructura
 // interna, que son de la libreria y tienen sus propios tests.
 //
-// El `aria-label` y el `id` que las pantallas ponen en el `SelectTrigger` llegan
+// El `aria-label`, el `id` y el `title` que las pantallas ponen en el `SelectTrigger` llegan
 // al `<select>` nativo (P9-M2): sin eso, `getByRole('combobox', { name })` no
 // encuentra el control, aunque en el DOM real Radix sí lo etiqueta.
 import type { ReactNode } from 'react'
 
 import { createContext, useContext, useLayoutEffect, useState } from 'react'
 
-type Etiqueta = { ariaLabel?: string; id?: string }
+type Etiqueta = { ariaLabel?: string; id?: string; title?: string }
 
 const SelectCtx = createContext<{
   value?: string
@@ -34,6 +34,7 @@ export function Select({ value, onValueChange, children, disabled }: SelectProps
         disabled={disabled}
         aria-label={etiqueta.ariaLabel}
         id={etiqueta.id}
+        title={etiqueta.title}
         onChange={(e) => onValueChange?.(e.target.value)}
       >
         {children}
@@ -44,11 +45,11 @@ export function Select({ value, onValueChange, children, disabled }: SelectProps
 
 // Trigger y Value no rendean nada: en el stub el <select> nativo ya es el
 // control. El trigger sólo le pasa su etiqueta al <select>.
-export function SelectTrigger({ 'aria-label': ariaLabel, id }: { children?: ReactNode; id?: string; className?: string; 'aria-label'?: string }) {
+export function SelectTrigger({ 'aria-label': ariaLabel, id, title }: { children?: ReactNode; id?: string; className?: string; 'aria-label'?: string; title?: string }) {
   const { registrar } = useContext(SelectCtx)
   useLayoutEffect(() => {
-    if (ariaLabel || id) registrar?.({ ariaLabel, id })
-  }, [ariaLabel, id, registrar])
+    if (ariaLabel || id || title) registrar?.({ ariaLabel, id, title })
+  }, [ariaLabel, id, title, registrar])
   return null
 }
 export function SelectValue(_props: { placeholder?: string }) {
