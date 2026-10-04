@@ -290,7 +290,7 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
           <div className="grid w-full gap-2 sm:w-auto">
             <Label htmlFor="reposicion-sucursal">Sucursal</Label>
             <Select value={sucursal} onValueChange={setSucursal}>
-              <SelectTrigger id="reposicion-sucursal" className="w-full sm:w-64" title={tituloDe(sucursal, sucursales.map((x) => [String(x.id), x.nombre]))}><SelectValue /></SelectTrigger>
+              <SelectTrigger id="reposicion-sucursal" className="w-full min-w-0 sm:w-64" title={tituloDe(sucursal, sucursales.map((x) => [String(x.id), x.nombre]))}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value={TODAS}>Toda la instancia</SelectItem>
                 {sucursales.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.nombre}</SelectItem>)}
@@ -302,7 +302,7 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
           <div className="grid w-full gap-2 sm:w-auto">
             <Label htmlFor="reposicion-categoria">Categoría</Label>
             <Select value={categoria} onValueChange={setCategoria}>
-              <SelectTrigger id="reposicion-categoria" className="w-full sm:w-64" title={tituloDe(categoria, categorias.map((x) => [x.nombre, x.nombre]))}><SelectValue /></SelectTrigger>
+              <SelectTrigger id="reposicion-categoria" className="w-full min-w-0 sm:w-64" title={tituloDe(categoria, categorias.map((x) => [x.nombre, x.nombre]))}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value={TODAS}>Todas las categorías</SelectItem>
                 {categorias.map((c) => <SelectItem key={c.id} value={c.nombre}>{c.nombre}</SelectItem>)}
@@ -314,7 +314,7 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
           <div className="grid w-full gap-2 sm:w-auto">
             <Label htmlFor="reposicion-proveedor">Proveedor</Label>
             <Select value={proveedor} onValueChange={setProveedor}>
-              <SelectTrigger id="reposicion-proveedor" className="w-full sm:w-64" title={tituloDe(proveedor, proveedores.map((x) => [String(x.id), x.nombre]))}><SelectValue /></SelectTrigger>
+              <SelectTrigger id="reposicion-proveedor" className="w-full min-w-0 sm:w-64" title={tituloDe(proveedor, proveedores.map((x) => [String(x.id), x.nombre]))}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value={TODAS}>Todos los proveedores</SelectItem>
                 {proveedores.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.nombre}</SelectItem>)}

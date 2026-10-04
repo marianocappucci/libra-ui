@@ -482,6 +482,15 @@ describe('Reposición: proveedor habitual (motor >= 0.33.0, ADR-021)', () => {
     expect(screen.queryByRole('button', { name: /^Proveedor/ })).toBeNull()
   })
 
+  it('los tres selects de filtro llevan `min-w-0`: sin él, en móvil un nombre largo ensancha la página (0.112.4)', async () => {
+    // jsdom no mide el layout. Medido en Chromium (390, 360 y 320 px): un `SelectTrigger` con `w-full` es un ítem de grid con `nowrap`; sin `min-w-0` el track crece al
+    // `min-content` del texto elegido y la página gana scroll horizontal (451 a 461 px). `max-width` o `min-w-0` en los ancestros no alcanzan: va en el trigger.
+    await abrir(TODO_CON)
+    for (const nombre of ['Sucursal', 'Categoría', 'Proveedor']) {
+      expect((await screen.findByLabelText(nombre)).className).toContain('min-w-0')
+    }
+  })
+
   it('si el motor lo maneja aparecen la columna «Proveedor» (con un guion donde no hay) y el filtro', async () => {
     await abrir(TODO_CON)
     expect(await screen.findByLabelText('Proveedor')).toBeTruthy()
