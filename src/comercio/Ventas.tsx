@@ -298,7 +298,7 @@ export function Ventas({
       header: 'Estado',
       size: 110,
       minSize: 90,
-      cell: ({ row }) => <BadgeEstado tono={ESTADO_VENTA_TONO[row.original.estado] ?? 'neutro'}>{etiquetaDeEstadoDeVenta(row.original.estado)}</BadgeEstado>,
+      cell: ({ row }) => <BadgeEstado tono={ESTADO_VENTA_TONO[row.original.estado] ?? 'neutro'} className="max-w-full" title={row.original.estado}><span className="truncate">{etiquetaDeEstadoDeVenta(row.original.estado)}</span></BadgeEstado>,
     },
     {
       id: 'factura',

@@ -20,7 +20,7 @@
 // El formulario de ajuste toma la forma de Contalibra (estado simple, sin
 // react-hook-form) con las validaciones que Restolibra tenía en su schema:
 // cantidad mayor a cero en los modos relativos, factor mayor a cero.
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import type { ColumnDef } from '../data-table'
 import {
@@ -97,6 +97,64 @@ export type StockProps = {
   conFiltros?: boolean
 }
 
+/** El ancho (px) de un elemento, siguiéndolo con un `ResizeObserver`. 0 mientras no se mide (sin `ResizeObserver`, como en jsdom): quien lo usa lo trata como «no sé» y deja la tabla. */
+function useAncho(): [(el: HTMLElement | null) => void, number] {
+  const [ancho, setAncho] = useState(0)
+  const observador = useRef<ResizeObserver | null>(null)
+  const ref = useCallback((el: HTMLElement | null) => {
+    observador.current?.disconnect()
+    observador.current = null
+    if (!el) return
+    setAncho(el.clientWidth)
+    if (typeof ResizeObserver === 'undefined') return
+    observador.current = new ResizeObserver((entradas) => setAncho(Math.round(entradas[0].contentRect.width)))
+    observador.current.observe(el)
+  }, [])
+  return [ref, ancho]
+}
+
+/** Bajo este ancho el historial de movimientos pasa de tabla a lista (con las columnas que hacen wrap la tabla entra desde ahí). */
+const ANCHO_MINIMO_HISTORIAL = 720
+
+type OrdenTarjetas = 'producto' | 'total-asc' | 'total-desc'
+
+const claseDeCantidad = (n: number) => (n < 0 ? 'font-medium text-destructive' : n === 0 ? 'text-muted-foreground' : '')
+
+/** Un producto como tarjeta: lo que la tabla reparte en columnas, apilado, para cuando la tabla no entra en el ancho que hay (nunca se scrollea de costado). */
+function TarjetaDeStock({ p, depositos, acciones }: { p: StockItem; depositos: DepositoColumna[]; acciones: ReactNode }) {
+  const e = estadoStock(p)
+  const clase = p.stock_actual <= 0 ? 'text-destructive' : (p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo) ? 'text-amber-600 dark:text-amber-400' : 'text-exito'
+  const aparte = [p.codigo, p.categoria].filter(Boolean).join(' · ')
+  return (
+    <li className="grid min-w-0 gap-2 rounded-md border p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="break-words font-medium">{p.nombre}</p>
+          {aparte && <p className="break-words text-xs text-muted-foreground">{aparte}</p>}
+        </div>
+        <BadgeEstado tono={e.tono}>{e.label}</BadgeEstado>
+      </div>
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm">
+        <span>{depositos.length > 0 ? 'Total' : 'Stock'}: <strong className={`text-base tabular-nums ${clase}`}>{formatEntero(p.stock_actual)}</strong> <span className="text-muted-foreground">{p.unidad}</span></span>
+        {p.stock_minimo > 0 && <span className="text-muted-foreground">Mínimo: {formatEntero(p.stock_minimo)}</span>}
+      </div>
+      {depositos.length > 0 && (
+        <ul className="flex flex-wrap gap-1.5" aria-label="Stock por depósito">
+          {depositos.map((d) => {
+            const n = p.por_deposito?.[String(d.id)] ?? 0
+            return (
+              <li key={d.id} className="max-w-full truncate rounded-md border px-2 py-0.5 text-xs" title={`${d.nombre}: ${formatEntero(n)}`}>
+                {d.nombre}: <span className={`tabular-nums ${claseDeCantidad(n)}`}>{formatEntero(n)}</span>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+      {acciones}
+    </li>
+  )
+}
+
 export function Stock({
   rutaDeMovimientos, conConversionDeUnidad = false, rutaDeProductos = '/productos', conFiltros = false,
 }: StockProps) {
@@ -107,11 +165,14 @@ export function Stock({
   const [soloConStock, setSoloConStock] = useState(false)
   const [depositos, setDepositos] = useState<DepositoColumna[]>([])
   const [depositoAjuste, setDepositoAjuste] = useState('')
+  const [orden, setOrden] = useState<OrdenTarjetas>('producto')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const [movimientos, setMovimientos] = useState<MovimientoStock[]>([])
   const [movLoading, setMovLoading] = useState(false)
+  const [medidaTabla, anchoTabla] = useAncho()
+  const [medidaHistorial, anchoHistorial] = useAncho()
   const [movimientosVisible, setMovimientosVisible] = useState(false)
   const [movFiltroProducto, setMovFiltroProducto] = useState('')
   const [movDesde, setMovDesde] = useState('')
@@ -272,6 +333,20 @@ export function Stock({
     return stockBase - val
   }, [editing, modo, cantidad, factor, conConversionDeUnidad, stockBase])
 
+  /** Los dos botones de cada producto, en la tabla y en la tarjeta. */
+  const acciones = (p: StockItem) => (
+    <div className="flex justify-end gap-1">
+      {rutaDeMovimientos ? (
+        <Button asChild size="icon" variant="outline" title="Ver movimientos" aria-label="Ver movimientos">
+          <Link to={rutaDeMovimientos(p.id)}><History /></Link>
+        </Button>
+      ) : (
+        <Button size="icon" variant="outline" title="Ver movimientos" aria-label="Ver movimientos" onClick={() => verMovimientos(p.id)}><History /></Button>
+      )}
+      <Button size="icon" variant="outline" title="Ajustar stock" aria-label="Ajustar stock" onClick={() => abrirAjuste(p)}><Pencil /></Button>
+    </div>
+  )
+
   const columns = useMemo<ColumnDef<StockItem>[]>(() => [
     {
       accessorKey: 'nombre',
@@ -327,27 +402,28 @@ export function Stock({
       header: () => <div className="text-right">Acciones</div>,
       size: anchoColumnaAcciones(2),
       minSize: anchoColumnaAcciones(2),
-      cell: ({ row }) => (
-        <div className="flex justify-end gap-1">
-          {rutaDeMovimientos ? (
-            <Button asChild size="icon" variant="outline" title="Ver movimientos" aria-label="Ver movimientos">
-              <Link to={rutaDeMovimientos(row.original.id)}><History /></Link>
-            </Button>
-          ) : (
-            <Button size="icon" variant="outline" title="Ver movimientos" aria-label="Ver movimientos" onClick={() => verMovimientos(row.original.id)}><History /></Button>
-          )}
-          <Button size="icon" variant="outline" title="Ajustar stock" aria-label="Ajustar stock" onClick={() => abrirAjuste(row.original)}><Pencil /></Button>
-        </div>
-      ),
+      cell: ({ row }) => acciones(row.original),
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [rutaDeMovimientos, depositos])
+
+  // La tabla necesita la suma de los `size` de sus columnas (`DataTable` la fija como `min-width`): si el contenedor es más angosto, en vez de scrollear de costado
+  // la pantalla pasa a tarjetas. Sin medida (0) se queda la tabla.
+  const anchoMinimoTabla = useMemo(() => columns.reduce((total, c) => total + (c.size ?? 0), 0), [columns])
+  const enTarjetas = anchoTabla > 0 && anchoTabla < anchoMinimoTabla
+  const tarjetas = useMemo(() => {
+    const orden_ = [...visibles]
+    if (orden === 'producto') return orden_.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+    return orden_.sort((a, b) => (orden === 'total-asc' ? a.stock_actual - b.stock_actual : b.stock_actual - a.stock_actual))
+  }, [visibles, orden])
+  const historialEnLista = anchoHistorial > 0 && anchoHistorial < ANCHO_MINIMO_HISTORIAL
 
   const movColumns = useMemo<ColumnDef<MovimientoStock>[]>(() => [
     { accessorKey: 'fecha', header: 'Fecha', cell: ({ row }) => formatearFecha(row.original.fecha) },
     {
       accessorKey: 'producto_nombre',
       header: 'Producto',
+      meta: { className: 'whitespace-normal break-words' },
       cell: ({ row }) => (
         <button type="button" className="font-semibold hover:underline" onClick={() => verMovimientos(row.original.producto_id)}>
           {row.original.producto_nombre}
@@ -365,12 +441,12 @@ export function Stock({
       ),
     },
     ...(conDepositos ? [{
-      id: 'deposito', header: 'Depósito',
+      id: 'deposito', header: 'Depósito', meta: { className: 'whitespace-normal break-words' },
       cell: ({ row }: { row: { original: MovimientoStock } }) => (
         <span className="text-muted-foreground">{depositos.find((d) => d.id === row.original.deposito_id)?.nombre ?? '—'}</span>
       ),
     } as ColumnDef<MovimientoStock>] : []),
-    { accessorKey: 'referencia', header: 'Referencia', cell: ({ row }) => <span className="text-muted-foreground">{row.original.referencia || '—'}</span> },
+    { accessorKey: 'referencia', header: 'Referencia', meta: { className: 'whitespace-normal break-words' }, cell: ({ row }) => <span className="text-muted-foreground">{row.original.referencia || '—'}</span> },
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [depositos])
 
@@ -396,12 +472,15 @@ export function Stock({
       {alertas.length > 0 && (
         <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-900 dark:bg-amber-950/40">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-          <p>
+          {/* `min-w-0` y las pastillas con `max-w-full` + `truncate`: un nombre largo no puede ensanchar la página (una pastilla `shrink-0` sin tope la empujaba). */}
+          <div className="min-w-0">
             <strong>{alertas.length} producto{alertas.length > 1 ? 's' : ''} con stock bajo mínimo:</strong>{' '}
             {alertas.map((a) => (
-              <BadgeEstado key={a.id} tono="atencion" className="ml-1">{a.nombre} ({formatEntero(a.stock_actual)} {a.unidad})</BadgeEstado>
+              <BadgeEstado key={a.id} tono="atencion" className="ml-1 max-w-full" title={`${a.nombre} (${formatEntero(a.stock_actual)} ${a.unidad})`}>
+                <span className="truncate">{a.nombre} ({formatEntero(a.stock_actual)} {a.unidad})</span>
+              </BadgeEstado>
             ))}
-          </p>
+          </div>
         </div>
       )}
 
@@ -419,15 +498,38 @@ export function Stock({
               </label>
             </div>
           )}
-          {loading ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">Cargando…</p>
-          ) : (
-            <DataTable
-              columns={columns}
-              data={visibles}
-              emptyMessage={<>No hay productos activos. <Link to={rutaDeProductos} className="text-primary hover:underline">Crear un producto</Link>.</>}
-            />
-          )}
+          <div ref={medidaTabla} className="min-w-0">
+            {loading ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">Cargando…</p>
+            ) : enTarjetas ? (
+              <div className="grid gap-3">
+                <div className="grid gap-2">
+                  <Label htmlFor="stock-orden">Ordenar por</Label>
+                  <Select value={orden} onValueChange={(v) => v && setOrden(v as OrdenTarjetas)}>
+                    <SelectTrigger id="stock-orden" className="w-full min-w-0 sm:w-64"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="producto">Producto (A a Z)</SelectItem>
+                      <SelectItem value="total-asc">Stock total (de menor a mayor)</SelectItem>
+                      <SelectItem value="total-desc">Stock total (de mayor a menor)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {tarjetas.length === 0 ? (
+                  <p className="py-6 text-center text-sm text-muted-foreground">No hay productos activos. <Link to={rutaDeProductos} className="text-primary hover:underline">Crear un producto</Link>.</p>
+                ) : (
+                  <ul className="grid gap-3">
+                    {tarjetas.map((p) => <TarjetaDeStock key={p.id} p={p} depositos={depositos} acciones={acciones(p)} />)}
+                  </ul>
+                )}
+              </div>
+            ) : (
+              <DataTable
+                columns={columns}
+                data={visibles}
+                emptyMessage={<>No hay productos activos. <Link to={rutaDeProductos} className="text-primary hover:underline">Crear un producto</Link>.</>}
+              />
+            )}
+          </div>
         </CardContent>
       </Card>
 
@@ -548,11 +650,35 @@ export function Stock({
                 <Button size="sm" variant="outline" onClick={limpiarFiltroMovimientos}><X />Limpiar</Button>
               )}
             </div>
-            {movLoading ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">Cargando…</p>
-            ) : (
-              <DataTable columns={movColumns} data={movimientos} emptyMessage="No hay movimientos registrados." />
-            )}
+            <div ref={medidaHistorial} className="min-w-0">
+              {movLoading ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">Cargando…</p>
+              ) : historialEnLista ? (
+                movimientos.length === 0 ? (
+                  <p className="py-6 text-center text-sm text-muted-foreground">No hay movimientos registrados.</p>
+                ) : (
+                  <ul className="grid gap-2">
+                    {movimientos.map((m) => (
+                      <li key={m.id} className="grid min-w-0 gap-1 rounded-md border p-3 text-sm">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-xs text-muted-foreground">{formatearFecha(m.fecha)}</span>
+                          <TipoBadge tipo={m.tipo} />
+                          <span className={m.cantidad >= 0 ? 'font-semibold text-exito' : 'font-semibold text-destructive'}>
+                            {m.cantidad >= 0 ? '+' : ''}{formatEntero(m.cantidad)}
+                          </span>
+                        </div>
+                        <button type="button" className="break-words text-left font-semibold hover:underline" onClick={() => verMovimientos(m.producto_id)}>{m.producto_nombre}</button>
+                        <p className="break-words text-xs text-muted-foreground">
+                          {[conDepositos ? (depositos.find((d) => d.id === m.deposito_id)?.nombre ?? null) : null, m.referencia || null].filter(Boolean).join(' · ') || '—'}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                )
+              ) : (
+                <DataTable columns={movColumns} data={movimientos} emptyMessage="No hay movimientos registrados." />
+              )}
+            </div>
           </CardContent>
         </Card>
       )}

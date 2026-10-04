@@ -121,6 +121,12 @@ describe('las cuentas de los pagos', () => {
     expect(formatoMoneda(1234.5)).toMatch(/1\.234,50/)
     expect(etiquetaDeEstadoDeVenta('parcial')).toBe('Pago parcial')
     expect(etiquetaDeEstadoDeVenta('otro')).toBe('otro')
+    // Los `status_detail` que el motor deja además de los cuatro de cobranza, con etiqueta corta (antes salían con el nombre técnico: `borrador_descartado` no entraba en la columna).
+    expect(etiquetaDeEstadoDeVenta('borrador_descartado')).toBe('Descartada')
+    expect(etiquetaDeEstadoDeVenta('devuelta')).toBe('Devuelta')
+    expect(etiquetaDeEstadoDeVenta('devuelta_parcial')).toBe('Dev. parcial')
+    // Uno que el kit no conoce no muestra guiones bajos.
+    expect(etiquetaDeEstadoDeVenta('algo_raro_nuevo')).toBe('algo raro nuevo')
     expect(opcionesCliente([{ id: 1, name: 'Ana', cuit_dni: '20', activo: 1 }, { id: 2, name: 'Beto', activo: 0 }])).toEqual([
       { value: '1', label: 'Ana', hint: '20' }, { value: '2', label: 'Beto', hint: 'inactivo' },
     ])
@@ -260,6 +266,16 @@ describe('Ventas', () => {
     expect(screen.getAllByLabelText('Anular')).toHaveLength(3)
     expect(screen.getAllByLabelText('Ver venta')[0].getAttribute('href')).toBe('/v/7')
     expect(screen.getByText('FACTURA C 0005-00000011').closest('a')?.getAttribute('href')).toBe('/f/55')
+  })
+
+  it('la columna Estado muestra una etiqueta corta para `borrador_descartado` y deja el nombre técnico en el title', async () => {
+    const DESCARTADA: Venta = { ...VENTA, id: 11, numero: 'V-00011', estado: 'borrador_descartado' }
+    responder({ ...BASE, '/api/ventas': [DESCARTADA] })
+    montarVentas()
+    const pastilla = (await screen.findByText('Descartada')).closest('[data-tono]')
+    expect(pastilla?.getAttribute('data-tono')).toBe('neutro')
+    expect(pastilla?.getAttribute('title')).toBe('borrador_descartado')
+    expect(screen.queryByText('borrador_descartado')).toBeNull()
   })
 
   it('las pestañas y los filtros arman la query; limpiar la deja vacía; sin red avisa', async () => {
