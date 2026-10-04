@@ -405,7 +405,7 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
                 </span>
               )}
             </CardTitle>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {orden && (
                 <Button size="sm" variant="outline" onClick={() => setOrden(null)}>Orden por urgencia</Button>
               )}
