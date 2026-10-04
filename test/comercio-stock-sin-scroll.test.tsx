@@ -83,6 +83,8 @@ describe('Stock: el aviso de stock bajo no ensancha la página', () => {
     expect(pastilla.className).toContain('max-w-full')
     expect(pastilla.querySelector('.truncate')?.textContent).toBe(`${NOMBRE_LARGO} (3 kg)`)
     expect(pastilla.parentElement!.className).toContain('min-w-0')
+    // El aviso mismo es un ítem de la grilla de la pantalla: sin `min-w-0` su mínimo es la pastilla más larga y ensancha la PÁGINA (medido en Chromium: 591 px a 390, 855 a 768 con el menú abierto).
+    expect(pastilla.closest('div.rounded-md.border')!.className).toContain('min-w-0')
   })
 })
 
