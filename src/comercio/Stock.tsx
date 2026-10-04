@@ -470,9 +470,9 @@ export function Stock({
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       {alertas.length > 0 && (
-        <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-900 dark:bg-amber-950/40">
+        <div className="flex min-w-0 items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-900 dark:bg-amber-950/40">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-          {/* `min-w-0` y las pastillas con `max-w-full` + `truncate`: un nombre largo no puede ensanchar la página (una pastilla `shrink-0` sin tope la empujaba). */}
+          {/* `min-w-0` en el aviso (es un ítem de la grilla de la pantalla: sin él su mínimo es el ancho de la pastilla más larga y arrastra a toda la página, medido a 390 y 768 px) y en el contenedor de las pastillas, que topan con `max-w-full` + `truncate`. */}
           <div className="min-w-0">
             <strong>{alertas.length} producto{alertas.length > 1 ? 's' : ''} con stock bajo mínimo:</strong>{' '}
             {alertas.map((a) => (

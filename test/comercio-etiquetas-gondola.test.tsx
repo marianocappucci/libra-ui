@@ -184,7 +184,8 @@ describe('elegir productos', () => {
     expect(screen.getByText('0 elegidos')).toBeInTheDocument()
 
     await tildar(user, 'Pan al peso')
-    expect(screen.getByRole('button', { name: /Ver e imprimir/ })).toBeEnabled()
+    // `waitFor`: bajo carga (la suite completa en un runner lento) el re-render de la selección llega después del clic y la aserción inmediata fallaba de forma intermitente.
+    await waitFor(() => expect(screen.getByRole('button', { name: /Ver e imprimir/ })).toBeEnabled())
     expect(screen.getByText('1 elegido')).toBeInTheDocument()
   })
 

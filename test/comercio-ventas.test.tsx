@@ -585,6 +585,28 @@ describe('VentaDetalle', () => {
       expect(pedidas().filter((p) => p.includes('anular'))).toHaveLength(0)
     })
 
+    it('reabrir la venta con la nota ya emitida en el servidor no vuelve a ofrecerla (ADR-034 de libracommerce)', async () => {
+      responder({ ...BASE, '/api/ventas/21': { ...CON_CAE, nota_credito_display: 'NOTA CREDITO C 0001-00000007' } })
+      montarDetalle(21, { puedeAnular: true, puedeEmitirNota: true })
+      expect((await screen.findByRole('note')).textContent).toBe('La nota de crédito NOTA CREDITO C 0001-00000007 está emitida: ya podés anular la venta.')
+      expect(screen.queryByRole('button', { name: /Emitir nota de crédito/ })).toBeNull()
+    })
+
+    it('al emitir la nota recarga el detalle y muestra la nota que trae el servidor', async () => {
+      let emitida = false
+      responder({
+        ...BASE,
+        '/api/ventas/21': () => (emitida ? { ...CON_CAE, nota_credito_display: 'NOTA CREDITO C 0001-00000007' } : CON_CAE),
+        'POST /api/facturas/55/nota-credito': () => { emitida = true; return {} },
+      })
+      const user = userEvent.setup()
+      montarDetalle(21, { puedeAnular: true, puedeEmitirNota: true })
+      await user.click(await screen.findByRole('button', { name: /Emitir nota de crédito/ }))
+      await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Emitir nota' }))
+      expect((await screen.findByRole('note')).textContent).toMatch(/NOTA CREDITO C 0001-00000007 está emitida/)
+      expect(pedidas().filter((p) => p === 'GET /api/ventas/21').length).toBeGreaterThanOrEqual(2)
+    })
+
     it('sin permiso no ofrece el botón y manda a pedírsela a un administrador', async () => {
       responder({ ...BASE, '/api/ventas/21': CON_CAE })
       montarDetalle(21, { puedeAnular: true })
@@ -599,6 +621,21 @@ describe('VentaDetalle', () => {
       await user.click(await screen.findByRole('button', { name: /Emitir nota de crédito/ }))
       await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Emitir nota' }))
       expect(await screen.findByText(/ya tiene la Nota de Crédito/)).toBeTruthy()
+      // Se anuncia (`role="alert"`) y recibe el foco: se muestra arriba y quien lo provocó está en los botones, más abajo (en un móvil quedaba fuera de pantalla).
+      const alerta = await screen.findByRole('alert')
+      expect(alerta.textContent).toMatch(/ya tiene la Nota de Crédito/)
+      expect(document.activeElement).toBe(alerta)
+    })
+
+    it('la tabla de artículos no scrollea de costado en un móvil: bloques bajo `sm` con la etiqueta de cada dato', async () => {
+      // jsdom no mide el layout: se fijan las clases que lo garantizan (medido en Chromium: el mínimo de la tabla era 386 px contra los ~340 de la tarjeta a 390 px).
+      responder({ ...BASE, '/api/ventas/21': CON_CAE })
+      montarDetalle(21)
+      const tabla = (await screen.findByText('Descripción')).closest('table')!
+      expect(tabla.className).toContain('max-sm:block')
+      expect(tabla.querySelector('thead')!.className).toContain('max-sm:hidden')
+      const etiquetas = [...tabla.querySelectorAll('tbody td[data-label]')].map((td) => td.getAttribute('data-label'))
+      expect(etiquetas).toEqual(['Cantidad', 'Precio unit.', 'Subtotal'])
     })
 
     it('una factura sin CAE o una venta sin factura no cambian: sin aviso ni botón', async () => {
