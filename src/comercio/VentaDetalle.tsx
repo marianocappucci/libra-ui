@@ -87,6 +87,10 @@ export type VentaDetalleAccionesExtraCtx = {
   recargar: () => void
 }
 
+// Cada artículo de la tabla como bloque en un móvil: las celdas de cantidad, precio y subtotal pasan a una línea «etiqueta … valor» (la etiqueta sale del `data-label`). Los totales, uno por línea.
+const FILA_MOVIL = 'max-sm:flex max-sm:justify-between max-sm:gap-4 max-sm:p-0 max-sm:pt-1 max-sm:font-normal max-sm:text-muted-foreground max-sm:before:content-[attr(data-label)]'
+const TOTAL_MOVIL = 'max-sm:flex max-sm:justify-between max-sm:gap-4 max-sm:px-3 max-sm:py-1'
+
 export type VentaDetalleProps = {
   /** Si la sesión puede anular ventas (los productos: rol admin). */
   puedeAnular?: boolean
@@ -144,7 +148,9 @@ export function VentaDetalle({
   const [confirmAnular, setConfirmAnular] = useState(false)
   const [confirmNota, setConfirmNota] = useState(false)
   const [emitiendoNota, setEmitiendoNota] = useState(false)
-  const [notaEmitida, setNotaEmitida] = useState(false)
+  // Respaldo para un motor que todavía no manda `nota_credito_display` (ADR-034 de libracommerce): con él la nota se lee del detalle y sobrevive a recargar la venta.
+  const [notaEmitidaLocal, setNotaEmitidaLocal] = useState(false)
+  const errorRef = useRef<HTMLParagraphElement | null>(null)
   const [facturando, setFacturando] = useState(false)
   const [qrEstado, setQrEstado] = useState<QrEstado>('idle')
   const [qrError, setQrError] = useState<string | null>(null)
@@ -164,6 +170,11 @@ export function VentaDetalle({
     if (err instanceof ApiError) return err.detail
     return 'Error de conexión.'
   }
+
+  // El error se anuncia (`role="alert"`) y se trae a la vista: se muestra arriba de la pantalla y quien lo provocó está más abajo, en los botones (en un móvil quedaba fuera de pantalla).
+  useEffect(() => {
+    if (error) errorRef.current?.focus()
+  }, [error])
 
   async function cargar() {
     setLoading(true)
@@ -196,8 +207,10 @@ export function VentaDetalle({
     setEmitiendoNota(true)
     try {
       await api.post(rutaDeNotaDeCredito(detalle.factura_id))
-      setNotaEmitida(true)
+      setNotaEmitidaLocal(true)
       setConfirmNota(false)
+      // Se recarga el detalle: trae la nota emitida (`nota_credito_display`) y deja la pantalla igual a como la vería quien la abra de nuevo.
+      await cargar()
     } catch (err) {
       setError(describeError(err))
       setConfirmNota(false)
@@ -295,6 +308,9 @@ export function VentaDetalle({
   const descuentoRestante = !detalle ? 0
     : (detalle.promociones?.length ? Math.round((detalle.descuento - ahorroDePromociones) * 100) / 100 : detalle.descuento)
 
+  const notaDisplay = detalle?.nota_credito_display ?? null
+  const notaEmitida = notaEmitidaLocal || notaDisplay !== null
+
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -312,7 +328,7 @@ export function VentaDetalle({
         )}
       </div>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <p ref={errorRef} role="alert" tabIndex={-1} className="text-sm text-destructive outline-none">{error}</p>}
 
       {loading || !detalle ? (
         <p className="py-6 text-center text-sm text-muted-foreground">Cargando…</p>
@@ -396,8 +412,10 @@ export function VentaDetalle({
           <Card>
             <CardHeader><CardTitle className="text-base">Artículos vendidos</CardTitle></CardHeader>
             <CardContent className="p-0">
-              <table className="w-full text-sm">
-                <thead className="border-b text-muted-foreground">
+              {/* Sin scroll horizontal: desde `sm` es la tabla; en un móvil (medido en Chromium: 386 px de mínimo contra los ~340 de la tarjeta) cada artículo es un bloque con su
+                  etiqueta (`data-label`, que sale por CSS) y los totales van uno por línea. */}
+              <table className="w-full text-sm max-sm:block">
+                <thead className="border-b text-muted-foreground max-sm:hidden">
                   <tr>
                     <th className="p-3 text-left font-medium">Descripción</th>
                     <th className="p-3 text-right font-medium">Cant.</th>
@@ -405,32 +423,32 @@ export function VentaDetalle({
                     <th className="p-3 text-right font-medium">Subtotal</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="max-sm:block">
                   {detalle.items.map((it, i) => (
-                    <tr key={i} className="border-b last:border-0">
-                      <td className="p-3">{it.nombre}</td>
-                      <td className="p-3 text-right">{it.qty}</td>
-                      <td className="p-3 text-right">{formatoMoneda(it.precio)}</td>
-                      <td className="p-3 text-right font-medium">{formatoMoneda(it.subtotal)}</td>
+                    <tr key={i} className="border-b last:border-0 max-sm:block max-sm:p-3">
+                      <td className="p-3 max-sm:block max-sm:break-words max-sm:p-0 max-sm:font-medium">{it.nombre}</td>
+                      <td data-label="Cantidad" className={`p-3 text-right ${FILA_MOVIL}`}>{it.qty}</td>
+                      <td data-label="Precio unit." className={`p-3 text-right ${FILA_MOVIL}`}>{formatoMoneda(it.precio)}</td>
+                      <td data-label="Subtotal" className={`p-3 text-right font-medium ${FILA_MOVIL}`}>{formatoMoneda(it.subtotal)}</td>
                     </tr>
                   ))}
                 </tbody>
-                <tfoot className="font-medium">
-                  <tr><td colSpan={3} className="p-3 text-right text-muted-foreground">Subtotal</td><td className="p-3 text-right">{formatoMoneda(detalle.subtotal)}</td></tr>
+                <tfoot className="font-medium max-sm:block">
+                  <tr className={TOTAL_MOVIL}><td colSpan={3} className="p-3 text-right text-muted-foreground max-sm:p-0">Subtotal</td><td className="p-3 text-right max-sm:p-0">{formatoMoneda(detalle.subtotal)}</td></tr>
                   {/* Las promociones aplicadas van una por fila. El `descuento` de la venta YA las incluye,
                       así que «Descuento» muestra sólo lo que quede (uno manual): no se cuenta dos veces. */}
                   {(detalle.promociones ?? []).map((promo, i) => (
-                    <tr key={`promo-${i}`}>
-                      <td colSpan={3} className="p-3 text-right text-muted-foreground">
+                    <tr key={`promo-${i}`} className={TOTAL_MOVIL}>
+                      <td colSpan={3} className="p-3 text-right text-muted-foreground max-sm:p-0 max-sm:text-left">
                         Promoción {promo.nombre}{promo.veces > 1 ? ` × ${promo.veces}` : ''}
                       </td>
-                      <td className="p-3 text-right text-exito">− {formatoMoneda(promo.ahorro)}</td>
+                      <td className="p-3 text-right text-exito max-sm:p-0">− {formatoMoneda(promo.ahorro)}</td>
                     </tr>
                   ))}
                   {descuentoRestante > 0 && (
-                    <tr><td colSpan={3} className="p-3 text-right text-muted-foreground">Descuento</td><td className="p-3 text-right text-destructive">− {formatoMoneda(descuentoRestante)}</td></tr>
+                    <tr className={TOTAL_MOVIL}><td colSpan={3} className="p-3 text-right text-muted-foreground max-sm:p-0">Descuento</td><td className="p-3 text-right text-destructive max-sm:p-0">− {formatoMoneda(descuentoRestante)}</td></tr>
                   )}
-                  <tr className="text-base"><td colSpan={3} className="p-3 text-right font-semibold">TOTAL</td><td className="p-3 text-right font-semibold text-primary">{formatoMoneda(detalle.total)}</td></tr>
+                  <tr className={`text-base ${TOTAL_MOVIL}`}><td colSpan={3} className="p-3 text-right font-semibold max-sm:p-0">TOTAL</td><td className="p-3 text-right font-semibold text-primary max-sm:p-0">{formatoMoneda(detalle.total)}</td></tr>
                 </tfoot>
               </table>
             </CardContent>
@@ -441,7 +459,7 @@ export function VentaDetalle({
             // después se anula la venta (el servidor contesta 409 si falta la nota).
             <p role="note" className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100">
               {notaEmitida
-                ? 'La nota de crédito está emitida: ya podés anular la venta.'
+                ? `La nota de crédito${notaDisplay ? ` ${notaDisplay}` : ''} está emitida: ya podés anular la venta.`
                 : <>La factura {detalle.factura_display} la emitió ARCA (CAE {detalle.factura_cae}). Para anular la venta hay que emitir antes la nota de crédito{puedeEmitirNota ? '.' : ': pedísela a un administrador.'}</>}
             </p>
           )}
