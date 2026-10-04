@@ -14,7 +14,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
-  ArrowLeft, Ban, CheckCircle2, FileCheck, Loader2, PackageCheck, Printer, QrCode, ReceiptText, ShoppingCart,
+  ArrowLeft, Ban, CheckCircle2, FileCheck, FileMinus, Loader2, PackageCheck, Printer, QrCode, ReceiptText, ShoppingCart,
 } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
@@ -109,6 +109,11 @@ export type VentaDetalleProps = {
   /** Igual que `rutaDeTicket`, para el recibo. `null` oculta el link
    *  —VentaLibra no tiene recibo—. */
   rutaDeRecibo?: ((id: number) => string) | null
+  /** Si la sesión puede emitir la nota de crédito de una factura con CAE (los productos: rol admin). Sin la prop no se
+   *  ofrece el botón y el aviso sólo dice que hace falta la nota. */
+  puedeEmitirNota?: boolean
+  /** A dónde se pide la nota de crédito de una factura (`libracore.facturas_router`); es la misma en todos los productos. */
+  rutaDeNotaDeCredito?: (facturaId: number) => string
   /** Un espacio para acciones propias del producto (F4, 2026-09-15) —p. ej.
    *  la devolución parcial de VentaLibra—, renderizado junto a las acciones
    *  existentes (anular/QR/facturar). Sin la prop no se renderiza nada nuevo. */
@@ -124,6 +129,8 @@ export function VentaDetalle({
   rutaDeFacturaManual,
   rutaDeTicket = (id) => `/ventas/${id}/ticket`,
   rutaDeRecibo = (id) => `/ventas/${id}/recibo`,
+  puedeEmitirNota = false,
+  rutaDeNotaDeCredito = (facturaId) => `/api/facturas/${facturaId}/nota-credito`,
   accionesExtra,
 }: VentaDetalleProps = {}) {
   const etiquetaDeMedio = useEtiquetaDeMedio()
@@ -135,6 +142,9 @@ export function VentaDetalle({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [confirmAnular, setConfirmAnular] = useState(false)
+  const [confirmNota, setConfirmNota] = useState(false)
+  const [emitiendoNota, setEmitiendoNota] = useState(false)
+  const [notaEmitida, setNotaEmitida] = useState(false)
   const [facturando, setFacturando] = useState(false)
   const [qrEstado, setQrEstado] = useState<QrEstado>('idle')
   const [qrError, setQrError] = useState<string | null>(null)
@@ -175,6 +185,24 @@ export function VentaDetalle({
       await cargar()
     } catch (err) {
       setError(describeError(err))
+    }
+  }
+
+  // La nota de crédito de la factura (total, la emite ARCA). La venta NO se anula sola: después de la nota se anula
+  // con el botón de siempre, que ahora no encuentra la factura vigente.
+  async function emitirNota() {
+    if (!detalle?.factura_id) return
+    setError(null)
+    setEmitiendoNota(true)
+    try {
+      await api.post(rutaDeNotaDeCredito(detalle.factura_id))
+      setNotaEmitida(true)
+      setConfirmNota(false)
+    } catch (err) {
+      setError(describeError(err))
+      setConfirmNota(false)
+    } finally {
+      setEmitiendoNota(false)
     }
   }
 
@@ -408,6 +436,16 @@ export function VentaDetalle({
             </CardContent>
           </Card>
 
+          {(detalle.estado === 'cobrada' || detalle.estado === 'parcial') && detalle.factura_cae && (
+            // 🔴 Con CAE la factura la tiene ARCA: anular acá no la deshace. Se revierte con la nota de crédito, y recién
+            // después se anula la venta (el servidor contesta 409 si falta la nota).
+            <p role="note" className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100">
+              {notaEmitida
+                ? 'La nota de crédito está emitida: ya podés anular la venta.'
+                : <>La factura {detalle.factura_display} la emitió ARCA (CAE {detalle.factura_cae}). Para anular la venta hay que emitir antes la nota de crédito{puedeEmitirNota ? '.' : ': pedísela a un administrador.'}</>}
+            </p>
+          )}
+
           {(detalle.estado === 'cobrada' || detalle.estado === 'parcial') && (
             <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
               {!detalle.factura_id && (
@@ -421,6 +459,11 @@ export function VentaDetalle({
                 </>
               )}
               {!detalle.remito_id && rutaDeRemitoNuevo && <Button asChild size="sm" variant="outline"><Link to={rutaDeRemitoNuevo}><PackageCheck />Generar remito</Link></Button>}
+              {puedeEmitirNota && detalle.factura_id && detalle.factura_cae && !notaEmitida && (
+                <Button size="sm" variant="outline" disabled={emitiendoNota} onClick={() => setConfirmNota(true)}>
+                  <FileMinus />{emitiendoNota ? 'Emitiendo…' : 'Emitir nota de crédito'}
+                </Button>
+              )}
               {puedeAnular && (
                 <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => setConfirmAnular(true)}><Ban />Anular venta</Button>
               )}
@@ -437,6 +480,15 @@ export function VentaDetalle({
         description="Se repondrá el stock, se revertirán los movimientos de caja y, si tenía pago a cuenta corriente, se acreditará la deuda del cliente."
         confirmLabel="Anular"
         onConfirm={() => { anular(); setConfirmAnular(false) }}
+      />
+
+      <ConfirmDialog
+        open={confirmNota}
+        onOpenChange={setConfirmNota}
+        title="¿Emitir la nota de crédito?"
+        description="Se emite ante ARCA la nota de crédito por el total de la factura y queda asociada a ella. No se puede deshacer. Después podés anular la venta."
+        confirmLabel="Emitir nota"
+        onConfirm={emitirNota}
       />
 
       {dialogoTicket}
