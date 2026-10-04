@@ -116,7 +116,7 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     fireEvent.change(plazo(), { target: { value: valorPlazo } })
     fireEvent.change(techo(), { target: { value: valorTecho } })
     await guardar(user)
-    expect(await within(dialogo()).findByText(mensaje)).toBeTruthy()
+    expect(await within(await within(dialogo()).findByRole('alert')).findByText(mensaje)).toBeTruthy()
     expect(pedidas().filter((p) => p.startsWith('PUT '))).toHaveLength(0)
   })
 
@@ -141,7 +141,7 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     fireEvent.change(within(dialogo()).getByLabelText('Nombre'), { target: { value: 'Yerba 2' } })   // también cambia el producto
     fireEvent.change(plazo(), { target: { value: '9' } })
     await guardar(user)
-    expect(await within(dialogo()).findByText(/El producto se guardó, pero no se pudieron guardar el plazo y el stock máximo/)).toBeTruthy()
+    expect(await within(await within(dialogo()).findByRole('alert')).findByText(/El producto se guardó, pero no se pudieron guardar el plazo y el stock máximo/)).toBeTruthy()
     expect(plazo().value).toBe('9')
   })
 
@@ -287,7 +287,7 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     await waitFor(() => expect(plazo().value).toBe('7'))
     fireEvent.change(plazo(), { target: { value: '9' } })
     await guardar(user)
-    expect(await within(dialogo()).findByText(/techo inválido/)).toBeTruthy()
+    expect(await within(await within(dialogo()).findByRole('alert')).findByText(/techo inválido/)).toBeTruthy()
     expect(within(dialogo()).queryByText(/El producto se guardó/)).toBeNull()
     expect(pedidas()).not.toContain('PUT /api/productos/1')
   })

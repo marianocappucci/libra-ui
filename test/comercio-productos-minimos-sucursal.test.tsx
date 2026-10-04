@@ -186,7 +186,7 @@ describe('Productos: mínimo por sucursal', () => {
     fireEvent.change(centro(), { target: { value: '5' } })
     fireEvent.change(norte(), { target: { value: valor } })
     await guardar(user)
-    expect(await within(dialogo()).findByText(/El mínimo de «Norte» tiene que ser un número mayor o igual que 0/)).toBeTruthy()
+    expect(await within(await within(dialogo()).findByRole('alert')).findByText(/El mínimo de «Norte» tiene que ser un número mayor o igual que 0/)).toBeTruthy()
     expect(escrituras()).toHaveLength(0)
   })
 
@@ -199,7 +199,7 @@ describe('Productos: mínimo por sucursal', () => {
     fireEvent.change(centro(), { target: { value: '5' } })
     fireEvent.change(norte(), { target: { value: '8' } })
     await guardar(user)
-    expect(await within(dialogo()).findByText('No se pudo guardar el mínimo de «Norte»: mínimo inválido')).toBeTruthy()
+    expect(await within(await within(dialogo()).findByRole('alert')).findByText('No se pudo guardar el mínimo de «Norte»: mínimo inválido')).toBeTruthy()
     expect(putsDeMinimos()).toEqual([`PUT ${MINIMOS}/1`, `PUT ${MINIMOS}/2`])
     // No dice que el producto se guardó: no se tocó. Lo escrito sigue en los campos.
     expect(within(dialogo()).queryByText(/El producto se guardó/)).toBeNull()
@@ -221,7 +221,7 @@ describe('Productos: mínimo por sucursal', () => {
     await within(dialogo()).findByText('Mínimo por sucursal')
     fireEvent.change(norte(), { target: { value: '30' } })
     await guardar(user)
-    expect(await within(dialogo()).findByText(`No se pudo guardar el mínimo de «Norte»: ${detail}`)).toBeTruthy()
+    expect(await within(await within(dialogo()).findByRole('alert')).findByText(`No se pudo guardar el mínimo de «Norte»: ${detail}`)).toBeTruthy()
   })
 
   it('si bajar el techo choca con un mínimo por sucursal, el error del motor sobre el producto/reposición se muestra tal cual', async () => {
@@ -275,7 +275,7 @@ describe('Productos: mínimo por sucursal', () => {
     fireEvent.change(centro(), { target: { value: '5' } })
     fireEvent.change(norte(), { target: { value: '50' } })   // el techo vigente es 40
     await guardar(user)
-    expect(await within(dialogo()).findByText('El mínimo de «Norte» (50) no puede ser mayor que el stock máximo (40).')).toBeTruthy()
+    expect(await within(await within(dialogo()).findByRole('alert')).findByText('El mínimo de «Norte» (50) no puede ser mayor que el stock máximo (40).')).toBeTruthy()
     expect(escrituras()).toHaveLength(0)
   })
 
@@ -302,7 +302,7 @@ describe('Productos: mínimo por sucursal', () => {
     fireEvent.change(within(dialogo()).getByLabelText('Stock máximo'), { target: { value: '20' } })
     fireEvent.change(norte(), { target: { value: '30' } })
     await guardar(user)
-    expect(await within(dialogo()).findByText('El mínimo de «Norte» (30) no puede ser mayor que el stock máximo (20).')).toBeTruthy()
+    expect(await within(await within(dialogo()).findByRole('alert')).findByText('El mínimo de «Norte» (30) no puede ser mayor que el stock máximo (20).')).toBeTruthy()
     expect(escrituras()).toHaveLength(0)
   })
 
@@ -316,7 +316,7 @@ describe('Productos: mínimo por sucursal', () => {
     fireEvent.change(centro(), { target: { value: '5' } })
     fireEvent.change(norte(), { target: { value: '1000000001' } })
     await guardar(user)
-    expect(await within(dialogo()).findByText(/El mínimo de «Norte» no puede pasar de 1\.000\.000\.000/)).toBeTruthy()
+    expect(await within(await within(dialogo()).findByRole('alert')).findByText(/El mínimo de «Norte» no puede pasar de 1\.000\.000\.000/)).toBeTruthy()
     expect(escrituras()).toHaveLength(0)
     // Justo en el tope sí se guarda.
     fireEvent.change(norte(), { target: { value: '1000000000' } })
@@ -352,7 +352,7 @@ describe('Productos: mínimo por sucursal', () => {
     expect(centro().value).toBe('30')
     // Ya con los mínimos a la vista, la validación del cliente corta antes de escribir.
     await guardar(user)
-    expect(await within(dialogo()).findByText('El mínimo de «Centro» (30) no puede ser mayor que el stock máximo (12).')).toBeTruthy()
+    expect(await within(await within(dialogo()).findByRole('alert')).findByText('El mínimo de «Centro» (30) no puede ser mayor que el stock máximo (12).')).toBeTruthy()
     expect(escrituras()).toHaveLength(0)
   })
 
@@ -507,7 +507,7 @@ describe('Productos: mínimo por sucursal', () => {
     fireEvent.change(centro(), { target: { value: nuevo } })   // Centro: 4 -> nuevo (se guarda)
     fireEvent.change(norte(), { target: { value: '8' } })      // Norte falla con un 422
     await guardar(user)
-    expect(await within(dialogo()).findByText('No se pudo guardar el mínimo de «Norte»: mínimo inválido')).toBeTruthy()
+    expect(await within(await within(dialogo()).findByRole('alert')).findByText('No se pudo guardar el mínimo de «Norte»: mínimo inválido')).toBeTruthy()
     expect(cuerpoDe(`PUT ${MINIMOS}/1`)).toEqual(cuerpoNuevo)
 
     fireEvent.change(centro(), { target: { value: '4' } })     // el usuario la devuelve al valor con el que se abrió el diálogo
@@ -528,7 +528,7 @@ describe('Productos: mínimo por sucursal', () => {
     fireEvent.change(within(dialogo()).getByLabelText('Nombre'), { target: { value: 'Yerba 2' } })
     fireEvent.change(norte(), { target: { value: '8' } })
     await guardar(user)
-    expect(await within(dialogo()).findByText('El producto se guardó, pero no se pudo guardar el mínimo de «Norte»: se cayó')).toBeTruthy()
+    expect(await within(await within(dialogo()).findByRole('alert')).findByText('El producto se guardó, pero no se pudo guardar el mínimo de «Norte»: se cayó')).toBeTruthy()
     expect(pedidas().filter((p) => p === 'PUT /api/productos/1')).toHaveLength(1)
 
     responder({ ...base, 'PUT /api/productos/1': { id: 1 }, [`PUT ${MINIMOS}/2`]: {} })
@@ -548,7 +548,7 @@ describe('Productos: mínimo por sucursal', () => {
     fireEvent.change(within(dialogo()).getByLabelText('Plazo de entrega (días)'), { target: { value: '9' } })
     fireEvent.change(norte(), { target: { value: '8' } })
     await guardar(user)
-    expect(await within(dialogo()).findByText(/se pudo guardar el mínimo de «Norte»/)).toBeTruthy()
+    expect(await within(await within(dialogo()).findByRole('alert')).findByText(/se pudo guardar el mínimo de «Norte»/)).toBeTruthy()
     expect(cuerpoDe(`PUT ${RUTA}`)).toEqual({ plazo_entrega_dias: 9, stock_maximo: 40 })
 
     responder({ ...base, [`PUT ${RUTA}`]: PARAMETROS, [`PUT ${MINIMOS}/2`]: {} })
@@ -713,7 +713,7 @@ describe('Productos: el error del formulario se lleva a la vista y marca el camp
     fireEvent.change(norte(), { target: { value: '50' } })   // el techo vigente es 40
   }
 
-  it('el mensaje es un alert, recibe el foco y se lleva a la vista (scrollIntoView sobre ese mismo elemento)', async () => {
+  it('el mensaje es un alert y recibe el foco; con un campo culpable se lleva a la vista EL CAMPO (con su mensaje en línea), no el alert (a 390 px no entran juntos)', async () => {
     const espia = vi.spyOn(Element.prototype, 'scrollIntoView').mockClear()
     const user = userEvent.setup()
     await conErrorDeMinimo(user)
@@ -722,8 +722,41 @@ describe('Productos: el error del formulario se lleva a la vista y marca el camp
     expect(alerta.textContent).toBe('El mínimo de «Norte» (50) no puede ser mayor que el stock máximo (40).')
     expect(document.activeElement).toBe(alerta)
     expect(espia).toHaveBeenCalledTimes(1)
-    expect(espia.mock.contexts[0]).toBe(alerta)
+    expect(espia.mock.contexts[0]).toBe(norte())
     espia.mockRestore()
+  })
+
+  it('sin campo culpable (el producto no se guardó) se lleva a la vista el alert', async () => {
+    const espia = vi.spyOn(Element.prototype, 'scrollIntoView').mockClear()
+    const user = userEvent.setup()
+    responder({ ...base, 'PUT /api/productos/1': { status: 409, detail: 'ya existe un producto con ese nombre' }, [`GET ${RUTA}`]: PARAMETROS, [`GET ${MINIMOS}`]: LEIDOS })
+    montar('/productos', <Productos conParametrosDeReposicion />)
+    await editar(user)
+    await within(dialogo()).findByText('Mínimo por sucursal')
+    await waitFor(() => expect((within(dialogo()).getByLabelText('Stock máximo') as HTMLInputElement).value).toBe('40'))
+    fireEvent.change(within(dialogo()).getByLabelText('Nombre'), { target: { value: 'Otro' } })
+    espia.mockClear()
+    await guardar(user)
+    const alerta = await within(dialogo()).findByRole('alert')
+    expect(alerta.textContent).toContain('ya existe un producto con ese nombre')
+    expect(document.activeElement).toBe(alerta)
+    expect(espia.mock.contexts.at(-1)).toBe(alerta)
+    expect(dialogo().querySelector('[data-error-del-campo]')).toBeNull()
+    espia.mockRestore()
+  })
+
+  it('el mensaje también se ve en línea, debajo del campo culpable, sin role (un solo alert) y como su descripción', async () => {
+    const user = userEvent.setup()
+    await conErrorDeMinimo(user)
+    await guardar(user)
+    const alerta = await within(dialogo()).findByRole('alert')
+    const enLinea = dialogo().querySelector('[data-error-del-campo]') as HTMLElement
+    expect(enLinea.textContent).toBe(alerta.textContent)
+    expect(enLinea.hasAttribute('role')).toBe(false)
+    expect(within(dialogo()).getAllByRole('alert')).toHaveLength(1)
+    expect(enLinea.id).not.toBe(alerta.id)
+    expect(norte().parentElement!.contains(enLinea)).toBe(true)   // pegado al campo de Norte, no en otro lado
+    expect(norte().getAttribute('aria-describedby')).toBe(enLinea.id)
   })
 
   it('repetir el mismo error vuelve a llevarlo a la vista (el texto no cambia, pero quien miraba el campo de abajo tiene que ver que Guardar respondió)', async () => {
@@ -741,7 +774,7 @@ describe('Productos: el error del formulario se lleva a la vista y marca el camp
     espia.mockRestore()
   })
 
-  it('el campo que causó el error queda aria-invalid y apunta al mensaje con aria-describedby; los otros no', async () => {
+  it('el campo que causó el error queda aria-invalid y apunta al mensaje (en línea) con aria-describedby; los otros no', async () => {
     const user = userEvent.setup()
     await conErrorDeMinimo(user)
     expect(norte()).not.toHaveAttribute('aria-invalid')

@@ -301,3 +301,49 @@ wiki (entidad `libra-ui` y `concepts/estandares-desarrollo`).
   - **Cómo se verificó el layout:** a 390 px sólo **por clases** (`whitespace-nowrap`, `flex-wrap`, `leading-snug`; los tests están rotulados «estructural»): jsdom no mide ni pinta, y el stub de `Select` sólo
     reenvía `disabled`. Hay que mirarlo a ojo con Chromium en la verificación del navegador. El foco se probó con el Dialog **real** de Radix (`comercio-productos-foco.test.tsx`), no con el stub.
   - Quien monta la pantalla decide las dos props desde la sesión (`productos.escribir`); el servidor sigue siendo quien autoriza (un 403 igual se dice bien).
+
+## ADR-014 — Códigos y variantes en castellano y de sólo lectura según el rol; el alta arranca con una unidad que existe
+
+- Estado: aceptada (hallazgos de la verificación de VentaLibra con Chromium real y el rol depósito, 2026-10-04; ajusta ADR-013)
+- Fecha: 2026-10-04 (`v0.112.0`)
+- Contexto: la misma pasada que dio ADR-013 encontró tres defectos más (las capturas A11 y B05) y dos observaciones menores (C11/C12, el contraste de los campos de sólo lectura):
+  1. **El diálogo «Gestionar códigos y variantes» mostraba el 403 crudo («forbidden»):** tenía su propio `describeError` que devolvía `err.detail`; el traductor de ADR-013 vivía sólo dentro de `Productos`.
+  2. **Ese diálogo dejaba agregar códigos y variantes a quien no puede** (el depósito): el `POST` daba 403. ADR-013 lo había dejado a cargo de quien monta la pantalla (`conDetalle`), pero sin `productos.escribir`
+     todo lo que hace el diálogo falla.
+  3. **El alta fallaba con el formulario sin tocar:** arrancaba con `unidad: 'u'`. VentaLibra no tiene `'u'` (sólo las unidades que se crean, p. ej. `UN`): el select mostraba «u» como si fuera válida y el `POST`
+     daba 422 «unidad desconocida: 'u'».
+- Decisión:
+  - **Un solo traductor de errores, `describeErrorHttp` en `src/comercio/errores-http.ts`** (con `esDetalleGenerico` y la lista explícita `DETALLES_GENERICOS` que antes estaban dentro de `Productos`). Mismo
+    comportamiento que ADR-013, sin cambios: 403 genérico = «No tenés permiso para hacer esto.», 401 genérico = «Tu sesión venció. Volvé a iniciar sesión.», todo lo demás (un `detail` propio, el objeto con
+    `mensaje`, otros status) tal cual, y lo que no es un `ApiError` = «Error de conexión.». Lo usan `Productos` y `ProductoCodigosVariantes`. **No se tocó `src/api-client.ts`** (~75 pantallas); el resto de
+    `src/comercio/` que muestra `err.detail` (Stock, Compras, Ventas, Depositos, Clientes, Vencimientos…) **no** guarda productos y queda como estaba: si alguno quiere el castellano, importa el helper.
+  - **`ProductoCodigosVariantes` acepta `conEdicionDelProducto` (por defecto `true`)**, que `Productos` le pasa. Con `false` la lista de códigos y variantes se sigue viendo, **no se dibuja ningún formulario de
+    alta** (ni los campos ni los dos «Agregar») y una nota dice «Tu rol sólo puede ver los códigos y variantes de este producto.». El diálogo hoy sólo agrega (no hay «Eliminar» ni «Marcar principal»): si se
+    suman, también quedan detrás de esta prop. Esto **reemplaza** la frase de ADR-013 de que `conDetalle` no se toca: quien no pasa `conEdicionDelProducto` no cambia.
+  - **La unidad del alta sale del catálogo de la instalación** (`GET /api/productos/unidades`, sin cambiar el contrato): arranca con `'u'` si el catálogo la tiene (Contalibra y Restolibra no cambian) y, si no, con
+    la **primera unidad real** (`unidadPorDefecto`). `EMPTY_VALUES.unidad` es `''`; la unidad se completa al abrir el alta y, si el catálogo llega con el alta ya abierta y nadie eligió, se completa sola
+    (un efecto). **Catálogo vacío o todavía sin leer: no se inventa nada**: el campo queda vacío y «Crear producto» dice «Elegí una unidad.» (el esquema exige una) en lugar de mandar `'u'`.
+    El select ofrece sólo las unidades del catálogo, **salvo al editar un producto que tiene otra**: esa se conserva y se agrega a las opciones (guardarlo no se la cambia). Si el producto no tiene unidad,
+    arranca con la del catálogo.
+  - **Qué cambió del respaldo:** antes, mientras el catálogo no se leía, el select ya ofrecía la lista de siempre (`UNIDADES`); ahora no ofrece ninguna hasta leerlo, y una lista **vacía** del backend ya no cae
+    a `UNIDADES` (es un catálogo vacío de verdad). Si el backend **no contesta** (no tiene el endpoint: 404, red caída), sí queda `UNIDADES` como respaldo, como antes.
+  - **El campo con error se ve junto con su mensaje** (observación a 390 px, capturas C11 y C12: el alert de arriba tomaba el foco y el scroll y el campo culpable —el mínimo de una sucursal, el plazo o
+    el techo— quedaba en el borde inferior de la pantalla, top 835 / bottom 871 con 844 de alto). Se eligió **repetir el mensaje en línea debajo del campo culpable** y llevar a la vista **el campo**, no el
+    alert: es lo más simple (sin medir alturas ni scrollear dos veces: centrar dos elementos lejanos entre sí no entra en una pantalla de celular) y lo más accesible. El `alert` de arriba **conserva el rol,
+    el foco y el texto** (`focus({ preventScroll: true })`); el texto en línea (`data-error-del-campo`) no tiene `role`, va `aria-hidden` y es lo que el campo señala con `aria-describedby` (una descripción
+    referenciada se lee igual aunque esté oculta): el lector de pantalla anuncia el error una vez, al enfocarse el alert, y lo repite como descripción sólo al llegar al campo. Un error **sin campo
+    culpable** (el producto no se guardó) sigue llevando el alert a la vista, sin texto en línea. **Cambio visible para los tests:** el texto del error ahora está dos veces en el DOM (alert y
+    en línea): los tests que lo buscan por texto lo hacen dentro del `role="alert"`.
+  - **Campos de sólo lectura por rol legibles** (`conEdicionDelProducto={false}`, sólo ese caso; el estilo global de `disabled` del kit no se toca): el `disabled:opacity-50` dejaba el texto en ~3,7:1.
+    Los campos del producto (`Input` y disparadores de `Select`) llevan `disabled:opacity-100 disabled:bg-muted disabled:text-foreground/75` (y `dark:disabled:bg-muted`): texto atenuado pero legible
+    sobre un fondo lleno que dice «no se edita» (más el `cursor-not-allowed` del kit). **El contraste se estimó por colores computados, no medido en pantalla:** con los colores por defecto de shadcn
+    (neutral) el `opacity-50` da 3,74:1 en claro (coincide con lo medido) y el nuevo texto sobre `muted` da ~8,8:1 en claro y ~8,8:1 en oscuro. Si el producto cambia los tokens `--foreground` o `--muted`
+    hay que recalcularlo. Los interruptores («Vendible», «Vence», «Producto activo») **no se tocaron** (no llevan texto: su rótulo no se atenúa).
+- Consecuencias:
+  - Los productos que no pasan `conEdicionDelProducto` no cambian; las instalaciones con `'u'` en el catálogo (o sin el endpoint) arrancan igual que antes.
+  - Un producto sin unidad en una instalación con catálogo vacío no puede guardarse hasta que se cree una unidad (el esquema pide una): es un dato incompleto que antes habría fallado con el 422 del motor.
+  - **Para el depósito de VentaLibra** el diálogo de códigos queda de sólo lectura sin tocar nada más que pasar `conEdicionDelProducto={false}` (ya lo pasa para el formulario).
+  - **Tests estructurales (jsdom no pinta ni mide):** el scroll al campo y el texto en línea se prueban por el DOM y `scrollIntoView` espiado; las clases de sólo lectura, por `className` (el stub del `Select`
+    no reenvía el `className` del disparador: unidad, tipo y estación no se comprueban). El contraste y que el campo entre en pantalla a 390 px hay que mirarlos con Chromium.
+  - **No verificado en navegador:** los tests usan el stub del `Select` (un `<select>` nativo, que muestra la primera opción aunque el formulario no tenga valor: por eso se comprueba lo que se **manda**) y el
+    `Dialog` stub; el placeholder «Elegir…» del `SelectValue` con la unidad vacía y la nota de sólo lectura hay que mirarlos con Chromium (capturas A11 y B05 como referencia).

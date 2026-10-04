@@ -3,8 +3,9 @@
 // (`libracommerce.web.catalogo_router`, v0.19.0).
 import { useEffect, useState } from 'react'
 
-import { api, ApiError } from '../api-client'
+import { api } from '../api-client'
 import { BadgeEstado } from '../badge-estado'
+import { describeErrorHttp } from './errores-http'
 import type { CodigoProducto, Producto, VarianteProducto } from './tipos'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,12 +21,11 @@ export const TIPOS_DE_CODIGO: Record<string, string> = {
   internal: 'Interno', barcode: 'Código de barras', sku: 'SKU', scale: 'Balanza', other: 'Otro',
 }
 
-function describeError(err: unknown): string {
-  if (err instanceof ApiError) return err.detail
-  return 'Error de conexión.'
-}
+const AYUDA_SOLO_LECTURA = 'Tu rol sólo puede ver los códigos y variantes de este producto.'
 
-export function ProductoCodigosVariantes({ producto, onClose }: { producto: Producto; onClose: () => void }) {
+/** `conEdicionDelProducto` (ADR-013, por defecto `true`): con `false` (el rol sólo repone, como el depósito de VentaLibra) la lista se ve pero no se ofrece nada que escriba
+ *  —agregar códigos ni variantes—, y una nota lo dice. El backend lo rechazaría con 403. */
+export function ProductoCodigosVariantes({ producto, onClose, conEdicionDelProducto = true }: { producto: Producto; onClose: () => void; conEdicionDelProducto?: boolean }) {
   const [codigos, setCodigos] = useState<CodigoProducto[]>([])
   const [variantes, setVariantes] = useState<VarianteProducto[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -47,7 +47,7 @@ export function ProductoCodigosVariantes({ producto, onClose }: { producto: Prod
       setCodigos(c)
       setVariantes(v)
     } catch (err) {
-      setError(describeError(err))
+      setError(describeErrorHttp(err))
     }
   }
 
@@ -65,7 +65,7 @@ export function ProductoCodigosVariantes({ producto, onClose }: { producto: Prod
       setCodigo('')
       await cargar()
     } catch (err) {
-      setError(describeError(err))
+      setError(describeErrorHttp(err))
     } finally {
       setGuardandoCodigo(false)
     }
@@ -81,7 +81,7 @@ export function ProductoCodigosVariantes({ producto, onClose }: { producto: Prod
       setNombre('')
       await cargar()
     } catch (err) {
-      setError(describeError(err))
+      setError(describeErrorHttp(err))
     } finally {
       setGuardandoVariante(false)
     }
@@ -94,6 +94,7 @@ export function ProductoCodigosVariantes({ producto, onClose }: { producto: Prod
           <DialogTitle>{producto.nombre}</DialogTitle>
         </DialogHeader>
         {error && <p className="text-sm text-destructive">{error}</p>}
+        {!conEdicionDelProducto && <p className="text-sm text-muted-foreground">{AYUDA_SOLO_LECTURA}</p>}
 
         <div className="grid gap-2">
           <h4 className="text-sm font-medium">Códigos</h4>
@@ -105,7 +106,7 @@ export function ProductoCodigosVariantes({ producto, onClose }: { producto: Prod
               </BadgeEstado>
             ))}
           </div>
-          <div className="flex items-end gap-2">
+          {conEdicionDelProducto && <div className="flex items-end gap-2">
             <div className="grid gap-2">
               <Label htmlFor="codigo-tipo">Tipo</Label>
               <Select value={tipo} onValueChange={(v) => v && setTipo(v)}>
@@ -122,7 +123,7 @@ export function ProductoCodigosVariantes({ producto, onClose }: { producto: Prod
               <Input id="codigo-valor" value={codigo} onChange={(e) => setCodigo(e.target.value)} />
             </div>
             <Button onClick={agregarCodigo} disabled={guardandoCodigo}>Agregar</Button>
-          </div>
+          </div>}
         </div>
 
         <div className="grid gap-2 border-t pt-4">
@@ -131,7 +132,7 @@ export function ProductoCodigosVariantes({ producto, onClose }: { producto: Prod
             {variantes.length === 0 && <p className="text-sm text-muted-foreground">Sin variantes todavía.</p>}
             {variantes.map((v) => <Badge key={v.id} variant="outline">{v.sku} — {v.nombre}</Badge>)}
           </div>
-          <div className="flex items-end gap-2">
+          {conEdicionDelProducto && <div className="flex items-end gap-2">
             <div className="grid gap-2">
               <Label htmlFor="variante-sku">SKU</Label>
               <Input id="variante-sku" value={sku} onChange={(e) => setSku(e.target.value)} className="w-32" />
@@ -141,7 +142,7 @@ export function ProductoCodigosVariantes({ producto, onClose }: { producto: Prod
               <Input id="variante-nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} />
             </div>
             <Button onClick={agregarVariante} disabled={guardandoVariante}>Agregar</Button>
-          </div>
+          </div>}
         </div>
       </DialogContent>
     </Dialog>

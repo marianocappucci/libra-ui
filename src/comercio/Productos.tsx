@@ -9,7 +9,8 @@
 // datalist de categorías, el borrado— era el mismo código.
 //
 // **Según el rol (0.111.0, ADR-013):** `conAlta={false}` quita «Nuevo producto» y `conEdicionDelProducto={false}` deja el producto de sólo lectura y editable sólo la reposición
-// (el depósito de VentaLibra). Un 401/403 se dice en castellano (`describeError`).
+// (el depósito de VentaLibra). Un 401/403 se dice en castellano (`describeErrorHttp`, de `errores-http.ts`, que comparte con el diálogo de códigos y variantes).
+// **La unidad del alta (0.112.0, ADR-014)** sale del catálogo de unidades de la instalación: `'u'` si existe, si no la primera; con el catálogo vacío o sin leer, ninguna (hay que elegir).
 //
 // ## Lo que cada producto decide
 //
@@ -34,6 +35,7 @@ import { BadgeEstado } from '../badge-estado'
 import { TituloPantalla } from '../titulo-pantalla'
 import { UNIDADES, type CategoriaProducto, type Estacion, type MinimosPorSucursal, type Producto, type Proveedor } from './tipos'
 import { ProductoCodigosVariantes } from './ProductoCodigosVariantes'
+import { describeErrorHttp } from './errores-http'
 import { formatEntero } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -62,7 +64,7 @@ const productoSchema = z.object({
   descripcion: z.string().trim().optional(),
   precio_venta: z.coerce.number().min(0, 'No puede ser negativo'),
   precio_costo: z.coerce.number().min(0, 'No puede ser negativo'),
-  unidad: z.string(),
+  unidad: z.string().min(1, 'Elegí una unidad.'),
   categoria: z.string().trim().optional(),
   stock_minimo: z.coerce.number().min(0, 'No puede ser negativo'),
   // Un servicio no tiene inventario: el backend lo excluye de Stock y nunca
@@ -80,9 +82,10 @@ const productoSchema = z.object({
 
 type Valores = z.infer<typeof productoSchema>
 
+// `unidad` va vacía: la unidad con la que arranca el alta la decide el catálogo de la instalación (`unidadPorDefecto`), no una constante.
 const EMPTY_VALUES: Valores = {
   nombre: '', codigo: '', descripcion: '', precio_venta: 0, precio_costo: 0,
-  unidad: 'u', categoria: '', stock_minimo: 0, tipo: 'producto', estacion: '', vendible: true, vence: false, activo: true,
+  unidad: '', categoria: '', stock_minimo: 0, tipo: 'producto', estacion: '', vendible: true, vence: false, activo: true,
 }
 
 // Radix Select no admite value="" (reservado): la estación vacía viaja como un
@@ -190,8 +193,11 @@ function leerMinimosPorSucursal(d: unknown, minimoDelProducto: number): { global
 
 /** El `id` del campo de mínimo de una sucursal: lo usan el `<Input>` y el error de validación (`aria-invalid` / `aria-describedby`). */
 const idDelMinimo = (sucursalId: number) => `repo-minimo-${sucursalId}`
-/** El `id` del mensaje de error del formulario del producto (el campo en falla lo señala con `aria-describedby`). */
+/** El `id` del `alert` con el error del formulario del producto (rol y foco; el campo en falla señala el mensaje en línea, `ID_ERROR_DEL_CAMPO`). */
 const ID_ERROR_FORM = 'producto-form-error'
+/** El mismo mensaje, en línea debajo del campo que lo causó: es lo que el campo señala con `aria-describedby`. El `alert` de arriba conserva el rol y el foco (lo anuncia el lector de
+ *  pantalla); éste es una referencia visual y de descripción (`aria-hidden`: una descripción referenciada se lee igual) para no leer el error dos veces. */
+const ID_ERROR_DEL_CAMPO = 'producto-form-error-campo'
 
 /** El tope del motor para un mínimo por sucursal (`erp.reposicion.MAX_STOCK_MINIMO`). */
 const MAX_MINIMO_SUCURSAL = 1_000_000_000
@@ -254,18 +260,9 @@ function leerParametrosReposicion(plazo: string, techo: string, minimo: number):
 
 const AYUDA_VENCE =
   'Marcalo si el producto es perecedero: vas a poder cargar lote y fecha al recibir compras y verlo en “Vencimientos y lotes”.'
-/** Los `detail` GENÉRICOS que el backend manda en un 401/403 (en minúsculas, sin puntuación final): `forbidden` (403) y `not authenticated` (401) son los de `libraauth`
- *  (`session_auth.py`) y los de FastAPI por defecto; el resto, los de uso común que una dependencia de seguridad puede soltar. **Lista explícita y cerrada**: cualquier otro
- *  texto (en castellano o no) lo dijo el backend a propósito y se muestra tal cual. «No permissions» no está: no es un genérico conocido de la familia. */
-const DETALLES_GENERICOS = new Set([
-  'forbidden', 'not authenticated', 'unauthorized', 'not enough permissions', 'could not validate credentials',
-  'operation not permitted', 'permission denied', 'access denied',
-])
-/** ¿Es un `detail` genérico (o vacío: un 401/403 sin cuerpo no dice nada)? Se compara normalizado: minúsculas, sin espacios de más y sin punto final. */
-const esDetalleGenerico = (texto: string) => {
-  const n = texto.toLowerCase().replace(/\s+/g, ' ').trim().replace(/[.!\s]+$/, '')
-  return n === '' || DETALLES_GENERICOS.has(n)
-}
+/** La unidad con la que arranca el alta: `'u'` si el catálogo la tiene (Contalibra y Restolibra, como siempre), si no la primera unidad REAL del catálogo (VentaLibra sólo tiene
+ *  las que se crean: `UN`, `KG`…). Catálogo vacío o todavía sin leer: `''`, no se inventa una (el 422 «unidad desconocida: 'u'» era mandar una que la instalación no tiene). */
+const unidadPorDefecto = (catalogo: readonly string[] | null) => (catalogo?.includes('u') ? 'u' : catalogo?.[0] ?? '')
 const AYUDA_SOLO_REPOSICION = 'Tu rol sólo puede cargar la reposición de este producto.'
 const ID_AYUDA_SOLO_REPOSICION = 'producto-solo-reposicion'
 const AYUDA_VENCE_SERVICIO = 'Un servicio no tiene inventario: no puede tener lotes ni vencimiento.'
@@ -291,9 +288,9 @@ export function Productos({
   const [error, setError] = useState<string | null>(null)
   const [q, setQ] = useState('')
   const [categorias, setCategorias] = useState<CategoriaProducto[]>([])
-  // Las unidades las dice el backend (`OpcionesCatalogo.unidades`; VentaLibra las administra en su base); la lista de
-  // siempre es el respaldo si no contesta.
-  const [unidades, setUnidades] = useState<string[]>([...UNIDADES])
+  // Las unidades las dice el backend (`OpcionesCatalogo.unidades`; VentaLibra las administra en su base). `null` = todavía sin leer (no se ofrece ninguna); una lista vacía es
+  // un catálogo vacío de verdad; si el backend NO contesta (no tiene el endpoint) queda la lista de siempre como respaldo.
+  const [unidades, setUnidades] = useState<string[] | null>(null)
   const [detalle, setDetalle] = useState<Producto | null>(null)
   const [stockTotal, setStockTotal] = useState<Record<number, number>>({})
   const [confirmDelete, setConfirmDelete] = useState<Producto | null>(null)
@@ -316,11 +313,18 @@ export function Productos({
   useEffect(() => {
     if (formFallo === null) return
     formErrorRef.current?.focus({ preventScroll: true })
-    formErrorRef.current?.scrollIntoView?.({ block: 'center' })
+    // Con un campo culpable se centra ÉL (y su mensaje en línea, pegado debajo): en un celular el alert de arriba y el campo de abajo no entran juntos, y centrar el alert dejaba el
+    // campo en el borde de la pantalla (medido a 390 px). Sin campo, el alert.
+    const campo = formFallo.campo === null ? null : document.getElementById(formFallo.campo)
+    ;(campo ?? formErrorRef.current)?.scrollIntoView?.({ block: 'center' })
   }, [formFallo])
   /** `aria-invalid` y `aria-describedby` del campo que causó el error del formulario. */
   const marcaDelCampo = (id: string) => (
-    formFallo?.campo === id ? { 'aria-invalid': true as const, 'aria-describedby': ID_ERROR_FORM } : {}
+    formFallo?.campo === id ? { 'aria-invalid': true as const, 'aria-describedby': ID_ERROR_DEL_CAMPO } : {}
+  )
+  /** El mensaje en línea, debajo del campo `id` si es el que causó el error. */
+  const errorEnLinea = (id: string) => (
+    formFallo?.campo === id ? <p id={ID_ERROR_DEL_CAMPO} aria-hidden="true" data-error-del-campo className="max-w-xs text-sm text-destructive">{formFallo.mensaje}</p> : null
   )
   // Opt-in por datos: una vez que algún producto trajo `vence` (aun uno que no vence: `false`) el backend lo maneja, y se
   // recuerda aunque una búsqueda posterior devuelva una lista vacía.
@@ -369,6 +373,17 @@ export function Productos({
     defaultValues: EMPTY_VALUES,
   })
 
+  // La unidad del formulario: sólo se ofrecen las del catálogo; la de un producto que se EDITA se conserva aunque el catálogo no la tenga (guardarlo no se la cambia).
+  const unidadDelFormulario = form.watch('unidad')
+  const opcionesDeUnidad = editingProducto !== null && unidadDelFormulario && !(unidades ?? []).includes(unidadDelFormulario)
+    ? [...(unidades ?? []), unidadDelFormulario] : (unidades ?? [])
+  // El catálogo puede llegar con el alta ya abierta: si todavía no hay unidad (nadie eligió), arranca con la del catálogo.
+  useEffect(() => {
+    if (unidades === null || !dialogOpen || editingProducto !== null || form.getValues('unidad') !== '') return
+    form.setValue('unidad', unidadPorDefecto(unidades))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unidades, dialogOpen, editingProducto])
+
   // Margen en vivo.
   const precioVenta = Number(form.watch('precio_venta')) || 0
   const precioCosto = Number(form.watch('precio_costo')) || 0
@@ -381,7 +396,7 @@ export function Productos({
   useEffect(() => {
     loadProductos()
     api.get<CategoriaProducto[]>('/api/productos/categorias').then(setCategorias).catch(() => {})
-    api.get<string[]>('/api/productos/unidades').then((u) => { if (Array.isArray(u) && u.length > 0) setUnidades(u) }).catch(() => {})
+    api.get<string[]>('/api/productos/unidades').then((u) => setUnidades(Array.isArray(u) ? u : [...UNIDADES])).catch(() => setUnidades([...UNIDADES]))
     if (conStockTotal) {
       api.get<{ productos: { id: number; stock_actual: number }[] }>('/api/stock')
         .then((d) => setStockTotal(Object.fromEntries((d?.productos ?? []).map((p) => [p.id, p.stock_actual]))))
@@ -421,19 +436,6 @@ export function Productos({
       })
   }, [conParametrosDeReposicion, conProveedorHabitual, productos, reintentoDelSondeo])
 
-  function describeError(err: unknown): string {
-    if (err instanceof ApiError) {
-      // El `detail` genérico de un 401/403 llega en inglés y pelado («forbidden», «not authenticated») y no dice qué hacer: se reemplaza (ver `DETALLES_GENERICOS`).
-      // Todo lo demás se conserva tal cual: un permiso puntual («No tenés permiso para marcar productos que vencen.»), el objeto con `mensaje` (los Términos
-      // pendientes, que distingue «faltan permisos» de «falta aceptar el contrato») y cualquier otro status.
-      const generico = (err.detailData === undefined || typeof err.detailData === 'string') && esDetalleGenerico(err.detail)
-      if (err.status === 403 && generico) return 'No tenés permiso para hacer esto.'
-      if (err.status === 401 && generico) return 'Tu sesión venció. Volvé a iniciar sesión.'
-      return err.detail
-    }
-    return 'Error de conexión.'
-  }
-
   async function loadProductos(query = q) {
     setLoading(true)
     setError(null)
@@ -443,7 +445,7 @@ export function Productos({
       if (lista.some((p) => typeof p.vence === 'boolean')) setBackendConVence(true)
       setProductos(lista)
     } catch (err) {
-      setError(describeError(err))
+      setError(describeErrorHttp(err))
     } finally {
       setLoading(false)
     }
@@ -457,7 +459,7 @@ export function Productos({
   function abrirNuevo() {
     volverA.current = null   // el alta vuelve al `DialogTrigger` (Radix)
     setEditingProducto(null)
-    form.reset(EMPTY_VALUES)
+    form.reset({ ...EMPTY_VALUES, unidad: unidadPorDefecto(unidades) })
     valoresIniciales.current = null
     costoOculto.current = false
     setFormFallo(null)
@@ -490,7 +492,7 @@ export function Productos({
       // Un rol sin `costos.ver` recibe el producto SIN `precio_costo` (VentaLibra, ADR-049): sin un número el formulario no valida y quien sólo
       // decide la reposición (el depósito) no podría guardar ni el plazo ni el techo. Se muestra 0 (nunca se guarda: ver `productoSinCambios`).
       precio_costo: producto.precio_costo ?? 0,
-      unidad: producto.unidad || 'u',
+      unidad: producto.unidad || unidadPorDefecto(unidades),
       categoria: producto.categoria ?? '',
       stock_minimo: producto.stock_minimo,
       tipo: producto.tipo || 'producto',
@@ -689,7 +691,7 @@ export function Productos({
       if (vigente()) setDialogOpen(false)
       await loadProductos()
     } catch (err) {
-      const detalle = describeError(err)
+      const detalle = describeErrorHttp(err)
       const falla = etapa === 'minimo'
         ? `no se pudo guardar el mínimo de «${sucursalEnCurso}»: ${detalle}`
         : `no se pudieron guardar el plazo y el stock máximo: ${detalle}`
@@ -714,7 +716,7 @@ export function Productos({
       await api.del(`/api/productos/${producto.id}`)
       await loadProductos()
     } catch (err) {
-      setError(describeError(err))
+      setError(describeErrorHttp(err))
     }
   }
 
@@ -852,6 +854,9 @@ export function Productos({
   // Edición de quien sólo puede cargar reposición: los campos del producto van de sólo lectura (el alta no cambia).
   const soloReposicion = !conEdicionDelProducto && editingProducto !== null
   const sinNadaQueGuardar = soloReposicion && !conParametrosDeReposicion
+  // Los campos de sólo lectura por rol (`soloReposicion`) se leen: el `disabled:opacity-50` del kit los dejaba en ~3,7:1; acá son opacidad completa con texto atenuado (`foreground/75`)
+  // sobre `bg-muted` (~8,8:1 con los colores por defecto de shadcn, en claro y en oscuro), y el fondo lleno y el cursor `not-allowed` del kit dicen que no se editan. Sólo para este caso.
+  const claseSoloLectura = soloReposicion ? ' disabled:opacity-100 disabled:bg-muted disabled:text-foreground/75 dark:disabled:bg-muted' : ''
 
   return (
     <div ref={raizRef} className="grid gap-4">
@@ -886,7 +891,7 @@ export function Productos({
                       <FormItem>
                         <FormLabel>Nombre</FormLabel>
                         <FormControl>
-                          <Input {...field} className="w-48" disabled={soloReposicion} />
+                          <Input {...field} className={`w-48${claseSoloLectura}`} disabled={soloReposicion} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -899,7 +904,7 @@ export function Productos({
                       <FormItem>
                         <FormLabel>Código</FormLabel>
                         <FormControl>
-                          <Input {...field} className="w-32" placeholder={codigoAutogenerado ? 'Autogenerado' : undefined} disabled={soloReposicion} />
+                          <Input {...field} className={`w-32${claseSoloLectura}`} placeholder={codigoAutogenerado ? 'Autogenerado' : undefined} disabled={soloReposicion} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -912,7 +917,7 @@ export function Productos({
                       <FormItem>
                         <FormLabel>Categoría</FormLabel>
                         <FormControl>
-                          <Input {...field} className="w-40" list="categorias-producto" placeholder="Elegir o escribir…" disabled={soloReposicion} />
+                          <Input {...field} className={`w-40${claseSoloLectura}`} list="categorias-producto" placeholder="Elegir o escribir…" disabled={soloReposicion} />
                         </FormControl>
                         <datalist id="categorias-producto">
                           {categorias.map((c) => <option key={c.id} value={c.nombre} />)}
@@ -929,12 +934,12 @@ export function Productos({
                         <FormLabel>Unidad</FormLabel>
                         <Select value={field.value} onValueChange={field.onChange} disabled={soloReposicion}>
                           <FormControl>
-                            <SelectTrigger className="w-28">
-                              <SelectValue />
+                            <SelectTrigger className={`w-28${claseSoloLectura}`}>
+                              <SelectValue placeholder="Elegir…" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {(unidades.includes(form.watch('unidad')) ? unidades : [...unidades, form.watch('unidad')]).map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                            {opcionesDeUnidad.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
                           </SelectContent>
                         </Select>
                         <FormMessage />
@@ -950,7 +955,7 @@ export function Productos({
                           <FormLabel>Tipo</FormLabel>
                           <Select value={field.value} onValueChange={field.onChange} disabled={soloReposicion}>
                             <FormControl>
-                              <SelectTrigger className="w-32">
+                              <SelectTrigger className={`w-32${claseSoloLectura}`}>
                                 <SelectValue />
                               </SelectTrigger>
                             </FormControl>
@@ -977,7 +982,7 @@ export function Productos({
                             disabled={soloReposicion}
                           >
                             <FormControl>
-                              <SelectTrigger className="w-40">
+                              <SelectTrigger className={`w-40${claseSoloLectura}`}>
                                 <SelectValue />
                               </SelectTrigger>
                             </FormControl>
@@ -999,7 +1004,7 @@ export function Productos({
                       <FormItem>
                         <FormLabel>Precio de venta</FormLabel>
                         <FormControl>
-                          <Input type="number" step="0.01" {...field} value={field.value as number} className="w-32" disabled={soloReposicion} />
+                          <Input type="number" step="0.01" {...field} value={field.value as number} className={`w-32${claseSoloLectura}`} disabled={soloReposicion} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1013,7 +1018,7 @@ export function Productos({
                         <FormItem>
                           <FormLabel>Precio de costo</FormLabel>
                           <FormControl>
-                            <Input type="number" step="0.01" {...field} value={field.value as number} className="w-32" disabled={soloReposicion} />
+                            <Input type="number" step="0.01" {...field} value={field.value as number} className={`w-32${claseSoloLectura}`} disabled={soloReposicion} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -1027,7 +1032,7 @@ export function Productos({
                       <FormItem>
                         <FormLabel>Stock mínimo</FormLabel>
                         <FormControl>
-                          <Input type="number" step="0.01" {...field} value={field.value as number} className="w-28" disabled={soloReposicion} />
+                          <Input type="number" step="0.01" {...field} value={field.value as number} className={`w-28${claseSoloLectura}`} disabled={soloReposicion} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1046,11 +1051,13 @@ export function Productos({
                             <Label htmlFor="repo-plazo">Plazo de entrega (días)</Label>
                             <Input id="repo-plazo" inputMode="numeric" placeholder="general" className="w-32" value={repoPlazo} {...marcaDelCampo('repo-plazo')}
                               disabled={repoEstado === 'cargando' || saving} onChange={(e) => setRepoPlazo(e.target.value)} />
+                            {errorEnLinea('repo-plazo')}
                           </div>
                           <div className="grid gap-2">
                             <Label htmlFor="repo-techo">Stock máximo</Label>
                             <Input id="repo-techo" inputMode="decimal" placeholder="sin tope" className="w-32" value={repoTecho} {...marcaDelCampo('repo-techo')}
                               disabled={repoEstado === 'cargando' || saving} onChange={(e) => setRepoTecho(e.target.value)} />
+                            {errorEnLinea('repo-techo')}
                           </div>
                           {proveedorDisponible && (
                             <div className="grid gap-2">
@@ -1091,6 +1098,7 @@ export function Productos({
                                 <Input id={idDelMinimo(f.sucursal_id)} {...marcaDelCampo(idDelMinimo(f.sucursal_id))} inputMode="decimal" placeholder={`global: ${minimoGlobalVisible}`} className="w-32"
                                   value={f.texto} disabled={saving}
                                   onChange={(e) => setMinimos((prev) => prev.map((x) => (x.sucursal_id === f.sucursal_id ? { ...x, texto: e.target.value } : x)))} />
+                                {errorEnLinea(idDelMinimo(f.sucursal_id))}
                               </div>
                             ))}
                           </div>
@@ -1108,7 +1116,7 @@ export function Productos({
                       <FormItem className="w-full">
                         <FormLabel>Descripción</FormLabel>
                         <FormControl>
-                          <Input {...field} disabled={soloReposicion} />
+                          <Input {...field} className={claseSoloLectura.trim()} disabled={soloReposicion} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1227,7 +1235,7 @@ export function Productos({
         </CardContent>
       </Card>
 
-      {detalle && <ProductoCodigosVariantes producto={detalle} onClose={() => setDetalle(null)} />}
+      {detalle && <ProductoCodigosVariantes producto={detalle} conEdicionDelProducto={conEdicionDelProducto} onClose={() => setDetalle(null)} />}
 
       <ConfirmDialog
         open={!!confirmDelete}
