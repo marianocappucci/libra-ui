@@ -123,6 +123,18 @@ describe('Reposición: lo que muestra', () => {
     expect(fila('Yerba').querySelector('svg[aria-hidden="true"]')).toBeTruthy()
   })
 
+  it('el select de sucursal lleva de título el nombre completo de la elegida (el valor se corta con line-clamp), y «Toda la instancia» no lleva', async () => {
+    const user = userEvent.setup()
+    const LARGO = 'Sucursal Centro Comercial Paseo del Bosque Local 214'
+    const sucursales = [...SUCURSALES, { ...SUCURSALES[0], id: 3, nombre: LARGO, es_default: 0 }]
+    await abrir({ ...TODO, '/api/sucursales': sucursales })
+    const select = await screen.findByLabelText('Sucursal')
+    expect(select.getAttribute('title')).toBeNull()
+    responder({ ...TODO, '/api/sucursales': sucursales, [RUTA]: { ...DATA, sucursal_id: 3 } })
+    await user.selectOptions(select, '3')
+    await waitFor(() => expect(screen.getByLabelText('Sucursal').getAttribute('title')).toBe(LARGO))
+  })
+
   it('lo en camino sin sucursal se avisa sólo con una sucursal elegida, donde se está contando', async () => {
     const user = userEvent.setup()
     await abrir()

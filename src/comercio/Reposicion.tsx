@@ -159,6 +159,11 @@ export type ReposicionProps = {
   rutaDeOrden?: (id: number) => string
 }
 
+/** El nombre completo de la opción elegida, para el `title` del select: el valor se corta con `line-clamp-1` y un nombre largo de sucursal, categoría o proveedor no se leía entero sin abrir la lista. «Todas…» (el valor `TODAS`) no lleva título. */
+function tituloDe(valor: string, opciones: [string, string][]): string | undefined {
+  return opciones.find(([v]) => v === valor)?.[1]
+}
+
 export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: ReposicionProps = {}) {
   const [valores, setValores] = useState<Record<ClaveParametro, string>>(
     () => Object.fromEntries(PARAMETROS.map((p) => [p.clave, p.defecto])) as Record<ClaveParametro, string>,
@@ -282,10 +287,10 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
 
       <div className="flex flex-wrap items-start gap-3">
         {sucursales.length > 0 && (
-          <div className="grid gap-2">
+          <div className="grid w-full gap-2 sm:w-auto">
             <Label htmlFor="reposicion-sucursal">Sucursal</Label>
             <Select value={sucursal} onValueChange={setSucursal}>
-              <SelectTrigger id="reposicion-sucursal" className="w-56"><SelectValue /></SelectTrigger>
+              <SelectTrigger id="reposicion-sucursal" className="w-full sm:w-64" title={tituloDe(sucursal, sucursales.map((x) => [String(x.id), x.nombre]))}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value={TODAS}>Toda la instancia</SelectItem>
                 {sucursales.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.nombre}</SelectItem>)}
@@ -294,10 +299,10 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
           </div>
         )}
         {categorias.length > 0 && (
-          <div className="grid gap-2">
+          <div className="grid w-full gap-2 sm:w-auto">
             <Label htmlFor="reposicion-categoria">Categoría</Label>
             <Select value={categoria} onValueChange={setCategoria}>
-              <SelectTrigger id="reposicion-categoria" className="w-56"><SelectValue /></SelectTrigger>
+              <SelectTrigger id="reposicion-categoria" className="w-full sm:w-64" title={tituloDe(categoria, categorias.map((x) => [x.nombre, x.nombre]))}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value={TODAS}>Todas las categorías</SelectItem>
                 {categorias.map((c) => <SelectItem key={c.id} value={c.nombre}>{c.nombre}</SelectItem>)}
@@ -306,10 +311,10 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
           </div>
         )}
         {conProveedor && proveedores.length > 0 && (
-          <div className="grid gap-2">
+          <div className="grid w-full gap-2 sm:w-auto">
             <Label htmlFor="reposicion-proveedor">Proveedor</Label>
             <Select value={proveedor} onValueChange={setProveedor}>
-              <SelectTrigger id="reposicion-proveedor" className="w-56"><SelectValue /></SelectTrigger>
+              <SelectTrigger id="reposicion-proveedor" className="w-full sm:w-64" title={tituloDe(proveedor, proveedores.map((x) => [String(x.id), x.nombre]))}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value={TODAS}>Todos los proveedores</SelectItem>
                 {proveedores.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.nombre}</SelectItem>)}
