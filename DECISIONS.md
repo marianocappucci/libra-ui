@@ -347,3 +347,12 @@ wiki (entidad `libra-ui` y `concepts/estandares-desarrollo`).
     no reenvía el `className` del disparador: unidad, tipo y estación no se comprueban). El contraste y que el campo entre en pantalla a 390 px hay que mirarlos con Chromium.
   - **No verificado en navegador:** los tests usan el stub del `Select` (un `<select>` nativo, que muestra la primera opción aunque el formulario no tenga valor: por eso se comprueba lo que se **manda**) y el
     `Dialog` stub; el placeholder «Elegir…» del `SelectValue` con la unidad vacía y la nota de sólo lectura hay que mirarlos con Chromium (capturas A11 y B05 como referencia).
+
+## ADR-015 — `VentaDetalle` avisa cuando la factura tiene CAE y ofrece la nota de crédito (0.113.0)
+
+**Contexto:** desde `libracommerce` v0.41.0 (ADR-032) anular una venta cuya factura tiene CAE de ARCA contesta `409` hasta que se emite la nota de crédito del motor (`libracore` v1.129.0). Sin pantalla, la persona se encontraba con un error y ningún camino.
+
+- Decisión 1 — `Venta` suma `factura_cae` (lo trae `obtener_venta`). Con CAE y la venta cobrada, el detalle muestra un **aviso** (`role="note"`): la factura la emitió ARCA y hace falta la nota antes de anular.
+- Decisión 2 — nuevo botón **«Emitir nota de crédito»**, con confirmación, que pide `POST /api/facturas/{id}/nota-credito` (la ruta es la misma en todos los productos; `rutaDeNotaDeCredito` la cambia). Sólo se ofrece con la prop **`puedeEmitirNota`** (los productos pasan el rol admin); sin ella el aviso manda a pedírsela a un administrador. Sin cuerpo: el motor decide todo (total, fecha de hoy, asociada a la factura).
+- Decisión 3 — **no anula sola**: después de la nota el aviso dice «ya podés anular la venta» y el botón «Anular venta» de siempre funciona. El `409` del servidor sigue siendo la guarda real.
+- Sin `factura_cae` (sin factura, o factura sin CAE) no cambia nada. **No verificado en navegador**: los tests usan jsdom.

@@ -260,6 +260,9 @@ export type Venta = {
   pagos: VentaPago[]
   factura_id: number | null
   factura_display: string | null
+  /** El CAE de la factura vinculada, si ARCA la autorizó (`null` si no hay factura o no tiene CAE). Con CAE la factura
+   *  la tiene ARCA: la venta no se anula hasta que se emita la nota de crédito (libracommerce v0.41.0). */
+  factura_cae?: string | null
   remito_id: number | null
   /** Las promociones que se aplicaron a la venta (`sale_promotions`). Sólo las trae un producto que las
    *  monta (VentaLibra); su ahorro ya está dentro de `descuento`. */

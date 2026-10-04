@@ -539,6 +539,61 @@ describe('VentaDetalle', () => {
     expect(await screen.findByText('Anulada')).toBeTruthy()
   })
 
+  // 🔴 Con CAE la factura la tiene ARCA: anular no la deshace. Se emite la nota de crédito (libracore v1.129.0) y
+  // después se anula (libracommerce v0.41.0 contesta 409 si falta la nota).
+  describe('factura con CAE: nota de crédito', () => {
+    const CON_CAE: Venta = { ...FACTURADA, id: 21, numero: 'V-00021', remito_id: null, factura_cae: '75123456789012' }
+
+    it('avisa que la factura la tiene ARCA y que hace falta la nota antes de anular', async () => {
+      responder({ ...BASE, '/api/ventas/21': CON_CAE })
+      montarDetalle(21, { puedeAnular: true, puedeEmitirNota: true })
+      const aviso = await screen.findByRole('note')
+      expect(aviso.textContent).toMatch(/75123456789012/)
+      expect(aviso.textContent).toMatch(/nota de crédito/)
+      expect(screen.getByRole('button', { name: /Emitir nota de crédito/ })).toBeTruthy()
+    })
+
+    it('emite la nota por la ruta del motor, confirma antes, no manda nada más y dice que ya se puede anular', async () => {
+      responder({ ...BASE, '/api/ventas/21': CON_CAE, 'POST /api/facturas/55/nota-credito': {} })
+      const user = userEvent.setup()
+      montarDetalle(21, { puedeAnular: true, puedeEmitirNota: true })
+      await user.click(await screen.findByRole('button', { name: /Emitir nota de crédito/ }))
+      await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Cancelar' }))
+      expect(pedidas().filter((p) => p.includes('nota-credito'))).toHaveLength(0)
+      await user.click(screen.getByRole('button', { name: /Emitir nota de crédito/ }))
+      await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Emitir nota' }))
+      expect((await screen.findByRole('note')).textContent).toMatch(/ya podés anular la venta/)
+      expect(pedidas().filter((p) => p === 'POST /api/facturas/55/nota-credito')).toHaveLength(1)
+      expect(screen.queryByRole('button', { name: /Emitir nota de crédito/ })).toBeNull()
+      // La venta NO se anula sola.
+      expect(pedidas().filter((p) => p.includes('anular'))).toHaveLength(0)
+    })
+
+    it('sin permiso no ofrece el botón y manda a pedírsela a un administrador', async () => {
+      responder({ ...BASE, '/api/ventas/21': CON_CAE })
+      montarDetalle(21, { puedeAnular: true })
+      expect((await screen.findByRole('note')).textContent).toMatch(/administrador/)
+      expect(screen.queryByRole('button', { name: /Emitir nota de crédito/ })).toBeNull()
+    })
+
+    it('el error de la nota se muestra y la ruta es del producto si la cambia', async () => {
+      responder({ ...BASE, '/api/ventas/21': CON_CAE, 'POST /api/facturas/55/nota-credito': { status: 409, detail: 'Esta factura ya tiene la Nota de Crédito C 0001-00000003' } })
+      const user = userEvent.setup()
+      montarDetalle(21, { puedeEmitirNota: true })
+      await user.click(await screen.findByRole('button', { name: /Emitir nota de crédito/ }))
+      await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Emitir nota' }))
+      expect(await screen.findByText(/ya tiene la Nota de Crédito/)).toBeTruthy()
+    })
+
+    it('una factura sin CAE o una venta sin factura no cambian: sin aviso ni botón', async () => {
+      responder({ ...BASE, '/api/ventas/9': FACTURADA })
+      montarDetalle(9, { puedeAnular: true, puedeEmitirNota: true })
+      await screen.findByText(/Venta V-00009/)
+      expect(screen.queryByRole('note')).toBeNull()
+      expect(screen.queryByRole('button', { name: /Emitir nota de crédito/ })).toBeNull()
+    })
+  })
+
   it('los errores de facturar, anular y cargar se muestran', async () => {
     responder({
       ...BASE, '/api/ventas/7': VENTA,
