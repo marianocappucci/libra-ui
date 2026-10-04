@@ -93,7 +93,7 @@ export function ProductoCodigosVariantes({ producto, onClose, conEdicionDelProdu
         <DialogHeader>
           <DialogTitle>{producto.nombre}</DialogTitle>
         </DialogHeader>
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         {!conEdicionDelProducto && <p className="text-sm text-muted-foreground">{AYUDA_SOLO_LECTURA}</p>}
 
         <div className="grid gap-2">
@@ -110,7 +110,7 @@ export function ProductoCodigosVariantes({ producto, onClose, conEdicionDelProdu
             <div className="grid gap-2">
               <Label htmlFor="codigo-tipo">Tipo</Label>
               <Select value={tipo} onValueChange={(v) => v && setTipo(v)}>
-                <SelectTrigger id="codigo-tipo" className="w-40"><SelectValue /></SelectTrigger>
+                <SelectTrigger id="codigo-tipo" className="w-48"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {Object.entries(TIPOS_DE_CODIGO).map(([valor, rotulo]) => (
                     <SelectItem key={valor} value={valor}>{rotulo}</SelectItem>

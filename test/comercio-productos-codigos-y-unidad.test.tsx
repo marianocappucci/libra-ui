@@ -56,6 +56,11 @@ describe('Gestionar códigos y variantes: errores en castellano', () => {
     expect(await within(dialogo()).findByText('No tenés permiso para cargar códigos de balanza.')).toBeTruthy()
   })
 
+  it('el error se anuncia como alerta para el lector de pantalla', async () => {
+    await abrirYAgregar({ status: 409, detail: 'el código ya existe' })
+    expect((await within(dialogo()).findByRole('alert')).textContent).toBe('el código ya existe')
+  })
+
   it('un 409 con su detail propio no se toca', async () => {
     await abrirYAgregar({ status: 409, detail: 'el código ya existe' })
     expect(await within(dialogo()).findByText('el código ya existe')).toBeTruthy()
