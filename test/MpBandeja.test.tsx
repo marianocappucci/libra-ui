@@ -249,7 +249,7 @@ describe('la bandeja compartida', () => {
       expect(cuerpo.cuit_dni).toBe('30712345678')
       expect(cuerpo.address).toBe('Av. Siempreviva 742')
     })
-  })
+  }, 20_000)   // tipea ~60 teclas con userEvent: bajo carga (la suite completa en un runner lento) los 5 s por defecto no alcanzan
 
   it('cargar el email de un emisor anónimo lo guarda en ESE movimiento', async () => {
     // Una transferencia bancaria llega sin email: sin cargarlo no hay a quién
