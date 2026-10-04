@@ -256,7 +256,8 @@ export type Venta = {
   cliente_id: number | null
   cliente_nombre: string
   observaciones: string
-  estado: 'pendiente' | 'parcial' | 'cobrada' | 'anulada'
+  /** El `status_detail` del motor: los cuatro de cobranza y los que deja una devolución o un borrador migrado (ver `ESTADO_VENTA_LABEL`). */
+  estado: 'pendiente' | 'parcial' | 'cobrada' | 'anulada' | 'devuelta' | 'devuelta_parcial' | 'borrador_descartado'
   pagos: VentaPago[]
   factura_id: number | null
   factura_display: string | null
@@ -357,14 +358,19 @@ export function formatoMoneda(valor: number): string {
 
 export const ESTADO_VENTA_TONO: Record<string, TonoEstado> = {
   cobrada: 'ok', parcial: 'atencion', pendiente: 'neutro', anulada: 'negativo',
+  devuelta: 'atencion', devuelta_parcial: 'atencion', borrador_descartado: 'neutro',
 }
 
+// `estado` es el `status_detail` de la venta tal cual lo guarda el motor, así que llegan también `devuelta`, `devuelta_parcial` y `borrador_descartado` (el de las
+// ventas migradas que eran borradores): sin etiqueta salían con el nombre técnico, muy largo para la columna. Las etiquetas son cortas a propósito.
 const ESTADO_VENTA_LABEL: Record<string, string> = {
   cobrada: 'Cobrada', parcial: 'Pago parcial', pendiente: 'Pendiente', anulada: 'Anulada',
+  devuelta: 'Devuelta', devuelta_parcial: 'Dev. parcial', borrador_descartado: 'Descartada',
 }
 
 export function etiquetaDeEstadoDeVenta(estado: string): string {
-  return ESTADO_VENTA_LABEL[estado] ?? estado
+  // Un estado que el kit no conoce no se muestra con guiones bajos (`algo_raro` -> `algo raro`).
+  return ESTADO_VENTA_LABEL[estado] ?? estado.replace(/_/g, ' ')
 }
 
 // ── P9-M4 (2026-09-07): lo financiero y transversal ──────────────────────
