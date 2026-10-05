@@ -66,6 +66,7 @@ export function CuentaCorrienteDetalle({ esAdmin = false, conRecibos = false }: 
   const [cajaId, setCajaId] = useState('')
   const [referencia, setReferencia] = useState('')
   const [pagando, setPagando] = useState(false)
+  const [confirmaSuelto, setConfirmaSuelto] = useState(false)
   const [confirmDeletePago, setConfirmDeletePago] = useState<number | null>(null)
 
   useEffect(() => {
@@ -122,6 +123,15 @@ export function CuentaCorrienteDetalle({ esAdmin = false, conRecibos = false }: 
     setCajaId(caja ? String(caja.id) : '')
     setMedioPago(caja?.medios_pago[0] ?? 'efectivo')
     setPagoOpen(true)
+  }
+
+  // Con facturas pendientes y ninguna tildada el pago baja el saldo pero no marca
+  // nada como cobrado: el caso de Visco y de Suipacha. Se pide confirmación en
+  // vez de dejarlo pasar con sólo un aviso en pantalla.
+  function pedirPago() {
+    if (!monto) return
+    if (pendientes.length > 0 && facturasSel.length === 0) setConfirmaSuelto(true)
+    else pagar()
   }
 
   async function pagar() {
@@ -349,7 +359,7 @@ export function CuentaCorrienteDetalle({ esAdmin = false, conRecibos = false }: 
                 </div>
                 <DialogFooter>
                   <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
-                  <Button disabled={pagando || !monto} onClick={pagar}><CircleDollarSign />{pagando ? 'Guardando…' : 'Registrar pago'}</Button>
+                  <Button disabled={pagando || !monto} onClick={pedirPago}><CircleDollarSign />{pagando ? 'Guardando…' : 'Registrar pago'}</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -379,6 +389,15 @@ export function CuentaCorrienteDetalle({ esAdmin = false, conRecibos = false }: 
           </Card>
         </>
       )}
+
+      <ConfirmDialog
+        open={confirmaSuelto}
+        onOpenChange={setConfirmaSuelto}
+        title="¿Registrar el pago sin cancelar ninguna factura?"
+        description="El saldo va a bajar, pero ninguna factura va a figurar como cobrada: seguirán «Sin cobrar». Volvé y tildá las que paga, o confirmá si es un adelanto."
+        confirmLabel="Registrar igual"
+        onConfirm={() => { setConfirmaSuelto(false); pagar() }}
+      />
 
       <ConfirmDialog
         open={confirmDeletePago !== null}
