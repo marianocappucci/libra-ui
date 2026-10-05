@@ -200,9 +200,11 @@ describe('Vencimientos: lo que muestra', () => {
     await abrir()
     const nota = screen.getAllByRole('note')[0]
     expect(texto(nota)).toBe(
-      'Hasta que las ventas descuenten por lote, el saldo de cada lote puede ser MAYOR al real: las ventas, devoluciones y ajustes ' +
-      'siguen restando del stock “sin lote”. Contrastá con el conteo físico antes de decidir.')
+      'Las ventas, devoluciones y transferencias anteriores al descuento por lote, y los ajustes de stock, restaron del stock “sin lote”: ' +
+      'el saldo de cada lote puede ser MAYOR al real. Contrastá con el conteo físico antes de decidir.')
     expect(within(nota).queryByRole('button')).toBeNull()
+    // Ya no promete un «hasta que»: desde A-4 las ventas descuentan por lote.
+    expect(texto(nota)).not.toContain('Hasta que')
     // Arriba de la tabla.
     expect(nota.compareDocumentPosition(tablaDeLotes()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
