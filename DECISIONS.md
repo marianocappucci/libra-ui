@@ -480,3 +480,20 @@ Medido en Chromium contra VentaLibra dev: «POS-000010» en monoespaciada mide 8
 **Decisión.** `CeldaEstable`: un componente con identidad fija que **llama a la función directo** con el contexto. Los hooks que use una celda quedan en esa instancia, igual que antes quedaban en su componente. Los componentes de verdad (clase, `memo`, `forwardRef`) siguen por `flexRender`, que ya les da identidad propia. Vale para celdas y encabezados.
 
 **Probado** con tres tests que dan rojo sin el cambio: un re-render del padre no cambia el nodo de la casilla ni del encabezado; tildar con espacio, re-renderizar y volver a tildar conserva el foco; un clic partido por un re-render tilda igual. 1529 tests; lint con los mismos 41 warnings que antes. **No medido en Chromium** (lo fija el DOM de los tests).
+
+## ADR-026 — `AvisoFce`: ¿a esta factura le corresponde ser FCE? (0.117.0)
+
+**Estado:** aceptada (2026-10-05). **Contexto:** ARCA no frena una factura común a un receptor obligado a recibir FCE (ni
+una FCE a uno que no lo está; medido el 2026-10-05), y una factura emitida no se cambia. El motor ya sabe preguntarlo al
+registro de FCE (`GET /api/facturas/fce/corresponde`, libracore ADR-019, decisión 2); faltaba que el formulario lo
+pregunte **antes de emitir**.
+
+- Decisión 1 — **un componente, no un formulario**: el formulario de emisión vive en cada producto (Contalibra y
+  Restolibra tienen el suyo, LibraClub otro), así que el kit da `<AvisoFce cuit total tipo fecha />` y cada producto lo
+  pone con una línea. La regla es del motor; acá sólo se muestra.
+- Decisión 2 — **pregunta con un respiro** (500 ms después del último cambio de CUIT o total) y sólo con un CUIT de 11
+  dígitos y un total > 0. Una respuesta vieja no pisa a una nueva.
+- Decisión 3 — **avisa, no frena**: corresponde y el tipo elegido no es FCE → `alert` con el monto desde el que es
+  obligatoria (y «cargá el CBU y la modalidad» si el emisor todavía no puede emitirla); eligió FCE y no corresponde →
+  una `note`, porque ARCA la autoriza igual. Si el registro no contesta (o la consulta falla), **no se muestra nada**.
+
