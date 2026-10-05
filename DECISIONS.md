@@ -417,3 +417,16 @@ Medidos en Chromium (VentaLibra con libra-ui 0.114.1, 110 productos, 1 a 6 depó
 - **Sin el saldo** (un motor anterior) todo sigue como en la fase anterior: nota total, sin elección de importe.
 - No verificado en navegador (jsdom).
 
+
+## ADR-020 — La lista de Ventas sin scroll horizontal: tabla cuando entra, tarjetas cuando no (0.116.0)
+
+**Contexto:** la verificación de 0.114.1 dejó anotado (ADR-018, «sin tocar» (b)) que la tabla de la lista de Ventas (962 px con los tres botones de VentaLibra) scrollea dentro de su contenedor en móvil y tableta. El pedido del humano para Stock vale para toda pantalla: «no tiene que haber scroll horizontal».
+
+**Decisión.** El mismo híbrido que Stock (ADR-016): `useAncho` (que pasa a `src/use-ancho.ts`, compartido) mide el contenedor de la tabla y, si es más angosto que la suma de los `size` de las columnas, la lista pasa a **tarjetas** (`TarjetaDeVenta`: el número como link al detalle, fecha y cliente, estado, total, medios de pago, factura y los mismos botones que la tabla). Sin medida (jsdom), la tabla. Además:
+1. **La columna de acciones reserva sólo los botones que el producto puede mostrar** (`2 + recibo + anular`): reservaba 4 y VentaLibra muestra 3 (`rutaDeRecibo={null}`), así que el umbral quedaba en 1002 px con una tabla de 962 (medido) y pasaba a tarjetas 40 px antes de tiempo.
+2. **Las pestañas Todas / Sin facturar / Facturadas hacen `wrap`** (`h-auto max-w-full flex-wrap`): a 320 px sumaban 324 px y ensanchaban la página 20 px (medido; con la franja oculta el desborde era 0).
+3. Las celdas de medios de pago y factura se comparten entre tabla y tarjeta (`mediosDe`, `facturaDe`, `acciones`); el badge de cada medio topa en el ancho (`max-w-full` + `truncate`). Sin cliente, la tarjeta muestra sólo la fecha (la tabla, «—»).
+
+**Medido en Chromium** (VentaLibra `71b93d3` con el kit local, 23 ventas con cliente de 113 caracteres, 1 a 4 medios, facturas, anuladas, `devuelta*` y `borrador_descartado`; 320 a 1920 px, menú abierto y colapsado, claro y oscuro): modo coherente con el umbral en 36 de 36 combinaciones (cambio exacto en el umbral, sin parpadeo), 0 desbordes dentro de 23 de 23 tarjetas y todos sus datos visibles, 0 px de desborde de página salvo el de las pestañas a 320. **Re-medido con los tres arreglos:** 0 px de desborde en los 10 anchos (las pestañas a 320 van en dos líneas de 66 px), umbral en 962 exacto (contenedor 961 tarjetas, 962 tabla sin scroll interno), modo coherente en 18 de 18. Stock con `useAncho` movido: sin cambios (tarjetas a 390, tabla a 1440).
+
+**Límites.** (1) En la tabla el total de 7 dígitos se recorta sin elipsis («$ 3.703.701,0», 23 px; previo, la columna mide 100). (2) Los botones de acción siguen en 36×36 (`size-9`, cumple 2.5.8 AA, no los 44 px). (3) Una factura de nombre muy largo (FCE MiPyME A) se trunca con elipsis en la tarjeta a ≤ 412 px, con el `title` completo. (4) En tarjetas no hay orden por columna (la lista llega ordenada del servidor).

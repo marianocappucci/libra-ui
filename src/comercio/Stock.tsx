@@ -20,7 +20,7 @@
 // El formulario de ajuste toma la forma de Contalibra (estado simple, sin
 // react-hook-form) con las validaciones que Restolibra tenía en su schema:
 // cantidad mayor a cero en los modos relativos, factor mayor a cero.
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import type { ColumnDef } from '../data-table'
 import {
@@ -33,6 +33,7 @@ import { anchoColumnaAcciones, DataTable, sortableHeader } from '../data-table'
 import { BadgeEstado, type TonoEstado } from '../badge-estado'
 import { TituloPantalla } from '../titulo-pantalla'
 import { SelectBuscable } from '../SelectBuscable'
+import { useAncho } from '../use-ancho'
 // Alias: `fecha` ya es el estado del campo de fecha del ajuste de stock.
 import { fecha as formatearFecha } from '@/lib/fechas'
 import { hoyISO } from '../fechas'
@@ -95,22 +96,6 @@ export type StockProps = {
   /** Un buscador por nombre y un «sólo los que tienen stock» sobre la lista: con muchos productos y varios
    *  depósitos la pregunta es «¿de dónde saco esto?». Sin esto, la lista es la de siempre. */
   conFiltros?: boolean
-}
-
-/** El ancho (px) de un elemento, siguiéndolo con un `ResizeObserver`. 0 mientras no se mide (sin `ResizeObserver`, como en jsdom): quien lo usa lo trata como «no sé» y deja la tabla. */
-function useAncho(): [(el: HTMLElement | null) => void, number] {
-  const [ancho, setAncho] = useState(0)
-  const observador = useRef<ResizeObserver | null>(null)
-  const ref = useCallback((el: HTMLElement | null) => {
-    observador.current?.disconnect()
-    observador.current = null
-    if (!el) return
-    setAncho(el.clientWidth)
-    if (typeof ResizeObserver === 'undefined') return
-    observador.current = new ResizeObserver((entradas) => setAncho(Math.round(entradas[0].contentRect.width)))
-    observador.current.observe(el)
-  }, [])
-  return [ref, ancho]
 }
 
 /** Bajo este ancho el historial de movimientos pasa de tabla a lista (con las columnas que hacen wrap la tabla entra desde ahí). */

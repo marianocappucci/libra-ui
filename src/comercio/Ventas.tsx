@@ -12,7 +12,7 @@
 //   Quedan las dos entradas al detalle y la abreviatura con el importe.
 // - `user.role === 'admin'` para anular pasa a ser la prop `puedeAnular`: el
 //   kit no sabe de sesiones.
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import type { ColumnDef } from '../data-table'
 import {
@@ -24,6 +24,7 @@ import { anchoColumnaAcciones, DataTable, sortableHeader } from '../data-table'
 import { BadgeEstado } from '../badge-estado'
 import { TituloPantalla } from '../titulo-pantalla'
 import { SelectBuscable } from '../SelectBuscable'
+import { useAncho } from '../use-ancho'
 import { IVA_CONDITIONS } from '../facturas'
 import { fecha } from '@/lib/fechas'
 import { hoyISO } from '../fechas'
@@ -47,6 +48,27 @@ import {
 import {
   Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog'
+
+/** Una venta como tarjeta: lo que la tabla reparte en columnas, apilado, para cuando la tabla no entra en el ancho que hay (nunca se scrollea de costado, ADR-020). */
+function TarjetaDeVenta({ venta, medios, factura, rutaDeDetalle, acciones }: {
+  venta: Venta; medios: ReactNode; factura: ReactNode; rutaDeDetalle: (id: number) => string; acciones: ReactNode
+}) {
+  return (
+    <li className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 rounded-md border p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <Link to={rutaDeDetalle(venta.id)} className="font-mono text-sm font-semibold text-primary hover:underline [overflow-wrap:anywhere]">{venta.numero}</Link>
+          <p className="text-xs text-muted-foreground [overflow-wrap:anywhere]">{[fecha(venta.fecha), venta.cliente_nombre].filter(Boolean).join(' · ')}</p>
+        </div>
+        <BadgeEstado tono={ESTADO_VENTA_TONO[venta.estado] ?? 'neutro'} className="max-w-full shrink-0" title={venta.estado}><span className="truncate">{etiquetaDeEstadoDeVenta(venta.estado)}</span></BadgeEstado>
+      </div>
+      <p className="text-sm">Total: <strong className="text-base tabular-nums">{formatoMoneda(venta.total)}</strong></p>
+      <div className="min-w-0" aria-label="Medios de pago">{medios}</div>
+      <div className="min-w-0">{factura}</div>
+      {acciones}
+    </li>
+  )
+}
 
 type ItemRow = { nombre: string; qty: string; precio: string; producto_id: number | null }
 
@@ -266,6 +288,40 @@ export function Ventas({
     }
   }
 
+  const mediosDe = (v: Venta) => (
+    <div className="flex flex-wrap gap-1">
+      {v.pagos.length === 0
+        ? <span className="text-muted-foreground">—</span>
+        : v.pagos.map((p, i) => (
+          <Badge key={i} variant="outline" className="max-w-full font-normal"><span className="truncate">{etiquetaCortaDeMedio(p.medio)}: {formatoMoneda(p.monto)}</span></Badge>
+        ))}
+    </div>
+  )
+
+  const facturaDe = (v: Venta) => v.factura_display
+    ? rutaDeFactura
+      ? <Link to={rutaDeFactura(v.factura_id as number)} onClick={(e) => e.stopPropagation()} className="inline-flex max-w-full items-center gap-1 truncate text-sm font-medium text-exito hover:underline" title={v.factura_display}><ReceiptText className="size-3.5 shrink-0" /><span className="truncate">{v.factura_display}</span></Link>
+      : <span className="inline-flex max-w-full items-center gap-1 truncate text-sm font-medium" title={v.factura_display}><ReceiptText className="size-3.5 shrink-0" /><span className="truncate">{v.factura_display}</span></span>
+    : v.estado !== 'anulada'
+      ? <BadgeEstado tono="atencion">Sin facturar</BadgeEstado>
+      : <span className="text-muted-foreground">—</span>
+
+  const acciones = (v: Venta) => (
+    <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+      <Button asChild size="icon" variant="outline" title="Ver venta"><Link to={rutaDeDetalle(v.id)} aria-label="Ver venta"><Eye /></Link></Button>
+      <Button size="icon" variant="outline" title="Imprimir ticket" aria-label="Imprimir ticket" onClick={() => imprimir(`/ventas/${v.id}/ticket`)}><Printer /></Button>
+      {v.pagos.length > 0 && rutaDeRecibo && (
+        <Button asChild size="icon" variant="outline" title="Ver recibo"><a href={rutaDeRecibo(v.id)} target="_blank" rel="noreferrer" aria-label="Ver recibo"><FileCheck /></a></Button>
+      )}
+      {puedeAnular && v.estado !== 'anulada' && (
+        <Button size="icon" variant="outline" title="Anular" aria-label="Anular" onClick={() => anular(v)}><Ban /></Button>
+      )}
+    </div>
+  )
+
+  // Los botones que puede llegar a tener una fila: el umbral de las tarjetas es la suma de las columnas, así que la de acciones no reserva los que el producto no muestra.
+  const botonesDeAccion = 2 + (rutaDeRecibo ? 1 : 0) + (puedeAnular ? 1 : 0)
+
   const columns = useMemo<ColumnDef<Venta>[]>(() => [
     { accessorKey: 'numero', header: sortableHeader('N°'), size: 100, minSize: 90, cell: ({ row }) => <span className="block truncate font-mono text-sm font-semibold text-primary" title={row.original.numero}>{row.original.numero}</span> },
     { accessorKey: 'fecha', header: 'Fecha', size: 100, minSize: 90, cell: ({ row }) => fecha(row.original.fecha) },
@@ -282,15 +338,7 @@ export function Ventas({
       header: 'Medios de pago',
       size: 150,
       minSize: 110,
-      cell: ({ row }) => (
-        <div className="flex flex-wrap gap-1">
-          {row.original.pagos.length === 0
-            ? <span className="text-muted-foreground">—</span>
-            : row.original.pagos.map((p, i) => (
-              <Badge key={i} variant="outline" className="font-normal">{etiquetaCortaDeMedio(p.medio)}: {formatoMoneda(p.monto)}</Badge>
-            ))}
-        </div>
-      ),
+      cell: ({ row }) => mediosDe(row.original),
     },
     { accessorKey: 'total', header: 'Total', size: 100, minSize: 80, cell: ({ row }) => <span className="font-medium">{formatoMoneda(row.original.total)}</span> },
     {
@@ -305,34 +353,22 @@ export function Ventas({
       header: 'Factura',
       size: 140,
       minSize: 100,
-      cell: ({ row }) => row.original.factura_display
-        ? rutaDeFactura
-          ? <Link to={rutaDeFactura(row.original.factura_id as number)} onClick={(e) => e.stopPropagation()} className="inline-flex w-full items-center gap-1 truncate text-sm font-medium text-exito hover:underline" title={row.original.factura_display}><ReceiptText className="size-3.5 shrink-0" /><span className="truncate">{row.original.factura_display}</span></Link>
-          : <span className="inline-flex w-full items-center gap-1 truncate text-sm font-medium" title={row.original.factura_display}><ReceiptText className="size-3.5 shrink-0" /><span className="truncate">{row.original.factura_display}</span></span>
-        : row.original.estado !== 'anulada'
-          ? <BadgeEstado tono="atencion">Sin facturar</BadgeEstado>
-          : <span className="text-muted-foreground">—</span>,
+      cell: ({ row }) => facturaDe(row.original),
     },
     {
       id: 'actions',
       header: () => <div className="text-right">Acciones</div>,
-      size: anchoColumnaAcciones(4),
-      minSize: anchoColumnaAcciones(4),
-      cell: ({ row }) => (
-        <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-          <Button asChild size="icon" variant="outline" title="Ver venta"><Link to={rutaDeDetalle(row.original.id)} aria-label="Ver venta"><Eye /></Link></Button>
-          <Button size="icon" variant="outline" title="Imprimir ticket" aria-label="Imprimir ticket" onClick={() => imprimir(`/ventas/${row.original.id}/ticket`)}><Printer /></Button>
-          {row.original.pagos.length > 0 && rutaDeRecibo && (
-            <Button asChild size="icon" variant="outline" title="Ver recibo"><a href={rutaDeRecibo(row.original.id)} target="_blank" rel="noreferrer" aria-label="Ver recibo"><FileCheck /></a></Button>
-          )}
-          {puedeAnular && row.original.estado !== 'anulada' && (
-            <Button size="icon" variant="outline" title="Anular" aria-label="Anular" onClick={() => anular(row.original)}><Ban /></Button>
-          )}
-        </div>
-      ),
+      size: anchoColumnaAcciones(botonesDeAccion),
+      minSize: anchoColumnaAcciones(botonesDeAccion),
+      cell: ({ row }) => acciones(row.original),
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [puedeAnular, medios])
+  ], [puedeAnular, medios, botonesDeAccion])
+
+  // Como en Stock (ADR-016): la tabla pide la suma de los `size` de sus columnas; si el contenedor es más angosto, tarjetas en vez de scroll de costado. Sin medida (0), la tabla.
+  const [medidaTabla, anchoTabla] = useAncho()
+  const anchoMinimoTabla = useMemo(() => columns.reduce((total, c) => total + (c.size ?? 0), 0), [columns])
+  const enTarjetas = anchoTabla > 0 && anchoTabla < anchoMinimoTabla
 
   const emptyMessage = tab === 'sin_facturar'
     ? 'No hay ventas pendientes de facturar.'
@@ -470,7 +506,8 @@ export function Ventas({
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
+        {/* A 320 px las tres pestañas suman 324: sin `flex-wrap` ensanchaban la página (medido en Chromium, ADR-020). */}
+        <TabsList className="h-auto max-w-full flex-wrap">
           <TabsTrigger value="todas"><ListChecks />Todas</TabsTrigger>
           <TabsTrigger value="sin_facturar"><ReceiptText />Sin facturar</TabsTrigger>
           <TabsTrigger value="facturadas"><FileCheck />Facturadas</TabsTrigger>
@@ -494,11 +531,23 @@ export function Ventas({
 
       <Card>
         <CardContent>
-          {loading ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">Cargando…</p>
-          ) : (
-            <DataTable columns={columns} data={ventas} emptyMessage={emptyMessage} onRowClick={(v) => navigate(rutaDeDetalle(v.id))} />
-          )}
+          <div ref={medidaTabla} className="min-w-0">
+            {loading ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">Cargando…</p>
+            ) : enTarjetas ? (
+              ventas.length === 0
+                ? <p className="py-6 text-center text-sm text-muted-foreground">{emptyMessage}</p>
+                : (
+                  <ul className="grid gap-3" aria-label="Ventas">
+                    {ventas.map((v) => (
+                      <TarjetaDeVenta key={v.id} venta={v} medios={mediosDe(v)} factura={facturaDe(v)} rutaDeDetalle={rutaDeDetalle} acciones={acciones(v)} />
+                    ))}
+                  </ul>
+                )
+            ) : (
+              <DataTable columns={columns} data={ventas} emptyMessage={emptyMessage} onRowClick={(v) => navigate(rutaDeDetalle(v.id))} />
+            )}
+          </div>
         </CardContent>
       </Card>
 
