@@ -403,6 +403,10 @@ Medidos en Chromium (VentaLibra con libra-ui 0.114.1, 110 productos, 1 a 6 depó
 
 **Sin tocar (medido y anotado).** (a) Los encabezados de depósito de la tabla se recortan sin puntos suspensivos ni `title` (`th` de 110 px; cosmético). (b) La tabla de la **lista de Ventas** (962 px) scrollea dentro de su contenedor a 390 y 768 px: es previa y no es de Stock; la página no desborda. (c) Los botones de acción miden 32 a 36 px (cumplen el mínimo de 24 px de WCAG 2.5.8, no los 44). (d) El diálogo de ajuste muestra «Stock resultante: 11.000 UN» con tres decimales. (e) Hay dos `<main>` anidados (`Layout.tsx` de VentaLibra).
 
+
+**Actualización (0.114.3, cosméticos de Stock anotados arriba):** (a) `sortableHeader` (`data-table.tsx`, lo usan todas las tablas del kit) pone el título en un `span.truncate` dentro de un botón `max-w-full`, con el título entero en el `title` y el icono de orden `shrink-0`: el nombre largo de un depósito se corta con «…» en vez de quedar recortado a secas. (b) El diálogo de ajuste muestra «Stock resultante: 11 kg» o «11,5 kg» (hasta 3 decimales, sin ceros de relleno y con coma) en lugar de «11.000 UN». **No se tocó** la tabla de la lista de Ventas (962 px, scrollea dentro de su contenedor en móvil y tableta: pide un diseño propio, como el de Stock) ni el tamaño de los botones de acción (32 a 36 px).
+(c) **Un solo `<main>`**: el `Layout` envolvía el contenido en un `<main>` dentro de `SidebarInset`, que ya es el `<main>`; ahora el contenedor interior es un `<div>` (mismas clases), así que los lectores de pantalla ven un único landmark «main».
+
 ## ADR-019 — `VentaDetalle` emite la nota de crédito parcial y sigue ofreciéndola mientras quede saldo (0.115.0)
 
 **Contexto:** con las notas parciales del motor (`libracore` v1.130.0, ADR-018) una factura se acredita en varias notas y la suma no puede superar su total. La pantalla de la fase anterior (ADR-015) ofrecía sólo la nota total y dejaba de ofrecerla apenas existía *una* nota: con parciales eso escondía el botón con la factura casi entera sin acreditar y decía «ya podés anular» cuando el servidor iba a contestar 409.
