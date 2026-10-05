@@ -90,6 +90,9 @@ export type VentaDetalleAccionesExtraCtx = {
   recargar: () => void
 }
 
+/** Bajo `lg` (la misma frontera que `FILA_MOVIL`) los botones miden 44 px de alto, el objetivo táctil de WCAG 2.5.5; en escritorio, los 32 de `sm`. ADR-022. */
+const BOTON_TACTIL = 'max-lg:h-11'
+
 // Cada artículo de la tabla como bloque en un móvil: las celdas de cantidad, precio y subtotal pasan a una línea «etiqueta … valor» (la etiqueta sale del `data-label`). Los totales, uno por línea.
 const FILA_MOVIL = 'max-lg:flex max-lg:justify-between max-lg:gap-4 max-lg:p-0 max-lg:pt-1 max-lg:font-normal max-lg:text-muted-foreground max-lg:before:content-[attr(data-label)]'
 const TOTAL_MOVIL = 'max-lg:flex max-lg:justify-between max-lg:gap-4 max-lg:px-3 max-lg:py-1'
@@ -346,12 +349,12 @@ export function VentaDetalle({
         {detalle && (
           <div className="flex flex-wrap gap-2">
             {rutaDeTicket && (
-              <Button size="sm" variant="outline" onClick={() => imprimir(rutaDeTicket(detalle.id))}><Printer />Ticket</Button>
+              <Button size="sm" variant="outline" className={BOTON_TACTIL} onClick={() => imprimir(rutaDeTicket(detalle.id))}><Printer />Ticket</Button>
             )}
             {rutaDeRecibo && detalle.pagos.length > 0 && (
-              <Button asChild size="sm" variant="outline"><a href={rutaDeRecibo(detalle.id)} target="_blank" rel="noreferrer"><FileCheck />Recibo</a></Button>
+              <Button asChild size="sm" variant="outline" className={BOTON_TACTIL}><a href={rutaDeRecibo(detalle.id)} target="_blank" rel="noreferrer"><FileCheck />Recibo</a></Button>
             )}
-            <Button asChild size="sm" variant="outline"><Link to={rutaDeVentas}><ArrowLeft />Volver</Link></Button>
+            <Button asChild size="sm" variant="outline" className={BOTON_TACTIL}><Link to={rutaDeVentas}><ArrowLeft />Volver</Link></Button>
           </div>
         )}
       </div>
@@ -409,7 +412,7 @@ export function VentaDetalle({
                             <CheckCircle2 className="size-3.5" />Pago acreditado.
                           </p>
                         ) : (
-                          <Button size="sm" variant="outline" disabled={qrEstado === 'creando'} onClick={cobrarConQr}>
+                          <Button size="sm" variant="outline" className={BOTON_TACTIL} disabled={qrEstado === 'creando'} onClick={cobrarConQr}>
                             <QrCode />{qrEstado === 'creando' ? 'Preparando el QR…' : 'Cobrar con QR'}
                           </Button>
                         )}
@@ -498,22 +501,22 @@ export function VentaDetalle({
             <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
               {!detalle.factura_id && (
                 <>
-                  <Button size="sm" variant="outline" disabled={facturando} onClick={facturar}>
+                  <Button size="sm" variant="outline" className={BOTON_TACTIL} disabled={facturando} onClick={facturar}>
                     <ReceiptText />{facturando ? 'Facturando…' : 'Generar factura'}
                   </Button>
                   {rutaDeFacturaManual && (
-                    <Button asChild size="sm" variant="ghost"><Link to={rutaDeFacturaManual(detalle.id)}>Facturar con el formulario</Link></Button>
+                    <Button asChild size="sm" variant="ghost" className={BOTON_TACTIL}><Link to={rutaDeFacturaManual(detalle.id)}>Facturar con el formulario</Link></Button>
                   )}
                 </>
               )}
-              {!detalle.remito_id && rutaDeRemitoNuevo && <Button asChild size="sm" variant="outline"><Link to={rutaDeRemitoNuevo}><PackageCheck />Generar remito</Link></Button>}
+              {!detalle.remito_id && rutaDeRemitoNuevo && <Button asChild size="sm" variant="outline" className={BOTON_TACTIL}><Link to={rutaDeRemitoNuevo}><PackageCheck />Generar remito</Link></Button>}
               {puedeEmitirNota && detalle.factura_id && detalle.factura_cae && !acreditadaPorCompleto && (
-                <Button size="sm" variant="outline" disabled={emitiendoNota} onClick={abrirNota}>
+                <Button size="sm" variant="outline" className={BOTON_TACTIL} disabled={emitiendoNota} onClick={abrirNota}>
                   <FileMinus />{emitiendoNota ? 'Emitiendo…' : 'Emitir nota de crédito'}
                 </Button>
               )}
               {puedeAnular && (
-                <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => setConfirmAnular(true)}><Ban />Anular venta</Button>
+                <Button size="sm" variant="outline" className={`${BOTON_TACTIL} text-destructive hover:text-destructive`} onClick={() => setConfirmAnular(true)}><Ban />Anular venta</Button>
               )}
               {accionesExtra?.({ detalle, recargar: cargar })}
             </div>
@@ -565,8 +568,8 @@ export function VentaDetalle({
             </div>
           )}
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setConfirmNota(false)}>Cancelar</Button>
-            <Button disabled={emitiendoNota || (notaParcial && importeValido === null)} onClick={emitirNota}>
+            <Button variant="ghost" className={BOTON_TACTIL} onClick={() => setConfirmNota(false)}>Cancelar</Button>
+            <Button className={BOTON_TACTIL} disabled={emitiendoNota || (notaParcial && importeValido === null)} onClick={emitirNota}>
               {emitiendoNota ? 'Emitiendo…' : 'Emitir nota'}
             </Button>
           </DialogFooter>

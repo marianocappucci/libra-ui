@@ -440,3 +440,11 @@ Medidos en Chromium (VentaLibra con libra-ui 0.114.1, 110 productos, 1 a 6 depó
 2. **La columna Total de Ventas pasa de 100 a 120 px** y la celda lleva `truncate` + `title` con el importe: hasta «$ 99.999.999,00» se lee entero; más, con «…» y el importe completo al pasar el mouse. El umbral de las tarjetas sube 20 px (con los 3 botones de VentaLibra, de 962 a 982).
 
 **Límites.** No medido en Chromium (el cambio es de tamaño fijo y lo fijan los tests: clases del contenedor, `title` del total, umbral). Los botones del detalle de venta (32 px, ADR-017) no se tocan.
+
+## ADR-022 — Los botones del detalle de venta, de 44 px bajo `lg` (0.116.2)
+
+**Contexto:** el último límite de ADR-017 («los botones del detalle miden 32 px de alto; WCAG 2.5.8 AA cumple, los 44 px no») y la línea de ADR-021 (botones táctiles en las tarjetas).
+
+**Decisión.** Bajo `lg` (1024 px, la misma frontera que ya usa el detalle para pasar la tabla de artículos a bloques, `FILA_MOVIL`) los botones del detalle de venta miden **44 px de alto** (`BOTON_TACTIL = 'max-lg:h-11'`): Ticket, Recibo, Volver, cobrar con QR, Facturar, Facturar con el formulario, Generar remito, Emitir nota de crédito, Anular venta y los dos del diálogo de la nota. En escritorio siguen en los 32 de `sm`. Sólo cambia el alto; el ancho lo da el texto (todos llevan texto, ninguno es un icono solo).
+
+**Límites.** No medido en Chromium (lo fija el test por clase). Los diálogos de confirmación de otros componentes del kit (`ConfirmDialog`) no se tocan.
