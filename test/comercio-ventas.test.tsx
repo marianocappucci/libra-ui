@@ -638,6 +638,22 @@ describe('VentaDetalle', () => {
       expect(etiquetas).toEqual(['Cantidad', 'Precio unit.', 'Subtotal'])
     })
 
+    it('bajo `lg` los botones del detalle miden 44 px de alto (objetivo táctil); en escritorio, los de `sm` (ADR-022)', async () => {
+      responder({ ...BASE, '/api/ventas/21': CON_CAE })
+      const user = userEvent.setup()
+      montarDetalle(21, { puedeAnular: true, puedeEmitirNota: true })
+      const botones = [
+        await screen.findByRole('button', { name: /Emitir nota de crédito/ }),
+        screen.getByRole('button', { name: /Anular venta/ }),
+        screen.getByRole('button', { name: /Ticket/ }),
+        screen.getByRole('link', { name: /Volver/ }),
+      ]
+      for (const b of botones) expect(b.className).toContain('max-lg:h-11')
+      expect(screen.getByRole('button', { name: /Anular venta/ }).className).toContain('text-destructive')
+      await user.click(botones[0])
+      expect(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Emitir nota' }).className).toContain('max-lg:h-11')
+    })
+
     it('una factura sin CAE o una venta sin factura no cambian: sin aviso ni botón', async () => {
       responder({ ...BASE, '/api/ventas/9': FACTURADA })
       montarDetalle(9, { puedeAnular: true, puedeEmitirNota: true })
