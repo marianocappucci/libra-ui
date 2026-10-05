@@ -68,6 +68,18 @@ async function montarPantalla() {
   return user
 }
 
+// Como `montarPantalla`, pero esperando a que lleguen los precios de la lista predeterminada (la yerba pasa de 3.000 a
+// 3.300). Hay que esperarlos antes de tocar un checkbox: esa respuesta re-renderiza la tabla, y como `columnas` se
+// redefine en cada render, DataTable (que le pasa cada `cell` a `flexRender` como un componente nuevo) REMONTA los
+// <input>. Un clic de `user.click` que cae a mitad de ese remonte (pointerdown sobre el nodo viejo, click sobre el
+// nuevo) se pierde sin error: la selección queda en 0 para siempre y ningún `waitFor` lo arregla. En la suite completa,
+// con la CPU cargada, el fetch simulado llegaba justo ahí ~1 de cada 8 corridas.
+async function montarAsentada() {
+  const user = await montarPantalla()
+  await waitFor(() => expect(screen.getByText(/3\.300,00/)).toBeInTheDocument())
+  return user
+}
+
 const tildar = (user: ReturnType<typeof userEvent.setup>, nombre: string) =>
   user.click(screen.getByRole('checkbox', { name: `Etiqueta de ${nombre}` }))
 
@@ -179,20 +191,18 @@ describe('el precio de la etiqueta', () => {
 describe('elegir productos', () => {
   it('«Ver e imprimir» está apagado hasta que se elige alguno', async () => {
     backend()
-    const user = await montarPantalla()
+    const user = await montarAsentada()
     expect(screen.getByRole('button', { name: /Ver e imprimir/ })).toBeDisabled()
     expect(screen.getByText('0 elegidos')).toBeInTheDocument()
 
     await tildar(user, 'Pan al peso')
-    // `waitFor`: bajo carga (la suite completa en un runner lento) el re-render de la selección llega después del clic y la aserción inmediata fallaba de forma intermitente.
-    // Con el segundo de espera por defecto volvió a fallar en el CI (libra-ui#259, 2026-10-05): 5 s.
-    await waitFor(() => expect(screen.getByRole('button', { name: /Ver e imprimir/ })).toBeEnabled(), { timeout: 5000 })
+    expect(screen.getByRole('button', { name: /Ver e imprimir/ })).toBeEnabled()
     expect(screen.getByText('1 elegido')).toBeInTheDocument()
   })
 
   it('«Elegir los N que se ven» toma sólo lo filtrado, y la selección sobrevive al cambiar de filtro', async () => {
     backend()
-    const user = await montarPantalla()
+    const user = await montarAsentada()
 
     await user.selectOptions(screen.getByLabelText('Categoría'), 'Bebidas')
     await user.click(screen.getByRole('button', { name: 'Elegir los 1 que se ven' }))
@@ -212,8 +222,7 @@ describe('elegir productos', () => {
 describe('la hoja de impresión', () => {
   async function abrirHoja(nombres: string[]) {
     backend()
-    const user = await montarPantalla()
-    await waitFor(() => expect(screen.getByText(/3\.300,00/)).toBeInTheDocument())
+    const user = await montarAsentada()
     for (const n of nombres) await tildar(user, n)
     await user.click(screen.getByRole('button', { name: /Ver e imprimir/ }))
     return user
