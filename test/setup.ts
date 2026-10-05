@@ -1,6 +1,12 @@
 import '@testing-library/jest-dom/vitest'
-import { cleanup } from '@testing-library/react'
+import { cleanup, configure } from '@testing-library/react'
 import { afterEach, vi } from 'vitest'
+
+// Los `findBy*` y `waitFor` esperan 1 s por defecto. Con la suite completa en paralelo o un CI cargado, una pantalla
+// que monta y pide sus datos pasa de 1 s con el elemento YA en camino: reproducido con `PasswordReset` fijando la CPU
+// (el botón del captcha tardaba más de 1 s en aparecer). `findBy` devuelve apenas aparece, así que un test que anda no
+// se vuelve más lento; sólo un elemento que de verdad no está tarda 5 s en fallar. Lo mismo que VentaLibra (#474).
+configure({ asyncUtilTimeout: 5000 })
 
 afterEach(() => {
   cleanup()

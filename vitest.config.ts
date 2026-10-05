@@ -27,6 +27,9 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
+    // Mayor que el `asyncUtilTimeout` de `test/setup.ts`, para que un `findBy` que no encuentra falle con su propio
+    // mensaje y no con el timeout opaco del test.
+    testTimeout: 15000,
     setupFiles: ['./test/setup.ts'],
     include: ['test/**/*.test.{ts,tsx}'],
     coverage: {
