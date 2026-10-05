@@ -185,7 +185,8 @@ describe('elegir productos', () => {
 
     await tildar(user, 'Pan al peso')
     // `waitFor`: bajo carga (la suite completa en un runner lento) el re-render de la selección llega después del clic y la aserción inmediata fallaba de forma intermitente.
-    await waitFor(() => expect(screen.getByRole('button', { name: /Ver e imprimir/ })).toBeEnabled())
+    // Con el segundo de espera por defecto volvió a fallar en el CI (libra-ui#259, 2026-10-05): 5 s.
+    await waitFor(() => expect(screen.getByRole('button', { name: /Ver e imprimir/ })).toBeEnabled(), { timeout: 5000 })
     expect(screen.getByText('1 elegido')).toBeInTheDocument()
   })
 
