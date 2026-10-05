@@ -148,6 +148,16 @@ beforeEach(() => {
 })
 
 describe('Vencimientos: lo que muestra', () => {
+  it('una respuesta que no es lo que promete el motor se avisa y no rompe la pantalla', async () => {
+    for (const rara of [{}, { lotes: [], resumen: {} }, { lotes: 'x', sin_lote: [], resumen: {} }, { lotes: [], sin_lote: [] }, [], 'hola']) {
+      responder({ ...TODO, [RUTA]: rara })
+      montar('/vencimientos', <Vencimientos />)
+      expect((await screen.findByText('La respuesta del servidor no tiene el formato esperado.')).getAttribute('role')).toBe('alert')
+      expect(screen.queryByRole('table')).toBeNull()
+      cleanup()
+    }
+  })
+
   it('pide con los defaults (15 días, con vencidos) y muestra los lotes con fecha dd-mm-aaaa y saldo tal como lo manda el motor', async () => {
     await abrir()
     expect(pedidasAlReporte()).toEqual([pide()])

@@ -122,6 +122,15 @@ function nuevaClaveDeOperacion(): string {
 
 /** El mensaje de un error del motor o de la red. 503 es la base sin la revisión `0002`; 409 (regla de negocio o clave
  *  reusada con otros datos), 422 y 404 traen su texto. Un 422 de validación del cuerpo llega como lista: se juntan los `msg`. */
+const RESPUESTA_INESPERADA = 'La respuesta del servidor no tiene el formato esperado.'
+
+/** Lo mínimo que lee la pantalla: un objeto con `lotes` y `sin_lote` (listas) y `resumen` (objeto). */
+function esVencimientos(data: unknown): data is VencimientosData {
+  if (typeof data !== 'object' || data === null) return false
+  const { lotes, sin_lote, resumen } = data as { lotes?: unknown; sin_lote?: unknown; resumen?: unknown }
+  return Array.isArray(lotes) && Array.isArray(sin_lote) && typeof resumen === 'object' && resumen !== null
+}
+
 function mensajeDeError(err: unknown): string {
   if (!(err instanceof ApiError)) return 'Error de conexión.'
   if (err.status === 503 && FALTA_REVISION.test(err.detail)) return SIN_REVISION
@@ -930,7 +939,11 @@ export function Vencimientos({ puedeMover = true, puedeMarcar = true }: { puedeM
     // Una respuesta que llega después de otro cambio de parámetros no pisa a la más nueva.
     let vigente = true
     api.get<VencimientosData>(`${RUTA}?${consulta}`)
-      .then((data) => { if (vigente) setRespuesta({ pedido, data, error: null }) })
+      .then((data) => {
+        if (!vigente) return
+        // Una respuesta que no es lo que el motor promete (un proxy, otra versión) no se pinta: la tabla lee `lotes`, `sin_lote` y `resumen`.
+        setRespuesta(esVencimientos(data) ? { pedido, data, error: null } : { pedido, data: null, error: RESPUESTA_INESPERADA })
+      })
       .catch((err) => { if (vigente) setRespuesta({ pedido, data: null, error: mensajeDeError(err) }) })
     return () => { vigente = false }
   }, [consulta, pedido])
