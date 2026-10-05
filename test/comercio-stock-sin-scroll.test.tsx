@@ -95,6 +95,30 @@ describe('Stock: tabla o tarjetas según el ancho', () => {
   })
 })
 
+describe('Stock: cosméticos', () => {
+  it('el encabezado de un depósito de nombre largo se corta con «…» y lleva el nombre entero en el title', async () => {
+    await abrir(1600)
+    const boton = screen.getByTitle(DEPOSITOS[1].nombre)
+    expect(boton.className).toContain('max-w-full')
+    expect(boton.querySelector('.truncate')!.textContent).toBe(DEPOSITOS[1].nombre)
+    expect(boton.querySelector('svg')!.getAttribute('class')).toContain('shrink-0')   // el icono de orden no se pierde
+  })
+
+  it('«Stock resultante» no muestra tres decimales fijos: 11 y no 11.000, 11,5 y no 11.500', async () => {
+    const user = userEvent.setup()
+    await abrir(1600)
+    await user.click(screen.getAllByLabelText('Ajustar stock')[0])
+    const dialogo = await screen.findByRole('dialog')
+    const campo = within(dialogo).getByRole('spinbutton', { name: /Stock nuevo|Cantidad/ })
+    await user.clear(campo)
+    await user.type(campo, '11')
+    expect(within(dialogo).getByText(/Stock resultante:/).textContent).toBe('Stock resultante: 11 kg')
+    await user.clear(campo)
+    await user.type(campo, '11.5')
+    expect(within(dialogo).getByText(/Stock resultante:/).textContent).toBe('Stock resultante: 11,5 kg')
+  })
+})
+
 describe('Stock: el aviso de stock bajo no ensancha la página', () => {
   it('las pastillas topan en el ancho del aviso (max-w-full + truncate) y llevan el nombre completo en el title', async () => {
     await abrir(1600)

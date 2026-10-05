@@ -138,11 +138,13 @@ export function sortableHeader(label: string) {
     <Button
       variant="ghost"
       size="sm"
-      className="-ml-3 h-8"
+      className="-ml-3 h-8 max-w-full"
+      title={label}
       onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
     >
-      {label}
-      <ArrowUpDown className="ml-2 h-3.5 w-3.5" />
+      {/* El título largo (el nombre de un depósito, por ejemplo) se corta con «…» dentro de su columna y se lee entero en el `title`; antes el botón `nowrap` se salía de la celda y quedaba recortado a secas. */}
+      <span className="truncate">{label}</span>
+      <ArrowUpDown className="ml-2 h-3.5 w-3.5 shrink-0" />
     </Button>
   )
 }

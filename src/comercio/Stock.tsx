@@ -618,7 +618,7 @@ export function Stock({
             {formError && <p className="text-sm text-destructive">{formError}</p>}
             {resultado !== null && (
               <p className={`text-sm ${resultado < 0 ? 'text-destructive' : 'text-exito'}`}>
-                Stock resultante: {resultado.toFixed(3)} {editing?.unidad}
+                Stock resultante: {String(Number(resultado.toFixed(3))).replace('.', ',')} {editing?.unidad}
               </p>
             )}
           </div>
