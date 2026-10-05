@@ -48,6 +48,9 @@ const TIPO_LABELS: Record<number, string> = {
   11: 'FAC C', 12: 'ND C', 13: 'NC C',
 }
 
+/** Los botones REGINFO (`REGINFO_VENTAS_ALICUOTAS` mide 254 px) topan en el ancho de su fila y parten el nombre si hace falta: a 320 px la tarjeta deja 240 y un botón de `nowrap` ensanchaba la página. `min-h-8` conserva el alto de `size="sm"` cuando entra en una línea. */
+const BOTON_REGINFO = 'h-auto min-h-8 max-w-full whitespace-normal py-1 [overflow-wrap:anywhere]'
+
 function ResumenPorTasa({ resumen, ivaColorClass }: { resumen: ResumenIva; ivaColorClass: string }) {
   const entries = Object.entries(resumen.por_tasa || {})
   if (entries.length === 0) return null
@@ -191,7 +194,8 @@ export function LibrosIva() {
         <p className="py-6 text-center text-sm text-muted-foreground">Cargando…</p>
       ) : (
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList>
+          {/* `h-auto flex-wrap`: a 320 px las dos pestañas con su contador miden 321 y ensanchaban la página 17 px. */}
+          <TabsList className="h-auto flex-wrap">
             <TabsTrigger value="ventas"><ArrowUpRight />IVA Ventas<Badge variant="secondary" className="ml-1">{data.facturas.length}</Badge></TabsTrigger>
             <TabsTrigger value="compras"><ArrowDownLeft />IVA Compras<Badge variant="secondary" className="ml-1">{data.egresos.length}</Badge></TabsTrigger>
           </TabsList>
@@ -208,11 +212,11 @@ export function LibrosIva() {
             <ResumenPorTasa resumen={data.resumen_v} ivaColorClass="text-primary" />
 
             <Card>
-              <CardHeader className="flex items-center justify-between space-y-0">
+              <CardHeader className="flex flex-wrap items-center justify-between gap-2 space-y-0">
                 <CardTitle className="text-base">Comprobantes emitidos</CardTitle>
-                <div className="flex flex-wrap gap-2">
-                  <Button asChild size="sm" variant="outline"><a href={`/libros-iva/export/ventas-cbte?desde=${desde}&hasta=${hasta}`}><Download />REGINFO_VENTAS_CBTE</a></Button>
-                  <Button asChild size="sm" variant="outline"><a href={`/libros-iva/export/ventas-alicuotas?desde=${desde}&hasta=${hasta}`}><Download />REGINFO_VENTAS_ALICUOTAS</a></Button>
+                <div className="flex min-w-0 flex-wrap gap-2">
+                  <Button asChild size="sm" variant="outline" className={BOTON_REGINFO}><a href={`/libros-iva/export/ventas-cbte?desde=${desde}&hasta=${hasta}`}><Download />REGINFO_VENTAS_CBTE</a></Button>
+                  <Button asChild size="sm" variant="outline" className={BOTON_REGINFO}><a href={`/libros-iva/export/ventas-alicuotas?desde=${desde}&hasta=${hasta}`}><Download />REGINFO_VENTAS_ALICUOTAS</a></Button>
                 </div>
               </CardHeader>
               <CardContent>
@@ -222,8 +226,11 @@ export function LibrosIva() {
 
             <p className="flex items-start gap-2 rounded-md border bg-muted/50 p-3 text-sm text-muted-foreground">
               <Info className="mt-0.5 size-4 shrink-0" />
-              Los archivos <strong className="text-foreground">REGINFO_VENTAS_CBTE</strong> y <strong className="text-foreground">REGINFO_VENTAS_ALICUOTAS</strong> se
-              importan en el Aplicativo REGINFO de ARCA (RG 3685). Comprobantes tipo C (Monotributista) van con <code>cantAlicuotas=0</code>. Las notas de crédito se exportan con importes negativos.
+              {/* El texto va en un `span` y no suelto: como hijos directos de un `flex` cada tramo (los `strong`, los `code`) era un ítem aparte que no parte y el párrafo medía 912 px a 390 (522 de desborde). */}
+              <span className="min-w-0 [overflow-wrap:anywhere]">
+                Los archivos <strong className="text-foreground">REGINFO_VENTAS_CBTE</strong> y <strong className="text-foreground">REGINFO_VENTAS_ALICUOTAS</strong> se
+                importan en el Aplicativo REGINFO de ARCA (RG 3685). Comprobantes tipo C (Monotributista) van con <code>cantAlicuotas=0</code>. Las notas de crédito se exportan con importes negativos.
+              </span>
             </p>
           </TabsContent>
 
@@ -239,11 +246,11 @@ export function LibrosIva() {
             <ResumenPorTasa resumen={data.resumen_c} ivaColorClass="text-exito" />
 
             <Card>
-              <CardHeader className="flex items-center justify-between space-y-0">
+              <CardHeader className="flex flex-wrap items-center justify-between gap-2 space-y-0">
                 <CardTitle className="text-base">Comprobantes recibidos</CardTitle>
-                <div className="flex flex-wrap gap-2">
-                  <Button asChild size="sm" variant="outline"><a href={`/libros-iva/export/compras-cbte?desde=${desde}&hasta=${hasta}`}><Download />REGINFO_COMPRAS_CBTE</a></Button>
-                  <Button asChild size="sm" variant="outline"><a href={`/libros-iva/export/compras-alicuotas?desde=${desde}&hasta=${hasta}`}><Download />REGINFO_COMPRAS_ALICUOTAS</a></Button>
+                <div className="flex min-w-0 flex-wrap gap-2">
+                  <Button asChild size="sm" variant="outline" className={BOTON_REGINFO}><a href={`/libros-iva/export/compras-cbte?desde=${desde}&hasta=${hasta}`}><Download />REGINFO_COMPRAS_CBTE</a></Button>
+                  <Button asChild size="sm" variant="outline" className={BOTON_REGINFO}><a href={`/libros-iva/export/compras-alicuotas?desde=${desde}&hasta=${hasta}`}><Download />REGINFO_COMPRAS_ALICUOTAS</a></Button>
                 </div>
               </CardHeader>
               <CardContent>
@@ -253,9 +260,11 @@ export function LibrosIva() {
 
             <p className="flex items-start gap-2 rounded-md border bg-muted/50 p-3 text-sm text-muted-foreground">
               <Info className="mt-0.5 size-4 shrink-0" />
-              Los archivos <strong className="text-foreground">REGINFO_COMPRAS_CBTE</strong> y <strong className="text-foreground">REGINFO_COMPRAS_ALICUOTAS</strong> se
-              importan en el Aplicativo REGINFO de ARCA (RG 3685). Solo se incluyen egresos registrados como Factura. El tipo de comprobante AFIP se asume
-              <code> 01 (Factura A)</code> por defecto; modificalo en el egreso si corresponde a otro tipo.
+              <span className="min-w-0 [overflow-wrap:anywhere]">
+                Los archivos <strong className="text-foreground">REGINFO_COMPRAS_CBTE</strong> y <strong className="text-foreground">REGINFO_COMPRAS_ALICUOTAS</strong> se
+                importan en el Aplicativo REGINFO de ARCA (RG 3685). Solo se incluyen egresos registrados como Factura. El tipo de comprobante AFIP se asume
+                <code> 01 (Factura A)</code> por defecto; modificalo en el egreso si corresponde a otro tipo.
+              </span>
             </p>
           </TabsContent>
         </Tabs>

@@ -324,10 +324,11 @@ export function MercadoPagoCard({
           id="mp-concepto" label="Descripción del cobro" value={cfg.mp_concepto_descripcion}
           onChange={(v) => setCfg({ ...cfg, mp_concepto_descripcion: v })}
         />
-        <div className="grid gap-2">
+        {/* `min-w-0`, `w-full` bajo `sm` y `max-w-full`: el valor «Sin IVA (Monotributista / Exento)» mide 277 px y el selector `w-fit` ensanchaba la página 23 px a 320 y 22 px a 768 con el menú abierto (la columna de una grilla de dos mide 97). */}
+        <div className="grid min-w-0 gap-2">
           <Label>Alícuota IVA</Label>
           <Select value={cfg.mp_iva_rate || '0'} onValueChange={(v) => setCfg({ ...cfg, mp_iva_rate: v })}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-full min-w-0 sm:w-fit sm:max-w-full"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="0">Sin IVA (Monotributista / Exento)</SelectItem>
               <SelectItem value="0.21">21%</SelectItem>

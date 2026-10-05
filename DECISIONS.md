@@ -448,3 +448,17 @@ Medidos en Chromium (VentaLibra con libra-ui 0.114.1, 110 productos, 1 a 6 depó
 **Decisión.** Bajo `lg` (1024 px, la misma frontera que ya usa el detalle para pasar la tabla de artículos a bloques, `FILA_MOVIL`) los botones del detalle de venta miden **44 px de alto** (`BOTON_TACTIL = 'max-lg:h-11'`): Ticket, Recibo, Volver, cobrar con QR, Facturar, Facturar con el formulario, Generar remito, Emitir nota de crédito, Anular venta y los dos del diálogo de la nota. En escritorio siguen en los 32 de `sm`. Sólo cambia el alto; el ancho lo da el texto (todos llevan texto, ninguno es un icono solo).
 
 **Límites.** No medido en Chromium (lo fija el test por clase). Los diálogos de confirmación de otros componentes del kit (`ConfirmDialog`) no se tocan.
+
+## ADR-023 — Ocho pantallas sin scroll horizontal de página, medidas contra VentaLibra dev (0.116.3)
+
+**Contexto:** la primera medición en Chromium contra un producto desplegado (VentaLibra dev, usuario de prueba, sólo lectura) encontró que, a 390 px, siete pantallas del kit ensanchaban la página: Libros IVA (522 px), Configuración (491), Transferencias (161), Reportes (99), Cajas (79), Tesorería (17) y Logs (4; los 590 medidos al principio eran el JSON del endpoint `/logs` de VentaLibra, que choca con la ruta de la pantalla: se arregla en el producto con la prop `basePath`). A 320, Promociones (38). El principio es el mismo de ADR-016: ninguna pantalla scrollea de costado.
+
+**Causa raíz, probada inyectando el cambio en el navegador antes de tocar el código** (una sola causa no alcanzaba en Libros IVA y Configuración):
+1. **Barras de pestañas sin wrap** (`TabsList` es `inline-flex w-fit h-9` con triggers `nowrap`): Configuración con siete pestañas medía 865 px y arrastraba toda la columna; Logs 394; Libros IVA 321 a 320 px. → `h-auto flex-wrap`, como Ventas (ADR-020).
+2. **Cabeceras y filas de filtros sin wrap:** Cajas (filtro de sucursal de 224 px + «Nueva caja»), Tesorería, Promociones, Reportes (filtros de 472 px), la sub-navegación de Integraciones y la cabecera de exportación de Libros IVA. → `flex-wrap` y `gap`.
+3. **Contenido que no parte:** el texto de ayuda de Libros IVA era `flex` con `strong` y `code` como ítems sueltos (912 px); va dentro de un `span` con `[overflow-wrap:anywhere]`. Los botones `REGINFO_*` (254 px) pueden partir (`BOTON_REGINFO`). El link de un tutorial con URL larga, el nombre de una caja y el selector «Alícuota IVA» de MercadoPago (`w-fit`, 277 px de valor) también.
+4. **Una tabla sin contenedor:** el historial de Transferencias (seis columnas, 551 px) va dentro de un `overflow-x-auto` (scroll de la tabla, no de la página) y la tarjeta del formulario lleva `min-w-0`.
+
+**Medido** con un build local de VentaLibra con el kit, contra la API de dev, «antes» (reproduce los números de dev) y «después»: **0 px de desborde de página** en las siete pantallas a 320, 360, 390, 768, 1024 y 1280 (Libros IVA y Configuración desbordaban también a 768 y 1024: 408/377 y 167/136 px). A 1280, capturas idénticas byte a byte salvo Cajas (los badges pueden ir en dos líneas y el icono ya no se achica) y Libros IVA (el texto de ayuda fluye como párrafo). Tests: 17 nuevos, rojos sin el arreglo.
+
+**Límites.** Siguen con scroll **interno** (no de página): las tablas de Libros IVA, el historial de Transferencias y la actividad de Logs. Fuera del kit quedan en VentaLibra: la vista previa del ticket (23 px a 320), la cabecera de Sucursales (17 px a 320) y la colisión de `/logs`.

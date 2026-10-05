@@ -129,7 +129,7 @@ function SubNavegacion({ secciones }: { secciones: SeccionConfig[] }) {
 
   return (
     <div className="flex flex-col gap-4 sm:flex-row">
-      <div className="flex shrink-0 flex-row gap-1 sm:w-48 sm:flex-col sm:border-r sm:pr-2">
+      <div className="flex shrink-0 flex-row flex-wrap gap-1 sm:w-48 sm:flex-col sm:border-r sm:pr-2">
         {secciones.map((s) => {
           const Icono = s.icono
           const activa = actual.clave === s.clave
@@ -149,7 +149,7 @@ function SubNavegacion({ secciones }: { secciones: SeccionConfig[] }) {
           )
         })}
       </div>
-      <div className="max-w-2xl flex-1">{actual.contenido}</div>
+      <div className="min-w-0 max-w-2xl flex-1">{actual.contenido}</div>
     </div>
   )
 }
@@ -269,8 +269,9 @@ export function createConfiguracion({
           {/* `value` y no `defaultValue`: la sección la manda la URL, así que
               el conmutador es controlado. Con `defaultValue` un `?seccion=`
               distinto al arrancar pintaría una pestaña y mostraría otra. */}
+          {/* `h-auto flex-wrap`: con las siete pestañas de VentaLibra la barra mide 865 px y, sin wrap, ensanchaba toda la pantalla (491 px de desborde a 390). */}
           <Tabs value={actual.clave} onValueChange={(v) => setParams({ seccion: v })}>
-            <TabsList>
+            <TabsList className="h-auto flex-wrap">
               {secciones.map((s) => {
                 const Icono = s.icono
                 return (

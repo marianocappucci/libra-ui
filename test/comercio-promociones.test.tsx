@@ -87,6 +87,13 @@ describe('Promociones', () => {
     expect(screen.getByText('Inactiva')).toBeInTheDocument()
   })
 
+  it('la cabecera hace wrap: a 320 px el título y «Nueva promoción» ensanchaban la página 38 px', async () => {
+    responder(base)
+    render(<MemoryRouter><Promociones /></MemoryRouter>)
+    const boton = await screen.findByRole('button', { name: /Nueva promoción/ })
+    expect(boton.parentElement!.className).toContain('flex-wrap')
+  })
+
   it('sin promociones ofrece crear la primera; sin red avisa', async () => {
     responder({ ...base, '/api/promociones': [] })
     render(<MemoryRouter><Promociones /></MemoryRouter>)

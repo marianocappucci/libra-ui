@@ -109,7 +109,8 @@ export function DepositoTransferencia({ rutaDeDepositos = '/depositos', conHisto
         </p>
       )}
 
-      <div className="flex justify-center">
+      {/* `min-w-0`: sin él el mínimo de la tarjeta (el selector de producto mide 309 px) ensanchaba la columna de la pantalla a 320 px. */}
+      <div className="flex min-w-0 justify-center">
         <Card className="w-full max-w-2xl">
           <CardHeader><CardTitle className="text-base">Transferir stock entre depósitos</CardTitle></CardHeader>
           <CardContent className="grid gap-4">
@@ -177,30 +178,33 @@ export function DepositoTransferencia({ rutaDeDepositos = '/depositos', conHisto
             {historial.length === 0 ? (
               <p className="py-6 text-center text-sm text-muted-foreground">Todavía no se transfirió nada.</p>
             ) : (
-              <table className="w-full text-sm">
-                <thead className="border-b text-muted-foreground">
-                  <tr>
-                    <th className="p-3 text-left font-medium">Fecha</th>
-                    <th className="p-3 text-left font-medium">Producto</th>
-                    <th className="p-3 text-right font-medium">Cantidad</th>
-                    <th className="p-3 text-left font-medium">Origen</th>
-                    <th className="p-3 text-left font-medium">Destino</th>
-                    <th className="p-3 text-left font-medium">Observaciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {historial.map((t) => (
-                    <tr key={t.id} className="border-b last:border-0">
-                      <td className="p-3 text-muted-foreground">{formatearFecha(t.fecha.slice(0, 10))}</td>
-                      <td className="p-3 font-medium">{t.producto}</td>
-                      <td className="p-3 text-right font-semibold">{t.cantidad}</td>
-                      <td className="p-3">{t.origen}</td>
-                      <td className="p-3">{t.destino}</td>
-                      <td className="p-3 text-muted-foreground">{t.observaciones || '—'}</td>
+              // Seis columnas no entran en 390 px (la tabla mide 551): scrollea la tabla dentro de la tarjeta, no la página (161 px de desborde).
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="border-b text-muted-foreground">
+                    <tr>
+                      <th className="p-3 text-left font-medium">Fecha</th>
+                      <th className="p-3 text-left font-medium">Producto</th>
+                      <th className="p-3 text-right font-medium">Cantidad</th>
+                      <th className="p-3 text-left font-medium">Origen</th>
+                      <th className="p-3 text-left font-medium">Destino</th>
+                      <th className="p-3 text-left font-medium">Observaciones</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {historial.map((t) => (
+                      <tr key={t.id} className="border-b last:border-0">
+                        <td className="p-3 text-muted-foreground">{formatearFecha(t.fecha.slice(0, 10))}</td>
+                        <td className="p-3 font-medium">{t.producto}</td>
+                        <td className="p-3 text-right font-semibold">{t.cantidad}</td>
+                        <td className="p-3">{t.origen}</td>
+                        <td className="p-3">{t.destino}</td>
+                        <td className="p-3 text-muted-foreground">{t.observaciones || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </CardContent>
         </Card>

@@ -184,9 +184,10 @@ export function Cajas({ sucursales, conActivarDesactivar = false, verMovimientos
 
   return (
     <div className="grid gap-4">
-      <div className="flex items-center justify-between">
+      {/* `flex-wrap` en la cabecera y en el grupo: el filtro de sucursal (224 px) y «Nueva caja» ensanchaban la página (79 px a 390, 148 a 320). */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <TituloPantalla icono={SquareStack}>Cajas</TituloPantalla>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {sucursales && sucursales.length > 1 && (
             <Select value={sucursalFiltro || 'todas'} onValueChange={(v) => setSucursalFiltro(v === 'todas' ? '' : v)}>
               <SelectTrigger className="h-9 w-56" aria-label="Filtrar por sucursal"><SelectValue placeholder="Todas las sucursales" /></SelectTrigger>
@@ -209,9 +210,10 @@ export function Cajas({ sucursales, conActivarDesactivar = false, verMovimientos
           {cajasVisibles.map((c) => (
             <Card key={c.id} className={c.activo ? undefined : 'opacity-50'}>
               <CardContent className="grid gap-2 pt-6">
+                {/* `flex-wrap justify-end` en los badges y `[overflow-wrap:anywhere]` en el nombre: con «Por defecto», «Inactiva» y «Turno abierto» juntos la fila medía 187 px en una tarjeta de 176 (2 px de desborde a 768 con el menú abierto). */}
                 <div className="flex items-start justify-between gap-2">
-                  <p className="flex items-center gap-2 font-semibold"><Wallet className="size-4 text-exito" />{c.nombre}</p>
-                  <div className="flex gap-1">
+                  <p className="flex items-center gap-2 font-semibold [overflow-wrap:anywhere]"><Wallet className="size-4 shrink-0 text-exito" />{c.nombre}</p>
+                  <div className="flex flex-wrap justify-end gap-1">
                     {!!c.es_default && <BadgeEstado tono="ok">Por defecto</BadgeEstado>}
                     {!c.activo && <BadgeEstado tono="neutro">Inactiva</BadgeEstado>}
                     {!!c.tiene_turno_abierto && <BadgeEstado tono="ok">Turno abierto</BadgeEstado>}
