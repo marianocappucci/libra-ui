@@ -437,6 +437,33 @@ describe('CuentaCorrienteDetalle', () => {
     expect(within(dialogo).queryByRole('alert')).toBeNull()
   })
 
+  it('sin ninguna factura tildada pide confirmación antes de registrar el pago suelto', async () => {
+    const F74 = { id: 87, concepto: 'FACTURA C 0005-00000074', fecha: '2026-08-28', total: 920000, pendiente: 920000 }
+    responder({ ...BASE,
+      '/api/cuenta-corriente/1': { cliente: ANA, movimientos: MOVS, saldo: 920000, facturas_pendientes: [F74] },
+      'POST /api/cuenta-corriente/1/pagar': { movimientos: MOVS, saldo: 0, recibo_id: null, facturas_pendientes: [] },
+    })
+    const user = userEvent.setup()
+    montar('/cuenta-corriente/1', <CuentaCorrienteDetalle />)
+    await screen.findByText('Historial de movimientos')
+    await user.click(screen.getByRole('button', { name: 'Registrar pago' }))
+    const dialogo = screen.getByRole('dialog')
+    await user.click(within(dialogo).getByRole('checkbox'))   // la destilda
+    await user.click(within(dialogo).getByRole('button', { name: 'Registrar pago' }))
+    // Pide confirmación y todavía no escribió nada.
+    const confirmacion = await screen.findByRole('alertdialog')
+    expect(confirmacion.textContent).toMatch(/ninguna factura va a figurar como cobrada/)
+    expect(() => cuerpoDe('POST /api/cuenta-corriente/1/pagar')).toThrow()
+    // Arrepentirse no manda nada.
+    await user.click(within(confirmacion).getByRole('button', { name: 'Cancelar' }))
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(() => cuerpoDe('POST /api/cuenta-corriente/1/pagar')).toThrow()
+    // Confirmar lo manda con la lista de facturas vacía.
+    await user.click(within(dialogo).getByRole('button', { name: 'Registrar pago' }))
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Registrar igual' }))
+    await waitFor(() => expect(cuerpoDe('POST /api/cuenta-corriente/1/pagar')).toMatchObject({ monto: 920000, facturas: [] }))
+  })
+
   it('con recibos abre el PDF al pagar y por movimiento; el error cierra la ventana', async () => {
     const ventana = ventanaFalsa()
     responder({
