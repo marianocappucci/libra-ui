@@ -31,6 +31,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { fecha } from '@/lib/fechas'
 
 type QrEstado = 'idle' | 'creando' | 'esperando' | 'acreditado'
@@ -147,6 +150,9 @@ export function VentaDetalle({
   const [error, setError] = useState<string | null>(null)
   const [confirmAnular, setConfirmAnular] = useState(false)
   const [confirmNota, setConfirmNota] = useState(false)
+  // La nota puede ser por el total o por un importe (parcial): lo elige quien la emite, con el saldo a la vista.
+  const [notaParcial, setNotaParcial] = useState(false)
+  const [importeNota, setImporteNota] = useState('')
   const [emitiendoNota, setEmitiendoNota] = useState(false)
   // Respaldo para un motor que todavía no manda `nota_credito_display` (ADR-034 de libracommerce): con él la nota se lee del detalle y sobrevive a recargar la venta.
   const [notaEmitidaLocal, setNotaEmitidaLocal] = useState(false)
@@ -199,14 +205,16 @@ export function VentaDetalle({
     }
   }
 
-  // La nota de crédito de la factura (total, la emite ARCA). La venta NO se anula sola: después de la nota se anula
-  // con el botón de siempre, que ahora no encuentra la factura vigente.
+  // La nota de crédito de la factura (total o por un importe; la emite ARCA). La venta NO se anula sola: después de la
+  // nota se anula con el botón de siempre, cuando la factura ya está acreditada por completo.
   async function emitirNota() {
     if (!detalle?.factura_id) return
     setError(null)
     setEmitiendoNota(true)
     try {
-      await api.post(rutaDeNotaDeCredito(detalle.factura_id))
+      // Sin cuerpo la nota es TOTAL (como siempre); con `importe`, parcial (libracore v1.130.0).
+      if (notaParcial && importeValido !== null) await api.post(rutaDeNotaDeCredito(detalle.factura_id), { importe: importeValido })
+      else await api.post(rutaDeNotaDeCredito(detalle.factura_id))
       setNotaEmitidaLocal(true)
       setConfirmNota(false)
       // Se recarga el detalle: trae la nota emitida (`nota_credito_display`) y deja la pantalla igual a como la vería quien la abra de nuevo.
@@ -309,7 +317,27 @@ export function VentaDetalle({
     : (detalle.promociones?.length ? Math.round((detalle.descuento - ahorroDePromociones) * 100) / 100 : detalle.descuento)
 
   const notaDisplay = detalle?.nota_credito_display ?? null
-  const notaEmitida = notaEmitidaLocal || notaDisplay !== null
+  // Con el saldo (libracommerce v0.44.0) la pantalla sabe si la factura ya está acreditada POR COMPLETO: una nota parcial
+  // no alcanza para anular. Sin él (un motor anterior) vale lo de antes: haya o no una nota.
+  const totalFactura = detalle?.factura_total ?? null
+  const saldo = detalle?.factura_saldo_acreditable ?? null
+  const conSaldo = saldo !== null && totalFactura !== null
+  const hayNotas = conSaldo ? totalFactura - saldo > 0.004 : (notaEmitidaLocal || notaDisplay !== null)
+  const acreditadaPorCompleto = conSaldo ? saldo <= 0.004 : hayNotas
+  // El importe que se escribió, como número, o `null` si no sirve (vacío, no numérico, cero, de más o con más de 2 decimales).
+  const importeTecleado = Number(importeNota.replace(',', '.'))
+  const importeValido: number | null =
+    importeNota.trim() !== '' && Number.isFinite(importeTecleado) && importeTecleado > 0
+    && Math.abs(importeTecleado * 100 - Math.round(importeTecleado * 100)) < 1e-6
+    && (!conSaldo || importeTecleado <= saldo + 0.004)
+      ? Math.round(importeTecleado * 100) / 100 : null
+
+  function abrirNota() {
+    // Con notas ya emitidas la total no corresponde (copia la factura entera): arranca por el saldo.
+    setNotaParcial(hayNotas)
+    setImporteNota(conSaldo && hayNotas ? String(saldo) : '')
+    setConfirmNota(true)
+  }
 
   return (
     <div className="grid gap-4">
@@ -458,9 +486,11 @@ export function VentaDetalle({
             // 🔴 Con CAE la factura la tiene ARCA: anular acá no la deshace. Se revierte con la nota de crédito, y recién
             // después se anula la venta (el servidor contesta 409 si falta la nota).
             <p role="note" className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100">
-              {notaEmitida
+              {acreditadaPorCompleto
                 ? `La nota de crédito${notaDisplay ? ` ${notaDisplay}` : ''} está emitida: ya podés anular la venta.`
-                : <>La factura {detalle.factura_display} la emitió ARCA (CAE {detalle.factura_cae}). Para anular la venta hay que emitir antes la nota de crédito{puedeEmitirNota ? '.' : ': pedísela a un administrador.'}</>}
+                : hayNotas && conSaldo
+                  ? <>La factura {detalle.factura_display} está acreditada sólo en parte: faltan {formatoMoneda(saldo)} por acreditar. Para anular la venta hay que emitir antes una nota por ese saldo{puedeEmitirNota ? '.' : ': pedísela a un administrador.'}</>
+                  : <>La factura {detalle.factura_display} la emitió ARCA (CAE {detalle.factura_cae}). Para anular la venta hay que emitir antes la nota de crédito{puedeEmitirNota ? '.' : ': pedísela a un administrador.'}</>}
             </p>
           )}
 
@@ -477,8 +507,8 @@ export function VentaDetalle({
                 </>
               )}
               {!detalle.remito_id && rutaDeRemitoNuevo && <Button asChild size="sm" variant="outline"><Link to={rutaDeRemitoNuevo}><PackageCheck />Generar remito</Link></Button>}
-              {puedeEmitirNota && detalle.factura_id && detalle.factura_cae && !notaEmitida && (
-                <Button size="sm" variant="outline" disabled={emitiendoNota} onClick={() => setConfirmNota(true)}>
+              {puedeEmitirNota && detalle.factura_id && detalle.factura_cae && !acreditadaPorCompleto && (
+                <Button size="sm" variant="outline" disabled={emitiendoNota} onClick={abrirNota}>
                   <FileMinus />{emitiendoNota ? 'Emitiendo…' : 'Emitir nota de crédito'}
                 </Button>
               )}
@@ -500,14 +530,48 @@ export function VentaDetalle({
         onConfirm={() => { anular(); setConfirmAnular(false) }}
       />
 
-      <ConfirmDialog
-        open={confirmNota}
-        onOpenChange={setConfirmNota}
-        title="¿Emitir la nota de crédito?"
-        description="Se emite ante ARCA la nota de crédito por el total de la factura y queda asociada a ella. No se puede deshacer. Después podés anular la venta."
-        confirmLabel="Emitir nota"
-        onConfirm={emitirNota}
-      />
+      <Dialog open={confirmNota} onOpenChange={setConfirmNota}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Emitir nota de crédito</DialogTitle>
+            <DialogDescription>
+              Se emite ante ARCA y queda asociada a la factura {detalle?.factura_display}. No se puede deshacer.
+              {conSaldo && <> Total de la factura {formatoMoneda(totalFactura)}{hayNotas ? <>; ya acreditado {formatoMoneda(totalFactura - saldo)}</> : null}; <strong>saldo acreditable {formatoMoneda(saldo)}</strong>.</>}
+            </DialogDescription>
+          </DialogHeader>
+          {conSaldo && (
+            <div className="grid gap-3">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="radio" name="tipo-nota" checked={!notaParcial} disabled={hayNotas}
+                       onChange={() => setNotaParcial(false)} />
+                Por el total de la factura{hayNotas ? ' (no disponible: ya tiene notas)' : ` (${formatoMoneda(totalFactura)})`}
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="radio" name="tipo-nota" checked={notaParcial} onChange={() => setNotaParcial(true)} />
+                Por un importe
+              </label>
+              {notaParcial && (
+                <div className="grid gap-1">
+                  <Label htmlFor="importe-nota">Importe a acreditar (con IVA)</Label>
+                  <Input id="importe-nota" inputMode="decimal" value={importeNota} autoFocus
+                         onChange={(e) => setImporteNota(e.target.value)} aria-invalid={importeNota.trim() !== '' && importeValido === null} />
+                  {importeNota.trim() !== '' && importeValido === null && (
+                    <p role="alert" className="text-sm text-destructive">
+                      Tiene que ser un monto mayor que cero, con hasta dos decimales y no más que el saldo ({formatoMoneda(saldo)}).
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setConfirmNota(false)}>Cancelar</Button>
+            <Button disabled={emitiendoNota || (notaParcial && importeValido === null)} onClick={emitirNota}>
+              {emitiendoNota ? 'Emitiendo…' : 'Emitir nota'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {dialogoTicket}
     </div>

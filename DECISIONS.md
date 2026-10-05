@@ -402,3 +402,14 @@ Medidos en Chromium (VentaLibra con libra-ui 0.114.1, 110 productos, 1 a 6 depó
 4. **La tabla del detalle de venta desbordaba a 768 px con el menú abierto y importes de 7 dígitos** (481 px contra 449 a 464 de contenedor: 33 px fuera de la tarjeta y 9 px de desborde de página). **Arreglo:** los bloques de ADR-017 pasan de `max-sm:` a `max-lg:` (bajo 1024 px): a 1024 el contenedor ya mide 670 px con el menú abierto y la tabla entra.
 
 **Sin tocar (medido y anotado).** (a) Los encabezados de depósito de la tabla se recortan sin puntos suspensivos ni `title` (`th` de 110 px; cosmético). (b) La tabla de la **lista de Ventas** (962 px) scrollea dentro de su contenedor a 390 y 768 px: es previa y no es de Stock; la página no desborda. (c) Los botones de acción miden 32 a 36 px (cumplen el mínimo de 24 px de WCAG 2.5.8, no los 44). (d) El diálogo de ajuste muestra «Stock resultante: 11.000 UN» con tres decimales. (e) Hay dos `<main>` anidados (`Layout.tsx` de VentaLibra).
+
+## ADR-019 — `VentaDetalle` emite la nota de crédito parcial y sigue ofreciéndola mientras quede saldo (0.115.0)
+
+**Contexto:** con las notas parciales del motor (`libracore` v1.130.0, ADR-018) una factura se acredita en varias notas y la suma no puede superar su total. La pantalla de la fase anterior (ADR-015) ofrecía sólo la nota total y dejaba de ofrecerla apenas existía *una* nota: con parciales eso escondía el botón con la factura casi entera sin acreditar y decía «ya podés anular» cuando el servidor iba a contestar 409.
+
+- Decisión 1 — `Venta` suma `factura_total` y `factura_saldo_acreditable` (`libracommerce` v0.44.0, ADR-036). **Con ellos** la pantalla decide por el saldo, no por la existencia de una nota: ofrece la nota mientras `saldo > 0`, dice cuánto falta cuando hay notas pero no alcanzan, y sólo dice «ya podés anular la venta» con el saldo en cero.
+- Decisión 2 — el botón abre un diálogo (`Dialog`, no `ConfirmDialog`, que sólo admite texto) con el total, lo ya acreditado y el saldo. **Por el total** (la de siempre, sin `importe`) sólo si la factura no tiene notas; **por un importe** (`{importe}` como número, hasta dos decimales, > 0 y ≤ saldo; acepta la coma) en cualquier caso. Con notas previas arranca en «por un importe» con el saldo escrito.
+- Decisión 3 — el servidor sigue siendo la guarda real (409/422 del motor); la validación de la pantalla evita el viaje y dice el motivo.
+- **Sin el saldo** (un motor anterior) todo sigue como en la fase anterior: nota total, sin elección de importe.
+- No verificado en navegador (jsdom).
+
