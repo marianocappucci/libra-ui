@@ -154,9 +154,10 @@ export function Tesoreria() {
 
   return (
     <div className="grid gap-4">
-      <div className="flex items-center justify-between">
+      {/* `flex-wrap` en la cabecera y en el grupo: «Transferir» y «Nueva cuenta» ensanchaban la página (17 px a 390, 87 a 320). */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <TituloPantalla icono={Landmark}>Tesorería</TituloPantalla>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Dialog open={showTransfer} onOpenChange={setShowTransfer}>
             <DialogTrigger asChild>
               <Button variant="outline" size="sm" onClick={abrirTransfer}><ArrowLeftRight />Transferir</Button>

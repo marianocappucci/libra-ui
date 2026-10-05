@@ -65,7 +65,8 @@ export function Reportes() {
     <div className="grid gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <TituloPantalla icono={BarChart3}>Reportes</TituloPantalla>
-        <div className="flex items-end gap-3">
+        {/* `flex-wrap`: los tres filtros miden 472 px y, sin wrap, ensanchaban la página (99 px de desborde a 390, 168 a 320). */}
+        <div className="flex flex-wrap items-end gap-3">
           <div className="grid gap-2"><Label>Desde</Label><Input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className="w-40" /></div>
           <div className="grid gap-2"><Label>Hasta</Label><Input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} className="w-40" /></div>
           <div className="grid gap-2">

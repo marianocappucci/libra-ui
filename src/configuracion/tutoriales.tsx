@@ -53,7 +53,7 @@ export function TutorialStep({ title, children }: { title: string; children: Rea
 
 export function TutorialLink({ href, children }: { href: string; children: ReactNode }) {
   return (
-    <a href={href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-primary hover:underline">
+    <a href={href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-primary [overflow-wrap:anywhere] hover:underline">
       {children}<ExternalLink className="size-3" />
     </a>
   )

@@ -272,7 +272,8 @@ export function Logs({ basePath = '/logs', icono }: {
         {/* El nombre de la pestaña ES el título de la sección: repetirlo en un
             `CardHeader` adentro sería decir lo mismo dos veces a un renglón de
             distancia. Los rótulos y los iconos son los de Contalibra. */}
-        <TabsList>
+        {/* `h-auto flex-wrap`: a 390 px las dos pestañas juntas miden 394 y, sin wrap, ensanchaban la página entera (4 px a 390, 74 a 320). */}
+        <TabsList className="h-auto flex-wrap">
           <TabsTrigger value="actividad">
             <BookText className="size-4" />Actividad del sistema
           </TabsTrigger>

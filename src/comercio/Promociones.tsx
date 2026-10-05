@@ -234,7 +234,8 @@ export function Promociones() {
 
   return (
     <div className="grid gap-4">
-      <div className="flex items-center justify-between">
+      {/* `flex-wrap`: a 320 px el título y «Nueva promoción» ensanchaban la página 38 px (medido en Chromium contra VentaLibra dev). */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <TituloPantalla icono={Percent}>Promociones</TituloPantalla>
         <Button onClick={abrirNueva}><Plus />Nueva promoción</Button>
       </div>
