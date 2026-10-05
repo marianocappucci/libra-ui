@@ -469,4 +469,6 @@ Medidos en Chromium (VentaLibra con libra-ui 0.114.1, 110 productos, 1 a 6 depó
 
 Medido en Chromium contra VentaLibra dev: «POS-000010» en monoespaciada mide 84,3 px y la columna de 100 dejaba una caja de 84, así que se cortaba con «…» por 0,3 px en todas las filas. La columna pasa a **110 px** (mínimo 100). El umbral de las tarjetas (ADR-020) sube 10 px: con los 3 botones de VentaLibra, de 982 a **992**; con 2, a 952. **Corrección de ADR-021:** el umbral con 3 botones era 982 (las columnas sin acciones sumaban 850, no 820 como decía un comentario de test, ya corregido). La celda de factura no cambia: ya lleva el `title` en el elemento exterior, que el navegador muestra también sobre el texto interior.
 
+**El botón del menú en el teléfono, de 44 px.** Es el único acceso al menú bajo `md` y medía 28×28 (`SidebarTrigger` es `size-7`). El `Layout` lo pide `size-11` y el contenido baja de `pt-12` a `pt-14` para no quedar debajo (44 + 8 del borde). `SidebarTrigger` mismo no cambia (en escritorio, quien lo use sigue en 28).
+
 **Flaky abierto:** `comercio-etiquetas-gondola` («Ver e imprimir» tras tildar un producto) falla más o menos una de cada ocho corridas de la suite completa, aun con 5 s de `waitFor`, y nunca con el archivo solo: no es lentitud. Sin causa encontrada todavía.

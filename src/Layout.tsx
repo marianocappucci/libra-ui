@@ -452,7 +452,8 @@ export function createLayout<TUser = { role?: string; name?: string }>({
           {/* Unico resto de la barra vieja: en mobile la sidebar arranca
               cerrada y sin esto no hay como abrirla. En desktop no hace falta
               -- la sidebar esta a la vista y Ctrl/Cmd+B la colapsa. */}
-          <SidebarTrigger className="fixed top-2 left-2 z-20 md:hidden" />
+          {/* 44 px: es el único acceso al menú en el teléfono y medía 28 (medido en Chromium contra VentaLibra dev). El contenido baja a `pt-14` para no quedar debajo. */}
+          <SidebarTrigger className="fixed top-2 left-2 z-20 size-11 md:hidden" />
           {/* min-w-0 es necesario para que los contenedores de scroll
               horizontal de las tablas (overflow-x-auto) puedan encogerse
               dentro del flex en vez de desbordarlo -- sin esto, una tabla
@@ -460,7 +461,7 @@ export function createLayout<TUser = { role?: string; name?: string }>({
               El pt-12 de mobile es el hueco del trigger flotante.
               Es un <div> y no un <main>: `SidebarInset` YA es el <main> de la pantalla, y dos <main> anidados dejan dos landmarks «main» para los
               lectores de pantalla (medido en la verificación de VentaLibra). */}
-          <div className="min-w-0 flex-1 space-y-4 p-4 pt-12 md:p-6 md:pt-6">{children}</div>
+          <div className="min-w-0 flex-1 space-y-4 p-4 pt-14 md:p-6 md:pt-6">{children}</div>
         </SidebarInset>
       </SidebarProvider>
     )
