@@ -312,7 +312,7 @@ describe('Reposición: orden', () => {
     const pedidos = pedidasAlReporte().length
 
     // Las cifras arrancan de mayor a menor; un segundo click invierte.
-    await user.click(screen.getByRole('button', { name: 'Sugerido' }))
+    await user.click(screen.getByRole('button', { name: /^Sugerido/ }))
     expect(nombresEnTabla()).toEqual(['Yerba', 'Harina', 'Sal'])
     expect(screen.getByRole('columnheader', { name: /Sugerido ▼/ }).getAttribute('aria-sort')).toBe('descending')
     await user.click(screen.getByRole('button', { name: /Sugerido/ }))
@@ -320,7 +320,7 @@ describe('Reposición: orden', () => {
     expect(screen.getByRole('columnheader', { name: /Sugerido ▲/ }).getAttribute('aria-sort')).toBe('ascending')
 
     // Por nombre arranca ascendente.
-    await user.click(screen.getByRole('button', { name: 'Producto' }))
+    await user.click(screen.getByRole('button', { name: /^Producto/ }))
     expect(nombresEnTabla()).toEqual(['Harina', 'Sal', 'Yerba'])
     await user.click(screen.getByRole('button', { name: /Producto/ }))
     expect(nombresEnTabla()).toEqual(['Yerba', 'Sal', 'Harina'])
@@ -365,7 +365,7 @@ describe('Reposición: orden', () => {
   it('un parámetro nuevo no pierde el orden elegido', async () => {
     const user = userEvent.setup()
     await abrir()
-    await user.click(screen.getByRole('button', { name: 'Producto' }))
+    await user.click(screen.getByRole('button', { name: /^Producto/ }))
     fireEvent.change(screen.getByLabelText('Días de cobertura'), { target: { value: '20' } })
     await waitFor(() => expect(ultimaConsulta()).toContain('dias_cobertura=20'))
     await waitFor(() => expect(screen.getByRole('columnheader', { name: /Producto ▲/ })).toBeTruthy())
@@ -390,12 +390,25 @@ describe('Reposición: CSV', () => {
       'GET /api/reportes/reposicion?dias_rotacion=60&dias_cobertura=15&plazo_entrega_dias=3&solo_a_pedir=false&sucursal_id=2&categoria=Bebidas')
   })
 
-  it('reordenar la tabla no cambia el CSV: el motor lo entrega en su orden de urgencia', async () => {
+  it('el CSV pide el orden activo de la tabla (columna y sentido), sin volver a pedir la lista', async () => {
     const user = userEvent.setup()
     await abrir()
-    const antes = screen.getByRole('link', { name: /CSV/ }).getAttribute('href')
-    await user.click(screen.getByRole('button', { name: 'Producto' }))
-    expect(screen.getByRole('link', { name: /CSV/ }).getAttribute('href')).toBe(antes)
+    const csv = () => screen.getByRole('link', { name: /CSV/ }).getAttribute('href')
+    // Sin ordenar, el de urgencia: nada que mandar.
+    expect(csv()).toBe(`${RUTA}/export?${consulta()}`)
+    const pedidosAntes = pedidasAlReporte().length
+    await user.click(screen.getByRole('button', { name: /^Producto/ }))
+    expect(csv()).toBe(`${RUTA}/export?${consulta()}&orden=nombre&sentido=asc`)
+    await user.click(screen.getByRole('button', { name: /^Producto/ }))
+    expect(csv()).toBe(`${RUTA}/export?${consulta()}&orden=nombre&sentido=desc`)
+    // Una numérica empieza de mayor a menor.
+    await user.click(screen.getByRole('button', { name: /^Sugerido/ }))
+    expect(csv()).toBe(`${RUTA}/export?${consulta()}&orden=sugerido&sentido=desc`)
+    // «Orden por urgencia» lo quita.
+    await user.click(screen.getByRole('button', { name: 'Orden por urgencia' }))
+    expect(csv()).toBe(`${RUTA}/export?${consulta()}`)
+    // Ordenar es local: no hubo ningún pedido nuevo.
+    expect(pedidasAlReporte().length).toBe(pedidosAntes)
   })
 })
 

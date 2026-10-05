@@ -6,9 +6,11 @@
 // `Margen`: no hay nada que varíe por producto.
 //
 // Diferencias con `Margen` que no son casualidad:
-// - **El orden es del navegador.** El motor no recibe un `orden`: devuelve la lista por urgencia (menor cobertura
-//   primero, después lo que más hay que pedir, sin rotación al final) y ése es el orden por defecto. Reordenar por
-//   otra columna es local, así que el CSV sale siempre en el orden de urgencia del motor, no en el de la tabla.
+// - **El orden de la tabla es del navegador; el del CSV lo hace el motor.** La lista llega por urgencia (menor cobertura
+//   primero, después lo que más hay que pedir, sin rotación al final) y ése es el orden por defecto; reordenar por otra
+//   columna es local y no vuelve a pedir. Al CSV, en cambio, se le manda la columna y el sentido activos (`orden` y
+//   `sentido`, motor >= 0.45.0, ADR-037) para que salga como se ve; con un motor más viejo ignora los parámetros y sale
+//   por urgencia.
 // - **Los parámetros se validan acá con los mismos topes que el motor** (`erp.reposicion.MAX_*`): un valor fuera de
 //   rango no se manda (el motor contestaría 422) y no se muestra una lista que no corresponde a lo que dicen los campos.
 //
@@ -450,7 +452,7 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
                 </Button>
               )}
               <Button asChild size="sm" variant="outline">
-                <a href={`${RUTA}/export?${consulta}`}><Download />CSV</a>
+                <a href={`${RUTA}/export?${consulta}${orden ? `&orden=${orden.clave}&sentido=${orden.sentido === 1 ? 'asc' : 'desc'}` : ''}`}><Download />CSV</a>
               </Button>
             </div>
           </CardHeader>
