@@ -76,12 +76,20 @@ describe('Ventas: tabla o tarjetas según el ancho', () => {
 
   it('la columna de acciones reserva sólo los botones que el producto muestra: sin recibo ni anular, el umbral baja 80 px', async () => {
     // VentaLibra pasa `rutaDeRecibo={null}`: medido en Chromium, la tabla mide 962 px y con 4 botones reservados el umbral quedaba en 1002.
-    // Columnas sin acciones: 820 px (con el Total de 120, ADR-021); con 2 botones (92) el umbral es 912, con 4 (172) sería 992.
-    anchoSimulado = 950
+    // Columnas sin acciones: 860 px (N° de 110 y Total de 120, ADR-021 y ADR-024); con 2 botones (92) el umbral es 952, con 4 (172) sería 1032.
+    anchoSimulado = 960
     responder({ '/api/ventas': [COBRADA], '/api/cajas/medios-disponibles': [] })
     render(<MemoryRouter><Ventas rutaDeRecibo={null} /></MemoryRouter>)
     await screen.findAllByText('V-00007')
     expect(screen.getByRole('table')).toBeTruthy()
+  })
+
+  it('el N° tiene 110 px (con 100 «POS-000010» se cortaba por 0,3 px): con 2 botones el umbral sube de 942 a 952 (ADR-024)', async () => {
+    anchoSimulado = 950
+    responder({ '/api/ventas': [COBRADA], '/api/cajas/medios-disponibles': [] })
+    render(<MemoryRouter><Ventas rutaDeRecibo={null} /></MemoryRouter>)
+    await screen.findAllByText('V-00007')
+    expect(screen.queryByRole('table')).toBeNull()
   })
 
   it('las pestañas hacen wrap en vez de ensanchar la página a 320 px', async () => {

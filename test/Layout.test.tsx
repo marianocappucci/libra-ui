@@ -286,10 +286,12 @@ describe('la barra superior no existe más', () => {
     const trigger = screen.getByLabelText('Alternar barra lateral')
     expect(trigger.className).toContain('fixed')
     expect(trigger.className).toContain('md:hidden')
+    // 44 px: es el único acceso al menú en el teléfono (medía 28, ADR-024).
+    expect(trigger.className).toContain('size-11')
   })
 
   it('el contenido deja el hueco del trigger sólo en mobile', () => {
-    // `pt-12` en mobile para no quedar debajo del botón flotante, y `md:pt-6`
+    // `pt-14` en mobile para no quedar debajo del botón flotante (44 px + 8), y `md:pt-6`
     // para que en desktop el contenido arranque arriba de todo — que es el
     // punto de haber sacado la barra.
     montarLayout()
@@ -297,7 +299,7 @@ describe('la barra superior no existe más', () => {
     // Un <div>: el <main> es `SidebarInset` (un solo landmark «main»).
     expect(main.tagName).toBe('DIV')
     expect(document.querySelectorAll('main main')).toHaveLength(0)   // dos <main> anidados dejaban dos landmarks para los lectores de pantalla
-    expect(main.className).toContain('pt-12')
+    expect(main.className).toContain('pt-14')
     expect(main.className).toContain('md:pt-6')
   })
 })
