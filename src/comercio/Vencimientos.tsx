@@ -17,9 +17,9 @@
 //   Codex): mientras llega la de un cambio de parámetros, o la recarga tras una escritura, no se muestra la tabla anterior
 //   bajo controles nuevos; se muestra «Cargando…».
 // - **El orden es del navegador**; el de origen es el del motor (por vencimiento) y el CSV sale siempre en ése.
-// - 🔴 **El aviso de que el saldo por lote puede ser MAYOR al real es permanente** (ADR-018): hasta que las ventas,
-//   devoluciones y ajustes descuenten por lote (A-4) siguen restando del stock «sin lote», así que el saldo de cada lote
-//   sobreestima lo que hay. Va arriba de todo, sin botón para cerrarlo, y se repite en los diálogos que mueven stock.
+// - 🔴 **El aviso de que el saldo por lote puede ser MAYOR al real es permanente** (ADR-018): lo anterior a A-4 (ventas,
+//   devoluciones, transferencias) y los ajustes de stock restaron del «sin lote», así que el saldo de cada lote
+//   puede sobreestimar lo que hay. Desde A-4 las ventas ya descuentan por lote: el texto no promete lo contrario. Va arriba de todo, sin botón para cerrarlo, y se repite en los diálogos que mueven stock.
 // - 🔑 **Idempotencia de las escrituras.** `asignar`, `entrada` y `merma` exigen `clave_operacion`. Cada diálogo genera UNA clave
 //   por intento del usuario y la REUSA mientras los datos que se van a enviar no cambien (volver a apretar «Confirmar»
 //   tras un rechazo del motor: no se escribió nada, la clave no se gasta). Se regenera cuando el usuario cambia algún dato.
@@ -81,8 +81,8 @@ const MAX_DIAS = 365
 const MAX_LARGO_LOTE = 64
 
 const AVISO_SALDO =
-  'Hasta que las ventas descuenten por lote, el saldo de cada lote puede ser MAYOR al real: las ventas, devoluciones y ajustes ' +
-  'siguen restando del stock “sin lote”. Contrastá con el conteo físico antes de decidir.'
+  'Las ventas, devoluciones y transferencias anteriores al descuento por lote, y los ajustes de stock, restaron del stock “sin lote”: ' +
+  'el saldo de cada lote puede ser MAYOR al real. Contrastá con el conteo físico antes de decidir.'
 
 const SIN_REVISION =
   'La base no tiene aplicada la revisión de vencimientos; pedí al administrador que ejecute libracommerce-migrar upgrade.'
