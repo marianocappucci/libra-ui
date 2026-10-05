@@ -457,8 +457,10 @@ export function createLayout<TUser = { role?: string; name?: string }>({
               horizontal de las tablas (overflow-x-auto) puedan encogerse
               dentro del flex en vez de desbordarlo -- sin esto, una tabla
               ancha empuja el layout entero en vez de scrollear.
-              El pt-12 de mobile es el hueco del trigger flotante. */}
-          <main className="min-w-0 flex-1 space-y-4 p-4 pt-12 md:p-6 md:pt-6">{children}</main>
+              El pt-12 de mobile es el hueco del trigger flotante.
+              Es un <div> y no un <main>: `SidebarInset` YA es el <main> de la pantalla, y dos <main> anidados dejan dos landmarks «main» para los
+              lectores de pantalla (medido en la verificación de VentaLibra). */}
+          <div className="min-w-0 flex-1 space-y-4 p-4 pt-12 md:p-6 md:pt-6">{children}</div>
         </SidebarInset>
       </SidebarProvider>
     )

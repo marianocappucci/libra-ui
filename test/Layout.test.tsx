@@ -294,7 +294,9 @@ describe('la barra superior no existe más', () => {
     // punto de haber sacado la barra.
     montarLayout()
     const main = screen.getByText('contenido').parentElement as HTMLElement
-    expect(main.tagName).toBe('MAIN')
+    // Un <div>: el <main> es `SidebarInset` (un solo landmark «main»).
+    expect(main.tagName).toBe('DIV')
+    expect(document.querySelectorAll('main main')).toHaveLength(0)   // dos <main> anidados dejaban dos landmarks para los lectores de pantalla
     expect(main.className).toContain('pt-12')
     expect(main.className).toContain('md:pt-6')
   })
