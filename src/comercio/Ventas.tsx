@@ -323,7 +323,8 @@ export function Ventas({
   const botonesDeAccion = 2 + (rutaDeRecibo ? 1 : 0) + (puedeAnular ? 1 : 0)
 
   const columns = useMemo<ColumnDef<Venta>[]>(() => [
-    { accessorKey: 'numero', header: sortableHeader('N°'), size: 100, minSize: 90, cell: ({ row }) => <span className="block truncate font-mono text-sm font-semibold text-primary" title={row.original.numero}>{row.original.numero}</span> },
+    // 110 px: «POS-000010» en monoespaciada mide 84,3 px y con 100 la caja quedaba en 84 y se cortaba con «…» (medido en Chromium contra VentaLibra dev).
+    { accessorKey: 'numero', header: sortableHeader('N°'), size: 110, minSize: 100, cell: ({ row }) => <span className="block truncate font-mono text-sm font-semibold text-primary" title={row.original.numero}>{row.original.numero}</span> },
     { accessorKey: 'fecha', header: 'Fecha', size: 100, minSize: 90, cell: ({ row }) => fecha(row.original.fecha) },
     {
       accessorKey: 'cliente_nombre',
