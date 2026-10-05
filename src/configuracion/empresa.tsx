@@ -156,7 +156,9 @@ export function EmpresaCard({ basePath = '/api/config/empresa' }: { basePath?: s
           <Building2 className="size-4" />Datos de la empresa
         </CardTitle>
       </CardHeader>
-      <CardContent className="grid gap-3 sm:grid-cols-2">
+      {/* `minmax(0,1fr)` bajo `sm` y `flex-wrap` en la fila del logo: con un logo cargado, la miniatura y «Logo cargado» en una fila sin
+          wrap fijaban el ancho de la única columna y el formulario ensanchaba la página 25 px a 320 (medido en Chromium contra demo). */}
+      <CardContent className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2">
         <Campo id="cfg-empresa_nombre" label="Nombre" value={datos.empresa_nombre} onChange={(v) => setDatos({ ...datos, empresa_nombre: v })} />
         <Campo id="cfg-empresa_cuit" label="CUIT" placeholder="20-12345678-9" value={datos.empresa_cuit} onChange={(v) => setDatos({ ...datos, empresa_cuit: v })} />
         <Campo id="cfg-empresa_direccion" label="Dirección" value={datos.empresa_direccion} onChange={(v) => setDatos({ ...datos, empresa_direccion: v })} />
@@ -186,7 +188,7 @@ export function EmpresaCard({ basePath = '/api/config/empresa' }: { basePath?: s
         <div className="col-span-full grid gap-2">
           <Label>Logo (PNG o JPG)</Label>
           {hayLogo && (
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <img
                 src={`${basePath}/logo?v=${version}`} alt="Logo de la empresa"
                 className="h-16 max-w-48 rounded-md border bg-white object-contain p-1.5"

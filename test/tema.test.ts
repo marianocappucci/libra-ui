@@ -250,3 +250,12 @@ describe('el éxito como texto (ADR-009, pasada visual en oscuro)', () => {
     expect((el.getAttribute('style') ?? '').trim()).toBe('')
   })
 })
+
+describe('tema.css: el lugar de la barra de scroll (ADR-027)', () => {
+  it('reserva siempre el lugar de la barra vertical: sin eso, Ventas y Stock cambiaban de modo según hacia dónde se redimensionara', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { resolve } = await import('node:path')
+    const css = readFileSync(resolve(process.cwd(), 'src/tema.css'), 'utf8')
+    expect(css).toMatch(/html\s*\{\s*scrollbar-gutter:\s*stable;\s*\}/)
+  })
+})

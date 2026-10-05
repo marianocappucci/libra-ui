@@ -11,6 +11,15 @@
  * Sin `@layer` a propósito: la regla del ítem activo tiene que ganarle a las utilidades `data-[active=true]:` de la sidebar
  * del kit, que Tailwind emite en su capa de utilidades.
  */
+/* El lugar de la barra de scroll vertical, reservado siempre (ADR-027). Con barras clásicas (escritorio Windows/Linux) la barra
+   aparecía recién cuando la página pasaba a scrollear y le quitaba ~15 px al contenido: las pantallas que eligen tabla o tarjetas
+   por el ancho de su contenedor (Stock, Ventas: `useAncho`) quedaban en un modo u otro según hacia dónde se redimensionara la ventana
+   (medido en Chromium contra VentaLibra demo: una franja de 15 px con el menú abierto), y todo el contenido saltaba al aparecer la
+   barra. Con barras superpuestas (móvil, macOS) no cambia nada. */
+html {
+  scrollbar-gutter: stable;
+}
+
 :root {
   /* Ítem activo del menú lateral (pedido del humano, 2026-10-01). El texto sale del contraste sobre el fondo: `aplicarTema` lo
      recalcula y acá queda el que corresponde al fondo por defecto. */
