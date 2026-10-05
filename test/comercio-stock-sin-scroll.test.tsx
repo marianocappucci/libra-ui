@@ -57,6 +57,12 @@ describe('Stock: tabla o tarjetas según el ancho', () => {
     expect(screen.getByText('OK')).toBeTruthy()
   })
 
+  it('en tarjetas los botones son objetivos táctiles de 44 px (ADR-021)', async () => {
+    await abrir(400)
+    const tarjeta = screen.getAllByLabelText('Stock por depósito')[0].closest('li')!
+    expect(within(tarjeta).getByLabelText('Ajustar stock').closest('div.flex')!.parentElement!.className).toBe('[&_a]:size-11 [&_button]:size-11')
+  })
+
   it('en tarjetas un depósito de nombre largo no ensancha la página: columna minmax(0,1fr), el nombre se trunca y la cantidad no (0.114.2)', async () => {
     // Medido en Chromium (390 px, 3 o más depósitos con uno de 64 caracteres): el chip aportaba su texto completo al mínimo de una columna `auto` y la página llegaba a 509 px.
     await abrir(400)

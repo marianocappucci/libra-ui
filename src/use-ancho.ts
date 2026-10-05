@@ -15,3 +15,6 @@ export function useAncho(): [(el: HTMLElement | null) => void, number] {
   }, [])
   return [ref, ancho]
 }
+
+/** Los botones de las tarjetas (la vista de los anchos angostos, donde se usa el dedo) miden 44 px, el objetivo táctil de WCAG 2.5.5; en la tabla siguen en 36 porque el ancho de la columna de acciones se calcula con ellos (`anchoColumnaAcciones`). ADR-021. */
+export const TACTIL = '[&_a]:size-11 [&_button]:size-11'
