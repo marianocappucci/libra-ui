@@ -42,8 +42,8 @@ export function Tabs({ defaultValue = '', value, onValueChange, children }: {
   )
 }
 
-export function TabsList({ children }: { className?: string; children?: ReactNode }) {
-  return <div role="tablist">{children}</div>
+export function TabsList({ className, children }: { className?: string; children?: ReactNode }) {
+  return <div role="tablist" className={className}>{children}</div>
 }
 
 export function TabsTrigger({ value, children }: {
