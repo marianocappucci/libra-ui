@@ -133,7 +133,8 @@ export function Sucursales({
       <div className="grid gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <TituloPantalla icono={Store}>{titulo}</TituloPantalla>
-          <div className="flex items-center gap-2">
+          {/* `flex-wrap` también en el grupo: «Transferir stock» y el alta juntos no entran a 320 px y ensanchaban la página 17 px (medido contra VentaLibra dev). */}
+          <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline"><Link to={rutaDeTransferencia}><ArrowLeftRight />Transferir stock</Link></Button>
             {!soloLectura && (
               <DialogTrigger asChild>

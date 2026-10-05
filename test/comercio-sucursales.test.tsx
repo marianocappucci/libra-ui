@@ -58,6 +58,13 @@ describe('Sucursales', () => {
     expect(screen.getByText('Sucursales')).toBeTruthy()
   })
 
+  it('el grupo de acciones de la cabecera hace wrap: a 320 px «Transferir stock» y el alta ensanchaban la página 17 px (ADR-023)', async () => {
+    responder(base)
+    montar('/sucursales', <Sucursales />)
+    await screen.findByText('Centro')
+    expect(screen.getByRole('link', { name: /Transferir stock/ }).parentElement!.className).toContain('flex-wrap')
+  })
+
   it('«Ver depósitos» y «Transferir stock» usan las rutas de las props (con sus defaults)', async () => {
     responder(base)
     const { unmount } = montar('/sucursales', <Sucursales />)
