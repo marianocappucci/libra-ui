@@ -164,6 +164,15 @@ function tituloDe(valor: string, opciones: [string, string][]): string | undefin
   return opciones.find(([v]) => v === valor)?.[1]
 }
 
+const RESPUESTA_INESPERADA = 'La respuesta del servidor no tiene el formato esperado.'
+
+/** Lo mínimo que lee la pantalla: un objeto con `productos` (lista) y `resumen` (objeto). */
+function esReposicion(data: unknown): data is ReposicionData {
+  if (typeof data !== 'object' || data === null) return false
+  const { productos, resumen } = data as { productos?: unknown; resumen?: unknown }
+  return Array.isArray(productos) && typeof resumen === 'object' && resumen !== null
+}
+
 /** Lo que se espera tras la última tecla en un parámetro antes de pedirle al motor: sin esto cada dígito tipeado es un pedido. */
 const DEMORA_PARAMETROS_MS = 300
 
@@ -254,6 +263,11 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
     api.get<ReposicionData>(`${RUTA}?${consulta}`)
       .then((data) => {
         if (!vigente) return
+        // Una respuesta que no es lo que el motor promete (un proxy, otra versión) no se pinta: la tabla leería `resumen` y `productos`.
+        if (!esReposicion(data)) {
+          setRespuesta({ consulta, recarga, data: null, error: RESPUESTA_INESPERADA })
+          return
+        }
         setRespuesta({ consulta, recarga, data, error: null })
         if (data && typeof data === 'object' && 'proveedor_id' in data) setConProveedor(true)
         if (data && typeof data === 'object' && 'estacionalidad' in data) setConEstacionalidad(true)
