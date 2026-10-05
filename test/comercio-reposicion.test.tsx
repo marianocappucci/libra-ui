@@ -427,6 +427,16 @@ describe('Reposición: cargando, vacío y errores', () => {
     expect(await screen.findByText('Error de conexión.')).toBeTruthy()
   })
 
+  it('una respuesta que no es lo que promete el motor se avisa y no rompe la pantalla', async () => {
+    for (const rara of [{}, { productos: [] }, { productos: 'x', resumen: {} }, [], 'hola']) {
+      responder({ ...TODO, [RUTA]: rara })
+      montar('/reposicion', <Reposicion />)
+      expect((await screen.findByText('La respuesta del servidor no tiene el formato esperado.')).getAttribute('role')).toBe('alert')
+      expect(screen.queryByRole('table')).toBeNull()
+      cleanup()
+    }
+  })
+
   it('un error tras una lista buena saca la lista, y el siguiente pedido bueno la trae de nuevo', async () => {
     await abrir()
     responder({ ...TODO, [RUTA]: { status: 403, detail: 'Solo admin' } })
