@@ -165,6 +165,20 @@ type DataTableProps<TData extends RowData> = {
   search?: DataTableSearch<TData>
 }
 
+/** Una celda (o encabezado) con identidad estable. `flexRender` monta una función como componente, y las columnas se
+ *  declaran casi siempre con `cell` inline: una función nueva en cada render del padre, o sea un componente distinto
+ *  para React, que **desmontaba y remontaba** cada celda en cada re-render. Un usuario de teclado perdía el foco (tilda
+ *  con espacio, la pantalla se actualiza, el foco se va) y un clic que caía a mitad del remonte se perdía (el flaky de
+ *  las etiquetas de góndola, libra-ui#262). Acá la función se llama directo dentro de un componente que no cambia: sus
+ *  hooks, si los tiene, quedan en esta instancia. Los componentes de verdad (clase, `memo`, `forwardRef`) siguen por
+ *  `flexRender`, que ya los monta con identidad propia. ADR-025. */
+function CeldaEstable<P extends object>({ render, contexto }: { render: unknown; contexto: P }) {
+  if (typeof render === 'function' && !(render as { prototype?: { isReactComponent?: unknown } }).prototype?.isReactComponent) {
+    return <>{(render as (p: P) => ReactNode)(contexto)}</>
+  }
+  return <>{flexRender(render as Parameters<typeof flexRender>[0], contexto)}</>
+}
+
 export function DataTable<TData extends RowData>({
   columns, data, emptyMessage = 'Sin resultados.', getRowClassName, onRowClick,
   search,
@@ -349,7 +363,7 @@ export function DataTable<TData extends RowData>({
               <TableHead key={header.id} className={cn(anySized && 'relative select-none overflow-hidden', header.column.columnDef.meta?.className)}>
                 {header.isPlaceholder
                   ? null
-                  : flexRender(header.column.columnDef.header, header.getContext())}
+                  : <CeldaEstable render={header.column.columnDef.header} contexto={header.getContext()} />}
                 {anySized && header.column.getCanResize() && (
                   <div
                     onMouseDown={header.getResizeHandler()}
@@ -380,7 +394,7 @@ export function DataTable<TData extends RowData>({
             >
               {row.getVisibleCells().map((cell) => (
                 <TableCell key={cell.id} className={cn(anySized && 'overflow-hidden', cell.column.columnDef.meta?.className)}>
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  <CeldaEstable render={cell.column.columnDef.cell} contexto={cell.getContext()} />
                 </TableCell>
               ))}
             </TableRow>
