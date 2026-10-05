@@ -33,7 +33,7 @@ import { anchoColumnaAcciones, DataTable, sortableHeader } from '../data-table'
 import { BadgeEstado, type TonoEstado } from '../badge-estado'
 import { TituloPantalla } from '../titulo-pantalla'
 import { SelectBuscable } from '../SelectBuscable'
-import { useAncho } from '../use-ancho'
+import { TACTIL, useAncho } from '../use-ancho'
 // Alias: `fecha` ya es el estado del campo de fecha del ajuste de stock.
 import { fecha as formatearFecha } from '@/lib/fechas'
 import { hoyISO } from '../fechas'
@@ -136,7 +136,7 @@ function TarjetaDeStock({ p, depositos, acciones }: { p: StockItem; depositos: D
           })}
         </ul>
       )}
-      {acciones}
+      <div className={TACTIL}>{acciones}</div>
     </li>
   )
 }

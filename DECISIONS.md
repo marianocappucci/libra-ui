@@ -430,3 +430,13 @@ Medidos en Chromium (VentaLibra con libra-ui 0.114.1, 110 productos, 1 a 6 depó
 **Medido en Chromium** (VentaLibra `71b93d3` con el kit local, 23 ventas con cliente de 113 caracteres, 1 a 4 medios, facturas, anuladas, `devuelta*` y `borrador_descartado`; 320 a 1920 px, menú abierto y colapsado, claro y oscuro): modo coherente con el umbral en 36 de 36 combinaciones (cambio exacto en el umbral, sin parpadeo), 0 desbordes dentro de 23 de 23 tarjetas y todos sus datos visibles, 0 px de desborde de página salvo el de las pestañas a 320. **Re-medido con los tres arreglos:** 0 px de desborde en los 10 anchos (las pestañas a 320 van en dos líneas de 66 px), umbral en 962 exacto (contenedor 961 tarjetas, 962 tabla sin scroll interno), modo coherente en 18 de 18. Stock con `useAncho` movido: sin cambios (tarjetas a 390, tabla a 1440).
 
 **Límites.** (1) En la tabla el total de 7 dígitos se recorta sin elipsis («$ 3.703.701,0», 23 px; previo, la columna mide 100). (2) Los botones de acción siguen en 36×36 (`size-9`, cumple 2.5.8 AA, no los 44 px). (3) Una factura de nombre muy largo (FCE MiPyME A) se trunca con elipsis en la tarjeta a ≤ 412 px, con el `title` completo. (4) En tarjetas no hay orden por columna (la lista llega ordenada del servidor).
+
+## ADR-021 — Botones táctiles de 44 px en las tarjetas y el total de Ventas entero (0.116.1)
+
+**Contexto:** dos observaciones que quedaron de las mediciones de ADR-018 y ADR-020: los botones de acción miden 36×36 (cumplen el mínimo de 24 px de WCAG 2.5.8 AA, no el objetivo de 44 px de 2.5.5), y en la tabla de Ventas un total de 7 dígitos se cortaba en seco («$ 3.703.701,0», 23 px fuera de una columna de 100).
+
+**Decisión.**
+1. **En las tarjetas de Stock y de Ventas los botones miden 44×44** (`TACTIL` en `src/use-ancho.ts`: `[&_a]:size-11 [&_button]:size-11` sobre el contenedor de acciones de la tarjeta). Las tarjetas son la vista de los anchos angostos, donde se usa el dedo. **En la tabla siguen en 36**: el ancho de la columna de acciones (`anchoColumnaAcciones`) se calcula con ellos y la tabla es la vista de escritorio. El link del número de la venta queda fuera del contenedor (no es un botón).
+2. **La columna Total de Ventas pasa de 100 a 120 px** y la celda lleva `truncate` + `title` con el importe: hasta «$ 99.999.999,00» se lee entero; más, con «…» y el importe completo al pasar el mouse. El umbral de las tarjetas sube 20 px (con los 3 botones de VentaLibra, de 962 a 982).
+
+**Límites.** No medido en Chromium (el cambio es de tamaño fijo y lo fijan los tests: clases del contenedor, `title` del total, umbral). Los botones del detalle de venta (32 px, ADR-017) no se tocan.

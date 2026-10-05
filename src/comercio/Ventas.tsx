@@ -24,7 +24,7 @@ import { anchoColumnaAcciones, DataTable, sortableHeader } from '../data-table'
 import { BadgeEstado } from '../badge-estado'
 import { TituloPantalla } from '../titulo-pantalla'
 import { SelectBuscable } from '../SelectBuscable'
-import { useAncho } from '../use-ancho'
+import { TACTIL, useAncho } from '../use-ancho'
 import { IVA_CONDITIONS } from '../facturas'
 import { fecha } from '@/lib/fechas'
 import { hoyISO } from '../fechas'
@@ -65,7 +65,7 @@ function TarjetaDeVenta({ venta, medios, factura, rutaDeDetalle, acciones }: {
       <p className="text-sm">Total: <strong className="text-base tabular-nums">{formatoMoneda(venta.total)}</strong></p>
       <div className="min-w-0" aria-label="Medios de pago">{medios}</div>
       <div className="min-w-0">{factura}</div>
-      {acciones}
+      <div className={TACTIL}>{acciones}</div>
     </li>
   )
 }
@@ -340,7 +340,8 @@ export function Ventas({
       minSize: 110,
       cell: ({ row }) => mediosDe(row.original),
     },
-    { accessorKey: 'total', header: 'Total', size: 100, minSize: 80, cell: ({ row }) => <span className="font-medium">{formatoMoneda(row.original.total)}</span> },
+    // 120 px: «$ 3.703.701,00» entra entero (con 100 se cortaba en seco, medido en Chromium); más largo, «…» y el importe en el `title`. ADR-021.
+    { accessorKey: 'total', header: 'Total', size: 120, minSize: 100, cell: ({ row }) => <span className="block truncate font-medium tabular-nums" title={formatoMoneda(row.original.total)}>{formatoMoneda(row.original.total)}</span> },
     {
       accessorKey: 'estado',
       header: 'Estado',

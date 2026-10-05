@@ -76,7 +76,8 @@ describe('Ventas: tabla o tarjetas según el ancho', () => {
 
   it('la columna de acciones reserva sólo los botones que el producto muestra: sin recibo ni anular, el umbral baja 80 px', async () => {
     // VentaLibra pasa `rutaDeRecibo={null}`: medido en Chromium, la tabla mide 962 px y con 4 botones reservados el umbral quedaba en 1002.
-    anchoSimulado = 930
+    // Columnas sin acciones: 820 px (con el Total de 120, ADR-021); con 2 botones (92) el umbral es 912, con 4 (172) sería 992.
+    anchoSimulado = 950
     responder({ '/api/ventas': [COBRADA], '/api/cajas/medios-disponibles': [] })
     render(<MemoryRouter><Ventas rutaDeRecibo={null} /></MemoryRouter>)
     await screen.findAllByText('V-00007')
@@ -86,6 +87,21 @@ describe('Ventas: tabla o tarjetas según el ancho', () => {
   it('las pestañas hacen wrap en vez de ensanchar la página a 320 px', async () => {
     await abrir(300)
     expect(screen.getByRole('tablist').className).toContain('flex-wrap')
+  })
+
+  it('en tarjetas los botones son objetivos táctiles de 44 px; en la tabla siguen en 36 (ADR-021)', async () => {
+    await abrir(390)
+    const tarjeta = within(screen.getByRole('list', { name: 'Ventas' })).getAllByRole('listitem')[0]
+    const contenedor = within(tarjeta).getByLabelText('Imprimir ticket').closest('div.flex')!.parentElement!
+    expect(contenedor.className).toBe('[&_a]:size-11 [&_button]:size-11')
+    // El número (link al detalle) queda afuera: no es un botón.
+    expect(contenedor.contains(within(tarjeta).getByRole('link', { name: 'V-00007' }))).toBe(false)
+  })
+
+  it('en la tabla el total entra entero (columna de 120 px) y, si no, lleva el importe en el title (ADR-021)', async () => {
+    await abrir(1600, [{ ...COBRADA, total: 3703701 }])
+    const celda = within(screen.getByRole('table')).getByTitle(/3\.703\.701/)
+    expect(celda.className).toContain('truncate')
   })
 
   it('sin ventas, en tarjetas, el mismo aviso que la tabla', async () => {
