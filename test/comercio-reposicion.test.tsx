@@ -232,6 +232,23 @@ describe('Reposición: lo que pide', () => {
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
+  it('al tipear un parámetro se pide una sola vez, con el valor final, y mientras tanto no se muestra la tabla de antes', async () => {
+    const user = userEvent.setup()
+    await abrir()
+    const antes = pedidasAlReporte().length
+    const campo = screen.getByLabelText('Días de rotación')
+    await user.clear(campo)
+    await user.type(campo, '365')
+    // Recién tipeado: nada nuevo pedido y la lista de otros parámetros no está a la vista.
+    expect(pedidasAlReporte().length).toBe(antes)
+    expect(screen.queryByRole('table')).toBeNull()
+    expect(screen.getByRole('status').textContent).toContain('Cargando')
+    await waitFor(() => expect(ultimaConsulta()).toBe(pide('', 'dias_rotacion=365&dias_cobertura=15&plazo_entrega_dias=3&solo_a_pedir=true')))
+    // Un solo pedido por toda la tanda de teclas (no uno por dígito, ni con el campo vacío).
+    expect(pedidasAlReporte().length).toBe(antes + 1)
+    await screen.findByRole('table')
+  })
+
   it('«Sólo lo que hay que pedir» viene marcado, y al desmarcarlo se pide todo (y el vacío lo dice distinto)', async () => {
     const user = userEvent.setup()
     await abrir()

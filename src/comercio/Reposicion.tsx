@@ -164,6 +164,9 @@ function tituloDe(valor: string, opciones: [string, string][]): string | undefin
   return opciones.find(([v]) => v === valor)?.[1]
 }
 
+/** Lo que se espera tras la última tecla en un parámetro antes de pedirle al motor: sin esto cada dígito tipeado es un pedido. */
+const DEMORA_PARAMETROS_MS = 300
+
 export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: ReposicionProps = {}) {
   const [valores, setValores] = useState<Record<ClaveParametro, string>>(
     () => Object.fromEntries(PARAMETROS.map((p) => [p.clave, p.defecto])) as Record<ClaveParametro, string>,
@@ -199,17 +202,30 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
   // (y no de estados sueltos que hay que apagar y prender) evita mostrar el error o la carga de una consulta vieja.
   const [respuesta, setRespuesta] = useState<{ consulta: string; recarga: number; data: ReposicionData | null; error: string | null } | null>(null)
 
+  // Los parámetros que se tipean se piden con demora (DEMORA_PARAMETROS_MS): los selectores y las casillas, no.
+  const [valoresPedidos, setValoresPedidos] = useState(valores)
+  useEffect(() => {
+    if (valoresPedidos === valores) return
+    const t = setTimeout(() => setValoresPedidos(valores), DEMORA_PARAMETROS_MS)
+    return () => clearTimeout(t)
+  }, [valores, valoresPedidos])
+  // Mientras los controles van adelante de lo pedido, la tabla de antes (de otros parámetros) no se muestra.
+  const demorando = valoresPedidos !== valores
+
   const errores = Object.fromEntries(PARAMETROS.map((p) => [p.clave, errorDelParametro(valores[p.clave], p.max)])) as
     Record<ClaveParametro, string | null>
+  // Se pide sólo si valen los parámetros de ahora y los que se van a mandar.
   const valido = PARAMETROS.every((p) => errores[p.clave] === null)
+  const validoPedido = valido && PARAMETROS.every((p) => errorDelParametro(valoresPedidos[p.clave], p.max) === null)
 
   // Una sola forma de armar la consulta para el JSON y para el CSV. `null` con un parámetro inválido: no se pide.
   const consulta = useMemo(() => {
-    if (!valido) return null
+    // Con los controles adelante de lo pedido tampoco se pide: sería repetir la consulta de antes.
+    if (!validoPedido || demorando) return null
     const q = new URLSearchParams({
-      dias_rotacion: String(Number(valores.dias_rotacion)),
-      dias_cobertura: String(Number(valores.dias_cobertura)),
-      plazo_entrega_dias: String(Number(valores.plazo_entrega_dias)),
+      dias_rotacion: String(Number(valoresPedidos.dias_rotacion)),
+      dias_cobertura: String(Number(valoresPedidos.dias_cobertura)),
+      plazo_entrega_dias: String(Number(valoresPedidos.plazo_entrega_dias)),
       solo_a_pedir: String(soloAPedir),
       ...(estacionalidad ? { estacionalidad: 'true' } : {}),
       ...(descontarPorVencer ? { descontar_por_vencer: 'true' } : {}),
@@ -218,7 +234,7 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
     if (categoria !== TODAS) q.set('categoria', categoria)
     if (proveedor !== TODAS) q.set('proveedor_id', proveedor)
     return q.toString()
-  }, [valido, valores, soloAPedir, estacionalidad, descontarPorVencer, sucursal, categoria, proveedor])
+  }, [validoPedido, demorando, valoresPedidos, soloAPedir, estacionalidad, descontarPorVencer, sucursal, categoria, proveedor])
 
   // Sin sucursales o sin categorías (un producto sin sucursales, o un usuario sin permiso) la pantalla sigue: sólo
   // pierde ese filtro.
