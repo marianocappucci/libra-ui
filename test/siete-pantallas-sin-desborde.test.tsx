@@ -63,6 +63,17 @@ describe('Configuración', () => {
   })
   const abrir = (ruta: string) => render(<MemoryRouter initialEntries={[ruta]}><Configuracion /></MemoryRouter>)
 
+  it('Empresa con logo: la fila de la miniatura hace wrap y la columna puede achicarse (25 px de desborde a 320, medido en demo)', async () => {
+    responder({
+      '/api/config/empresa': {}, '/api/config/empresa/logo': {}, '/api/config/backups': [], '/api/config/resguardo-externo': { contratado: false },
+    })
+    abrir('/configuracion')
+    const logo = await screen.findByAltText('Logo de la empresa')
+    expect(logo.parentElement!.className).toContain('flex-wrap')
+    const contenido = document.getElementById('cfg-empresa_nombre')!.closest('.gap-3')!
+    expect(contenido.className).toContain('grid-cols-[minmax(0,1fr)]')
+  })
+
   it('la barra de secciones hace wrap: con siete pestañas medía 865 px y ensanchaba la página 491 px a 390', async () => {
     abrir('/configuracion')
     tiene(await screen.findByRole('tablist'), 'h-auto', 'flex-wrap')

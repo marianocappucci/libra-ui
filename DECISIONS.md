@@ -497,3 +497,9 @@ pregunte **antes de emitir**.
   obligatoria (y «cargá el CBU y la modalidad» si el emisor todavía no puede emitirla); eligió FCE y no corresponde →
   una `note`, porque ARCA la autoriza igual. Si el registro no contesta (o la consulta falla), **no se muestra nada**.
 
+
+## ADR-027 — El lugar de la barra de scroll, reservado siempre; y Empresa con logo a 320 (0.117.1)
+
+**Barra de scroll.** Con barras clásicas (escritorio Windows/Linux) la barra vertical aparecía recién cuando la página scrolleaba y le quitaba 15 px al contenido. Las pantallas que eligen tabla o tarjetas por el ancho de su contenedor (`useAncho`: Ventas, Stock) quedaban en un modo u otro según el sentido del redimensionado: medido en Chromium con un build de VentaLibra, en `/ventas` con el menú abierto, **15 anchos de ventana (1346 a 1360) daban tabla bajando y tarjetas subiendo** (al pasar a tarjetas la página se alarga, aparece la barra y el contenedor queda por debajo del umbral). **Decisión:** `html { scrollbar-gutter: stable; }` en `tema.css`, que importan todos los productos. Medido después: 0 diferencias entre sentidos, 0 desborde horizontal en Ventas, Stock, Dashboard, Configuración y Libros IVA a 1280, 1920 y 390. **Costo, visible:** en una página corta (sin scroll vertical) a escritorio con barras clásicas el contenido queda 15 px más angosto y el margen derecho, ~39 px contra 24 del izquierdo; el hueco es del color de la página. Con barras superpuestas (móvil, macOS) no cambia nada. `stable both-edges` lo simetrizaría a costa de 30 px: no se tomó.
+
+**Configuración › Empresa con logo.** Medido en demo (que tiene logo; dev no): a 320 px el formulario ensanchaba la página 25 px. La miniatura y «Logo cargado» van en una fila sin wrap, y ese ancho fijaba la única columna de la grilla. Probado inyectando el cambio: `flex-wrap` en esa fila lo lleva a 0; `minmax(0,1fr)` solo, no. Van los dos (la columna con `minmax(0,1fr)` bajo `sm` como resguardo).
