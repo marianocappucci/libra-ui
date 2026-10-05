@@ -266,6 +266,11 @@ export type Venta = {
   factura_cae?: string | null
   /** La nota de crédito con CAE de esa factura (`NOTA CREDITO C 0005-00000001`), o `null` (libracommerce v0.42.0, ADR-034): con ella la pantalla sabe, al reabrir la venta, que ya se puede anular. */
   nota_credito_display?: string | null
+  /** El total de la factura y lo que queda por acreditar de ella (las notas con CAE SUMAN: libracore v1.130.0, libracommerce
+   *  v0.44.0, ADR-036). `null` si no hay factura con CAE. Con ellos la pantalla sigue ofreciendo la nota mientras haya saldo,
+   *  sugiere el importe y sabe cuándo ya se puede anular la venta (saldo en cero). Sin ellos (un motor anterior) la nota es total. */
+  factura_total?: number | null
+  factura_saldo_acreditable?: number | null
   remito_id: number | null
   /** Las promociones que se aplicaron a la venta (`sale_promotions`). Sólo las trae un producto que las
    *  monta (VentaLibra); su ahorro ya está dentro de `descuento`. */

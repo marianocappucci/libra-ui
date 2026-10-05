@@ -574,10 +574,10 @@ describe('VentaDetalle', () => {
       const user = userEvent.setup()
       montarDetalle(21, { puedeAnular: true, puedeEmitirNota: true })
       await user.click(await screen.findByRole('button', { name: /Emitir nota de crédito/ }))
-      await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Cancelar' }))
+      await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancelar' }))
       expect(pedidas().filter((p) => p.includes('nota-credito'))).toHaveLength(0)
       await user.click(screen.getByRole('button', { name: /Emitir nota de crédito/ }))
-      await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Emitir nota' }))
+      await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Emitir nota' }))
       expect((await screen.findByRole('note')).textContent).toMatch(/ya podés anular la venta/)
       expect(pedidas().filter((p) => p === 'POST /api/facturas/55/nota-credito')).toHaveLength(1)
       expect(screen.queryByRole('button', { name: /Emitir nota de crédito/ })).toBeNull()
@@ -602,7 +602,7 @@ describe('VentaDetalle', () => {
       const user = userEvent.setup()
       montarDetalle(21, { puedeAnular: true, puedeEmitirNota: true })
       await user.click(await screen.findByRole('button', { name: /Emitir nota de crédito/ }))
-      await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Emitir nota' }))
+      await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Emitir nota' }))
       expect((await screen.findByRole('note')).textContent).toMatch(/NOTA CREDITO C 0001-00000007 está emitida/)
       expect(pedidas().filter((p) => p === 'GET /api/ventas/21').length).toBeGreaterThanOrEqual(2)
     })
@@ -619,7 +619,7 @@ describe('VentaDetalle', () => {
       const user = userEvent.setup()
       montarDetalle(21, { puedeEmitirNota: true })
       await user.click(await screen.findByRole('button', { name: /Emitir nota de crédito/ }))
-      await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Emitir nota' }))
+      await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Emitir nota' }))
       expect(await screen.findByText(/ya tiene la Nota de Crédito/)).toBeTruthy()
       // Se anuncia (`role="alert"`) y recibe el foco: se muestra arriba y quien lo provocó está en los botones, más abajo (en un móvil quedaba fuera de pantalla).
       const alerta = await screen.findByRole('alert')
@@ -644,6 +644,95 @@ describe('VentaDetalle', () => {
       await screen.findByText(/Venta V-00009/)
       expect(screen.queryByRole('note')).toBeNull()
       expect(screen.queryByRole('button', { name: /Emitir nota de crédito/ })).toBeNull()
+    })
+
+    // ── La nota PARCIAL (libracore v1.130.0, libracommerce v0.44.0): el detalle trae el saldo acreditable ──
+    describe('nota parcial', () => {
+      const CON_SALDO: Venta = { ...CON_CAE, factura_total: 180, factura_saldo_acreditable: 180 }
+
+      async function abrirDialogo(user: ReturnType<typeof userEvent.setup>) {
+        await user.click(await screen.findByRole('button', { name: /Emitir nota de crédito/ }))
+        return within(await screen.findByRole('dialog'))
+      }
+
+      it('muestra el total y el saldo, y por defecto emite la nota TOTAL sin importe', async () => {
+        responder({ ...BASE, '/api/ventas/21': CON_SALDO, 'POST /api/facturas/55/nota-credito': {} })
+        const user = userEvent.setup()
+        montarDetalle(21, { puedeAnular: true, puedeEmitirNota: true })
+        const dialogo = await abrirDialogo(user)
+        expect(dialogo.getByText(/saldo acreditable/).textContent).toMatch(/180,00/)
+        expect((dialogo.getByLabelText(/Por el total de la factura/) as HTMLInputElement).checked).toBe(true)
+        await user.click(dialogo.getByRole('button', { name: 'Emitir nota' }))
+        await waitFor(() => expect(pedidas()).toContain('POST /api/facturas/55/nota-credito'))
+        const llamada = fetchMock.mock.calls.find((c) => String(c[0]).includes('/nota-credito'))!
+        // Sin `importe` el motor la lee como TOTAL (el cliente HTTP manda `{}` cuando no hay cuerpo).
+        expect(JSON.parse(String((llamada[1] as RequestInit).body ?? '{}'))).not.toHaveProperty('importe')
+      })
+
+      it('por un importe manda {importe} como número, acepta la coma y no deja pasar lo inválido', async () => {
+        responder({ ...BASE, '/api/ventas/21': CON_SALDO, 'POST /api/facturas/55/nota-credito': {} })
+        const user = userEvent.setup()
+        montarDetalle(21, { puedeAnular: true, puedeEmitirNota: true })
+        const dialogo = await abrirDialogo(user)
+        await user.click(dialogo.getByLabelText('Por un importe'))
+        const campo = dialogo.getByLabelText(/Importe a acreditar/)
+        const emitir = dialogo.getByRole('button', { name: 'Emitir nota' })
+        expect(emitir).toBeDisabled()                                         // vacío
+        for (const malo of ['0', '-5', 'abc', '10.005', '180,01']) {          // cero, negativo, texto, 3 decimales, más que el saldo
+          fireEvent.change(campo, { target: { value: malo } })
+          expect(emitir).toBeDisabled()
+          expect(dialogo.getByRole('alert').textContent).toMatch(/no más que el saldo/)
+        }
+        fireEvent.change(campo, { target: { value: '45,50' } })
+        expect(emitir).toBeEnabled()
+        await user.click(emitir)
+        await waitFor(() => expect(pedidas()).toContain('POST /api/facturas/55/nota-credito'))
+        const llamada = fetchMock.mock.calls.find((c) => String(c[0]).includes('/nota-credito'))!
+        expect(JSON.parse(String((llamada[1] as RequestInit).body))).toEqual({ importe: 45.5 })
+      })
+
+      it('con notas ya emitidas la total no está, arranca por el saldo y el aviso dice cuánto falta (no deja anular)', async () => {
+        const PARCIAL: Venta = { ...CON_CAE, factura_total: 180, factura_saldo_acreditable: 130, nota_credito_display: 'NOTA DE CREDITO C 0005-00000001' }
+        responder({ ...BASE, '/api/ventas/21': PARCIAL })
+        const user = userEvent.setup()
+        montarDetalle(21, { puedeAnular: true, puedeEmitirNota: true })
+        const aviso = await screen.findByRole('note')
+        expect(aviso.textContent).toMatch(/acreditada sólo en parte/)
+        expect(aviso.textContent).toMatch(/130,00/)
+        expect(aviso.textContent).not.toMatch(/ya podés anular/)
+        const dialogo = await abrirDialogo(user)
+        expect(dialogo.getByText(/ya acreditado/).textContent).toMatch(/50,00/)
+        expect((dialogo.getByLabelText(/Por el total de la factura/) as HTMLInputElement).disabled).toBe(true)
+        expect((dialogo.getByLabelText('Por un importe') as HTMLInputElement).checked).toBe(true)
+        expect((dialogo.getByLabelText(/Importe a acreditar/) as HTMLInputElement).value).toBe('130')
+      })
+
+      it('con el saldo en cero ya no ofrece la nota y deja anular', async () => {
+        const COMPLETA: Venta = { ...CON_CAE, factura_total: 180, factura_saldo_acreditable: 0, nota_credito_display: 'NOTA DE CREDITO C 0005-00000002' }
+        responder({ ...BASE, '/api/ventas/21': COMPLETA })
+        montarDetalle(21, { puedeAnular: true, puedeEmitirNota: true })
+        expect((await screen.findByRole('note')).textContent).toMatch(/ya podés anular la venta/)
+        expect(screen.queryByRole('button', { name: /Emitir nota de crédito/ })).toBeNull()
+      })
+
+      it('quien no puede emitir ve cuánto falta y a quién pedirlo', async () => {
+        const PARCIAL: Venta = { ...CON_CAE, factura_total: 180, factura_saldo_acreditable: 130, nota_credito_display: 'NOTA DE CREDITO C 0005-00000001' }
+        responder({ ...BASE, '/api/ventas/21': PARCIAL })
+        montarDetalle(21, { puedeAnular: true })
+        const aviso = await screen.findByRole('note')
+        expect(aviso.textContent).toMatch(/130,00/)
+        expect(aviso.textContent).toMatch(/administrador/)
+        expect(screen.queryByRole('button', { name: /Emitir nota de crédito/ })).toBeNull()
+      })
+
+      it('un servidor sin el saldo (motor anterior) sigue ofreciendo sólo la nota total', async () => {
+        responder({ ...BASE, '/api/ventas/21': CON_CAE, 'POST /api/facturas/55/nota-credito': {} })
+        const user = userEvent.setup()
+        montarDetalle(21, { puedeAnular: true, puedeEmitirNota: true })
+        const dialogo = await abrirDialogo(user)
+        expect(dialogo.queryByLabelText('Por un importe')).toBeNull()
+        expect(dialogo.queryByText(/saldo acreditable/)).toBeNull()
+      })
     })
   })
 
