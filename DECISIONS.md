@@ -507,3 +507,9 @@ pregunte **antes de emitir**.
 ## ADR-028 — El CSV de Reposición sale en el orden de la tabla (0.118.0)
 
 La tabla se ordena en el navegador, pero el CSV lo arma el motor y salía siempre por urgencia: quien ordenaba y exportaba recibía otro orden. Desde libracommerce 0.45.0 (ADR-037 del motor) el export acepta `orden` y `sentido`; el enlace «CSV» los manda cuando hay una columna activa (los mismos nombres de columna que el motor). La lista sigue ordenándose en local y no vuelve a pedirse. Con un motor anterior, que ignora los parámetros, el CSV sale por urgencia como antes. El CSV no se arma en el kit: ahí no viven `csv_seguro` ni los booleanos legibles.
+
+## ADR-029 — Una entrada del menú se marca también en las rutas que agrupa (0.119.0)
+
+El menú marcaba una entrada sólo si la ruta coincidía exacta con su `to`. Una sección que agrupa pantallas con rutas propias quedaba sin ninguna entrada marcada al entrar a una de ellas: en LibraCargo, «Comprobantes» abre las pre facturas (`/pre-facturas/7`), que salieron del menú cuando se juntaron en una sección con pestañas (pedido del humano, 2026-10-06). El producto lo había resuelto con un parche sobre una API interna de react-router (`UNSAFE_LocationContext`).
+
+**Decisión.** `NavItem` y `NavChild` aceptan `activoEn?: string[]`: rutas, además de `to`, en las que la entrada se marca, cada una con todo lo que cuelga de ella (`/pre-facturas` cubre `/pre-facturas/7/editar`, no `/pre-facturas-viejas`). La regla vive en `estaActivo`, exportada y testeada. Sin `activoEn`, todo igual que antes.

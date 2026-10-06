@@ -49,9 +49,23 @@ import type { ProductLogo } from './branding'
 import { cn } from './utils'
 import { fijarModo, leerModo, suscribirseAlModo, type Modo } from './modo'
 
+/** Si la ruta actual corresponde a una entrada del menú: la suya exacta, o una
+ *  de `activoEn` —ella misma o cualquier ruta debajo (`/pre-facturas` cubre
+ *  `/pre-facturas/7/editar`, pero no `/pre-facturas-viejas`)—.
+ *
+ *  🔑 Existe para una sección que agrupa pantallas con rutas propias (las
+ *  pestañas de Comprobantes de LibraCargo, que abren las pre facturas): sin
+ *  esto, entrar al detalle dejaba el menú sin ninguna entrada marcada. */
+export function estaActivo(pathname: string, to: string, activoEn?: string[]): boolean {
+  if (pathname === to) return true
+  return (activoEn ?? []).some((p) => pathname === p || pathname.startsWith(`${p.replace(/\/$/, '')}/`))
+}
+
 export type NavChild<TUser> = {
   to: string
   label: string
+  /** Rutas, además de `to`, en las que esta entrada se marca activa. Ver `estaActivo`. */
+  activoEn?: string[]
   module?: string
   icon?: ComponentType<{ className?: string }>
   hideFor?: (user: TUser) => boolean
@@ -61,6 +75,8 @@ export type NavItem<TUser> = {
   to: string
   label: string
   icon: ComponentType<{ className?: string }>
+  /** Rutas, además de `to`, en las que esta entrada se marca activa. Ver `estaActivo`. */
+  activoEn?: string[]
   module?: string
   adminOnly?: boolean
   hideFor?: (user: TUser) => boolean
@@ -284,7 +300,7 @@ export function createLayout<TUser = { role?: string; name?: string }>({
                         .filter((child) => moduleVisible(child.module))
                       return (
                         <SidebarMenuItem key={item.to}>
-                          <SidebarMenuButton asChild isActive={location.pathname === item.to}>
+                          <SidebarMenuButton asChild isActive={estaActivo(location.pathname, item.to, item.activoEn)}>
                             <NavLink to={item.to}>
                               <item.icon className="size-4" />
                               <span>{item.label}</span>
@@ -323,7 +339,7 @@ export function createLayout<TUser = { role?: string; name?: string }>({
                             <SidebarMenuSub>
                               {children.map((child) => (
                                 <SidebarMenuSubItem key={child.to}>
-                                  <SidebarMenuSubButton asChild isActive={location.pathname === child.to}>
+                                  <SidebarMenuSubButton asChild isActive={estaActivo(location.pathname, child.to, child.activoEn)}>
                                     <NavLink to={child.to}>
                                       {child.icon && <child.icon className="size-4" />}
                                       <span>{child.label}</span>
