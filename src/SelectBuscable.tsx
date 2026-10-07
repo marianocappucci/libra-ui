@@ -15,11 +15,18 @@
 // las tiraba en silencio y el control quedaba **sin nombre accesible incluso
 // dentro de un formulario con su `<FormLabel>` puesto**. Ver el bloque de
 // props de abajo.
+//
+// **v0.121.0 (2026-10-07)**: modo `buscarEscribiendo`. El control cerrado es un
+// **campo de texto con lupa** y no un botón: se escribe encima y la lista se
+// abre filtrada. En el modo por defecto (el botón que abre un desplegable con
+// el buscador adentro) la gente no descubre que puede escribir. Ver ADR-031.
 import {
   useEffect, useId, useMemo, useRef, useState,
   type KeyboardEvent as ReactKeyboardEvent,
+  type ChangeEvent,
+  type RefObject,
 } from 'react'
-import { Check, ChevronsUpDown, Search } from 'lucide-react'
+import { Check, ChevronsUpDown, Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { coincideBusqueda } from './utils'
 import { Input } from '@/components/ui/input'
@@ -40,9 +47,16 @@ type Props = {
   /** Texto cuando la búsqueda no encuentra nada. */
   emptyMessage?: string
   disabled?: boolean
-  /** Clase del botón que abre el desplegable (para fijarle el ancho). */
+  /** Clase del botón que abre el desplegable (para fijarle el ancho). Con
+   *  `buscarEscribiendo` va al contenedor del campo, que es lo que tiene ancho. */
   className?: string
   ariaLabel?: string
+  /** Modo «escribir para buscar» (v0.121.0, ADR-031): el control cerrado es un
+   *  campo de texto con lupa, no un botón. Escribir filtra y abre la lista al
+   *  instante; con algo elegido el campo muestra su etiqueta y una × lo vacía.
+   *  Por defecto (`false`) todo es como antes. El `placeholder` es lo que se ve
+   *  con el campo vacío: conviene que diga qué se busca («Buscar cliente…»). */
+  buscarEscribiendo?: boolean
   // --- Lo que inyecta un `FormControl` de shadcn ---------------------------
   //
   // `FormControl` es un `Slot.Root`: le pasa estas tres props **al hijo**, sin
@@ -65,7 +79,56 @@ type Props = {
   'aria-invalid'?: boolean | 'true' | 'false'
 }
 
-export function SelectBuscable({
+export function SelectBuscable(props: Props) {
+  return props.buscarEscribiendo ? <SelectDeCampo {...props} /> : <SelectDeBoton {...props} />
+}
+
+/** Las opciones del desplegable, que comparten los dos modos. `idOpcion` sólo lo
+ *  pasa el modo de campo (lo necesita su `aria-activedescendant`): en el otro
+ *  el DOM queda como siempre. */
+function ListaDeOpciones({
+  listaRef, id, filtradas, value, resaltada, setResaltada, elegir, emptyMessage, idOpcion,
+}: {
+  listaRef: RefObject<HTMLDivElement | null>
+  id: string
+  filtradas: OpcionSelect[]
+  value: string
+  resaltada: number
+  setResaltada: (i: number) => void
+  elegir: (o: OpcionSelect) => void
+  emptyMessage: string
+  idOpcion?: (i: number) => string
+}) {
+  return (
+    <div ref={listaRef} id={id} role="listbox" className="max-h-60 overflow-y-auto">
+      {filtradas.length === 0 ? (
+        <p className="px-2 py-3 text-center text-sm text-muted-foreground">{emptyMessage}</p>
+      ) : (
+        filtradas.map((o, i) => (
+          <div
+            key={o.value}
+            id={idOpcion?.(i)}
+            role="option"
+            aria-selected={o.value === value}
+            data-resaltada={i === resaltada}
+            onClick={() => elegir(o)}
+            onMouseEnter={() => setResaltada(i)}
+            className={cn(
+              'flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm',
+              i === resaltada && 'bg-accent text-accent-foreground',
+            )}
+          >
+            <Check className={cn('size-4 shrink-0', o.value !== value && 'opacity-0')} />
+            <span className="truncate">{o.label}</span>
+            {o.hint && <span className="ml-auto truncate text-xs text-muted-foreground">{o.hint}</span>}
+          </div>
+        ))
+      )}
+    </div>
+  )
+}
+
+function SelectDeBoton({
   value, onChange, opciones, placeholder = 'Elegí una opción…',
   emptyMessage = 'Sin resultados.', disabled, className, ariaLabel,
   id, 'aria-describedby': describedBy, 'aria-invalid': invalido,
@@ -181,30 +244,174 @@ export function SelectBuscable({
             />
           </div>
 
-          <div ref={lista} id={`${idInterno}-lista`} role="listbox" className="max-h-60 overflow-y-auto">
-            {filtradas.length === 0 ? (
-              <p className="px-2 py-3 text-center text-sm text-muted-foreground">{emptyMessage}</p>
-            ) : (
-              filtradas.map((o, i) => (
-                <div
-                  key={o.value}
-                  role="option"
-                  aria-selected={o.value === value}
-                  data-resaltada={i === resaltada}
-                  onClick={() => elegir(o)}
-                  onMouseEnter={() => setResaltada(i)}
-                  className={cn(
-                    'flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm',
-                    i === resaltada && 'bg-accent text-accent-foreground',
-                  )}
-                >
-                  <Check className={cn('size-4 shrink-0', o.value !== value && 'opacity-0')} />
-                  <span className="truncate">{o.label}</span>
-                  {o.hint && <span className="ml-auto truncate text-xs text-muted-foreground">{o.hint}</span>}
-                </div>
-              ))
-            )}
-          </div>
+          <ListaDeOpciones
+            listaRef={lista} id={`${idInterno}-lista`} filtradas={filtradas} value={value}
+            resaltada={resaltada} setResaltada={setResaltada} elegir={elegir} emptyMessage={emptyMessage}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** El modo `buscarEscribiendo` (v0.121.0, ADR-031): el control cerrado es un campo
+ *  de texto con lupa. Es un componente aparte y no una rama del de botón para que
+ *  éste, que usan once pantallas, no cambie ni un nodo del DOM.
+ *
+ *  `consulta` es `null` mientras no se está buscando: el campo muestra la etiqueta
+ *  de lo elegido y la lista, si se abre, muestra todo. En cuanto se escribe pasa a
+ *  ser el texto del campo y filtra. Cerrar la lista por cualquier camino la vuelve
+ *  a `null`: la etiqueta elegida reaparece y lo escrito a medias se descarta. */
+function SelectDeCampo({
+  value, onChange, opciones, placeholder = 'Buscar…',
+  emptyMessage = 'Sin resultados.', disabled, className, ariaLabel,
+  id, 'aria-describedby': describedBy, 'aria-invalid': invalido,
+}: Props) {
+  const [abierto, setAbierto] = useState(false)
+  const [consulta, setConsulta] = useState<string | null>(null)
+  const [resaltada, setResaltada] = useState(0)
+  const campo = useRef<HTMLInputElement>(null)
+  const lista = useRef<HTMLDivElement>(null)
+  // Para el primer `mouseup` tras enfocar con el mouse: los navegadores lo usan
+  // para colocar el cursor y deshacen el «seleccionar todo» del foco.
+  const recienEnfocado = useRef(false)
+  const idInterno = useId()
+  const idLista = `${idInterno}-lista`
+  const idOpcion = (i: number) => `${idInterno}-opcion-${i}`
+
+  const seleccionada = opciones.find((o) => o.value === value)
+
+  const filtradas = useMemo(
+    () => opciones.filter((o) => coincideBusqueda(`${o.label} ${o.hint ?? ''}`, consulta ?? '')),
+    [opciones, consulta],
+  )
+
+  // Elegir deja el foco en el campo; con la etiqueta recién puesta todo
+  // seleccionada, la próxima letra empieza una búsqueda nueva en vez de
+  // pegarse al nombre elegido.
+  const etiqueta = seleccionada?.label
+  useEffect(() => {
+    if (document.activeElement === campo.current) campo.current?.select()
+  }, [etiqueta])
+
+  useEffect(() => {
+    if (!abierto) return
+    lista.current?.querySelector('[data-resaltada="true"]')?.scrollIntoView({ block: 'nearest' })
+  }, [resaltada, abierto])
+
+  function abrir() {
+    setConsulta(null)
+    const i = opciones.findIndex((o) => o.value === value)
+    setResaltada(i >= 0 ? i : 0)
+    setAbierto(true)
+  }
+
+  function cerrar() {
+    setAbierto(false)
+    setConsulta(null)
+  }
+
+  function elegir(opcion: OpcionSelect) {
+    onChange(opcion.value)
+    cerrar()
+  }
+
+  function vaciar() {
+    onChange('')
+    cerrar()
+    campo.current?.focus()
+  }
+
+  function alEscribir(e: ChangeEvent<HTMLInputElement>) {
+    setConsulta(e.target.value)
+    setResaltada(0)
+    setAbierto(true)
+  }
+
+  function alTeclear(e: ReactKeyboardEvent) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      if (abierto) setResaltada((i) => Math.min(i + 1, filtradas.length - 1))
+      else abrir()
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      if (abierto) setResaltada((i) => Math.max(i - 1, 0))
+    } else if (e.key === 'Enter') {
+      // Cerrada, Enter no es nuestro: que siga su camino (enviar el formulario).
+      if (!abierto) return
+      e.preventDefault()
+      const opcion = filtradas[resaltada]
+      if (opcion) elegir(opcion)
+    } else if (e.key === 'Escape') {
+      if (!abierto) return
+      e.preventDefault()
+      cerrar()
+    } else if (e.key === 'Tab') {
+      cerrar()
+    }
+  }
+
+  const activa = abierto ? filtradas[resaltada] : undefined
+
+  return (
+    <div
+      className={cn('relative', className)}
+      // Cierra cuando el foco sale del control entero —campo, × y lista—, que
+      // cubre el click afuera y el Tab. Elegir con el mouse no lo dispara
+      // porque el `mousedown` de la lista no le saca el foco al campo.
+      onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) cerrar() }}
+    >
+      <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+      <Input
+        id={id}
+        ref={campo}
+        type="text"
+        role="combobox"
+        autoComplete="off"
+        value={consulta ?? etiqueta ?? ''}
+        onChange={alEscribir}
+        onKeyDown={alTeclear}
+        onFocus={(e) => { recienEnfocado.current = true; e.currentTarget.select() }}
+        onMouseUp={(e) => { if (recienEnfocado.current) e.preventDefault(); recienEnfocado.current = false }}
+        onClick={() => { if (!abierto) abrir() }}
+        placeholder={placeholder}
+        disabled={disabled}
+        aria-expanded={abierto}
+        aria-haspopup="listbox"
+        aria-controls={abierto ? idLista : undefined}
+        aria-activedescendant={activa ? idOpcion(resaltada) : undefined}
+        aria-autocomplete="list"
+        aria-label={ariaLabel}
+        aria-describedby={describedBy}
+        aria-invalid={invalido}
+        className={cn('w-full pl-9', value !== '' && !disabled && 'pr-9')}
+      />
+      {value !== '' && !disabled && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label="Quitar la selección"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={vaciar}
+          className="absolute top-1/2 right-1 size-7 -translate-y-1/2 text-muted-foreground"
+        >
+          <X className="size-4" />
+        </Button>
+      )}
+
+      {abierto && (
+        <div
+          // Sin esto, tocar la lista (una opción, la barra de scroll) le saca el
+          // foco al campo y el `onBlur` de arriba la cierra antes del click.
+          onMouseDown={(e) => e.preventDefault()}
+          className="absolute z-50 mt-1 w-full min-w-56 rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+        >
+          <ListaDeOpciones
+            listaRef={lista} id={idLista} filtradas={filtradas} value={value}
+            resaltada={resaltada} setResaltada={setResaltada} elegir={elegir} emptyMessage={emptyMessage}
+            idOpcion={idOpcion}
+          />
         </div>
       )}
     </div>

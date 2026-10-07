@@ -87,7 +87,7 @@ para que el motor de Tailwind v4 escanee las clases usadas dentro de
 | `libra-ui/Login` | `createLogin({ productName, productInitial, redirectTo })` | Factory: recibe branding + ruta de redirect post-login. Acepta `logo` y `wordmarkClassName` — ver abajo. Desde `v0.70.0` abre el modal del segundo factor en dos pasos si el `useAuth` que recibe trae `confirmarCodigo` — ver abajo. |
 | `libra-ui/CodigoPorDigitos` | `CodigoPorDigitos({ value, onChange, onComplete?, length?, disabled?, autoFocus? })` | El recuadro de 6 dígitos del segundo factor (`v0.70.0`), uno por casillero. Controlado: el que llama tiene el código en `value` y lo resetea poniéndolo en `''`. No es exclusivo del modal de `Login` — cualquier pantalla con un código de un solo uso lo puede usar. |
 | `libra-ui/branding` | `type ProductLogo` | El tipo del logo de producto. Módulo aparte para que `Login` no tenga que importar de `Layout` y arrastrarse la sidebar entera al bundle de la pantalla que carga sin sesión. |
-| `libra-ui/SelectBuscable` | `SelectBuscable`, `type OpcionSelect` | Select con **búsqueda por teclado** (`v0.9.0`). El `Select` de shadcn/Radix obliga a encontrar la opción a ojo en una lista ordenada; con los cientos de clientes que puede tener una empresa real, eso deja de ser viable. Filtra sin acentos y exige todos los términos, igual que el buscador de `data-table` — comparten `coincideBusqueda`. **No necesita `cmdk` ni el primitivo `popover`**: se construye con `input`, `button` y `cn`, que ya están en los 5 consumidores. Desde `v0.25.0` **anda solo adentro de un `<FormControl>`**: declara el `id`, el `aria-describedby` y el `aria-invalid` que el Slot le inyecta, así el `htmlFor` del `<FormLabel>` lo nombra — ver abajo. |
+| `libra-ui/SelectBuscable` | `SelectBuscable`, `type OpcionSelect` | Select con **búsqueda por teclado** (`v0.9.0`). El `Select` de shadcn/Radix obliga a encontrar la opción a ojo en una lista ordenada; con los cientos de clientes que puede tener una empresa real, eso deja de ser viable. Filtra sin acentos y exige todos los términos, igual que el buscador de `data-table` — comparten `coincideBusqueda`. **No necesita `cmdk` ni el primitivo `popover`**: se construye con `input`, `button` y `cn`, que ya están en los 5 consumidores. Desde `v0.25.0` **anda solo adentro de un `<FormControl>`**: declara el `id`, el `aria-describedby` y el `aria-invalid` que el Slot le inyecta, así el `htmlFor` del `<FormLabel>` lo nombra — ver abajo. Desde `v0.121.0`, con `buscarEscribiendo` el control cerrado es un **campo de texto con lupa** donde se escribe para buscar — ver «`SelectBuscable` en modo `buscarEscribiendo`». |
 | `libra-ui/Configuracion` | `createConfiguracion({ icono, producto, integraciones, propias })`, `EmpresaCard`, `MercadoPagoCard`, `ArcaCard`, `EmailCard`, `DatosBackupCard`, los `Tutorial*` | **La pantalla de Configuración de la familia, entera** (`v0.47.0`). Tutoriales incluidos. Exige tres primitivos más del consumidor — ver abajo. |
 | `libra-ui/use-mobile` | `useIsMobile` | Hook de breakpoint, 100% genérico. |
 | `libra-ui/utils` | `cn`, `normalizar`, `coincideBusqueda` | Helper `clsx` + `tailwind-merge` de shadcn, más los dos helpers de búsqueda que comparten `data-table` y `SelectBuscable` (sin acentos, todos los términos en cualquier orden). |
@@ -252,6 +252,30 @@ Tres cosas que no son obvias:
   actualizar.
 - **El `id` del desplegable es otro**, interno y con `useId()`. Si se lo pisara
   con el del control, el `aria-controls` del botón apuntaría al botón mismo.
+
+## `SelectBuscable` en modo `buscarEscribiendo` (`v0.121.0`)
+
+Por defecto el control cerrado es un botón y el buscador está adentro del desplegable: quien lo ve no sabe que puede escribir. Con `buscarEscribiendo` el control **es un campo de texto con lupa** (ADR-031):
+
+```tsx
+<Label htmlFor="cc-tercero">Cliente</Label>
+<SelectBuscable
+  buscarEscribiendo
+  id="cc-tercero"
+  value={terceroId}
+  onChange={setTerceroId}
+  opciones={clientes.map((c) => ({ value: String(c.id), label: c.nombre, hint: c.cuit }))}
+  placeholder="Buscar cliente por nombre o CUIT…"
+  emptyMessage="No hay ninguno con ese nombre."
+/>
+```
+
+- **Escribir filtra y abre la lista al instante** (etiqueta + `hint`, sin acentos, todos los términos). Un click o `ArrowDown` abren la lista completa; las flechas mueven el resaltado, `Enter` elige, `Escape` cierra.
+- **Con algo elegido el campo muestra su etiqueta**; al enfocar queda seleccionada, así escribir empieza una búsqueda nueva. Una **×** vacía la selección (`onChange('')`).
+- **Salir sin elegir** (click afuera, `Tab`, `Escape`) cierra la lista y devuelve la etiqueta elegida: lo escrito a medias se descarta.
+- **ARIA**: `role="combobox"`, `aria-expanded`, `aria-controls`, `aria-activedescendant`, `listbox`/`option`; `id`, `aria-describedby`, `aria-invalid` y `ariaLabel` van al `<input>`.
+- **`className` va al contenedor** (el ancho), no a un botón. El `placeholder` es lo que se ve con el campo vacío: que diga qué se busca.
+- No ofrezcas una opción con `value: ''` («Todos») en este modo: para «ninguno», el campo vacío.
 
 ## Peer dependencies
 
