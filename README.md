@@ -392,6 +392,15 @@ En una instancia que **ya** tiene fila no cambia nada: el `GET` devuelve el slug
 real y es ése el que viaja de vuelta. Contalibra y Restolibra son multi-empresa
 y no declaran nada: su fila se dio de alta con la razón social.
 
+### Más de un servicio de ARCA (`v0.120.0`)
+
+La tarjeta de ARCA pide `GET {basePath}/servicios` y, **si el motor lista más que la
+facturación**, pinta un bloque por servicio (hoy, además de la facturación, el CTG y la
+Carta de Porte — `wscpe`): certificado y clave por ambiente, estado, CUIT del certificado,
+vencimiento y «Probar conexión». El producto no declara nada en el kit: lo decide el motor
+(`build_arca_router(servicios=("wsfe", "wscpe"))`, libracore ADR-032). Con la facturación
+sola —o con un motor que no tiene la ruta— la tarjeta es la de siempre. Ver ADR-030.
+
 ### Con una sola integración no hay sub-navegación (`v0.49.0`)
 
 Una barra lateral de 192 px con un solo botón, ocupando el ancho de la pestaña

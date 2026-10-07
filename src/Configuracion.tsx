@@ -71,6 +71,7 @@ export type { DatosEmpresa } from './configuracion/empresa'
 // eligen de una lista.
 export { CONDICIONES_IVA } from './configuracion/empresa'
 export type { ConfigArca, EstadoArca } from './configuracion/arca'
+export type { ServicioArca } from './configuracion/arca-pares'
 export type { ConfigMercadoPago, TextoAutoFacturar } from './configuracion/mercadopago'
 export { ArcaCard, DatosBackupCard, EmailCard, EmpresaCard, MercadoPagoCard, ResguardoExternoCard }
 export {
