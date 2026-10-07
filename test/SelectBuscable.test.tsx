@@ -313,3 +313,313 @@ describe('SelectBuscable dentro de un formulario', () => {
     expect(screen.getByRole('listbox')).toBeInTheDocument()
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('SelectBuscable en modo `buscarEscribiendo` (campo de texto con lupa)', () => {
+  // El modo por defecto es un botón que abre un desplegable con el buscador
+  // adentro: la gente no descubre que puede escribir. Acá el control cerrado ya
+  // es el campo donde se escribe. (ADR-031)
+
+  function Campo({
+    inicial = '', onChange, id,
+  }: { inicial?: string; onChange?: (v: string) => void; id?: string }) {
+    const [value, setValue] = useState(inicial)
+    return (
+      <SelectBuscable
+        buscarEscribiendo
+        id={id}
+        value={value}
+        onChange={(v) => { setValue(v); onChange?.(v) }}
+        opciones={CLIENTES}
+        placeholder="Buscar cliente…"
+        ariaLabel="Cliente"
+      />
+    )
+  }
+
+  const combo = () => screen.getByRole('combobox', { name: 'Cliente' })
+
+  it('cerrado es un campo de texto con el placeholder, no un botón', () => {
+    render(<Campo />)
+    expect(combo().tagName).toBe('INPUT')
+    expect(combo()).toHaveAttribute('placeholder', 'Buscar cliente…')
+    expect(combo()).toHaveValue('')
+    expect(combo()).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    // Sin nada elegido no hay con qué vaciar.
+    expect(screen.queryByRole('button', { name: 'Quitar la selección' })).not.toBeInTheDocument()
+  })
+
+  it('escribir abre la lista ya filtrada, sin un click intermedio', async () => {
+    const user = userEvent.setup()
+    render(<Campo />)
+    await user.click(screen.getByRole('combobox', { name: 'Cliente' }))
+    await user.keyboard('panaderia')
+
+    expect(combo()).toHaveAttribute('aria-expanded', 'true')
+    expect(opciones()).toEqual(['Panadería La Espiga' + 'Mercedes'])
+  })
+
+  it('escribir sin haber hecho click también abre (foco por teclado)', async () => {
+    const user = userEvent.setup()
+    render(<Campo />)
+    await user.tab()
+    expect(combo()).toHaveFocus()
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+
+    await user.keyboard('torni')
+    expect(opciones()).toHaveLength(1)
+  })
+
+  it('busca también por el hint y exige todos los términos', async () => {
+    const user = userEvent.setup()
+    render(<Campo />)
+    await user.type(combo(), 'suipacha hospital')
+    expect(opciones()).toHaveLength(1)
+    expect(opciones()[0]).toContain('Hospital Esteban Iribarne')
+  })
+
+  it('un click abre la lista completa', async () => {
+    const user = userEvent.setup()
+    render(<Campo />)
+    await user.click(combo())
+    expect(opciones()).toHaveLength(4)
+  })
+
+  it('Enter elige la opción resaltada, que al escribir es la primera del filtro', async () => {
+    const user = userEvent.setup()
+    const alElegir = vi.fn()
+    render(<Campo onChange={alElegir} />)
+    await user.type(combo(), 'suipacha{Enter}')
+
+    expect(alElegir).toHaveBeenCalledWith('1')
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    expect(combo()).toHaveValue('Compulibra')
+  })
+
+  it('las flechas mueven el resaltado, y aria-activedescendant lo sigue', async () => {
+    const user = userEvent.setup()
+    const alElegir = vi.fn()
+    render(<Campo onChange={alElegir} />)
+    await user.click(combo())
+
+    const activa = () => document.getElementById(combo().getAttribute('aria-activedescendant')!)
+    expect(activa()).toHaveTextContent('Compulibra')
+    await user.keyboard('{ArrowDown}{ArrowDown}')
+    expect(activa()).toHaveTextContent('Panadería La Espiga')
+    expect(activa()).toHaveAttribute('role', 'option')
+    await user.keyboard('{ArrowUp}{ArrowDown}{Enter}')
+    expect(alElegir).toHaveBeenCalledWith('3')
+  })
+
+  it('ArrowDown con la lista cerrada la abre', async () => {
+    const user = userEvent.setup()
+    render(<Campo />)
+    await user.tab()
+    await user.keyboard('{ArrowDown}')
+    expect(screen.getByRole('listbox')).toBeInTheDocument()
+  })
+
+  it('elegir con el mouse devuelve el value, cierra y deja la etiqueta en el campo', async () => {
+    const user = userEvent.setup()
+    const alElegir = vi.fn()
+    render(<Campo onChange={alElegir} />)
+    await user.type(combo(), 'ferre')
+    await user.click(screen.getByRole('option', { name: /Ferretería El Tornillo/ }))
+
+    expect(alElegir).toHaveBeenCalledWith('4')
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    expect(combo()).toHaveValue('Ferretería El Tornillo')
+    // El foco no se fue: seguir buscando no pide otro click.
+    expect(combo()).toHaveFocus()
+  })
+
+  it('con algo elegido, la lista se abre resaltándolo y Enter no cambia la selección', async () => {
+    const user = userEvent.setup()
+    const alElegir = vi.fn()
+    render(<Campo inicial="3" onChange={alElegir} />)
+    expect(combo()).toHaveValue('Panadería La Espiga')
+
+    await user.click(combo())
+    expect(opciones()).toHaveLength(4)
+    expect(screen.getByRole('option', { name: /Panadería/ })).toHaveAttribute('aria-selected', 'true')
+    await user.keyboard('{Enter}')
+    expect(alElegir).toHaveBeenCalledWith('3')
+  })
+
+  it('con algo elegido, enfocar y escribir empieza una búsqueda nueva', async () => {
+    // El foco selecciona todo: lo escrito reemplaza la etiqueta y no se le pega.
+    const user = userEvent.setup()
+    render(<Campo inicial="3" />)
+    await user.click(combo())
+    await user.keyboard('hospital')
+
+    expect(combo()).toHaveValue('hospital')
+    expect(opciones()).toHaveLength(1)
+    expect(opciones()[0]).toContain('Hospital Esteban Iribarne')
+  })
+
+  it('tras elegir, la próxima letra tampoco se pega a la etiqueta', async () => {
+    const user = userEvent.setup()
+    render(<Campo />)
+    await user.type(combo(), 'compu{Enter}')
+    expect(combo()).toHaveValue('Compulibra')
+
+    await user.keyboard('luj')
+    expect(combo()).toHaveValue('luj')
+    expect(opciones()).toHaveLength(1)
+    expect(opciones()[0]).toContain('Ferretería El Tornillo')
+  })
+
+  it('la × vacía la selección, cierra y deja el foco en el campo', async () => {
+    const user = userEvent.setup()
+    const alElegir = vi.fn()
+    render(<Campo inicial="2" onChange={alElegir} />)
+    expect(combo()).toHaveValue('Hospital Esteban Iribarne')
+
+    await user.click(screen.getByRole('button', { name: 'Quitar la selección' }))
+    expect(alElegir).toHaveBeenCalledWith('')
+    expect(combo()).toHaveValue('')
+    expect(combo()).toHaveFocus()
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Quitar la selección' })).not.toBeInTheDocument()
+  })
+
+  it('Escape cierra sin elegir y devuelve la etiqueta elegida', async () => {
+    const user = userEvent.setup()
+    const alElegir = vi.fn()
+    render(<Campo inicial="3" onChange={alElegir} />)
+    await user.click(combo())
+    await user.keyboard('zzz')
+    expect(combo()).toHaveValue('zzz')
+
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    expect(combo()).toHaveValue('Panadería La Espiga')
+    expect(alElegir).not.toHaveBeenCalled()
+  })
+
+  it('Escape con la lista cerrada no se traga la tecla (puede ser de un diálogo)', async () => {
+    const user = userEvent.setup()
+    const alEscape = vi.fn()
+    render(<div onKeyDown={(e) => { if (e.key === 'Escape') alEscape(e.defaultPrevented) }}><Campo /></div>)
+    await user.tab()
+    await user.keyboard('{Escape}')
+    expect(alEscape).toHaveBeenCalledWith(false)
+  })
+
+  it('al perder el foco sin elegir, cierra y restaura la etiqueta; lo escrito se descarta', async () => {
+    const user = userEvent.setup()
+    const alElegir = vi.fn()
+    render(<><Campo inicial="1" onChange={alElegir} /><button type="button">afuera</button></>)
+    await user.click(combo())
+    await user.keyboard('panad')
+    expect(combo()).toHaveValue('panad')
+
+    await user.click(screen.getByRole('button', { name: 'afuera' }))
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    expect(combo()).toHaveValue('Compulibra')
+    expect(alElegir).not.toHaveBeenCalled()
+  })
+
+  it('Tab cierra y restaura la etiqueta', async () => {
+    const user = userEvent.setup()
+    render(<><Campo inicial="1" /><button type="button">siguiente</button></>)
+    await user.click(combo())
+    await user.keyboard('zzz')
+    await user.tab()
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    expect(combo()).toHaveValue('Compulibra')
+  })
+
+  it('sin resultados lo dice y Enter no elige nada', async () => {
+    const user = userEvent.setup()
+    const alElegir = vi.fn()
+    render(<Campo onChange={alElegir} />)
+    await user.type(combo(), 'zzz{Enter}')
+    expect(screen.getByText('Sin resultados.')).toBeInTheDocument()
+    expect(opciones()).toHaveLength(0)
+    expect(alElegir).not.toHaveBeenCalled()
+    expect(combo()).not.toHaveAttribute('aria-activedescendant')
+  })
+
+  it('Enter con la lista cerrada sigue su camino: envía el formulario', async () => {
+    const user = userEvent.setup()
+    const alEnviar = vi.fn((e: { preventDefault: () => void }) => e.preventDefault())
+    render(<form onSubmit={alEnviar}><Campo inicial="1" /><button type="submit">ok</button></form>)
+    await user.click(combo())
+    await user.keyboard('{Escape}{Enter}')
+    expect(alEnviar).toHaveBeenCalledTimes(1)
+  })
+
+  describe('accesibilidad', () => {
+    it('es un combobox con el nombre accesible que se le pasa', () => {
+      render(<Campo />)
+      expect(screen.getByRole('combobox', { name: 'Cliente' })).toBeInTheDocument()
+    })
+
+    it('abierto, aria-controls apunta a un listbox con options', async () => {
+      const user = userEvent.setup()
+      render(<Campo />)
+      await user.click(combo())
+      const lista = screen.getByRole('listbox')
+      expect(combo()).toHaveAttribute('aria-expanded', 'true')
+      expect(combo()).toHaveAttribute('aria-controls', lista.id)
+      expect(combo()).toHaveAttribute('aria-autocomplete', 'list')
+      expect(within(lista).getAllByRole('option')).toHaveLength(4)
+    })
+
+    it('el `id` va al campo y el `htmlFor` de una etiqueta lo nombra', () => {
+      render(
+        <>
+          <label htmlFor="cliente">Cliente (locatario)</label>
+          <SelectBuscable buscarEscribiendo id="cliente" value="" onChange={vi.fn()} opciones={CLIENTES} />
+        </>,
+      )
+      expect(screen.getByRole('combobox', { name: 'Cliente (locatario)' })).toHaveAttribute('id', 'cliente')
+    })
+
+    it('`aria-describedby` y `aria-invalid` llegan al campo', () => {
+      render(
+        <>
+          <SelectBuscable
+            buscarEscribiendo ariaLabel="Cliente" aria-describedby="msg" aria-invalid
+            value="" onChange={vi.fn()} opciones={CLIENTES}
+          />
+          <p id="msg">Elegí un cliente</p>
+        </>,
+      )
+      expect(combo()).toHaveAccessibleDescription('Elegí un cliente')
+      expect(combo()).toBeInvalid()
+    })
+
+    it('el `className` va al contenedor, que es lo que tiene ancho', () => {
+      const { container } = render(
+        <SelectBuscable
+          buscarEscribiendo ariaLabel="Cliente" className="w-64"
+          value="" onChange={vi.fn()} opciones={CLIENTES}
+        />,
+      )
+      expect(container.firstElementChild).toHaveClass('relative', 'w-64')
+    })
+  })
+
+  it('deshabilitado no abre y no ofrece la ×', async () => {
+    const user = userEvent.setup()
+    render(
+      <SelectBuscable
+        buscarEscribiendo ariaLabel="Cliente" value="1" onChange={vi.fn()} opciones={CLIENTES} disabled
+      />,
+    )
+    expect(combo()).toBeDisabled()
+    await user.click(combo())
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Quitar la selección' })).not.toBeInTheDocument()
+  })
+
+  it('sin `buscarEscribiendo` sigue siendo el botón de siempre', () => {
+    render(<ConEstado />)
+    expect(screen.getByRole('combobox', { name: 'Cliente' }).tagName).toBe('BUTTON')
+  })
+})

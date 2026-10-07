@@ -526,3 +526,17 @@ La tarjeta de Configuración / ARCA sólo conocía la facturación (`wsfe`). Lib
 5. `empresa` viaja igual que en la facturación (`cfg.empresa`, o el slug del producto en una instancia nueva).
 
 **Consecuencias.** LibraCargo sube a `libra-ui` 0.120.0 y a la versión del motor con `build_arca_router(servicios=("wsfe", "wscpe"))`; con el motor nuevo y el kit viejo (o al revés) la pantalla sigue siendo la de siempre. Los demás productos suben el pin sin cambios. Queda fuera: elegir con qué CUIT se opera (`cuitRepresentada`), que es de cada llamada y no de esta pantalla.
+
+## ADR-031 — `SelectBuscable` con modo «escribir para buscar» (0.121.0)
+
+`SelectBuscable` es un **botón** que abre un desplegable con el buscador adentro. Quien lo ve cerrado no sabe que se puede buscar: LibraCargo lo usa para elegir cliente, fletero o proveedor en la cuenta corriente y el humano (2026-10-07) pidió «un cuadro de buscar donde se ponga el nombre […] que no sólo deje seleccionarlo sino también buscarlo por letras».
+
+**Decisión.** Prop opt-in `buscarEscribiendo` (booleano, por defecto `false`; el nombre dice lo que hace y sigue la convención en castellano de las demás props). Con ella el control cerrado **es un `<input>` con lupa** —`role="combobox"`, con el `placeholder` que pase el consumidor («Buscar cliente…»)—, sin botón ni buscador interno.
+
+1. **Escribir filtra y abre al instante**, con el mismo `coincideBusqueda` sobre etiqueta + `hint` (sin acentos ni mayúsculas, todos los términos). Un click o `ArrowDown` abren la lista completa. ArrowUp/Down mueven el resaltado, Enter elige el resaltado (cerrada, Enter sigue su camino: puede ser el de enviar un formulario), Escape cierra (cerrada, no se la traga: puede ser la de un diálogo), Tab cierra.
+2. **Con algo elegido el campo muestra su etiqueta.** Enfocar selecciona todo y tras elegir también, así la próxima letra empieza una búsqueda nueva en vez de pegarse al nombre. Una **×** (`aria-label` «Quitar la selección») llama `onChange('')` y deja el foco en el campo.
+3. **Salir sin elegir descarta lo escrito**: cuando el foco sale del control entero (click afuera, Tab) o con Escape, la lista se cierra y el campo vuelve a la etiqueta elegida. Se decide con `onBlur` del contenedor y `relatedTarget`; el `mousedown` de la lista se cancela para que tocar una opción o la barra de scroll no le saque el foco al campo.
+4. **ARIA**: `role="combobox"`, `aria-expanded`, `aria-controls` (abierto) al `listbox`, `aria-activedescendant` a la opción resaltada (las opciones llevan `id` sólo en este modo), `aria-autocomplete="list"`. `id`, `aria-describedby`, `aria-invalid` y `ariaLabel` van al `<input>`, así el `htmlFor` de un `<FormLabel>` lo nombra como antes al botón.
+5. **El modo por defecto no cambia**: es el mismo componente, con las opciones del desplegable extraídas a un helper que comparten los dos (mismo DOM, sin `id` de opción), y la suite y los snapshots de antes pasan sin tocarse. El modo nuevo es un componente interno aparte, no una rama dentro del otro.
+
+**Consecuencias.** `className` va al contenedor del campo (es lo que tiene ancho), no a un botón. Sin buscador interno, el `placeholder` pasa a ser el de la búsqueda (el «Buscar…» del modo botón vivía adentro del desplegable). Una opción con `value: ''` (p. ej. «Todos») sigue eligiéndose desde la lista, pero la × se ofrece sólo si `value !== ''`: para «ninguno» en este modo conviene dejar el campo vacío y no ofrecer esa opción. LibraCargo lo usa en las tres pestañas de Cuenta corriente.
