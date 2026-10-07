@@ -46,6 +46,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { CambiarPassword } from './CambiarPassword'
 import type { ProductLogo } from './branding'
+import type { Producto } from './identidad'
+import { MarcaProducto } from './MarcaProducto'
 import { cn } from './utils'
 import { fijarModo, leerModo, suscribirseAlModo, type Modo } from './modo'
 
@@ -148,7 +150,7 @@ function BotonDeModo() {
 
 export function createLayout<TUser = { role?: string; name?: string }>({
   productName, productInitial, navItems, navSections,
-  icon: HeaderIcon, logo, wordmarkClassName, homeTo, accountTo,
+  icon: HeaderIcon, logo, producto, wordmarkClassName, homeTo, accountTo,
   hasModule, getUserName, getUserSubtitle, userMenu,
   useAuth = useAuthDefault as unknown as () => { user: TUser | null; logout: () => Promise<void> },
 }: {
@@ -166,6 +168,9 @@ export function createLayout<TUser = { role?: string; name?: string }>({
   // entero, **incluido `icon`**: son dos formas de llenar el mismo hueco y el
   // logo es la más específica. Ver `branding.ts`.
   logo?: ProductLogo
+  // Identidad del producto (`identidad.ts`): dibuja `MarcaProducto` (su ícono sobre un cuadrado de su color) en el hueco de la marca. Gana a
+  // `logo`, a `icon` y a la inicial: precedencia `producto` > `logo` > `icon` > inicial. Sin ella, el encabezado es el de siempre.
+  producto?: Producto
   // Clases extra para el nombre del producto. Se mergean con
   // `truncate font-semibold` via `cn`. LibraDesk lo usa para su Montserrat Bold.
   wordmarkClassName?: string
@@ -215,7 +220,10 @@ export function createLayout<TUser = { role?: string; name?: string }>({
 
     const HeaderContent = (
       <>
-        {logo ? (
+        {producto ? (
+          // Con la sidebar colapsada el encabezado deja 32 px de ancho útil: `MarcaProducto` ya viene con `h-8 w-8 shrink-0`.
+          <MarcaProducto producto={producto} />
+        ) : logo ? (
           <img
             src={logo.src}
             alt={logo.alt ?? productName}

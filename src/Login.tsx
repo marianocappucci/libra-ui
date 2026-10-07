@@ -16,6 +16,8 @@ import {
 import { PasswordInput } from './PasswordInput'
 import { CodigoPorDigitos } from './CodigoPorDigitos'
 import type { ProductLogo } from './branding'
+import type { Producto } from './identidad'
+import { MarcaProducto } from './MarcaProducto'
 import { cn } from './utils'
 import { useCaptcha } from './captcha'
 import { CampoCaptcha } from './CampoCaptcha'
@@ -37,7 +39,7 @@ function esDesafioVencido(err: ApiError): boolean {
 // `useAuth` juntos, consistentes entre si.
 export function createLogin<TUser = User>({
   productName, productInitial, redirectTo, onLoginSuccess, useAuth: useAuthOverride, formatError,
-  forgotPasswordPath, forgotPasswordHint, demoPath, captchaPath, logo, wordmarkClassName,
+  forgotPasswordPath, forgotPasswordHint, demoPath, captchaPath, logo, producto, wordmarkClassName,
   // `totpPath` NO se desestructura: sigue en el tipo de acá abajo (deprecado)
   // para que el backoffice compile sin cambiar una línea, pero el cuerpo de
   // esta función no lo usa para nada -- ver el comentario del prop.
@@ -48,6 +50,9 @@ export function createLogin<TUser = User>({
   // Logo del producto, arriba del nombre. Si se pasa, reemplaza al box con la
   // inicial; si no, no cambia nada. Ver `branding.ts`.
   logo?: ProductLogo
+  // Identidad del producto (`identidad.ts`): dibuja `MarcaProducto` (su ícono sobre un cuadrado de su color) arriba del nombre. Gana a `logo` y
+  // a la inicial: precedencia `producto` > `logo` > inicial. Sin ella, el login es el de siempre.
+  producto?: Producto
   // Clases extra para el nombre del producto. Se mergean con `text-xl` via
   // `cn`, así que el producto puede pisar tamaño, peso y color sin perder el
   // resto. LibraDesk lo usa para su Montserrat Bold.
@@ -292,7 +297,9 @@ export function createLogin<TUser = User>({
       <div className="flex min-h-svh items-center justify-center bg-muted/40 p-4">
         <Card className="w-full max-w-sm">
           <CardHeader className="text-center">
-            {logo ? (
+            {producto ? (
+              <MarcaProducto producto={producto} className="mx-auto mb-2 h-10 w-10" iconoClassName="size-5" />
+            ) : logo ? (
               <img
                 src={logo.src}
                 alt={logo.alt ?? productName}
