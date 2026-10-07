@@ -4,11 +4,12 @@
 // «Ver depósitos» lleva al detalle. `Depositos` sigue siendo la pantalla plana de Contalibra.
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeftRight, Check, Eye, MapPin, Pencil, Plus, Star, Store } from 'lucide-react'
+import { ArrowLeftRight, Check, Eye, MapPin, Pencil, Plus, Star } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
 import { BadgeEstado } from '../badge-estado'
 import { TituloPantalla } from '../titulo-pantalla'
+import { ICONOS } from '../iconos-identidad'
 import type { Sucursal } from './tipos'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -132,7 +133,7 @@ export function Sucursales({
     <Dialog open={formOpen} onOpenChange={setFormOpen}>
       <div className="grid gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <TituloPantalla icono={Store}>{titulo}</TituloPantalla>
+          <TituloPantalla icono={ICONOS.sucursales}>{titulo}</TituloPantalla>
           {/* `flex-wrap` también en el grupo: «Transferir stock» y el alta juntos no entran a 320 px y ensanchaban la página 17 px (medido contra VentaLibra dev). */}
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline"><Link to={rutaDeTransferencia}><ArrowLeftRight />Transferir stock</Link></Button>
@@ -156,7 +157,7 @@ export function Sucursales({
               <Card key={s.id} className={s.activa ? '' : 'opacity-50'}>
                 <CardContent className="grid gap-3">
                   <div>
-                    <p className="flex items-center gap-2 font-semibold"><Store className="size-4 text-primary" />{s.nombre}</p>
+                    <p className="flex items-center gap-2 font-semibold"><ICONOS.sucursales className="size-4 text-primary" />{s.nombre}</p>
                     <div className="mt-1 flex flex-wrap gap-1.5">
                       {s.es_default ? <BadgeEstado tono="ok">Por defecto</BadgeEstado> : null}
                       {!s.activa && <BadgeEstado tono="neutro">Inactiva</BadgeEstado>}
@@ -187,7 +188,7 @@ export function Sucursales({
 
       <DialogContent>
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Store className="size-4" />{editingId !== null ? 'Editar' : 'Nueva'} sucursal</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><ICONOS.sucursales className="size-4" />{editingId !== null ? 'Editar' : 'Nueva'} sucursal</DialogTitle>
         </DialogHeader>
         {formError && <p className="text-sm text-destructive">{formError}</p>}
         <div className="grid gap-4">

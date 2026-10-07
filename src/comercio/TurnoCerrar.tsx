@@ -10,8 +10,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { ArrowDownCircle, ArrowLeft, ArrowUpCircle, CheckCircle2, Clock, StopCircle } from 'lucide-react'
+import { ArrowDownCircle, ArrowLeft, ArrowUpCircle, CheckCircle2, StopCircle } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
+import { ICONOS } from '../iconos-identidad'
 import { fechaHora } from '@/lib/fechas'
 
 function DiferenciaBadge({ esperado, declarado }: { esperado: number | null; declarado: number | null }) {
@@ -84,7 +85,7 @@ export function TurnoCerrar() {
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <TituloPantalla icono={Clock}>Cerrar turno {turno && `#${turno.id}`}</TituloPantalla>
+        <TituloPantalla icono={ICONOS.turnosDeCaja}>Cerrar turno {turno && `#${turno.id}`}</TituloPantalla>
         {turno && <Button asChild size="sm" variant="outline"><Link to={`/turnos/${turno.id}`}><ArrowLeft />Volver</Link></Button>}
       </div>
 

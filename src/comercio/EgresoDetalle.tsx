@@ -26,8 +26,9 @@ import {
   Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
 } from '@/components/ui/form'
 import { ConfirmDialog } from '@/components/confirm-dialog'
-import { ArrowLeft, CheckCircle2, CreditCard, Hourglass, ListChecks, ShoppingBag, Trash2 } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, CreditCard, Hourglass, ListChecks, Trash2 } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
+import { ICONOS } from '../iconos-identidad'
 import { fecha } from '@/lib/fechas'
 import { hoyISO } from '../fechas'
 
@@ -174,7 +175,7 @@ export function EgresoDetalle() {
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <TituloPantalla icono={ShoppingBag}>{egreso ? egreso.concepto : 'Egreso'}</TituloPantalla>
+        <TituloPantalla icono={ICONOS.egresos}>{egreso ? egreso.concepto : 'Egreso'}</TituloPantalla>
         <Button asChild size="sm" variant="outline"><Link to="/egresos"><ArrowLeft />Volver</Link></Button>
       </div>
 

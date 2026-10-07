@@ -41,6 +41,7 @@ import {
   Forward, UserRoundX, MailWarning, History, ArrowDownCircle, Hourglass, Info, User,
 } from 'lucide-react'
 import { TituloPantalla } from './titulo-pantalla'
+import { ICONOS } from './iconos-identidad'
 import { fecha } from '@/lib/fechas'
 
 function formatCurrency(value: number): string {
@@ -427,7 +428,7 @@ export function MpBandeja() {
   return (
     <div className="grid gap-4">
       <div className="flex items-center justify-between">
-        <TituloPantalla icono={CreditCard}>Pagos MercadoPago</TituloPantalla>
+        <TituloPantalla icono={ICONOS.pagosMercadoPago}>Pagos MercadoPago</TituloPantalla>
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}

@@ -15,8 +15,9 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { DataTable, sortableHeader } from '../data-table'
-import { BookText, ArrowUpRight, ArrowDownLeft, Download, Info } from 'lucide-react'
+import { ArrowUpRight, ArrowDownLeft, Download, Info } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
+import { ICONOS } from '../iconos-identidad'
 import { fecha } from '@/lib/fechas'
 import { hoyISO, primerDiaDelMesISO } from '../fechas'
 
@@ -166,7 +167,7 @@ export function LibrosIva() {
 
   return (
     <div className="grid gap-4">
-      <TituloPantalla icono={BookText}>Libros IVA Digital</TituloPantalla>
+      <TituloPantalla icono={ICONOS.librosDeIva}>Libros IVA Digital</TituloPantalla>
 
       {/* ── Selector de período ── */}
       <Card>

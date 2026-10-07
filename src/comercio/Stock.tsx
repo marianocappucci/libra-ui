@@ -24,14 +24,14 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import type { ColumnDef } from '../data-table'
 import {
-  AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Boxes, Filter, History, Pencil,
-  RefreshCw, RotateCcw, ShoppingCart, TriangleAlert, X,
+  AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Filter, History, Pencil, RefreshCw, RotateCcw, ShoppingCart, TriangleAlert, X,
 } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
 import { anchoColumnaAcciones, DataTable, sortableHeader } from '../data-table'
 import { BadgeEstado, type TonoEstado } from '../badge-estado'
 import { TituloPantalla } from '../titulo-pantalla'
+import { ICONOS } from '../iconos-identidad'
 import { SelectBuscable } from '../SelectBuscable'
 import { TACTIL, useAncho } from '../use-ancho'
 // Alias: `fecha` ya es el estado del campo de fecha del ajuste de stock.
@@ -447,7 +447,7 @@ export function Stock({
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <TituloPantalla icono={Boxes}>Stock</TituloPantalla>
+        <TituloPantalla icono={ICONOS.stock}>Stock</TituloPantalla>
         {!rutaDeMovimientos && (
           <Button variant="outline" onClick={toggleMovimientos}><History />Historial de movimientos</Button>
         )}

@@ -2,11 +2,12 @@
 // 2026-09-06). Era idéntico en Contalibra y Restolibra salvo comentarios.
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, ArrowLeftRight, Check, Pencil, Warehouse } from 'lucide-react'
+import { ArrowLeft, ArrowLeftRight, Check, Pencil } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
 import { BadgeEstado, type TonoEstado } from '../badge-estado'
 import { TituloPantalla } from '../titulo-pantalla'
+import { ICONOS } from '../iconos-identidad'
 import type { Deposito, StockItem } from './tipos'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -108,7 +109,7 @@ export function DepositoDetalle({
     <Dialog open={editOpen} onOpenChange={setEditOpen}>
       <div className="grid gap-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <TituloPantalla icono={Warehouse}>{deposito ? deposito.nombre : 'Depósito'}
+          <TituloPantalla icono={ICONOS.depositos}>{deposito ? deposito.nombre : 'Depósito'}
             {deposito?.es_default ? <BadgeEstado tono="ok">Por defecto</BadgeEstado> : null}</TituloPantalla>
           {deposito && (
             <div className="flex flex-wrap gap-2">

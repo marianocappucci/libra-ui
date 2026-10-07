@@ -27,12 +27,13 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import type { ColumnDef } from '../data-table'
-import { Barcode, ClipboardList, Package, Pencil, Plus, Search, Trash2, TrendingUp, X } from 'lucide-react'
+import { Barcode, ClipboardList, Pencil, Plus, Search, Trash2, TrendingUp, X } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
 import { anchoColumnaAcciones, DataTable, sortableHeader } from '../data-table'
 import { BadgeEstado } from '../badge-estado'
 import { TituloPantalla } from '../titulo-pantalla'
+import { ICONOS } from '../iconos-identidad'
 import { UNIDADES, type CategoriaProducto, type Estacion, type MinimosPorSucursal, type Producto, type Proveedor } from './tipos'
 import { ProductoCodigosVariantes } from './ProductoCodigosVariantes'
 import { describeErrorHttp } from './errores-http'
@@ -861,7 +862,7 @@ export function Productos({
   return (
     <div ref={raizRef} className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <TituloPantalla icono={Package}>Productos</TituloPantalla>
+        <TituloPantalla icono={ICONOS.productos}>Productos</TituloPantalla>
         <div className="flex items-center gap-2">
           {acciones}
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -873,7 +874,7 @@ export function Productos({
             <DialogContent className="sm:max-w-2xl" onCloseAutoFocus={devolverElFoco}>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
-                  <Package className="size-4" />{editingProducto ? 'Editar producto' : 'Nuevo producto'}
+                  <ICONOS.productos className="size-4" />{editingProducto ? 'Editar producto' : 'Nuevo producto'}
                 </DialogTitle>
               </DialogHeader>
               <Form {...form}>

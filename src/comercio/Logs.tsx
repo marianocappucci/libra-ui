@@ -21,8 +21,9 @@ import {
 import {
   Tabs, TabsContent, TabsList, TabsTrigger,
 } from '@/components/ui/tabs'
-import { BookText, Boxes, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Clock, Download, ExternalLink, FileText, History, Inbox, LogIn, LogOut, PackageCheck, PiggyBank, Shield, ShoppingCart, User as UserIcon, XCircle } from 'lucide-react'
+import { BookText, Boxes, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Clock, Download, ExternalLink, FileText, Inbox, LogIn, LogOut, PackageCheck, PiggyBank, Shield, ShoppingCart, User as UserIcon, XCircle } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
+import { ICONOS } from '../iconos-identidad'
 import { fecha, fechaHora, horaConSegundos } from '@/lib/fechas'
 
 // Orden y set canonico de tipos -- coincide con TIPO_META de
@@ -156,7 +157,7 @@ export function Logs() {
 
   return (
     <div className="grid gap-4">
-      <TituloPantalla icono={History}>Logs</TituloPantalla>
+      <TituloPantalla icono={ICONOS.logDeActividad}>Logs</TituloPantalla>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 

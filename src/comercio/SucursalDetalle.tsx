@@ -4,11 +4,12 @@
 // movimientos ni el default de la instancia) las impone el backend: acá sólo se muestra su mensaje.
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, ArrowLeftRight, Building2, Check, Eye, MapPin, Package, Pencil, Plus, Star, Store, Trash2 } from 'lucide-react'
+import { ArrowLeft, ArrowLeftRight, Check, Eye, MapPin, Package, Pencil, Plus, Star, Trash2 } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
 import { BadgeEstado } from '../badge-estado'
 import { TituloPantalla } from '../titulo-pantalla'
+import { ICONOS } from '../iconos-identidad'
 import type { Deposito, Sucursal } from './tipos'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -154,7 +155,7 @@ export function SucursalDetalle({
     return (
       <div className="grid gap-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <TituloPantalla icono={Store}>Sucursal</TituloPantalla>
+          <TituloPantalla icono={ICONOS.sucursales}>Sucursal</TituloPantalla>
           {volver}
         </div>
         <Card><CardContent className="py-6 text-center text-sm text-muted-foreground">Sucursal no encontrada.</CardContent></Card>
@@ -166,7 +167,7 @@ export function SucursalDetalle({
     <Dialog open={formOpen} onOpenChange={setFormOpen}>
       <div className="grid gap-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <TituloPantalla icono={Store}>{sucursal ? sucursal.nombre : 'Sucursal'}</TituloPantalla>
+          <TituloPantalla icono={ICONOS.sucursales}>{sucursal ? sucursal.nombre : 'Sucursal'}</TituloPantalla>
           <div className="flex flex-wrap gap-2">
             {sucursal && <Button asChild size="sm" variant="outline"><Link to={rutaDeTransferencia}><ArrowLeftRight />Transferir stock</Link></Button>}
             {sucursal && !soloLectura && (
@@ -205,7 +206,7 @@ export function SucursalDetalle({
                     <Card key={d.id} className={d.activo ? '' : 'opacity-50'}>
                       <CardContent className="grid gap-3">
                         <div>
-                          <p className="flex items-center gap-2 font-semibold"><Building2 className="size-4 text-primary" />{d.nombre}</p>
+                          <p className="flex items-center gap-2 font-semibold"><ICONOS.depositos className="size-4 text-primary" />{d.nombre}</p>
                           <div className="mt-1 flex flex-wrap gap-1.5">
                             {deVenta && <BadgeEstado tono="ok">Depósito de venta</BadgeEstado>}
                             {d.es_default ? <BadgeEstado tono="ok">Por defecto</BadgeEstado> : null}
@@ -242,7 +243,7 @@ export function SucursalDetalle({
 
       <DialogContent>
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Building2 className="size-4" />{editingId !== null ? 'Editar' : 'Nuevo'} depósito</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><ICONOS.depositos className="size-4" />{editingId !== null ? 'Editar' : 'Nuevo'} depósito</DialogTitle>
         </DialogHeader>
         {formError && <p className="text-sm text-destructive">{formError}</p>}
         <div className="grid gap-4">

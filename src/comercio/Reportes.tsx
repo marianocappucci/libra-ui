@@ -14,10 +14,10 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import {
-  BarChart3, ShoppingCart, DollarSign, Receipt, Wallet, Download, TrendingUp, PieChart, Boxes,
-  AlertTriangle,
+  ShoppingCart, DollarSign, Receipt, Wallet, Download, TrendingUp, PieChart, Boxes, AlertTriangle,
 } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
+import { ICONOS } from '../iconos-identidad'
 import { iconoDe } from '../medios-pago'
 import { fecha } from '@/lib/fechas'
 import { hoyISO, primerDiaDelMesISO } from '../fechas'
@@ -64,7 +64,7 @@ export function Reportes() {
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <TituloPantalla icono={BarChart3}>Reportes</TituloPantalla>
+        <TituloPantalla icono={ICONOS.reportes}>Reportes</TituloPantalla>
         {/* `flex-wrap`: los tres filtros miden 472 px y, sin wrap, ensanchaban la página (99 px de desborde a 390, 168 a 320). */}
         <div className="flex flex-wrap items-end gap-3">
           <div className="grid gap-2"><Label>Desde</Label><Input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className="w-40" /></div>

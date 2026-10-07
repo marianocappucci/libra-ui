@@ -28,8 +28,7 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import type { ColumnDef } from './data-table'
 import {
-  CheckCircle2, ChevronLeft, ChevronRight, CircleDollarSign, Eye, FileDown,
-  FileMinus, FilePlus, Hourglass, Receipt, Search, X,
+  CheckCircle2, ChevronLeft, ChevronRight, CircleDollarSign, Eye, FileDown, FileMinus, FilePlus, Hourglass, Search, X,
 } from 'lucide-react'
 
 import { api, ApiError } from './api-client'
@@ -37,6 +36,7 @@ import type { Factura } from './facturas'
 import { anchoColumnaAcciones, DataTable, sortableHeader } from './data-table'
 import { BadgeEstado } from './badge-estado'
 import { TituloPantalla } from './titulo-pantalla'
+import { ICONOS } from './iconos-identidad'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -341,13 +341,13 @@ export function Facturas({
   return (
     <div className="grid gap-4">
       <div className="flex items-center justify-between">
-        <TituloPantalla icono={Receipt}>Comprobantes</TituloPantalla>
+        <TituloPantalla icono={ICONOS.comprobantes}>Comprobantes</TituloPantalla>
         {acciones}
       </div>
 
       <Tabs value={vista} onValueChange={(v) => { setVista(v as VistaDeComprobantes); setPage(1) }}>
         <TabsList>
-          <TabsTrigger value="facturas"><Receipt />Facturas</TabsTrigger>
+          <TabsTrigger value="facturas"><ICONOS.comprobantes />Facturas</TabsTrigger>
           {muestraCobros && (
             <TabsTrigger value="sin_cobrar">
               <Hourglass />Sin cobrar

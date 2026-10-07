@@ -16,13 +16,14 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import type { ColumnDef } from '../data-table'
 import {
-  Ban, CheckCircle2, Eye, FileCheck, ListChecks, Plus, Printer, ReceiptText, ShoppingCart, UserPlus, X,
+  Ban, CheckCircle2, Eye, FileCheck, ListChecks, Plus, Printer, ReceiptText, UserPlus, X,
 } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
 import { anchoColumnaAcciones, DataTable, sortableHeader } from '../data-table'
 import { BadgeEstado } from '../badge-estado'
 import { TituloPantalla } from '../titulo-pantalla'
+import { ICONOS } from '../iconos-identidad'
 import { SelectBuscable } from '../SelectBuscable'
 import { TACTIL, useAncho } from '../use-ancho'
 import { IVA_CONDITIONS } from '../facturas'
@@ -381,7 +382,7 @@ export function Ventas({
   return (
     <div className="grid gap-4">
       <div className="flex items-center justify-between">
-        <TituloPantalla icono={ShoppingCart}>Ventas</TituloPantalla>
+        <TituloPantalla icono={ICONOS.ventas}>Ventas</TituloPantalla>
         {permitirAlta && (
         <Dialog open={showNueva} onOpenChange={setShowNueva}>
           <DialogTrigger asChild>
@@ -389,7 +390,7 @@ export function Ventas({
           </DialogTrigger>
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2"><ShoppingCart className="size-4" />Nueva venta</DialogTitle>
+              <DialogTitle className="flex items-center gap-2"><ICONOS.ventas className="size-4" />Nueva venta</DialogTitle>
             </DialogHeader>
 
             <div className="grid gap-4">

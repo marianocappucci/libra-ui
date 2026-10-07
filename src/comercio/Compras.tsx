@@ -7,12 +7,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { ColumnDef } from '../data-table'
-import { Plus, ShoppingBag } from 'lucide-react'
+import { Plus } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
 import { DataTable, sortableHeader } from '../data-table'
 import { BadgeEstado } from '../badge-estado'
 import { TituloPantalla } from '../titulo-pantalla'
+import { ICONOS } from '../iconos-identidad'
 import { SelectBuscable } from '../SelectBuscable'
 import {
   opcionesProveedor, PURCHASE_ORDER_STATUS_LABELS, PURCHASE_ORDER_STATUS_TONO,
@@ -177,7 +178,7 @@ export function Compras({ rutaDelDetalle = (id) => `/compras/${id}` }: ComprasPr
   return (
     <div className="grid gap-4">
       <div className="flex items-center justify-between">
-        <TituloPantalla icono={ShoppingBag}>Compras</TituloPantalla>
+        <TituloPantalla icono={ICONOS.ordenesDeCompra}>Compras</TituloPantalla>
         <NuevaCompraDialog suppliers={suppliers} onCreada={irAlDetalle} />
       </div>
 

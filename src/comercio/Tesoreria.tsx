@@ -22,9 +22,10 @@ import {
 } from '@/components/ui/dialog'
 import { DataTable } from '../data-table'
 import {
-  Landmark, Plus, Pencil, List, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, ArrowDownCircle, ArrowUpCircle, Check,
+  Plus, Pencil, List, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, ArrowDownCircle, ArrowUpCircle, Check,
 } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
+import { ICONOS } from '../iconos-identidad'
 import { fecha } from '@/lib/fechas'
 import { hoyISO } from '../fechas'
 
@@ -156,7 +157,7 @@ export function Tesoreria() {
     <div className="grid gap-4">
       {/* `flex-wrap` en la cabecera y en el grupo: «Transferir» y «Nueva cuenta» ensanchaban la página (17 px a 390, 87 a 320). */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <TituloPantalla icono={Landmark}>Tesorería</TituloPantalla>
+        <TituloPantalla icono={ICONOS.tesoreria}>Tesorería</TituloPantalla>
         <div className="flex flex-wrap gap-2">
           <Dialog open={showTransfer} onOpenChange={setShowTransfer}>
             <DialogTrigger asChild>
@@ -215,7 +216,7 @@ export function Tesoreria() {
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle className="flex items-center gap-2"><Landmark className="size-4" />Nueva cuenta</DialogTitle>
+                <DialogTitle className="flex items-center gap-2"><ICONOS.tesoreria className="size-4" />Nueva cuenta</DialogTitle>
               </DialogHeader>
               <div className="grid gap-3">
                 <div className="grid gap-2">
@@ -303,7 +304,7 @@ export function Tesoreria() {
       ) : (
         <Card>
           <CardContent className="py-10 text-center text-muted-foreground">
-            <Landmark className="mx-auto mb-3 size-10 opacity-25" />
+            <ICONOS.tesoreria className="mx-auto mb-3 size-10 opacity-25" />
             No hay cuentas creadas aún.
             <div className="mt-3"><Button onClick={abrirNuevaCuenta}><Plus />Crear primera cuenta</Button></div>
           </CardContent>

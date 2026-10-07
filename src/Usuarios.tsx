@@ -25,6 +25,7 @@ import { DataTable, sortableHeader } from './data-table'
 import { PasswordInput } from './PasswordInput'
 import type { ComponentType } from 'react'
 import { TituloPantalla } from './titulo-pantalla'
+import { ICONOS } from './iconos-identidad'
 
 function describeError(err: unknown): string {
   if (err instanceof ApiError) return err.detail
@@ -54,15 +55,19 @@ function formVacio(roles: Rol[]) {
 // (Gestiolibra/MedLibra/VentaLibra montan `users.router` en `/users`).
 // LibraDesk monta el suyo en `/api/usuarios` y pasa esa ruta explicita.
 export function Usuarios({
-  basePath = '/users', icono, roles = ROLES_POR_DEFECTO, permitirEliminar = false, usuarioActualId,
+  basePath = '/users', icono = ICONOS.usuarios, roles = ROLES_POR_DEFECTO, permitirEliminar = false, usuarioActualId,
 }: {
   basePath?: string
-  /** El icono que el sidebar del producto le da a esta pantalla.
-   *  **Obligatorio y sin default**: VentaLibra usa `Building2` para
-   *  `/usuarios` donde los otros usan `UserCog`, asi que un default aca le
-   *  pondria a un producto el icono de otro. Que sea requerido hace que el
-   *  compilador —y no un guard— obligue a cada consumidor a decir el suyo. */
-  icono: ComponentType<{ className?: string }>
+  /** El icono que el sidebar del producto le da a esta pantalla. Default: el
+   *  del catalogo (`ICONOS.usuarios`, ADR-035), que es el que tiene que llevar
+   *  el menu de TODOS los productos.
+   *
+   *  Antes era obligatorio y sin default, porque VentaLibra usaba `Building2`
+   *  donde los otros usaban `UserCog` y un default le habria puesto a un
+   *  producto el icono de otro. Con el catalogo esa razon se cae: el icono de
+   *  Usuarios es uno solo. La prop queda para no romper a quien ya la pasa, y
+   *  se puede dejar de pasar. */
+  icono?: ComponentType<{ className?: string }>
   /** Roles que ofrece el Select de rol, en el orden en que se listan.
    *  Default `[{value:'staff',...},{value:'admin',...}]` -- exactamente el
    *  comportamiento de antes de esta prop, para no cambiarle nada a un

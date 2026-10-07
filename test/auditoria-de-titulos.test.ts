@@ -10,8 +10,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
-  auditarTitulos, describirDesajustes, iconoDelTitulo, iconosDelNav, resolverAlias,
-  rutasDelRouter,
+  auditarMenuContraCatalogo, auditarTitulos, describirDesajustes, iconoDelTitulo, iconosDelNav,
+  resolverAlias, rutasDelRouter,
 } from '../src/auditoria-de-titulos'
 
 const NAV = `
@@ -206,5 +206,114 @@ describe('describirDesajustes', () => {
     expect(describirDesajustes([
       { ruta: '/remitos/:id', pantalla: 'RemitoDetalle', titulo: null, sidebar: 'FileText', forma: 'título SIN icono' },
     ])).toEqual(['/remitos/:id (RemitoDetalle): título=título SIN icono, sidebar=FileText'])
+  })
+})
+
+// ── El catálogo de íconos de identidad (ADR-035, v0.125.0) ───────────────
+//
+// Un producto que migra su menú a `ICONOS.<concepto>` no puede quedar «sin icono» para el guard de arriba: las dos formas tienen que leerse.
+
+describe('los íconos del catálogo en el menú y en los títulos', () => {
+  it('🔴 `iconosDelNav` lee `ICONOS.concepto` entero, no sólo `ICONOS`', () => {
+    const nav = iconosDelNav(`[
+      { to: '/caja', label: 'Caja', icon: ICONOS.caja },
+      { to: '/proveedores', label: 'Proveedores', icon: ICONOS_LC.proveedores },
+      { to: '/stock', label: 'Stock', icon: Boxes },
+    ]`)
+    expect(nav.get('/caja')).toBe('ICONOS.caja')
+    expect(nav.get('/proveedores')).toBe('ICONOS_LC.proveedores')
+    expect(nav.get('/stock')).toBe('Boxes')
+  })
+
+  it('🔴 `iconoDelTitulo` lee `icono={ICONOS.concepto}`', () => {
+    expect(iconoDelTitulo('<TituloPantalla icono={ICONOS.caja}>Caja</TituloPantalla>'))
+      .toEqual({ icono: 'ICONOS.caja', forma: 'TituloPantalla' })
+  })
+
+  describe('de punta a punta', () => {
+    let raiz: string
+    beforeAll(() => {
+      raiz = mkdtempSync(join(tmpdir(), 'auditoria-catalogo-'))
+      mkdirSync(join(raiz, 'components'), { recursive: true })
+      mkdirSync(join(raiz, 'pages'), { recursive: true })
+      writeFileSync(join(raiz, 'components', 'Layout.tsx'), `
+        import { BarChart3 } from 'lucide-react'
+        const NAV = [
+          { to: '/caja', label: 'Caja', icon: ICONOS.caja },
+          { to: '/reportes', label: 'Reportes', icon: BarChart3 },
+          { to: '/clientes', label: 'Clientes', icon: ICONOS.clientes },
+          { to: '/proveedores', label: 'Proveedores', icon: ICONOS_LC.proveedores },
+        ]`)
+      writeFileSync(join(raiz, 'App.tsx'), `
+        <Route path="/caja" element={<ProtectedRoute><Caja /></ProtectedRoute>} />
+        <Route path="/reportes" element={<ProtectedRoute><Reportes /></ProtectedRoute>} />
+        <Route path="/clientes" element={<ProtectedRoute><Clientes /></ProtectedRoute>} />
+        <Route path="/proveedores" element={<ProtectedRoute><Proveedores /></ProtectedRoute>} />`)
+      // Menú y título por el catálogo: cumple.
+      writeFileSync(join(raiz, 'pages', 'Caja.tsx'), '<TituloPantalla icono={ICONOS.caja}>Caja</TituloPantalla>')
+      // El menú con el nombre de lucide (`BarChart3`) y el título por el catálogo (`ICONOS.reportes`): es el mismo ícono, cumple.
+      writeFileSync(join(raiz, 'pages', 'Reportes.tsx'), '<TituloPantalla icono={ICONOS.reportes}>Reportes</TituloPantalla>')
+      // Título por el catálogo con otro concepto: NO cumple.
+      writeFileSync(join(raiz, 'pages', 'Clientes.tsx'), '<TituloPantalla icono={ICONOS.proveedores}>Clientes</TituloPantalla>')
+      // La excepción de LibraCargo: menú y título por la vista del producto. Cumple sólo si se audita COMO libracargo.
+      writeFileSync(join(raiz, 'pages', 'Proveedores.tsx'), '<TituloPantalla icono={ICONOS_LC.proveedores}>Proveedores</TituloPantalla>')
+    })
+    afterAll(() => rmSync(raiz, { recursive: true, force: true }))
+
+    it('🔴 compara el menú y el título aunque uno diga `BarChart3` y el otro `ICONOS.reportes`', () => {
+      const a = auditarTitulos(raiz, 'libracargo')
+      expect(a.pantallas).toBe(4)
+      expect(a.conIcono).toBe(3)
+      expect(a.distinto.map((d) => d.pantalla)).toEqual(['Clientes'])
+      expect(a.sinIcono).toEqual([])
+    })
+  })
+
+  describe('auditarMenuContraCatalogo', () => {
+    const LAYOUT = `
+      import { BarChart3, Wallet } from 'lucide-react'
+      const NAV = [
+        { to: '/caja', label: 'Caja', icon: ICONOS.caja },
+        { to: '/cuenta-corriente', label: 'Cuenta corriente', icon: Wallet },
+        { to: '/reportes', label: 'Reportes', icon: BarChart3 },
+        { to: '/proveedores', label: 'Proveedores', icon: ICONOS.proveedores },
+      ]`
+
+    it('🔴 acepta las dos formas, `ICONOS.caja` y el componente de lucide que es el del catálogo', () => {
+      const r = auditarMenuContraCatalogo(LAYOUT, { '/caja': 'caja', '/reportes': 'reportes' })
+      expect(r).toEqual({ medidas: 2, mal: [], faltan: [] })
+    })
+
+    it('🔴 marca el ícono que no es el del catálogo y dice cuál esperaba', () => {
+      // El caso real que el catálogo vino a sacar: la cuenta corriente con `Wallet`, que es la Caja.
+      const r = auditarMenuContraCatalogo(LAYOUT, { '/cuenta-corriente': 'cuentaCorriente' })
+      expect(r.mal).toEqual([{ ruta: '/cuenta-corriente', concepto: 'cuentaCorriente', esperado: 'BookOpen', encontrado: 'Wallet' }])
+    })
+
+    it('marca `ICONOS.<otro concepto>` puesto donde va otro', () => {
+      const r = auditarMenuContraCatalogo(LAYOUT, { '/caja': 'cajas' })
+      expect(r.mal.map((m) => m.ruta)).toEqual(['/caja'])
+    })
+
+    it('🔴 el control — dice cuánto midió y cuántas rutas del mapa no están en el menú', () => {
+      const r = auditarMenuContraCatalogo(LAYOUT, { '/caja': 'caja', '/stock': 'stock' })
+      expect(r.medidas).toBe(1)
+      expect(r.faltan).toEqual(['/stock'])
+      // Un menú vacío no da «todo bien»: da cero medidas y todas faltan.
+      expect(auditarMenuContraCatalogo('', { '/caja': 'caja' })).toEqual({ medidas: 0, mal: [], faltan: ['/caja'] })
+    })
+
+    it('🔴 la excepción de LibraCargo vive en el catálogo: con `libracargo`, Proveedores es Store', () => {
+      const conStore = LAYOUT.replace('icon: ICONOS.proveedores', 'icon: Store')
+      expect(auditarMenuContraCatalogo(conStore, { '/proveedores': 'proveedores' }, 'libracargo').mal).toEqual([])
+      // Y sin el producto —o en otro— Store NO es el ícono de Proveedores.
+      expect(auditarMenuContraCatalogo(conStore, { '/proveedores': 'proveedores' }, 'contalibra').mal).toHaveLength(1)
+      expect(auditarMenuContraCatalogo(conStore, { '/proveedores': 'proveedores' }).mal).toHaveLength(1)
+    })
+
+    it('resuelve el alias de un import', () => {
+      const r = auditarMenuContraCatalogo("import { Wallet as IconoCaja } from 'lucide-react'\n{ to: '/caja', icon: IconoCaja }", { '/caja': 'caja' })
+      expect(r).toEqual({ medidas: 1, mal: [], faltan: [] })
+    })
   })
 })

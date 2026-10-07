@@ -10,12 +10,13 @@
 // único producto de la familia con este módulo (ver el docstring de `tipos.ts`).
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Check, PackageCheck, ShoppingBag } from 'lucide-react'
+import { ArrowLeft, Check, PackageCheck } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
 import { fechaHora } from '@/lib/fechas'
 import { BadgeEstado } from '../badge-estado'
 import { TituloPantalla } from '../titulo-pantalla'
+import { ICONOS } from '../iconos-identidad'
 import { SelectBuscable } from '../SelectBuscable'
 import { esFechaISOValida } from './fecha-iso'
 import {
@@ -162,7 +163,7 @@ export function CompraDetalle({ rutaDeCompras = '/compras' }: CompraDetalleProps
   if (loading || !order) {
     return (
       <div className="grid gap-4">
-        <TituloPantalla icono={ShoppingBag}>Orden de compra</TituloPantalla>
+        <TituloPantalla icono={ICONOS.ordenesDeCompra}>Orden de compra</TituloPantalla>
         {error ? <p className="text-sm text-destructive">{error}</p> : (
           <p className="py-6 text-center text-sm text-muted-foreground">Cargando…</p>
         )}
@@ -173,7 +174,7 @@ export function CompraDetalle({ rutaDeCompras = '/compras' }: CompraDetalleProps
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <TituloPantalla icono={ShoppingBag}>
+        <TituloPantalla icono={ICONOS.ordenesDeCompra}>
           Orden {order.number}{' '}
           <BadgeEstado tono={PURCHASE_ORDER_STATUS_TONO[order.status] ?? 'neutro'}>
             {PURCHASE_ORDER_STATUS_LABELS[order.status] ?? order.status}

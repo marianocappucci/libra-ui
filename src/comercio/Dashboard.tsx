@@ -11,12 +11,12 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  ArrowDownCircle, ArrowUpCircle, CheckCircle2, ClipboardList, History, Hourglass, Inbox, LayoutDashboard, Receipt,
-  Wallet,
+  ArrowDownCircle, ArrowUpCircle, CheckCircle2, ClipboardList, History, Hourglass, Inbox, Receipt, Wallet,
 } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
 import { TituloPantalla } from '../titulo-pantalla'
+import { ICONOS } from '../iconos-identidad'
 import type { DashboardData } from './tipos'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -79,7 +79,7 @@ export function Dashboard({
   return (
     <div className="grid gap-4">
       <div className="flex items-center justify-between">
-        <TituloPantalla icono={LayoutDashboard}>Dashboard</TituloPantalla>
+        <TituloPantalla icono={ICONOS.dashboard}>Dashboard</TituloPantalla>
         {data && (
           <span className="text-sm text-muted-foreground">{fecha(data.mes_hasta)}</span>
         )}

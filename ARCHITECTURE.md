@@ -59,7 +59,8 @@ Tres capas, de más genérico a más específico:
     `Facturas`/`FacturaDetalle`, `MpBandeja`.
   - Helpers y piezas compartidas: `AuthContext`, `api-client`, `data-table`
     (sobre TanStack Table), `SelectBuscable`, `PasswordInput`, `acciones` /
-    `iconos-accion`, `badge-estado`, `titulo-pantalla` /
+    `iconos-accion`, `iconos-identidad` (el catálogo de íconos del menú y los
+    títulos, ADR-035), `badge-estado`, `titulo-pantalla` /
     `auditoria-de-titulos`, `medios-pago`, `mp`, `facturas`, `fechas` (formato
     `dd-mm-aaaa` de familia), `branding`, `use-mobile`, `utils` (el `cn` de
     tailwind-merge).
