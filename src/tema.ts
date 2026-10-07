@@ -36,9 +36,11 @@ export type DefinicionDeColor = {
   variable: string
   /** Otras variables que reciben el mismo color (p. ej. el anillo de foco sigue al acento). */
   tambien?: readonly string[]
-  /** El valor de siempre, `#rrggbb` en minúsculas. Si `defectoPorProducto`, es sólo una referencia para la vista previa. */
+  /** El valor de siempre, `#rrggbb` en minúsculas. Si `defectoPorProducto`, es la referencia neutra para un producto que no declara el suyo; el
+   *  real de cada producto lo da `defectosDelProducto(producto)` (`libra-ui/identidad`). */
   porDefecto: string
-  /** El «valor de siempre» depende del producto (lo declara su `index.css`): mientras no se elija uno, no se toca la variable. */
+  /** El «valor de siempre» depende del producto (lo declara su `index.css` o su identidad, ADR-033 y ADR-036): mientras no se elija uno, no se
+   *  toca la variable. Para mostrarlo (vista previa, «De siempre») se usa `defectosDelProducto(producto)`, no `porDefecto`. */
   defectoPorProducto?: boolean
   /** Si el color lleva texto encima: la variable CSS donde se guarda el texto calculado y el piso de contraste. */
   textoSobre?: {
@@ -113,7 +115,10 @@ export const COLORES_DE_TEMA: readonly DefinicionDeColor[] = [
     etiqueta: 'Ítem activo del menú: fondo',
     ayuda: 'El fondo de la opción del menú lateral en la que estás parado.',
     variable: '--libra-menu-activo-fondo',
-    porDefecto: '#ecfdf5',
+    // Neutro (neutral-100): es el último recurso de `tema.css` para un producto que no llama a `aplicarIdentidad`. El de cada producto es su
+    // `colorClaro` (ADR-036).
+    porDefecto: '#f5f5f5',
+    defectoPorProducto: true,
     textoSobre: { variable: '--libra-menu-activo-texto', contrasteMinimo: 4.5 },
   },
   {
@@ -121,7 +126,8 @@ export const COLORES_DE_TEMA: readonly DefinicionDeColor[] = [
     etiqueta: 'Ítem activo del menú: borde',
     ayuda: 'El borde de esa misma opción. Tiene que distinguirse del fondo de la barra.',
     variable: '--libra-menu-activo-borde',
-    porDefecto: '#5ee9b5',
+    porDefecto: '#d4d4d4',
+    defectoPorProducto: true,
   },
 ]
 

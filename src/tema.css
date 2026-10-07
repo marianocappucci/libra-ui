@@ -22,10 +22,12 @@ html {
 
 :root {
   /* Ítem activo del menú lateral (pedido del humano, 2026-10-01). El texto sale del contraste sobre el fondo: `aplicarTema` lo
-     recalcula y acá queda el que corresponde al fondo por defecto. */
-  --libra-menu-activo-fondo: #ecfdf5;
-  --libra-menu-activo-borde: #5ee9b5;
-  --libra-menu-activo-texto: #064e3b;
+     recalcula. El defecto es de cada producto, no de la suite: `aplicarIdentidad` (`libra-ui/identidad`) lo fija con el fondo suave, el
+     borde y el texto de su color (ADR-036). Lo de acá es el último recurso, para un producto que no la llama: un neutro sin marca (era el
+     verde de VentaLibra, que quedaba mal en los otros siete). */
+  --libra-menu-activo-fondo: #f5f5f5;
+  --libra-menu-activo-borde: #d4d4d4;
+  --libra-menu-activo-texto: #171717;
 }
 
 /* El borde es un `box-shadow` inset y no un `border`: el ítem no se corre 1 px respecto de los demás. El fondo es el mismo en modo

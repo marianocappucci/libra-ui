@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -40,6 +42,26 @@ describe('el catálogo', () => {
     const { tema, errores } = validarTema(defectos)
     expect(errores).toEqual({})
     expect(tema).toEqual(defectos)
+  })
+})
+
+describe('el ítem activo del menú (ADR-036)', () => {
+  it('fondo y borde son de cada producto: defectoPorProducto, como el acento y la barra', () => {
+    for (const clave of ['acento', 'barraLateralFondo', 'menuActivoFondo', 'menuActivoBorde']) {
+      expect(COLORES_DE_TEMA.find((d) => d.clave === clave)?.defectoPorProducto, clave).toBe(true)
+    }
+  })
+
+  it('🔴 tema.css ya no trae el verde: su último recurso es el neutro de COLORES_DE_TEMA', () => {
+    const css = readFileSync(resolve(__dirname, '../src/tema.css'), 'utf8')
+    const fondo = COLORES_DE_TEMA.find((d) => d.clave === 'menuActivoFondo')!
+    const borde = COLORES_DE_TEMA.find((d) => d.clave === 'menuActivoBorde')!
+    expect(css).toContain(`--libra-menu-activo-fondo: ${fondo.porDefecto};`)
+    expect(css).toContain(`--libra-menu-activo-borde: ${borde.porDefecto};`)
+    expect(css).not.toMatch(/ecfdf5|5ee9b5|064e3b/i)
+    // El texto del neutro se lee sobre su fondo.
+    const texto = /--libra-menu-activo-texto: (#[0-9a-f]{6});/.exec(css)![1]
+    expect(contraste(texto, fondo.porDefecto)).toBeGreaterThanOrEqual(4.5)
   })
 })
 

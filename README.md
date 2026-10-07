@@ -130,7 +130,10 @@ antes — misma regla que rige desde `v0.3.0`.
 ## El tema de la suite: colores editables (`v0.93.0`, ADR-007)
 
 `libra-ui/tema.css` declara las variables de color que el backoffice de cada suite puede cambiar, con los valores de siempre como
-defecto, y la regla del ítem activo del menú lateral que las usa (fondo `#ECFDF5`, borde `#5EE9B5`). El producto lo importa una vez,
+defecto, y la regla del ítem activo del menú lateral que las usa. Desde `v0.126.0` (ADR-036) el color del ítem activo es **el del producto**
+(`aplicarIdentidad` lo fija: fondo `colorClaro`, borde de marca al 45%, texto `colorOscuro` a 4,5:1); lo de `tema.css` es un neutro de último
+recurso. `defectosDelProducto(producto)` (`libra-ui/identidad`) devuelve el valor «de siempre» de cada color editable para ese producto, para
+quien tenga que mostrarlo (la vista previa de «Apariencia»). El producto lo importa una vez,
 después de Tailwind:
 
 ```css
