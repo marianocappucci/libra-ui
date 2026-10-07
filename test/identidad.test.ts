@@ -5,7 +5,8 @@
 // uno solo, este test falla. Cambiar un valor acá sin cambiarlo en los otros dos es justo lo que NO hay que hacer.
 import { Coffee, CalendarCheck, HeartPulse, Headset, ReceiptText, ScanBarcode, Trophy, Truck } from 'lucide-react'
 import { afterEach, describe, expect, it } from 'vitest'
-import { IDENTIDAD, aplicarIdentidad, cssDeIdentidad, type Producto } from '../src/identidad'
+import { IDENTIDAD, aplicarIdentidad, cssDeIdentidad, defectosDelProducto, menuActivoDeProducto, type Producto } from '../src/identidad'
+import { COLORES_DE_TEMA, aplicarTema, validarTema } from '../src/tema'
 import { faviconDeMarca } from '../src/marcas'
 
 const TABLA_DEL_WIKI = {
@@ -164,5 +165,127 @@ describe('aplicarIdentidad', () => {
     expect(estilos[0].textContent).toContain(`--primary: ${IDENTIDAD.medlibra.colorAccion};`)
     expect(estilos[0].textContent).not.toContain(IDENTIDAD.contalibra.colorAccion)
     expect(document.head.querySelector('meta[name="theme-color"]')?.getAttribute('content')).toBe('#0d9488')
+  })
+})
+
+describe('el ítem activo del menú es del producto (ADR-036)', () => {
+  // Valores medidos de los ocho (fondo = colorClaro; borde = 45% de la marca sobre el fondo; texto = colorOscuro ajustado a 4,5:1).
+  const ESPERADO = {
+    contalibra: { fondo: '#eff6ff', borde: '#94b4f6', texto: '#1d4ed8' },
+    restolibra: { fondo: '#fff7ed', borde: '#f6af88', texto: '#c2410c' },
+    gestiolibra: { fondo: '#f5f3ff', borde: '#bfa0f7', texto: '#6d28d9' },
+    medlibra: { fondo: '#f0fdfa', borde: '#8acec7', texto: '#0f766e' },
+    ventalibra: { fondo: '#fffbeb', borde: '#eec084', texto: '#b45309' },
+    libradesk: { fondo: '#eef2ff', borde: '#a6a5f3', texto: '#4338ca' },
+    libracargo: { fondo: '#eef3fc', borde: '#8399c6', texto: '#001d5c' },
+    libraclub: { fondo: '#ecfdf5', borde: '#82c3a9', texto: '#015c38' },
+  } as const satisfies Record<Producto, object>
+  const VERDE_DE_ANTES = { fondo: '#ecfdf5', borde: '#5ee9b5' }
+  const BARRA = '#fafafa'
+
+  afterEach(() => {
+    document.getElementById('libra-identidad')?.remove()
+    document.documentElement.removeAttribute('style')
+  })
+
+  it.each(PRODUCTOS)('%s: fondo, borde y texto son los medidos', (p) => {
+    expect(menuActivoDeProducto(p)).toEqual(ESPERADO[p])
+  })
+
+  it.each(PRODUCTOS)('🔴 %s: el texto del ítem activo llega a 4,5:1 sobre su fondo', (p) => {
+    const { fondo, texto } = menuActivoDeProducto(p)
+    expect(contraste(texto, fondo)).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it.each(PRODUCTOS)('%s: el borde se distingue de la barra, al menos como el verde de antes', (p) => {
+    const { borde } = menuActivoDeProducto(p)
+    expect(contraste(borde, BARRA)).toBeGreaterThanOrEqual(contraste(VERDE_DE_ANTES.borde, BARRA))
+  })
+
+  it.each(PRODUCTOS)('%s: el fondo es el colorClaro del producto, no el verde de antes (salvo LibraClub, cuyo colorClaro es ese verde)', (p) => {
+    const { fondo } = menuActivoDeProducto(p)
+    expect(fondo).toBe(IDENTIDAD[p].colorClaro)
+    if (p !== 'libraclub') expect(fondo).not.toBe(VERDE_DE_ANTES.fondo)
+    expect(menuActivoDeProducto(p).borde).not.toBe(VERDE_DE_ANTES.borde)
+  })
+
+  it.each(PRODUCTOS)('🔴 %s: el CSS de identidad trae las tres variables del ítem activo', (p) => {
+    const css = cssDeIdentidad(p)
+    const { fondo, borde, texto } = menuActivoDeProducto(p)
+    expect(css).toContain(`--libra-menu-activo-fondo: ${fondo};`)
+    expect(css).toContain(`--libra-menu-activo-borde: ${borde};`)
+    expect(css).toContain(`--libra-menu-activo-texto: ${texto};`)
+    // Dentro del bloque claro (`:root:root`), que es el que gana a tema.css: el chip es claro en los dos modos.
+    const claro = css.slice(0, css.indexOf('.dark.dark'))
+    expect(claro).toContain('--libra-menu-activo-fondo')
+    expect(css.slice(css.indexOf('.dark.dark'))).not.toContain('--libra-menu-activo')
+  })
+
+  it('🔴 un tema de instancia en línea sigue ganando a la identidad, y al restaurarlo vuelve la del producto', () => {
+    aplicarIdentidad('contalibra')
+    expect(document.getElementById('libra-identidad')?.textContent).not.toContain('!important')
+    const raiz = document.documentElement
+    // En línea (lo que hace `aplicarTema`) gana al `<style>` por cascada; lo que se mide es que se fije y se limpie sin tocar el de identidad.
+    aplicarTema({ menuActivoFondo: '#fdf2f8', menuActivoBorde: '#f9a8d4' })
+    expect(raiz.style.getPropertyValue('--libra-menu-activo-fondo')).toBe('#fdf2f8')
+    expect(raiz.style.getPropertyValue('--libra-menu-activo-borde')).toBe('#f9a8d4')
+    expect(raiz.style.getPropertyValue('--libra-menu-activo-texto')).toBe('#0f172a')
+    expect(document.getElementById('libra-identidad')?.textContent).toContain(`--libra-menu-activo-fondo: ${ESPERADO.contalibra.fondo};`)
+    aplicarTema({})
+    expect(raiz.style.getPropertyValue('--libra-menu-activo-fondo')).toBe('')
+    expect(raiz.style.getPropertyValue('--libra-menu-activo-texto')).toBe('')
+  })
+
+  it('aplicarIdentidad cambia el ítem activo al cambiar de producto', () => {
+    aplicarIdentidad('contalibra')
+    aplicarIdentidad('restolibra')
+    const css = document.getElementById('libra-identidad')?.textContent ?? ''
+    expect(css).toContain(`--libra-menu-activo-fondo: ${ESPERADO.restolibra.fondo};`)
+    expect(css).not.toContain(ESPERADO.contalibra.borde)
+  })
+})
+
+describe('defectosDelProducto', () => {
+  it.each(PRODUCTOS)('🔴 %s: coincide con IDENTIDAD (acento = colorAccion; ítem activo = el de menuActivoDeProducto)', (p) => {
+    const d = defectosDelProducto(p)
+    const { fondo, borde } = menuActivoDeProducto(p)
+    expect(d.acento).toBe(IDENTIDAD[p].colorAccion)
+    expect(d.menuActivoFondo).toBe(fondo)
+    expect(d.menuActivoBorde).toBe(borde)
+  })
+
+  it.each(PRODUCTOS)('%s: trae todas las claves del tema, en #rrggbb, y el ítem activo pasa validarTema', (p) => {
+    const d = defectosDelProducto(p)
+    expect(Object.keys(d).sort()).toEqual(COLORES_DE_TEMA.map((c) => c.clave).sort())
+    for (const v of Object.values(d)) expect(v).toMatch(/^#[0-9a-f]{6}$/)
+    // El fondo y el borde del ítem activo se podrían guardar como elegidos sin que la instancia los rechace.
+    const { tema, errores } = validarTema({ menuActivoFondo: d.menuActivoFondo, menuActivoBorde: d.menuActivoBorde })
+    expect(errores).toEqual({})
+    expect(tema).toEqual({ menuActivoFondo: d.menuActivoFondo, menuActivoBorde: d.menuActivoBorde })
+  })
+
+  it('🔴 el acento de LibraCargo (#012c83) es un defecto válido pero NO una elección válida: «De siempre» tiene que ser vaciar, no guardar el defecto', () => {
+    // 1,6:1 contra la página oscura (#0a0a0a): `legibleSobrePagina` (3:1, vale en claro y oscuro) lo rechaza. Es el acento real del producto, que
+    // lo pinta `aplicarIdentidad` con su propio juego claro/oscuro; sólo no se puede ELEGIR por instancia. Los otros siete sí pasan.
+    expect(validarTema({ acento: defectosDelProducto('libracargo').acento }).errores.acento).toMatch(/no se distingue del fondo/)
+    for (const p of PRODUCTOS.filter((x) => x !== 'libracargo')) {
+      expect(validarTema({ acento: defectosDelProducto(p).acento }).errores, p).toEqual({})
+    }
+  })
+
+  it('lo que no sale de la identidad es lo de COLORES_DE_TEMA (la barra #fafafa de shadcn, el éxito y el POS)', () => {
+    const d = defectosDelProducto('libradesk')
+    for (const c of COLORES_DE_TEMA) {
+      if (['acento', 'menuActivoFondo', 'menuActivoBorde'].includes(c.clave)) continue
+      expect(d[c.clave], c.clave).toBe(c.porDefecto)
+    }
+    expect(d.barraLateralFondo).toBe('#fafafa')
+  })
+
+  it('los ocho tienen defectos distintos de acento y de ítem activo (no hay un verde común)', () => {
+    const acentos = new Set(PRODUCTOS.map((p) => defectosDelProducto(p).acento))
+    const fondos = new Set(PRODUCTOS.map((p) => defectosDelProducto(p).menuActivoFondo))
+    expect(acentos.size).toBe(8)
+    expect(fondos.size).toBe(8)
   })
 })
