@@ -298,7 +298,7 @@ export function createLogin<TUser = User>({
         <Card className="w-full max-w-sm">
           <CardHeader className="text-center">
             {producto ? (
-              <MarcaProducto producto={producto} className="mx-auto mb-2 h-10 w-10" iconoClassName="size-5" />
+              <MarcaProducto producto={producto} className="mx-auto mb-2 h-12 w-12" />
             ) : logo ? (
               <img
                 src={logo.src}

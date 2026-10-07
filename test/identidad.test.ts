@@ -6,6 +6,7 @@
 import { Coffee, CalendarCheck, HeartPulse, Headset, ReceiptText, ScanBarcode, Trophy, Truck } from 'lucide-react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { IDENTIDAD, aplicarIdentidad, cssDeIdentidad, type Producto } from '../src/identidad'
+import { faviconDeMarca } from '../src/marcas'
 
 const TABLA_DEL_WIKI = {
   contalibra: { nombre: 'ContaLibra', rubro: 'Comercios y PyMEs', color: '#2563eb', colorOscuro: '#1d4ed8', colorClaro: '#eff6ff', colorSobreOscuro: '#60a5fa', icono: ReceiptText },
@@ -80,6 +81,28 @@ describe('aplicarIdentidad', () => {
   afterEach(() => {
     document.getElementById('libra-identidad')?.remove()
     document.head.querySelector('meta[name="theme-color"]')?.remove()
+    document.head.querySelectorAll('link[rel~="icon"]').forEach((l) => l.remove())
+  })
+
+  it('🔴 pone el favicon del producto (ADR-034) en un <link rel="icon">', () => {
+    aplicarIdentidad('gestiolibra')
+    const links = document.head.querySelectorAll<HTMLLinkElement>('link[rel~="icon"]')
+    expect(links).toHaveLength(1)
+    expect(links[0].getAttribute('href')).toBe(faviconDeMarca('gestiolibra'))
+    expect(links[0].type).toBe('image/svg+xml')
+  })
+
+  it('reusa el <link rel="icon"> que traía el index.html y le cambia el href', () => {
+    const previo = document.createElement('link')
+    previo.rel = 'icon'
+    previo.href = '/favicon.png'
+    document.head.appendChild(previo)
+    aplicarIdentidad('ventalibra')
+    aplicarIdentidad('ventalibra')
+    const links = document.head.querySelectorAll('link[rel~="icon"]')
+    expect(links).toHaveLength(1)
+    expect(links[0]).toBe(previo)
+    expect(previo.getAttribute('href')).toBe(faviconDeMarca('ventalibra'))
   })
 
   it('inyecta un único <style id="libra-identidad"> con el acento en claro y en oscuro', () => {

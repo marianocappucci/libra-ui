@@ -1,4 +1,4 @@
-// `MarcaProducto` y la prop `producto` de `createLayout` y `createLogin` (ADR-033, v0.123.0).
+// `MarcaProducto` y la prop `producto` de `createLayout` y `createLogin` (ADR-033, v0.123.0; el dibujo propio, ADR-034, v0.124.0).
 //
 // Cada caso con producto trae su control SIN producto, por lo mismo que en `logo-de-producto.test.tsx`: un «la inicial ya no está» pasaría en verde
 // aunque la inicial nunca hubiera estado ahí.
@@ -10,6 +10,18 @@ import { createLogin } from '../src/Login'
 import type { ProductLogo } from '../src/branding'
 import { IDENTIDAD, type Producto } from '../src/identidad'
 import { MarcaProducto } from '../src/MarcaProducto'
+import { svgDeMarca } from '../src/marcas'
+
+// El color del cuadrado: el primer <rect> del SVG, que es el fondo.
+const fondoDe = (marca: HTMLElement) => marca.querySelector('svg > rect')!.getAttribute('fill')
+// El dibujo de `svgDeMarca` tal como lo deja el parser de HTML (el mismo que usa `dangerouslySetInnerHTML`), sin el <title>, que
+// `MarcaProducto` saca.
+function dibujoDe(svg: string) {
+  const div = document.createElement('div')
+  div.innerHTML = svg
+  div.querySelector('title')?.remove()
+  return div.querySelector('svg')!.innerHTML
+}
 
 const Icono = () => <svg />
 const IconoDeEncabezado = () => <svg data-testid="icono-de-encabezado" />
@@ -45,38 +57,55 @@ describe('MarcaProducto', () => {
     expect(svg).toHaveAttribute('aria-hidden', 'true')
   })
 
-  it('pinta el cuadrado con el color de marca, en línea', () => {
+  it('pinta el cuadrado con el color de marca', () => {
     render(<MarcaProducto producto="libracargo" />)
-    expect(screen.getByRole('img')).toHaveStyle({ backgroundColor: IDENTIDAD.libracargo.color })
+    expect(fondoDe(screen.getByRole('img'))).toBe(IDENTIDAD.libracargo.color)
+  })
+
+  it('🔴 dibuja la marca propia de `marcas.ts`, no un ícono de lucide', () => {
+    const { container } = render(<MarcaProducto producto="libracargo" />)
+    expect(container.querySelector('svg.lucide')).toBeNull()
+    expect(container.querySelector('svg')!.innerHTML).toBe(dibujoDe(svgDeMarca('libracargo')))
   })
 
   it('🔴 usa el color de MARCA y no el de acción: RestoLibra queda #ea580c aunque el botón use #c2410c', () => {
     render(<MarcaProducto producto="restolibra" />)
-    expect(screen.getByRole('img')).toHaveStyle({ backgroundColor: '#ea580c' })
+    expect(fondoDe(screen.getByRole('img'))).toBe('#ea580c')
   })
 
-  it('por defecto mide 32 px, no se achica (shrink-0) y es redondeado', () => {
+  it('por defecto mide 32 px y no se achica (shrink-0)', () => {
     render(<MarcaProducto producto="contalibra" />)
     const marca = screen.getByRole('img')
     expect(marca.className).toContain('h-8')
     expect(marca.className).toContain('w-8')
     expect(marca.className).toContain('shrink-0')
-    expect(marca.className).toContain('rounded-lg')
   })
 
-  it('el className pisa el tamaño por defecto y iconoClassName el del ícono', () => {
-    const { container } = render(<MarcaProducto producto="contalibra" className="h-10 w-10" iconoClassName="size-5" />)
+  it('el className pisa el tamaño por defecto; el SVG llena el cuadrado', () => {
+    const { container } = render(<MarcaProducto producto="contalibra" className="h-12 w-12" />)
     const marca = screen.getByRole('img')
-    expect(marca.className).toContain('h-10')
+    expect(marca.className).toContain('h-12')
     expect(marca.className).not.toContain('h-8')
-    const svg = container.querySelector('svg')!
-    expect(svg.getAttribute('class')).toContain('size-5')
-    expect(svg.getAttribute('class')).not.toContain('size-4')
+    expect(container.querySelector('svg')).toHaveAttribute('width', '100%')
   })
 
-  it('el ícono por defecto es de 16 px (size-4)', () => {
-    const { container } = render(<MarcaProducto producto="contalibra" />)
-    expect(container.querySelector('svg')!.getAttribute('class')).toContain('size-4')
+  it('iconoClassName (de antes de v0.124.0) se acepta y no rompe nada', () => {
+    render(<MarcaProducto producto="contalibra" iconoClassName="size-5" />)
+    expect(screen.getByRole('img', { name: 'ContaLibra' })).toBeInTheDocument()
+  })
+
+  it('el control — variante favicon dibuja otra cosa que el ícono', () => {
+    const { container } = render(<><MarcaProducto producto="medlibra" /><MarcaProducto producto="medlibra" variante="favicon" /></>)
+    const [icono, favicon] = container.querySelectorAll('svg')
+    expect(favicon.innerHTML).not.toBe(icono.innerHTML)
+    expect(favicon.innerHTML).toBe(dibujoDe(svgDeMarca('medlibra', 'favicon')))
+  })
+
+  it('🔴 sin el <title> del SVG: el nombre lo da el aria-label, una sola vez, y no aparece como texto junto al nombre del encabezado', () => {
+    const { container } = render(<MarcaProducto producto="libraclub" />)
+    expect(container.querySelector('title')).toBeNull()
+    expect(screen.queryByText('LibraClub')).toBeNull()
+    expect(screen.getAllByRole('img', { name: 'LibraClub' })).toHaveLength(1)
   })
 
   it.each(Object.keys(IDENTIDAD) as Producto[])('%s se dibuja con su nombre', (p) => {
@@ -95,7 +124,7 @@ describe('sidebar: producto', () => {
   it('🔴 con producto, aparece la marca de 32 px y la inicial desaparece', () => {
     montarLayout({ producto: 'contalibra' })
     const marca = screen.getByRole('img', { name: 'ContaLibra' })
-    expect(marca).toHaveStyle({ backgroundColor: '#2563eb' })
+    expect(fondoDe(marca)).toBe('#2563eb')
     expect(marca.className).toContain('h-8')
     expect(marca.className).toContain('shrink-0')
     expect(screen.queryByText('C')).not.toBeInTheDocument()
@@ -126,14 +155,13 @@ describe('login: producto', () => {
     expect(screen.queryByRole('img')).not.toBeInTheDocument()
   })
 
-  it('🔴 con producto, aparece la marca de 40 px con ícono de 20 px y la inicial desaparece', () => {
+  it('🔴 con producto, aparece la marca de 48 px y la inicial desaparece', () => {
     montarLogin({ producto: 'contalibra' })
     const marca = screen.getByRole('img', { name: 'ContaLibra' })
-    expect(marca).toHaveStyle({ backgroundColor: '#2563eb' })
-    expect(marca.className).toContain('h-10')
-    expect(marca.className).toContain('w-10')
+    expect(fondoDe(marca)).toBe('#2563eb')
+    expect(marca.className).toContain('h-12')
+    expect(marca.className).toContain('w-12')
     expect(marca.className).not.toContain('h-8')
-    expect(marca.querySelector('svg')!.getAttribute('class')).toContain('size-5')
     expect(screen.queryByText('C')).not.toBeInTheDocument()
   })
 

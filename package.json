@@ -1,6 +1,6 @@
 {
   "name": "libra-ui",
-  "version": "0.123.0",
+  "version": "0.124.0",
   "private": true,
   "type": "module",
   "description": "Paquete de frontend compartido para los verticales de la familia Libra sin backoffice server-rendered propio (Gestiolibra, MedLibra, VentaLibra).",
@@ -17,6 +17,7 @@
     "./Login": "./src/Login.tsx",
     "./Logs": "./src/Logs.tsx",
     "./MarcaProducto": "./src/MarcaProducto.tsx",
+    "./marcas": "./src/marcas.ts",
     "./MpBandeja": "./src/MpBandeja.tsx",
     "./PasswordInput": "./src/PasswordInput.tsx",
     "./PasswordReset": "./src/PasswordReset.tsx",
@@ -164,6 +165,7 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
+    "marcas": "ACTUALIZAR_MARCAS=1 vitest run test/marcas.test.ts",
     "typecheck": "tsc -p tsconfig.check.json --noEmit"
   },
   "dependencies": {

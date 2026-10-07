@@ -16,6 +16,7 @@ import {
   CalendarCheck, Coffee, HeartPulse, Headset, ReceiptText, ScanBarcode, Trophy, Truck,
   type LucideIcon,
 } from 'lucide-react'
+import { faviconDeMarca } from './marcas'
 
 export type Producto =
   | 'contalibra'
@@ -42,7 +43,8 @@ export type IdentidadDeProducto = {
   colorSobreOscuro: string
   /** Fondo de la acción principal (texto blanco encima): cumple 4,5:1 contra blanco, `#rrggbb`. */
   colorAccion: string
-  /** El ícono de la marca (lucide). */
+  /** El ícono de lucide del producto. Desde `v0.124.0` la marca es el dibujo de `marcas.ts` (ADR-034); éste queda para quien necesite el
+   *  glifo de una línea (un menú, un chip), con el trazo y el color del texto. */
   icono: LucideIcon
 }
 
@@ -164,7 +166,7 @@ export function cssDeIdentidad(producto: Producto): string {
 
 /**
  * Fija el acento del producto en toda la app: `--primary`, `--ring`, `--sidebar-primary` y `--sidebar-ring`, en claro y en oscuro, y el
- * `theme-color` del navegador. Se llama una vez, en `main.tsx`, antes de montar.
+ * `theme-color` del navegador, y pone el favicon del producto (`faviconDeMarca`, ADR-034). Se llama una vez, en `main.tsx`, antes de montar.
  *
  * **Por qué inyecta un `<style>` y no pone las variables en línea**: en línea (`documentElement.style`) las variables no distinguen entre
  * claro y oscuro, y `aplicarTema` ya usa ese lugar para el acento que el backoffice elige por instancia. Con un `<style>` las dos capas
@@ -192,4 +194,15 @@ export function aplicarIdentidad(producto: Producto): void {
     document.head.appendChild(tema)
   }
   tema.content = color
+
+  // El favicon: se reemplaza el `href` del `<link rel="icon">` que traiga el `index.html` del producto (o se crea uno), así cada app estrena
+  // la marca nueva con sólo subir el pin. El `index.html` puede seguir apuntando a su archivo: es lo que se ve hasta que corre el JS.
+  let favicon = document.head.querySelector<HTMLLinkElement>('link[rel~="icon"]')
+  if (!favicon) {
+    favicon = document.createElement('link')
+    favicon.rel = 'icon'
+    document.head.appendChild(favicon)
+  }
+  favicon.type = 'image/svg+xml'
+  favicon.href = faviconDeMarca(producto)
 }
