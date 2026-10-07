@@ -540,3 +540,11 @@ La tarjeta de Configuración / ARCA sólo conocía la facturación (`wsfe`). Lib
 5. **El modo por defecto no cambia**: es el mismo componente, con las opciones del desplegable extraídas a un helper que comparten los dos (mismo DOM, sin `id` de opción), y la suite y los snapshots de antes pasan sin tocarse. El modo nuevo es un componente interno aparte, no una rama dentro del otro.
 
 **Consecuencias.** `className` va al contenedor del campo (es lo que tiene ancho), no a un botón. Sin buscador interno, el `placeholder` pasa a ser el de la búsqueda (el «Buscar…» del modo botón vivía adentro del desplegable). Una opción con `value: ''` (p. ej. «Todos») sigue eligiéndose desde la lista, pero la × se ofrece sólo si `value !== ''`: para «ninguno» en este modo conviene dejar el campo vacío y no ofrecer esa opción. LibraCargo lo usa en las tres pestañas de Cuenta corriente.
+
+## ADR-032 — El buscador ignora los separadores entre números (0.122.0)
+
+Un CUIT se guarda «20-12345678-9» en LibraCargo y «20123456789» en Contalibra, y quien busca lo teclea de las dos formas. `coincideBusqueda` comparaba el texto tal cual, así que en LibraCargo teclear el CUIT sin guiones no encontraba nada. Contalibra lo resolvía guardando el CUIT sólo con dígitos; el humano (2026-10-07) pidió que esté en un lugar común y lo tomen todos.
+
+**Decisión.** Cada término coincide si aparece tal cual **o** si aparece después de sacar, de los dos lados, los guiones, puntos y barras que quedan **entre dos dígitos** (`sinSeparadoresNumericos`, exportada). Vale para todo lo que usa `coincideBusqueda`: el buscador de `DataTable`, `SelectBuscable` (los dos modos) y las etiquetas de góndola.
+
+**Consecuencias.** «2012345678» encuentra «20-12345678-9» y «20-1234» encuentra «20123456789»; de paso «1580000» encuentra «$ 1.580.000». No se unen números separados por espacios ni por letras («2012» no encuentra «Lote 20 y 12»). Nada que antes coincidía deja de coincidir: el camino tal cual sigue primero.

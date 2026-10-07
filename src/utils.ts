@@ -31,10 +31,25 @@ export function normalizar(texto: string): string {
  * pantalla busca igual en la otra.
  *
  * Una consulta vacia (o de puros espacios) no filtra nada.
+ *
+ * **Los separadores entre numeros no cuentan** (v0.122.0, ADR-032): un CUIT se
+ * guarda «20-12345678-9» en un producto y «20123456789» en otro, y se teclea de
+ * las dos formas. Cada termino coincide si aparece tal cual **o** si aparece con
+ * los guiones, puntos y barras entre digitos sacados de los dos lados. Asi
+ * «2012345678» encuentra «20-12345678-9», «20-1234» encuentra «20123456789», y
+ * de paso «1580000» encuentra «$ 1.580.000». Lo hacia Contalibra guardando el
+ * CUIT solo con digitos; aca vale para todos, guarden como guarden.
  */
 export function coincideBusqueda(texto: string, consulta: string): boolean {
   const terminos = normalizar(consulta).split(/\s+/).filter(Boolean)
   if (!terminos.length) return true
   const objetivo = normalizar(texto)
-  return terminos.every((t) => objetivo.includes(t))
+  const objetivoCompacto = sinSeparadoresNumericos(objetivo)
+  return terminos.every((t) =>
+    objetivo.includes(t) || objetivoCompacto.includes(sinSeparadoresNumericos(t)))
+}
+
+/** Saca los guiones, puntos y barras que quedan **entre dos digitos**: «20-12.345/6» → «20123456». */
+export function sinSeparadoresNumericos(texto: string): string {
+  return texto.replace(/(\d)[-./](?=\d)/g, '$1')
 }
