@@ -17,6 +17,7 @@ import { api, ApiError } from '../api-client'
 import { DataTable } from '../data-table'
 import { BadgeEstado } from '../badge-estado'
 import { TituloPantalla } from '../titulo-pantalla'
+import { ICONOS } from '../iconos-identidad'
 import type { CategoriaProducto, ItemListaPrecio, ListaPrecio, PrecioVigente, Quiebre } from './tipos'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -429,7 +430,7 @@ export function ListaPrecioDetalle({ conQuiebres = false, conVigencias = false, 
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <TituloPantalla icono={Tag}>{lista ? lista.nombre : 'Lista de precios'}
+        <TituloPantalla icono={ICONOS.listasDePrecio}>{lista ? lista.nombre : 'Lista de precios'}
           {lista && !lista.activa && <BadgeEstado tono="neutro">Inactiva</BadgeEstado>}</TituloPantalla>
         {lista && (
           <div className="flex flex-wrap gap-2">

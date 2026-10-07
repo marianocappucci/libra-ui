@@ -92,6 +92,7 @@ para que el motor de Tailwind v4 escanee las clases usadas dentro de
 | `libra-ui/use-mobile` | `useIsMobile` | Hook de breakpoint, 100% genérico. |
 | `libra-ui/utils` | `cn`, `normalizar`, `coincideBusqueda` | Helper `clsx` + `tailwind-merge` de shadcn, más los dos helpers de búsqueda que comparten `data-table` y `SelectBuscable` (sin acentos, todos los términos en cualquier orden). |
 | `libra-ui/iconos-accion` | ~60 componentes de icono (`Eye`, `Pencil`, `Trash2`, `FilePlus`…) | El **vocabulario de iconos de acción y estado** de la familia (`v0.18.0`). Vive acá y no copiado por producto porque la misma acción tiene que dibujarse igual en todos. **Requiere configuración en el consumidor — ver abajo.** |
+| `libra-ui/iconos-identidad` | `ICONOS`, `iconosDe(producto?)`, `iconoDelConcepto(concepto, producto?)`, `ICONOS_POR_PRODUCTO`, `type Concepto` | El **catálogo de íconos de identidad** de la familia (`v0.125.0`, ADR-035): un concepto, un ícono, en el menú y en el título de la pantalla. Ver «El catálogo de íconos de identidad». |
 
 ## El logo del producto y el wordmark (`v0.23.0`)
 
@@ -277,6 +278,54 @@ Por defecto el control cerrado es un botón y el buscador está adentro del desp
 - **`className` va al contenedor** (el ancho), no a un botón. El `placeholder` es lo que se ve con el campo vacío: que diga qué se busca.
 - No ofrezcas una opción con `value: ''` («Todos») en este modo: para «ninguno», el campo vacío.
 
+## El catálogo de íconos de identidad (`v0.125.0`, ADR-035)
+
+`libra-ui/iconos-identidad` es **el ícono de cada entrada del menú y del título de su pantalla**, el mismo en todos los productos: Caja es `Wallet` en los ocho, no `SquareStack` en uno, `Landmark` en otro y `Wallet` en un tercero. Es un mapa `concepto → componente de lucide`, congelado, con la tabla aprobada por el humano el 2026-10-07 (wiki: `catalogo-iconos-identidad-diseno`).
+
+```tsx
+import { ICONOS, iconosDe, iconoDelConcepto } from 'libra-ui/iconos-identidad'
+
+// Menú y título: el mismo concepto, el mismo ícono.
+{ to: '/caja', label: 'Caja', icon: ICONOS.caja }
+<TituloPantalla icono={ICONOS.caja}>Caja</TituloPantalla>
+
+// Un producto con excepciones (hoy sólo LibraCargo) toma la vista que le corresponde.
+const ICONOS_LC = iconosDe('libracargo')
+{ to: '/proveedores', label: 'Proveedores', icon: ICONOS_LC.proveedores }   // Store; fleteros es Truck
+```
+
+| Concepto | Ícono | Concepto | Ícono | Concepto | Ícono |
+|---|---|---|---|---|---|
+| `dashboard` | `LayoutDashboard` | `ventas` | `ShoppingCart` | `cajas` | `SquareStack` |
+| `agenda` | `CalendarDays` | `ordenesDeCompra` | `ShoppingBasket` | `cajaPorMedio` | `Coins` |
+| `clientes` | `Users` | `proveedores` | `Truck` (LibraCargo: `Store`) | `turnosDeCaja` | `Clock` |
+| `cuentaCorriente` | `BookOpen` | `fleteros` | `Truck` | `cierreDiario` | `CalendarCheck` |
+| `comprobantes` | `Receipt` | `egresos` | `ShoppingBag` | `tesoreria` | `Landmark` |
+| `recibos` | `ReceiptText` | `senas` | `HandCoins` | `pagosMercadoPago` | `CreditCard` |
+| `preFacturas` | `FileClock` | `productos` | `Package` | `reportes` | `ChartColumn` (= `BarChart3`) |
+| `comprobantesAFacturar` | `Inbox` | `listasDePrecio` | `Tags` | `librosDeIva` | `BookText` |
+| `presupuestos` | `Calculator` | `stock` | `Boxes` | `configuracion` | `Settings` |
+| `remitos` | `FileText` | `depositos` | `Warehouse` | `usuarios` | `UserCog` |
+| | | `sucursales` | `MapPin` | `logDeActividad` | `ScrollText` |
+| | | `caja` | `Wallet` | | |
+
+**Las reglas.** Un concepto lleva un solo ícono; dos conceptos no comparten ícono (la única repetición del mapa base es `proveedores` / `fleteros`, que LibraCargo separa); y **las excepciones por producto viven en `ICONOS_POR_PRODUCTO`, nunca en el menú del producto**. Hoy hay una sola: en LibraCargo `proveedores` es `Store`.
+
+**Para un producto.**
+1. Su menú y sus títulos toman el ícono de `ICONOS` (o de `iconosDe('<producto>')` si tiene excepciones).
+2. Su test lo comprueba. Si tiene el ícono a mano: `expect(iconoDeLaEntrada).toBe(iconoDelConcepto('caja', 'ventalibra'))`. Si el menú está en un `Layout.tsx` que no se exporta: `auditarMenuContraCatalogo` (`libra-ui/auditoria-de-titulos`) lo lee del fuente.
+
+```ts
+const r = auditarMenuContraCatalogo(fuenteDelLayout, { '/caja': 'caja', '/cuenta-corriente': 'cuentaCorriente' }, 'ventalibra')
+expect(r.medidas).toBe(2)   // que midió algo: un parser que no encuentra nada también deja `mal` vacío
+expect(r.faltan).toEqual([])
+expect(r.mal).toEqual([])
+```
+
+3. `Usuarios`, `Logs` y `createConfiguracion` ya no necesitan que se les pase `icono`: usan el del catálogo.
+
+**Para agregar un concepto**, ver ADR-035: la fila en el wiki, la clave acá con un ícono que nadie más use, la fila en `test/iconos-identidad.test.tsx`, y subir la versión.
+
 ## Peer dependencies
 
 `react`, `react-dom`, `react-router-dom`, `@tanstack/react-table`,
@@ -301,7 +350,8 @@ con `failed to resolve import "~icons/…"`, que nombra el problema.
 
 Y no es un requisito que agregue este módulo: el producto ya necesita las tres
 cosas para sus iconos de **identidad**, los del menú, que se le pasan a
-`createLayout` desde el producto y no salen de acá.
+`createLayout` desde el producto y no salen de acá (la lista de cuál lleva cada
+concepto sí: `iconos-identidad`, abajo).
 
 > Verificado el 2026-08-13 antes de mover el módulo: un `~icons/` dentro de
 > `node_modules/libra-ui/src/` resuelve bien —el SVG termina en el bundle del

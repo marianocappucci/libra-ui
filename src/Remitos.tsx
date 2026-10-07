@@ -16,8 +16,9 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { anchoColumnaAcciones, DataTable, sortableHeader } from './data-table'
-import { FileText, Plus, Search, X, Eye, FileDown } from 'lucide-react'
+import { Plus, Search, X, Eye, FileDown } from 'lucide-react'
 import { TituloPantalla } from './titulo-pantalla'
+import { ICONOS } from './iconos-identidad'
 
 export function Remitos({ urlDelPdf = (id: number) => `/remitos/${id}/pdf` }: {
   /** El PDF lo sirve el router del producto, no la API. */
@@ -83,7 +84,7 @@ export function Remitos({ urlDelPdf = (id: number) => `/remitos/${id}/pdf` }: {
   return (
     <div className="grid gap-4">
       <div className="flex items-center justify-between">
-        <TituloPantalla icono={FileText}>Remitos</TituloPantalla>
+        <TituloPantalla icono={ICONOS.remitos}>Remitos</TituloPantalla>
         <Button asChild><Link to="/remitos/nuevo"><Plus />Nuevo remito</Link></Button>
       </div>
 

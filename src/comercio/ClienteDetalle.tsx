@@ -34,8 +34,9 @@ import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose,
 } from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/confirm-dialog'
-import { ArrowLeft, ArrowLeftRight, BarChart3, CheckCircle2, Eye, FileText, Inbox, Loader2, Pencil, Plus, Receipt, Search, Tags, Trash2, Truck, Undo2, Users, XCircle } from 'lucide-react'
+import { ArrowLeft, ArrowLeftRight, BarChart3, CheckCircle2, Eye, Inbox, Loader2, Pencil, Plus, Search, Trash2, Undo2, XCircle } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
+import { ICONOS } from '../iconos-identidad'
 import { fecha } from '@/lib/fechas'
 
 function formatCurrency(value: number): string {
@@ -318,7 +319,7 @@ export function ClienteDetalle(
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-3">
-          <TituloPantalla icono={Users}>{cliente ? cliente.name : 'Cliente'}</TituloPantalla>
+          <TituloPantalla icono={ICONOS.clientes}>{cliente ? cliente.name : 'Cliente'}</TituloPantalla>
           {cliente && !cliente.activo && <BadgeEstado tono="neutro">Inactivo</BadgeEstado>}
         </div>
         <div className="flex flex-wrap gap-2">
@@ -533,7 +534,7 @@ export function ClienteDetalle(
           {conListaDePrecio && (
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base"><Tags className="size-4" />Lista de precios (mayorista)</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-base"><ICONOS.listasDePrecio className="size-4" />Lista de precios (mayorista)</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-3">
                 <p className="text-xs text-muted-foreground">
@@ -617,7 +618,7 @@ export function ClienteDetalle(
               {cliente.facturas.length > 0 && (
                 <Card>
                   <CardHeader className="flex items-center justify-between space-y-0">
-                    <CardTitle className="flex items-center gap-2 text-base"><Receipt className="size-4" />Facturas y comprobantes</CardTitle>
+                    <CardTitle className="flex items-center gap-2 text-base"><ICONOS.comprobantes className="size-4" />Facturas y comprobantes</CardTitle>
                     <Button asChild size="sm" variant="outline"><Link to="/facturas/nueva"><Plus />Nueva factura</Link></Button>
                   </CardHeader>
                   <CardContent className="p-0">
@@ -660,7 +661,7 @@ export function ClienteDetalle(
               {cliente.presupuestos.length > 0 && (
                 <Card>
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-base"><FileText className="size-4" />Presupuestos</CardTitle>
+                    <CardTitle className="flex items-center gap-2 text-base"><ICONOS.presupuestos className="size-4" />Presupuestos</CardTitle>
                   </CardHeader>
                   <CardContent className="p-0">
                     <table className="w-full text-sm">
@@ -700,7 +701,7 @@ export function ClienteDetalle(
               {cliente.remitos.length > 0 && (
                 <Card>
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-base"><Truck className="size-4" />Remitos</CardTitle>
+                    <CardTitle className="flex items-center gap-2 text-base"><ICONOS.remitos className="size-4" />Remitos</CardTitle>
                   </CardHeader>
                   <CardContent className="p-0">
                     <table className="w-full text-sm">
@@ -735,8 +736,8 @@ export function ClienteDetalle(
                     <Inbox className="size-8 opacity-50" />
                     <p>Este cliente no tiene comprobantes asociados todavía.</p>
                     <div className="flex gap-2">
-                      <Button asChild size="sm" variant="outline"><Link to="/facturas/nueva"><Receipt />Nueva factura</Link></Button>
-                      <Button asChild size="sm" variant="outline"><Link to="/presupuestos/nuevo"><FileText />Nuevo presupuesto</Link></Button>
+                      <Button asChild size="sm" variant="outline"><Link to="/facturas/nueva"><ICONOS.comprobantes />Nueva factura</Link></Button>
+                      <Button asChild size="sm" variant="outline"><Link to="/presupuestos/nuevo"><ICONOS.presupuestos />Nuevo presupuesto</Link></Button>
                     </div>
                   </CardContent>
                 </Card>

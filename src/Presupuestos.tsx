@@ -18,8 +18,9 @@ import { Badge } from '@/components/ui/badge'
 import { BadgeEstado, type TonoEstado } from './badge-estado'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { anchoColumnaAcciones, DataTable, sortableHeader } from './data-table'
-import { Plus, Pencil, Search, X, Eye, FileDown, Calculator } from 'lucide-react'
+import { Plus, Pencil, Search, X, Eye, FileDown } from 'lucide-react'
 import { TituloPantalla } from './titulo-pantalla'
+import { ICONOS } from './iconos-identidad'
 import { fecha } from '@/lib/fechas'
 
 function formatCurrency(value: number): string {
@@ -120,7 +121,7 @@ export function Presupuestos({ urlDelPdf = (id: number) => `/presupuestos/${id}/
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <TituloPantalla icono={Calculator}>Presupuestos</TituloPantalla>
+        <TituloPantalla icono={ICONOS.presupuestos}>Presupuestos</TituloPantalla>
         <Button asChild><Link to="/presupuestos/nuevo"><Plus />Nuevo presupuesto</Link></Button>
       </div>
 

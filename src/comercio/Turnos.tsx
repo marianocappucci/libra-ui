@@ -18,8 +18,9 @@ import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose,
 } from '@/components/ui/dialog'
 import { anchoColumnaAcciones, DataTable, sortableHeader } from '../data-table'
-import { Clock, PlayCircle, StopCircle, Eye, ArrowUpCircle, ArrowDownCircle, CheckCircle2 } from 'lucide-react'
+import { PlayCircle, StopCircle, Eye, ArrowUpCircle, ArrowDownCircle, CheckCircle2 } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
+import { ICONOS } from '../iconos-identidad'
 import { fechaHora } from '@/lib/fechas'
 
 // El backend guarda "YYYY-MM-DD HH:MM:SS"; en el listado los segundos son
@@ -188,7 +189,7 @@ export function Turnos({ esAdmin = false, conCaja = false }: TurnosProps = {}) {
   return (
     <div className="grid gap-4">
       <div className="flex items-center justify-between">
-        <TituloPantalla icono={Clock}>Turnos de caja</TituloPantalla>
+        <TituloPantalla icono={ICONOS.turnosDeCaja}>Turnos de caja</TituloPantalla>
         {!turnoActivo && (
           <Dialog open={abrirOpen} onOpenChange={setAbrirOpen}>
             <DialogTrigger asChild>

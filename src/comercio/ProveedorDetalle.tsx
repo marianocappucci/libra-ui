@@ -27,8 +27,9 @@ import {
 } from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { DataTable, sortableHeader } from '../data-table'
-import { Truck, Pencil, ArrowLeft, Plus, Inbox, Trash2 } from 'lucide-react'
+import { Pencil, ArrowLeft, Plus, Inbox, Trash2 } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
+import { ICONOS } from '../iconos-identidad'
 import { fecha } from '@/lib/fechas'
 import { hoyISO } from '../fechas'
 
@@ -203,7 +204,7 @@ export function ProveedorDetalle({ conEgresos = true }: { conEgresos?: boolean }
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <TituloPantalla icono={Truck}>{proveedor ? proveedor.nombre : 'Proveedor'}</TituloPantalla>
+        <TituloPantalla icono={ICONOS.proveedores}>{proveedor ? proveedor.nombre : 'Proveedor'}</TituloPantalla>
         <div className="flex flex-wrap gap-2">
           {proveedor && (
             <Dialog open={editOpen} onOpenChange={setEditOpen}>

@@ -11,8 +11,9 @@ import { type Remito } from './facturas'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/confirm-dialog'
-import { ArrowLeft, FileDown, FileText, Trash2 } from 'lucide-react'
+import { ArrowLeft, FileDown, Trash2 } from 'lucide-react'
 import { TituloPantalla } from './titulo-pantalla'
+import { ICONOS } from './iconos-identidad'
 import { fecha } from '@/lib/fechas'
 
 export function RemitoDetalle({ urlDelPdf = (id: number) => `/remitos/${id}/pdf` }: {
@@ -63,7 +64,7 @@ export function RemitoDetalle({ urlDelPdf = (id: number) => `/remitos/${id}/pdf`
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <TituloPantalla icono={FileText}>{detalle ? `Remito ${detalle.number}` : 'Remito'}</TituloPantalla>
+        <TituloPantalla icono={ICONOS.remitos}>{detalle ? `Remito ${detalle.number}` : 'Remito'}</TituloPantalla>
         <div className="flex gap-2">
           {detalle && <Button asChild size="sm" variant="outline"><a href={urlDelPdf(detalle.id)} target="_blank" rel="noreferrer"><FileDown />Ver PDF</a></Button>}
           <Button asChild size="sm" variant="outline"><Link to="/remitos"><ArrowLeft />Volver</Link></Button>

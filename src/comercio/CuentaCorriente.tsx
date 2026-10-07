@@ -12,8 +12,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { BadgeEstado } from '../badge-estado'
 import { DataTable, sortableHeader } from '../data-table'
-import { BookOpen, Eye } from 'lucide-react'
+import { Eye } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
+import { ICONOS } from '../iconos-identidad'
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
@@ -81,7 +82,7 @@ export function CuentaCorriente() {
   return (
     <div className="grid gap-4">
       <div className="flex items-center justify-between">
-        <TituloPantalla icono={BookOpen}>Cuenta Corriente</TituloPantalla>
+        <TituloPantalla icono={ICONOS.cuentaCorriente}>Cuenta Corriente</TituloPantalla>
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}

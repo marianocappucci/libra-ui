@@ -15,9 +15,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { FileText, Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 import { SelectBuscable } from './SelectBuscable'
 import { TituloPantalla } from './titulo-pantalla'
+import { ICONOS } from './iconos-identidad'
 import { hoyISO } from './fechas'
 
 type ItemRow = { description: string; qty: string }
@@ -93,7 +94,7 @@ export function RemitoNuevo() {
 
   return (
     <div className="grid gap-4">
-      <TituloPantalla icono={FileText}>Nuevo remito</TituloPantalla>
+      <TituloPantalla icono={ICONOS.remitos}>Nuevo remito</TituloPantalla>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 

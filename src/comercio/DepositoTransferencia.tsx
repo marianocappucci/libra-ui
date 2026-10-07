@@ -2,11 +2,12 @@
 // Contalibra y Restolibra salvo el orden de dos imports.
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, ArrowLeftRight, Info, Warehouse } from 'lucide-react'
+import { ArrowLeft, ArrowLeftRight, Info } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
 import { SelectBuscable } from '../SelectBuscable'
 import { TituloPantalla } from '../titulo-pantalla'
+import { ICONOS } from '../iconos-identidad'
 import { hoyISO } from '../fechas'
 import { opcionesProducto, type Deposito, type Producto, type StockPorDeposito, type TransferenciaDeStock } from './tipos'
 import { fecha as formatearFecha } from '@/lib/fechas'
@@ -97,7 +98,7 @@ export function DepositoTransferencia({ rutaDeDepositos = '/depositos', conHisto
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <TituloPantalla icono={Warehouse}>Transferir stock</TituloPantalla>
+        <TituloPantalla icono={ICONOS.depositos}>Transferir stock</TituloPantalla>
         <Button asChild size="sm" variant="outline"><Link to={rutaDeDepositos}><ArrowLeft />Volver</Link></Button>
       </div>
 

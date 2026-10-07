@@ -3,11 +3,12 @@
 // Restolibra salvo 9 líneas de comentarios.
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeftRight, Building2, Check, Eye, Package, Pencil, Plus, Star, Trash2, Warehouse } from 'lucide-react'
+import { ArrowLeftRight, Check, Eye, Package, Pencil, Plus, Star, Trash2 } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
 import { BadgeEstado } from '../badge-estado'
 import { TituloPantalla } from '../titulo-pantalla'
+import { ICONOS } from '../iconos-identidad'
 import type { Deposito } from './tipos'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -155,7 +156,7 @@ export function Depositos({
     <Dialog open={formOpen} onOpenChange={setFormOpen}>
       <div className="grid gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <TituloPantalla icono={Warehouse}>{titulo}</TituloPantalla>
+          <TituloPantalla icono={ICONOS.depositos}>{titulo}</TituloPantalla>
           <div className="flex items-center gap-2">
             <Button asChild variant="outline"><Link to={rutaDeTransferencia}><ArrowLeftRight />Transferir stock</Link></Button>
             {!soloLectura && (
@@ -191,7 +192,7 @@ export function Depositos({
               <Card key={d.id} className={d.activo ? '' : 'opacity-50'}>
                 <CardContent className="grid gap-3">
                   <div>
-                    <p className="flex items-center gap-2 font-semibold"><Building2 className="size-4 text-primary" />{d.nombre}</p>
+                    <p className="flex items-center gap-2 font-semibold"><ICONOS.depositos className="size-4 text-primary" />{d.nombre}</p>
                     <div className="mt-1 flex gap-1.5">
                       {tipos && <BadgeEstado tono="curso">{etiquetaDeTipo(tipoDe(d))}</BadgeEstado>}
                       {d.es_default ? <BadgeEstado tono="ok">Por defecto</BadgeEstado> : null}
@@ -225,7 +226,7 @@ export function Depositos({
 
       <DialogContent>
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Building2 className="size-4" />{editingId !== null ? 'Editar' : 'Nuevo'} {tipos ? (etiquetaDeTipo(tipo) || 'depósito').toLowerCase() : 'depósito'}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><ICONOS.depositos className="size-4" />{editingId !== null ? 'Editar' : 'Nuevo'} {tipos ? (etiquetaDeTipo(tipo) || 'depósito').toLowerCase() : 'depósito'}</DialogTitle>
         </DialogHeader>
         {formError && <p className="text-sm text-destructive">{formError}</p>}
         <div className="grid gap-4">

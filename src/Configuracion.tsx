@@ -55,6 +55,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { TituloPantalla } from './titulo-pantalla'
+import { ICONOS } from './iconos-identidad'
 import { ArcaCard } from './configuracion/arca'
 import { DatosBackupCard, ResguardoExternoCard } from './configuracion/datos'
 import { EmailCard } from './configuracion/email'
@@ -156,10 +157,11 @@ function SubNavegacion({ secciones }: { secciones: SeccionConfig[] }) {
 }
 
 export function createConfiguracion({
-  icono, producto, integraciones, propias = [], empresa, datos, backupRapido = true, pie,
+  icono = ICONOS.configuracion, producto, integraciones, propias = [], empresa, datos, backupRapido = true, pie,
 }: {
-  /** El icono que el sidebar de este producto le da a /configuracion. */
-  icono: ComponentType<{ className?: string }>
+  /** El icono que el sidebar de este producto le da a /configuracion. Default:
+   *  el del catalogo (`ICONOS.configuracion`, ADR-035). Ver `Usuarios`. */
+  icono?: ComponentType<{ className?: string }>
   /** Cómo se llama el producto. Sale en los tutoriales de Gmail y de Padrón
    *  A13, que le piden al cliente que nombre **este** sistema. Escribir
    *  "Contalibra" en el kit haría que MedLibra le pida al cliente una

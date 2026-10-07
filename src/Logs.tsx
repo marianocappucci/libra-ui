@@ -63,6 +63,7 @@ import {
 } from 'lucide-react'
 import type { ComponentType, ReactNode } from 'react'
 import { TituloPantalla } from './titulo-pantalla'
+import { ICONOS } from './iconos-identidad'
 
 const TODOS = '__todos__'
 
@@ -184,10 +185,11 @@ function SinDatos({ icono: Icono, children }: {
  * es el de Gestiolibra/MedLibra/VentaLibra; LibraDesk monta el suyo bajo
  * `/api/logs` y pasa esa ruta explícita — mismo criterio que `Usuarios`.
  */
-export function Logs({ basePath = '/logs', icono }: {
+export function Logs({ basePath = '/logs', icono = ICONOS.logDeActividad }: {
   basePath?: string
-  /** El icono del sidebar de este producto. Obligatorio: ver `Usuarios`. */
-  icono: ComponentType<{ className?: string }>
+  /** El icono del sidebar de este producto. Default: el del catalogo
+   *  (`ICONOS.logDeActividad`, ADR-035). Ver `Usuarios`. */
+  icono?: ComponentType<{ className?: string }>
 }) {
   const [data, setData] = useState<LogsData | null>(null)
   const [loading, setLoading] = useState(true)

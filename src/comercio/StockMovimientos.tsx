@@ -4,11 +4,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import type { ColumnDef } from '../data-table'
-import { ArrowLeft, Boxes, X } from 'lucide-react'
+import { ArrowLeft, X } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
 import { DataTable, sortableHeader } from '../data-table'
 import { TituloPantalla } from '../titulo-pantalla'
+import { ICONOS } from '../iconos-identidad'
 import { SelectBuscable } from '../SelectBuscable'
 import { TipoBadge } from './Stock'
 import { opcionesProducto, type MovimientoStock, type Producto } from './tipos'
@@ -114,7 +115,7 @@ export function StockMovimientos({
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <TituloPantalla icono={Boxes}>Movimientos de stock
+        <TituloPantalla icono={ICONOS.stock}>Movimientos de stock
           {productoNombre && <span className="text-sm font-normal text-muted-foreground">· {productoNombre}</span>}</TituloPantalla>
         <Button asChild size="sm" variant="outline"><Link to={rutaDeStock}><ArrowLeft />Stock</Link></Button>
       </div>

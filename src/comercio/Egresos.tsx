@@ -28,8 +28,9 @@ import {
 } from '@/components/ui/form'
 import { anchoColumnaAcciones, DataTable, sortableHeader } from '../data-table'
 import { SelectBuscable } from '../SelectBuscable'
-import { ArrowUpCircle, CheckCircle2, Eye, Filter, Hourglass, Plus, ShoppingBag, X } from 'lucide-react'
+import { ArrowUpCircle, CheckCircle2, Eye, Filter, Hourglass, Plus, X } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
+import { ICONOS } from '../iconos-identidad'
 import { fecha } from '@/lib/fechas'
 import { hoyISO, primerDiaDelMesISO } from '../fechas'
 
@@ -197,7 +198,7 @@ export function Egresos() {
     <Dialog open={nuevoOpen} onOpenChange={setNuevoOpen}>
       <div className="grid gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <TituloPantalla icono={ShoppingBag}>Egresos</TituloPantalla>
+          <TituloPantalla icono={ICONOS.egresos}>Egresos</TituloPantalla>
           <DialogTrigger asChild>
             <Button onClick={abrirNuevo}><Plus />Nuevo egreso</Button>
           </DialogTrigger>

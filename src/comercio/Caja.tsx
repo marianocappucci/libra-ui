@@ -22,8 +22,9 @@ import {
 } from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { anchoColumnaAcciones, DataTable, sortableHeader } from '../data-table'
-import { ArrowDownCircle, ArrowUpCircle, Check, Filter, PiggyBank, Plus, Receipt, SquareStack, Ban, Wallet, X } from 'lucide-react'
+import { ArrowDownCircle, ArrowUpCircle, Check, Filter, PiggyBank, Plus, Receipt, Ban, Wallet, X } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
+import { ICONOS } from '../iconos-identidad'
 import { fecha } from '@/lib/fechas'
 import { hoyISO, primerDiaDelMesISO } from '../fechas'
 
@@ -240,7 +241,7 @@ export function Caja() {
   return (
     <div className="grid gap-4">
       <div className="flex items-center justify-between">
-        <TituloPantalla icono={SquareStack}>Caja</TituloPantalla>
+        <TituloPantalla icono={ICONOS.caja}>Caja</TituloPantalla>
         <Dialog open={nuevoOpen} onOpenChange={setNuevoOpen}>
           <DialogTrigger asChild>
             <Button onClick={abrirNuevo}><Plus />Nuevo movimiento</Button>

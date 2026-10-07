@@ -10,8 +10,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { BadgeEstado, type TonoEstado } from '../badge-estado'
-import { ArrowDownCircle, ArrowLeft, ArrowUpCircle, CheckCircle2, Clock, Receipt, StopCircle } from 'lucide-react'
+import { ArrowDownCircle, ArrowLeft, ArrowUpCircle, CheckCircle2, Receipt, StopCircle } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
+import { ICONOS } from '../iconos-identidad'
 import { fechaHora } from '@/lib/fechas'
 
 function DiferenciaBadge({ esperado, declarado }: { esperado: number | null; declarado: number | null }) {
@@ -65,7 +66,7 @@ export function TurnoDetalle() {
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <TituloPantalla icono={Clock}>{turno ? <>Turno #{turno.id}</> : 'Turno'}
+        <TituloPantalla icono={ICONOS.turnosDeCaja}>{turno ? <>Turno #{turno.id}</> : 'Turno'}
           {turno && <BadgeEstado tono={turno.estado === 'abierto' ? 'ok' : 'neutro'}>{turno.estado === 'abierto' ? 'Abierto' : 'Cerrado'}</BadgeEstado>}</TituloPantalla>
         {turno && (
           <div className="flex flex-wrap gap-2">

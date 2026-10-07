@@ -23,9 +23,10 @@ import { Label } from '@/components/ui/label'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { Calculator, Trash2 } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
 import { SelectBuscable } from './SelectBuscable'
 import { TituloPantalla } from './titulo-pantalla'
+import { ICONOS } from './iconos-identidad'
 import { enDiasISO, hoyISO } from './fechas'
 
 function formatCurrency(value: number): string {
@@ -208,7 +209,7 @@ export function PresupuestoForm({ conSelectorDeLista = false, conQuiebres = fals
 
   return (
     <div className="grid gap-4">
-      <TituloPantalla icono={Calculator}>{editingId ? 'Editar presupuesto' : 'Nuevo presupuesto'}</TituloPantalla>
+      <TituloPantalla icono={ICONOS.presupuestos}>{editingId ? 'Editar presupuesto' : 'Nuevo presupuesto'}</TituloPantalla>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 

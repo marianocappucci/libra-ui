@@ -14,13 +14,14 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
-  ArrowLeft, Ban, CheckCircle2, FileCheck, FileMinus, Loader2, PackageCheck, Printer, QrCode, ReceiptText, ShoppingCart,
+  ArrowLeft, Ban, CheckCircle2, FileCheck, FileMinus, Loader2, PackageCheck, Printer, QrCode, ReceiptText,
 } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
 import { BadgeEstado } from '../badge-estado'
 import { esElectronico } from '../medios-pago'
 import { TituloPantalla } from '../titulo-pantalla'
+import { ICONOS } from '../iconos-identidad'
 import { useEtiquetaDeMedio } from './medios-pago'
 import { useImprimirTicket } from './useImprimirTicket'
 import { ESTADO_VENTA_TONO, etiquetaDeEstadoDeVenta, formatoMoneda, type Venta } from './tipos'
@@ -157,7 +158,7 @@ export function VentaDetalle({
   const [notaParcial, setNotaParcial] = useState(false)
   const [importeNota, setImporteNota] = useState('')
   const [emitiendoNota, setEmitiendoNota] = useState(false)
-  // Respaldo para un motor que todavía no manda `nota_credito_display` (ADR-034 de libracommerce): con él la nota se lee del detalle y sobrevive a recargar la venta.
+  // Respaldo para un motor que todavía no manda `nota_credito_display` (ADR-035 de libracommerce): con él la nota se lee del detalle y sobrevive a recargar la venta.
   const [notaEmitidaLocal, setNotaEmitidaLocal] = useState(false)
   const errorRef = useRef<HTMLParagraphElement | null>(null)
   const [facturando, setFacturando] = useState(false)
@@ -345,7 +346,7 @@ export function VentaDetalle({
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <TituloPantalla icono={ShoppingCart}>{detalle ? <>Venta {detalle.numero} <BadgeEstado tono={ESTADO_VENTA_TONO[detalle.estado] ?? 'neutro'}>{etiquetaDeEstadoDeVenta(detalle.estado)}</BadgeEstado></> : 'Venta'}</TituloPantalla>
+        <TituloPantalla icono={ICONOS.ventas}>{detalle ? <>Venta {detalle.numero} <BadgeEstado tono={ESTADO_VENTA_TONO[detalle.estado] ?? 'neutro'}>{etiquetaDeEstadoDeVenta(detalle.estado)}</BadgeEstado></> : 'Venta'}</TituloPantalla>
         {detalle && (
           <div className="flex flex-wrap gap-2">
             {rutaDeTicket && (

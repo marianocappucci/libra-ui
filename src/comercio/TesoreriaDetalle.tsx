@@ -25,9 +25,10 @@ import {
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { anchoColumnaAcciones, DataTable } from '../data-table'
 import {
-  ArrowLeft, ArrowLeftRight, Archive, Check, Landmark, Pencil, Plus, Trash2,
+  ArrowLeft, ArrowLeftRight, Archive, Check, Pencil, Plus, Trash2,
 } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
+import { ICONOS } from '../iconos-identidad'
 import { fecha } from '@/lib/fechas'
 import { hoyISO } from '../fechas'
 
@@ -235,7 +236,7 @@ export function TesoreriaDetalle() {
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <TituloPantalla icono={Landmark}>{cuenta ? cuenta.nombre : 'Cuenta'}
+        <TituloPantalla icono={ICONOS.tesoreria}>{cuenta ? cuenta.nombre : 'Cuenta'}
           {cuenta && (
             <BadgeEstado tono={cuenta.saldo >= 0 ? 'ok' : 'negativo'}>
               {formatCurrency(cuenta.saldo)}

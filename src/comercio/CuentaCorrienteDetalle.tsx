@@ -32,10 +32,10 @@ import {
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { anchoColumnaAcciones, DataTable } from '../data-table'
 import {
-  ArrowLeft, BookOpen, CircleDollarSign, Trash2, ArrowUpCircle, ArrowDownCircle,
-  ShoppingCart, Receipt, ReceiptText, User,
+  ArrowLeft, CircleDollarSign, Trash2, ArrowUpCircle, ArrowDownCircle, ReceiptText, User,
 } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
+import { ICONOS } from '../iconos-identidad'
 // Alias: `fecha` ya es el estado del campo de fecha del formulario de pago.
 import { fecha as formatearFecha } from '@/lib/fechas'
 import { hoyISO } from '../fechas'
@@ -217,10 +217,10 @@ export function CuentaCorrienteDetalle({ esAdmin = false, conRecibos = false }: 
       header: 'Concepto',
       cell: ({ row }) => {
         if (row.original.venta_id) {
-          return <Link to={`/ventas/${row.original.venta_id}`} className="flex items-center gap-1 font-medium text-primary hover:underline"><ShoppingCart className="size-3.5" />{row.original.concepto}</Link>
+          return <Link to={`/ventas/${row.original.venta_id}`} className="flex items-center gap-1 font-medium text-primary hover:underline"><ICONOS.ventas className="size-3.5" />{row.original.concepto}</Link>
         }
         if (row.original.factura_id) {
-          return <Link to={`/facturas/${row.original.factura_id}`} className="flex items-center gap-1 font-medium text-primary hover:underline"><Receipt className="size-3.5" />{row.original.concepto}</Link>
+          return <Link to={`/facturas/${row.original.factura_id}`} className="flex items-center gap-1 font-medium text-primary hover:underline"><ICONOS.comprobantes className="size-3.5" />{row.original.concepto}</Link>
         }
         return row.original.concepto
       },
@@ -273,7 +273,7 @@ export function CuentaCorrienteDetalle({ esAdmin = false, conRecibos = false }: 
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <TituloPantalla icono={BookOpen}>{cliente ? cliente.name : 'Cuenta Corriente'}
+        <TituloPantalla icono={ICONOS.cuentaCorriente}>{cliente ? cliente.name : 'Cuenta Corriente'}
           {cliente && (
             saldo > 0 ? (
               <BadgeEstado tono="atencion">Debe {formatCurrency(saldo)}</BadgeEstado>

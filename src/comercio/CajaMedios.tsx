@@ -15,9 +15,10 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import {
-  Wallet, Download, ArrowLeft, ArrowUp, ArrowDown,
+  Download, ArrowLeft, ArrowUp, ArrowDown,
 } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
+import { ICONOS } from '../iconos-identidad'
 import { iconoDe } from '../medios-pago'
 import { hoyISO, primerDiaDelMesISO } from '../fechas'
 
@@ -67,7 +68,7 @@ export function CajaMedios() {
   return (
     <div className="grid gap-4">
       <div className="flex items-center justify-between gap-3">
-        <TituloPantalla icono={Wallet}>Caja por Medio de Cobro</TituloPantalla>
+        <TituloPantalla icono={ICONOS.cajaPorMedio}>Caja por Medio de Cobro</TituloPantalla>
         <Button asChild variant="outline" size="sm"><Link to="/reportes"><ArrowLeft />Reportes</Link></Button>
       </div>
 
@@ -101,7 +102,7 @@ export function CajaMedios() {
       ) : data.cajas.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted-foreground">
-            <Wallet className="size-6" />No hay movimientos de caja en el período seleccionado.
+            <ICONOS.cajaPorMedio className="size-6" />No hay movimientos de caja en el período seleccionado.
           </CardContent>
         </Card>
       ) : (
@@ -173,7 +174,7 @@ export function CajaMedios() {
           {data.cajas.map((caja) => (
             <Card key={caja.id}>
               <CardHeader className="flex-row flex-wrap items-center justify-between gap-3 space-y-0">
-                <CardTitle className="flex items-center gap-2 text-base"><Wallet className="size-4 text-primary" />{caja.nombre}</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-base"><ICONOS.cajas className="size-4 text-primary" />{caja.nombre}</CardTitle>
                 <div className="flex flex-wrap gap-4 text-sm">
                   <span className="flex items-center gap-1 font-semibold text-exito"><ArrowUp className="size-3.5" />{formatCurrency(caja.total_ingresos)}</span>
                   <span className="flex items-center gap-1 font-semibold text-destructive"><ArrowDown className="size-3.5" />{formatCurrency(caja.total_egresos)}</span>

@@ -8,12 +8,13 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import type { ColumnDef } from '../data-table'
-import { Ban, Pencil, Plus, Star, Tag, Trash2, Undo2 } from 'lucide-react'
+import { Ban, Pencil, Plus, Star, Trash2, Undo2 } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
 import { DataTable, sortableHeader } from '../data-table'
 import { BadgeEstado } from '../badge-estado'
 import { TituloPantalla } from '../titulo-pantalla'
+import { ICONOS } from '../iconos-identidad'
 import type { ListaPrecio } from './tipos'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -193,14 +194,14 @@ export function ListasPrecio({ rutaDelDetalle = (id) => `/listas-precio/${id}` }
   return (
     <div className="grid gap-4">
       <div className="flex items-center justify-between">
-        <TituloPantalla icono={Tag}>Listas de precios</TituloPantalla>
+        <TituloPantalla icono={ICONOS.listasDePrecio}>Listas de precios</TituloPantalla>
         <Dialog open={nuevoOpen} onOpenChange={setNuevoOpen}>
           <DialogTrigger asChild>
             <Button onClick={abrirNuevo}><Plus />Nueva lista</Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-xl">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2"><Tag className="size-4" />Nueva lista de precios</DialogTitle>
+              <DialogTitle className="flex items-center gap-2"><ICONOS.listasDePrecio className="size-4" />Nueva lista de precios</DialogTitle>
             </DialogHeader>
             <Form {...form}>
               <form className="grid gap-4" onSubmit={form.handleSubmit(crearLista)}>
@@ -283,7 +284,7 @@ export function ListasPrecio({ rutaDelDetalle = (id) => `/listas-precio/${id}` }
               data={listas}
               emptyMessage={
                 <div className="flex flex-col items-center gap-3 py-4">
-                  <Tag className="size-10 text-muted-foreground/40" />
+                  <ICONOS.listasDePrecio className="size-10 text-muted-foreground/40" />
                   <span>No hay listas de precios creadas aún.</span>
                   <Button size="sm" onClick={abrirNuevo}><Plus />Crear primera lista</Button>
                 </div>

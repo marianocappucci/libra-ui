@@ -20,8 +20,9 @@ import { ConfirmDialog } from '@/components/confirm-dialog'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { SquareStack, Plus, Eye, Pencil, Trash2, Star, Wallet, Check, Power, PowerOff } from 'lucide-react'
+import { Plus, Eye, Pencil, Trash2, Star, Check, Power, PowerOff } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
+import { ICONOS } from '../iconos-identidad'
 
 // 🔴 Aca habia un `TODOS_MEDIOS = Object.keys(MEDIOS_PAGO_LABELS)`, o sea la
 // copia TypeScript de la lista del motor. **Esta es la pantalla donde mas
@@ -186,7 +187,7 @@ export function Cajas({ sucursales, conActivarDesactivar = false, verMovimientos
     <div className="grid gap-4">
       {/* `flex-wrap` en la cabecera y en el grupo: el filtro de sucursal (224 px) y «Nueva caja» ensanchaban la página (79 px a 390, 148 a 320). */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <TituloPantalla icono={SquareStack}>Cajas</TituloPantalla>
+        <TituloPantalla icono={ICONOS.cajas}>Cajas</TituloPantalla>
         <div className="flex flex-wrap items-center gap-2">
           {sucursales && sucursales.length > 1 && (
             <Select value={sucursalFiltro || 'todas'} onValueChange={(v) => setSucursalFiltro(v === 'todas' ? '' : v)}>
@@ -212,7 +213,7 @@ export function Cajas({ sucursales, conActivarDesactivar = false, verMovimientos
               <CardContent className="grid gap-2 pt-6">
                 {/* `flex-wrap justify-end` en los badges y `[overflow-wrap:anywhere]` en el nombre: con «Por defecto», «Inactiva» y «Turno abierto» juntos la fila medía 187 px en una tarjeta de 176 (2 px de desborde a 768 con el menú abierto). */}
                 <div className="flex items-start justify-between gap-2">
-                  <p className="flex items-center gap-2 font-semibold [overflow-wrap:anywhere]"><Wallet className="size-4 shrink-0 text-exito" />{c.nombre}</p>
+                  <p className="flex items-center gap-2 font-semibold [overflow-wrap:anywhere]"><ICONOS.cajas className="size-4 shrink-0 text-exito" />{c.nombre}</p>
                   <div className="flex flex-wrap justify-end gap-1">
                     {!!c.es_default && <BadgeEstado tono="ok">Por defecto</BadgeEstado>}
                     {!c.activo && <BadgeEstado tono="neutro">Inactiva</BadgeEstado>}
@@ -273,7 +274,7 @@ export function Cajas({ sucursales, conActivarDesactivar = false, verMovimientos
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Wallet className="size-4 text-primary" />{editingCaja ? 'Editar caja' : 'Nueva caja'}
+              <ICONOS.cajas className="size-4 text-primary" />{editingCaja ? 'Editar caja' : 'Nueva caja'}
             </DialogTitle>
           </DialogHeader>
           <div className="grid gap-3">

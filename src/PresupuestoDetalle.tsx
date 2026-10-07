@@ -18,8 +18,9 @@ import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose,
 } from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/confirm-dialog'
-import { ArrowLeft, Calculator, CheckCheck, CheckCircle2, FileDown, Mail, Pencil, Receipt, RefreshCw, Send, Trash2, Undo2, XCircle } from 'lucide-react'
+import { ArrowLeft, CheckCheck, CheckCircle2, FileDown, Mail, Pencil, Receipt, RefreshCw, Send, Trash2, Undo2, XCircle } from 'lucide-react'
 import { TituloPantalla } from './titulo-pantalla'
+import { ICONOS } from './iconos-identidad'
 import { fecha } from '@/lib/fechas'
 
 function formatCurrency(value: number): string {
@@ -138,7 +139,7 @@ export function PresupuestoDetalle({
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-3">
-          <TituloPantalla icono={Calculator}>Presupuesto {p && <span className="font-mono">{p.number}</span>}</TituloPantalla>
+          <TituloPantalla icono={ICONOS.presupuestos}>Presupuesto {p && <span className="font-mono">{p.number}</span>}</TituloPantalla>
           {p && <BadgeEstado tono={ESTADO_TONO[p.status] ?? 'neutro'}>{ESTADO_LABELS[p.status] ?? p.status}</BadgeEstado>}
         </div>
         <div className="flex flex-wrap gap-2">

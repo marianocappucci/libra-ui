@@ -25,8 +25,9 @@ import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose,
 } from '@/components/ui/dialog'
 import { DataTable, sortableHeader } from '../data-table'
-import { Truck, Plus, Pencil, Eye, Search, X } from 'lucide-react'
+import { Plus, Pencil, Eye, Search, X } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
+import { ICONOS } from '../iconos-identidad'
 
 const proveedorSchema = z.object({
   nombre: z.string().trim().min(1, 'El nombre es obligatorio'),
@@ -144,14 +145,14 @@ export function Proveedores() {
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <TituloPantalla icono={Truck}>Proveedores</TituloPantalla>
+        <TituloPantalla icono={ICONOS.proveedores}>Proveedores</TituloPantalla>
         <Dialog open={nuevoOpen} onOpenChange={setNuevoOpen}>
           <DialogTrigger asChild>
             <Button onClick={abrirNuevo}><Plus />Nuevo proveedor</Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-2xl">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2"><Truck className="size-4" />Nuevo proveedor</DialogTitle>
+              <DialogTitle className="flex items-center gap-2"><ICONOS.proveedores className="size-4" />Nuevo proveedor</DialogTitle>
             </DialogHeader>
             <Form {...form}>
               <form className="flex flex-wrap items-start gap-3" onSubmit={form.handleSubmit(crearProveedor)}>
