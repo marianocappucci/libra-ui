@@ -105,6 +105,9 @@ describe('ARCA — con la facturación sola, la tarjeta es la de siempre', () =>
   it('🔴 el HTML es el mismo que antes de existir los servicios (snapshot del código anterior)', async () => {
     // El snapshot se generó con `arca.tsx` de c4b288b —sin `/servicios`—. Si esto se pone
     // rojo, un producto que sólo factura está viendo otra pantalla.
+    // 2026-10-08 (ADR-037): se regeneró UNA vez porque los cuatro `<input type="file">` pasaron a
+    // `CampoArchivo`. Se comprobó que es lo único que cambió: sacando esos cuatro campos, el
+    // resto del HTML es byte a byte el de c4b288b.
     servir(null)
     const { container } = render(<ArcaCard producto="Contalibra" />)
     await screen.findByLabelText(/^CUIT$/)

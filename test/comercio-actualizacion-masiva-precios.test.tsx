@@ -84,12 +84,12 @@ it('un error de la API se muestra sin romper la pantalla', async () => {
   await screen.findByText('La planilla no tiene ninguna fila con código y costo.')
 })
 
-it('elegir otra planilla borra el resultado anterior', async () => {
+it('quitar la planilla borra el resultado anterior', async () => {
   const user = userEvent.setup()
   responder({ 'POST /api/actualizacion-masiva/precios/preview': RESULTADO })
   await subir()
   await screen.findByText('Yerba')
 
-  await user.click(screen.getByRole('button', { name: /Elegir otra/ }))
+  await user.click(screen.getByRole('button', { name: 'Quitar archivo' }))
   expect(screen.queryByText('Yerba')).not.toBeInTheDocument()
 })

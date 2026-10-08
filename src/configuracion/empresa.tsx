@@ -18,15 +18,15 @@
  *  vacío, y **el primer guardado lo pisa en silencio**. Por eso el valor
  *  guardado que no esté en la lista se agrega como una opción más, marcada.
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Building2, CheckCircle2, Save, Upload } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
+import { CampoArchivo } from '../CampoArchivo'
 import { BadgeEstado } from '../badge-estado'
 import { Campo, AccionesDeSeccion } from './campos'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -73,7 +73,6 @@ export function EmpresaCard({ basePath = '/api/config/empresa' }: { basePath?: s
   // el nuevo ya esté en el servidor.
   const [version, setVersion] = useState(0)
   const [hayLogo, setHayLogo] = useState<boolean | null>(null)
-  const inputLogo = useRef<HTMLInputElement>(null)
 
   const cargar = useCallback(async () => {
     setCargando(true)
@@ -123,7 +122,6 @@ export function EmpresaCard({ basePath = '/api/config/empresa' }: { basePath?: s
       setError(describirError(err))
     } finally {
       setOcupado(false)
-      if (inputLogo.current) inputLogo.current.value = ''
     }
   }
 
@@ -197,10 +195,10 @@ export function EmpresaCard({ basePath = '/api/config/empresa' }: { basePath?: s
             </div>
           )}
           <div className="flex flex-wrap items-center gap-2">
-            <Input
-              ref={inputLogo} type="file" accept=".png,.jpg,.jpeg" disabled={ocupado}
+            <CampoArchivo
+              archivo={null} accept=".png,.jpg,.jpeg" disabled={ocupado}
               aria-label="Logo (PNG o JPG)" className="max-w-sm"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) void subirLogo(f) }}
+              onChange={(f) => { if (f) void subirLogo(f) }}
             />
             {hayLogo && (
               <Button type="button" variant="outline" size="sm" onClick={() => void quitarLogo()}>
