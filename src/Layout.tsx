@@ -413,7 +413,10 @@ export function createLayout<TUser = { role?: string; name?: string }>({
                       con los stubs de este paquete: hace falta Radix de verdad.
                       Si pasa, la salida conocida es `modal={false}` en el
                       `DropdownMenu`. */}
-                  <div className="px-2 py-1.5">
+                  {/* `stopPropagation` del teclado: el `DropdownMenuContent` de Radix tiene typeahead y, al escribir en un campo de acá
+                      (el selector de sucursal es un `SelectBuscable`), la primera letra le mandaba el foco a un ítem del menú
+                      («C» → «Cambiar contraseña»). Medido en LibraClub y LibraDesk (2026-10-08). */}
+                  <div className="px-2 py-1.5" onKeyDown={(e) => e.stopPropagation()}>
                     {userMenu}
                   </div>
                   <DropdownMenuSeparator />

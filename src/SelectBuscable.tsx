@@ -75,9 +75,13 @@ type Props = {
    *  no deja enviar el formulario vacío) y `aria-required`. Con él la × no se
    *  ofrece: vaciar un campo obligatorio no es una elección. */
   required?: boolean
-  /** Si se ofrece la × que vacía la selección (sólo en el modo de campo). Por
-   *  defecto sí, salvo que el campo sea `required` o que la lista ya tenga una
-   *  opción de valor `''` («Todos»), que es la forma explícita de vaciar. */
+  /** Si se ofrece la × que vacía la selección (sólo en el modo de campo): manda
+   *  `''`. **Por defecto no** (0.129.1): muchos consumidores representan «todos»
+   *  o «ninguno» con un centinela propio (`TODOS`, `'0'`, `__todas__`) y una ×
+   *  que manda `''` los dejaba en un estado que no esperan (`Number('')` = 0
+   *  filtra por un id inexistente). Se pide con `limpiable` en los campos donde
+   *  `''` es un valor válido; la forma preferida de vaciar sigue siendo una
+   *  opción de valor `''` («Todos», «Ninguno») en la lista. */
   limpiable?: boolean
   // --- Lo que inyecta un `FormControl` de shadcn ---------------------------
   //
@@ -374,9 +378,9 @@ function SelectDeCampo({
 
   useEscapeQueCierra(abierto, contenedor, cerrar)
 
-  // La × vacía la selección. No se ofrece si el campo es obligatorio ni si la lista ya trae su opción de «ninguno» (`value: ''`, p. ej. «Todos»):
-  // ésa es la forma explícita de vaciar y el campo la muestra como etiqueta.
-  const conCruz = value !== '' && !disabled && (limpiable ?? (!required && !opciones.some((o) => o.value === '')))
+  // La × vacía la selección (manda `''`). Sólo si el consumidor la pide: un `''` inesperado rompe a quien usa un centinela propio para
+  // «todos» (ver la prop). Nunca en un campo obligatorio ni si la lista ya trae su opción de «ninguno» (`value: ''`), salvo que se la pida explícitamente.
+  const conCruz = value !== '' && !disabled && limpiable === true
 
   function elegir(opcion: OpcionSelect) {
     onChange(opcion.value)
