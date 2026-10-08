@@ -138,7 +138,7 @@ const ID_DEL_ESTILO = 'libra-identidad'
 // #34d399 entre ellos, quedan arriba de 7:1 contra esto), así que el texto del botón se lee en los ocho.
 export const TEXTO_SOBRE_ACENTO_OSCURO = '#0b1324'
 
-// Cuánto del color de marca lleva el borde del ítem activo, mezclado con `colorClaro`. Con 0,45 el borde se distingue de la barra (#fafafa) con
+// Cuánto del color de marca lleva el borde del ítem activo, mezclado con `colorClaro`. Con 0,45 el borde se distingue de la barra (era #fafafa; desde ADR-042, #ebebeb) con
 // 1,6:1 a 2,7:1 según el producto, nunca menos que el verde de antes (#5ee9b5, 1,46:1), y sigue siendo un borde y no un marco: el 100% del color
 // de marca alrededor de un chip pálido pesaba más que el texto.
 const MEZCLA_DEL_BORDE_ACTIVO = 0.45
@@ -171,7 +171,7 @@ export function menuActivoDeProducto(producto: Producto): MenuActivoDeProducto {
  *
  * - `acento`: el `colorAccion` del producto (lo que `aplicarIdentidad` fija en `--primary`, en modo claro).
  * - `menuActivoFondo` / `menuActivoBorde`: los de `menuActivoDeProducto`.
- * - `barraLateralFondo`: no sale de la identidad. Los ocho productos heredan el `--sidebar` de shadcn (`oklch(0.985 0 0)` = `#fafafa`) y ninguno lo
+ * - `barraLateralFondo`: no sale de la identidad. Desde ADR-042 el defecto es del kit (`tema.css`: `oklch(0.94 0 0)` = `#ebebeb`) y ningún producto lo
  *   cambia, así que vale la referencia de `COLORES_DE_TEMA`. Si un producto pasa a tener la barra de otro color, se agrega acá.
  * - El resto (éxito, encabezado del POS): el mismo en todos, el de `COLORES_DE_TEMA`.
  */

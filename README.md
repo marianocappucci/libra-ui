@@ -96,12 +96,14 @@ para que el motor de Tailwind v4 escanee las clases usadas dentro de
 | `libra-ui/iconos-identidad` | `ICONOS`, `iconosDe(producto?)`, `iconoDelConcepto(concepto, producto?)`, `ICONOS_POR_PRODUCTO`, `type Concepto` | El **catálogo de íconos de identidad** de la familia (`v0.125.0`, ADR-035): un concepto, un ícono, en el menú y en el título de la pantalla. Ver «El catálogo de íconos de identidad». |
 | `libra-ui/iconos-indicador` | `INDICADORES`, `iconoDelIndicador(concepto, producto?)`, `conceptoCanonico`, `esDeIdentidad`, `type ConceptoIndicador` | El **catálogo de íconos de reportes e indicadores** (`v0.128.0`, ADR-038): un concepto, un ícono, para lo que se mide (cobros, stock bajo, órdenes de carga…). Incluye los 33 de identidad. Ver «Reportes e indicadores». |
 | `libra-ui/TarjetaReporte` | `TarjetaReporte({ concepto, titulo, descripcion?, nota?, a? \| onClick?, producto?, className? })` | La tarjeta de un reporte en el índice de reportes (`v0.128.0`): ícono del catálogo en el recuadro del título, título, qué pregunta responde. Enlace (`a`), botón (`onClick`) o informativa. |
-| `libra-ui/TarjetaIndicador` | `TarjetaIndicador({ concepto, etiqueta, valor?, ayuda?, variacion?, tono?, cargando?, a?, producto?, className?, children? })` | El KPI de un tablero (`v0.128.0`): etiqueta, cifra, ayuda, variación, estado de carga y el ícono del catálogo. |
+| `libra-ui/TarjetaIndicador` | `TarjetaIndicador({ concepto, etiqueta, valor?, ayuda?, variacion?, tono?, cargando?, a?, producto?, className?, children?, disposicion? })` | El KPI de un tablero (`v0.128.0`): etiqueta, cifra, ayuda, variación, estado de carga y el ícono del catálogo. |
+| `libra-ui/GrillaDeIndicadores` | `GrillaDeIndicadores({ variante?, className?, children })`, `useDisposicionDeIndicador` | La grilla de las tarjetas de KPI (`v0.130.0`, ADR-042). `variante="estandar"` (defecto) es la de siempre; `"ancha"` son 2 columnas desde `lg` con tarjetas horizontales (la de LibraCargo). |
 | `libra-ui/IconoIndicador` | `IconoIndicador({ concepto, producto?, className? })` | El ícono de un concepto (16 px) para el título de un bloque de un reporte. |
 | `libra-ui/titulo-pantalla` | `TituloPantalla({ icono, children, className?, acciones? })` | El título de pantalla con su ícono en el recuadro (`v0.34.0`). Desde `v0.128.0` acepta `acciones`: los botones a la altura del título, a la derecha. |
 | `libra-ui/auditoria-de-titulos` | `auditarTitulos`, `auditarMenuContraCatalogo`, `iconoDelTitulo`… | **De test.** El guard de que el ícono del título es el del menú (ADR-035). |
 | `libra-ui/auditoria-de-relleno` | `auditarRelleno(raizSrc, opciones?)`, `describirInfracciones`, `describirSobrantes`, `analizarFuente`, `rellenoDeClases`, `esPantallaDeProducto` | **De test.** El guard de que una pantalla no agrega relleno propio arriba del que ya pone el `Layout` (ADR-040). |
 | `libra-ui/auditoria-de-selects` | `auditarSelects(raizSrc, opciones?)`, `describirInfracciones`, `desplegablesEn`, `MAX_CERRADO`, `MARCA_CERRADO` | **De test.** El guard de que todo desplegable de datos se busca escribiendo (ADR-039): falla si un `<Select>` o un `<select>` tiene opciones que arma el código (datos) o más de 8 fijas, y no es `SelectBuscable`. |
+| `libra-ui/auditoria-de-barra-lateral` | `auditarBarraLateral(raizSrc, opciones?)`, `describirInfracciones`, `declaracionesDeLaBarra`, `importaElTemaDelKit`, `VARIABLES_DE_LA_BARRA` | **De test.** El guard de que el `index.css` de un producto no declara `--sidebar`, `--sidebar-accent` ni `--sidebar-border`: su defecto es de `tema.css` (ADR-042). |
 | `libra-ui/auditoria-de-indicadores` | `auditarIndicadores(raizSrc, opciones?)`, `describirInfracciones`, `LUCIDE_PERMITIDOS`, `esPantallaDeIndicadores`, `iconosDeConceptoEn` | **De test.** El guard de que los reportes y tableros no importan íconos de lucide por su cuenta (ADR-038). |
 
 ## El logo del producto y el wordmark (`v0.23.0`)
@@ -140,7 +142,7 @@ antes — misma regla que rige desde `v0.3.0`.
 ## El tema de la suite: colores editables (`v0.93.0`, ADR-007)
 
 `libra-ui/tema.css` declara las variables de color que el backoffice de cada suite puede cambiar, con los valores de siempre como
-defecto, y la regla del ítem activo del menú lateral que las usa. Desde `v0.126.0` (ADR-036) el color del ítem activo es **el del producto**
+defecto (desde `v0.130.0`, ADR-042, **también el fondo, el hover y el borde de la barra lateral**: `#ebebeb`, `#e1e1e1` y `#dbdbdb` en claro, los de siempre en oscuro; el producto NO los declara en su `index.css` y `auditarBarraLateral` lo comprueba), y la regla del ítem activo del menú lateral que las usa. Desde `v0.126.0` (ADR-036) el color del ítem activo es **el del producto**
 (`aplicarIdentidad` lo fija: fondo `colorClaro`, borde de marca al 45%, texto `colorOscuro` a 4,5:1); lo de `tema.css` es un neutro de último
 recurso. `defectosDelProducto(producto)` (`libra-ui/identidad`) devuelve el valor «de siempre» de cada color editable para ese producto, para
 quien tenga que mostrarlo (la vista previa de «Apariencia»). El producto lo importa una vez,
@@ -397,6 +399,17 @@ const CONCEPTO_DE: Record<string, ConceptoIndicador> = { saldos: 'saldos', 'por-
 
 // Un test compara con ===.
 expect(iconoDeLaTarjeta).toBe(iconoDelIndicador('cobros'))
+```
+
+**Tablero ancho (`v0.130.0`, ADR-042).** `TarjetaIndicador` tiene una segunda disposición, `horizontal`: ícono de 40 px a la izquierda, etiqueta y ayuda en el medio, cifra a la derecha (70 px de alto contra 122–146 de la vertical). Se pide con `GrillaDeIndicadores variante="ancha"` (1 columna en celular, 2 desde `lg`; las tarjetas salen horizontales solas) o con `disposicion="horizontal"` en una tarjeta suelta. Con `children`, el desglose va debajo a todo ancho. El defecto sigue siendo la vertical: ningún tablero cambia si no lo pide.
+
+```tsx
+import { GrillaDeIndicadores } from 'libra-ui/GrillaDeIndicadores'
+
+<GrillaDeIndicadores variante="ancha" className="mt-6">
+  <TarjetaIndicador concepto="facturado" etiqueta="Facturado en el mes" valor={…} ayuda="…" a="/comprobantes" />
+  …
+</GrillaDeIndicadores>
 ```
 
 Las dos tarjetas usan el recuadro del título de pantalla (`data-slot="icono-tile"`), son sobrias (sin color, la cifra es del color del texto; `tono` pinta cuando significa algo) y traen el modo oscuro. `TarjetaIndicador` con `cargando` deja la etiqueta y el ícono y pone un esqueleto en lugar de la cifra; con `children` suma un desglose debajo.

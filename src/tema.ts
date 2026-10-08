@@ -77,8 +77,8 @@ export const COLORES_DE_TEMA: readonly DefinicionDeColor[] = [
     etiqueta: 'Barra lateral: fondo',
     ayuda: 'El fondo del menú lateral. El texto, los íconos, el borde y el color al pasar el mouse se calculan solos.',
     variable: '--sidebar',
-    porDefecto: '#fafafa',
-    defectoPorProducto: true,
+    // El defecto lo da `tema.css` (ADR-042: `oklch(0.94 0 0)`); sin `defectoPorProducto`, porque ya no es de cada producto.
+    porDefecto: '#ebebeb',
     textoSobre: { variable: '--sidebar-foreground', tambien: ['--sidebar-accent-foreground'], contrasteMinimo: 4.5 },
     derivadas: [
       { variable: '--sidebar-accent', mezcla: 0.08 },
