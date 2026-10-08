@@ -83,6 +83,22 @@ describe('iconoDelTitulo', () => {
       .toEqual({ icono: 'Users', forma: 'TituloPantalla' })
   })
 
+  it('🔴 lo encuentra con `acciones` (ADR-038), venga antes o después de `icono`', () => {
+    const despues = '<TituloPantalla icono={ICONOS.clientes} acciones={<Button onClick={() => abrir()}>Nuevo</Button>}>Clientes</TituloPantalla>'
+    const antes = '<TituloPantalla acciones={<Button onClick={() => abrir()}>Nuevo</Button>} icono={ICONOS.clientes}>Clientes</TituloPantalla>'
+    const enVariasLineas = '<TituloPantalla\n  acciones={(\n    <>\n      <Button>Nuevo</Button>\n    </>\n  )}\n  icono={ICONOS.clientes}\n>\n  Clientes\n</TituloPantalla>'
+    for (const fuente of [despues, antes, enVariasLineas]) {
+      expect(iconoDelTitulo(fuente)).toEqual({ icono: 'ICONOS.clientes', forma: 'TituloPantalla' })
+    }
+  })
+
+  it('un título que no tiene `icono` no se lleva el de la pantalla de al lado', () => {
+    const fuente = '<TituloPantalla acciones={<b />}>Uno</TituloPantalla>\n<TituloPantalla icono={Users}>Dos</TituloPantalla>'
+    // El primero no cruza al segundo; el parser encuentra el del segundo por ser el primero con `icono`, pero nunca lo atribuye al primero.
+    expect(iconoDelTitulo(fuente).icono).toBe('Users')
+    expect(iconoDelTitulo('<TituloPantalla acciones={<b />}>Uno</TituloPantalla>').icono).toBeNull()
+  })
+
   it('lo encuentra en la forma escrita a mano', () => {
     const viejo = '<h2 className="flex items-center gap-2 text-lg font-semibold"><Package className="size-5" />Productos</h2>'
     expect(iconoDelTitulo(viejo)).toEqual({ icono: 'Package', forma: 'h a mano' })

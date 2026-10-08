@@ -6,18 +6,18 @@
 import { useEffect, useState } from 'react'
 import { api, ApiError } from '../api-client'
 import { type ReportesData } from './tipos'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import {
-  ShoppingCart, DollarSign, Receipt, Wallet, Download, TrendingUp, PieChart, Boxes, AlertTriangle,
-} from 'lucide-react'
+import { Download } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
+import { IconoIndicador } from '../IconoIndicador'
+import { TarjetaIndicador } from '../TarjetaIndicador'
 import { iconoDe } from '../medios-pago'
 import { fecha } from '@/lib/fechas'
 import { hoyISO, primerDiaDelMesISO } from '../fechas'
@@ -89,50 +89,18 @@ export function Reportes() {
         <p className="py-6 text-center text-sm text-muted-foreground">Cargando…</p>
       ) : (
         <>
+          {/* Los cuatro KPI toman su ícono del catálogo de indicadores (ADR-038): se pasa el concepto, no un ícono de lucide. */}
           <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
-            <Card>
-              <CardContent className="flex items-start justify-between gap-3">
-                <div className="min-w-0 [&_p]:truncate">
-                  <CardDescription>Ventas en período</CardDescription>
-                  <p className="text-2xl font-bold">{data.resumen.ventas_cantidad}</p>
-                  <CardDescription>operaciones</CardDescription>
-                </div>
-                <span className="shrink-0 rounded-lg bg-primary/10 p-2 text-primary"><ShoppingCart /></span>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="flex items-start justify-between gap-3">
-                <div className="min-w-0 [&_p]:truncate">
-                  <CardDescription>Total vendido</CardDescription>
-                  <p className="text-2xl font-bold text-exito">{formatCurrency(data.resumen.ventas_total)}</p>
-                </div>
-                <span className="shrink-0 rounded-lg bg-exito/10 p-2 text-exito"><DollarSign /></span>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="flex items-start justify-between gap-3">
-                <div className="min-w-0 [&_p]:truncate">
-                  <CardDescription>Facturas emitidas</CardDescription>
-                  <p className="text-2xl font-bold">{data.resumen.facturas_cantidad}</p>
-                </div>
-                <span className="shrink-0 rounded-lg bg-violet-500/10 p-2 text-violet-600 dark:text-violet-400"><Receipt /></span>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="flex items-start justify-between gap-3">
-                <div className="min-w-0 [&_p]:truncate">
-                  <CardDescription>Movimientos de caja</CardDescription>
-                  <p className="text-2xl font-bold">{formatCurrency(data.resumen.caja_saldo)}</p>
-                </div>
-                <span className="shrink-0 rounded-lg bg-amber-500/10 p-2 text-amber-600 dark:text-amber-400"><Wallet /></span>
-              </CardContent>
-            </Card>
+            <TarjetaIndicador concepto="ventas" etiqueta="Ventas en período" valor={data.resumen.ventas_cantidad} ayuda="operaciones" />
+            <TarjetaIndicador concepto="montoVendido" etiqueta="Total vendido" valor={formatCurrency(data.resumen.ventas_total)} tono="exito" />
+            <TarjetaIndicador concepto="comprobantes" etiqueta="Facturas emitidas" valor={data.resumen.facturas_cantidad} />
+            <TarjetaIndicador concepto="caja" etiqueta="Movimientos de caja" valor={formatCurrency(data.resumen.caja_saldo)} />
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader className="flex items-center justify-between space-y-0">
-                <CardTitle className="flex items-center gap-2 text-base"><TrendingUp className="size-4 text-primary" />Ventas en el período</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-base"><IconoIndicador concepto="ventas" className="text-muted-foreground" />Ventas en el período</CardTitle>
                 <Button asChild size="sm" variant="outline"><a href={`/reportes/export/ventas?desde=${desde}&hasta=${hasta}&agrupacion=${agrupacion}`}><Download />CSV</a></Button>
               </CardHeader>
               <CardContent className="p-0">
@@ -172,7 +140,7 @@ export function Reportes() {
 
             <Card>
               <CardHeader className="flex items-center justify-between space-y-0">
-                <CardTitle className="flex items-center gap-2 text-base"><PieChart className="size-4 text-exito" />Medios de pago</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-base"><IconoIndicador concepto="mediosDePago" className="text-muted-foreground" />Medios de pago</CardTitle>
                 <Button asChild size="sm" variant="outline"><a href={`/reportes/export/medios?desde=${desde}&hasta=${hasta}`}><Download />CSV</a></Button>
               </CardHeader>
               <CardContent>
@@ -206,7 +174,7 @@ export function Reportes() {
 
             <Card>
               <CardHeader className="flex items-center justify-between space-y-0">
-                <CardTitle className="flex items-center gap-2 text-base"><Boxes className="size-4 text-purple-600 dark:text-purple-400" />Productos más vendidos</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-base"><IconoIndicador concepto="productos" className="text-muted-foreground" />Productos más vendidos</CardTitle>
                 <Button asChild size="sm" variant="outline"><a href={`/reportes/export/productos?desde=${desde}&hasta=${hasta}`}><Download />CSV</a></Button>
               </CardHeader>
               <CardContent className="p-0">
@@ -240,7 +208,7 @@ export function Reportes() {
             </Card>
 
             <Card>
-              <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Wallet className="size-4 text-amber-600 dark:text-amber-400" />Caja por tipo de movimiento</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="flex items-center gap-2 text-base"><IconoIndicador concepto="caja" className="text-muted-foreground" />Caja por tipo de movimiento</CardTitle></CardHeader>
               <CardContent className="p-0">
                 {data.caja.length === 0 ? (
                   <p className="py-4 text-center text-sm text-muted-foreground">Sin movimientos en el período.</p>
@@ -274,7 +242,7 @@ export function Reportes() {
             <Card className="border-amber-500/50">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base text-amber-600 dark:text-amber-400">
-                  <AlertTriangle className="size-4" />Stock bajo mínimo ({data.stock_bajo.length} producto{data.stock_bajo.length !== 1 ? 's' : ''})
+                  <IconoIndicador concepto="stockBajo" />Stock bajo mínimo ({data.stock_bajo.length} producto{data.stock_bajo.length !== 1 ? 's' : ''})
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">

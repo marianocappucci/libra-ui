@@ -61,7 +61,9 @@ Tres capas, de más genérico a más específico:
     (sobre TanStack Table), `SelectBuscable`, `PasswordInput`,
     `CampoArchivo` (el único campo de archivo de la suite, ADR-037), `acciones` /
     `iconos-accion`, `iconos-identidad` (el catálogo de íconos del menú y los
-    títulos, ADR-035), `badge-estado`, `titulo-pantalla` /
+    títulos, ADR-035), `iconos-indicador` (el de lo que se mide en reportes y
+    tableros, con `TarjetaReporte`, `TarjetaIndicador` e `IconoIndicador`,
+    ADR-038), `badge-estado`, `titulo-pantalla` /
     `auditoria-de-titulos`, `medios-pago`, `mp`, `facturas`, `fechas` (formato
     `dd-mm-aaaa` de familia), `branding`, `use-mobile`, `utils` (el `cn` de
     tailwind-merge).

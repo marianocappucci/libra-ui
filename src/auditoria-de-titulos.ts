@@ -85,7 +85,9 @@ export function rutasDelRouter(fuenteApp: string): Map<string, string> {
 
 /** El icono que una pantalla pone al lado de su título. */
 export function iconoDelTitulo(fuentePagina: string): { icono: string | null; forma: string } {
-  const conComponente = new RegExp(String.raw`<TituloPantalla\s+icono=\{(${EXPR_ICONO})\}`).exec(fuentePagina)
+  // `icono` puede no ser la primera prop (`<TituloPantalla acciones={…} icono={…}>`, ADR-038): se acepta cualquier cosa hasta `icono=`, sin cruzar
+  // a otro `<TituloPantalla` y con un tope, para que un título sin `icono` (que el tipo no admite) no se lleve el de la pantalla de al lado.
+  const conComponente = new RegExp(String.raw`<TituloPantalla\b(?:(?!<TituloPantalla|\bicono=)[\s\S]){0,600}?\bicono=\{(${EXPR_ICONO})\}`).exec(fuentePagina)
   if (conComponente) return { icono: conComponente[1], forma: 'TituloPantalla' }
   // La forma escrita a mano: `<h2 …><Icono …/>`.
   const aMano = /<h[12][^>]*>\s*\n?\s*<([A-Z][A-Za-z0-9]*)[\s/]/.exec(fuentePagina)
