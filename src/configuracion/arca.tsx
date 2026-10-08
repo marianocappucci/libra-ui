@@ -24,6 +24,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { CheckCircle2, KeyRound, Save, Send, ShieldCheck } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
+import { CampoArchivo } from '../CampoArchivo'
 import { AvisoEstado, BadgeEstado } from '../badge-estado'
 import {
   AMBIENTES_ARCA, AYUDA_DEL_SERVICIO, NOMBRE_DEL_AMBIENTE, SERVICIO_FACTURACION,
@@ -34,7 +35,6 @@ import { Campo, AccionesDeSeccion } from './campos'
 import { TutorialArcaCertificado, TutorialArcaPadron } from './tutoriales'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -152,13 +152,9 @@ function SubirMitad({ label, accept, cargado, disabled, idSufijo, contexto, onAr
     <div className="grid gap-2">
       <Label>{label}</Label>
       {cargado && <BadgeEstado tono="ok" className="w-fit"><CheckCircle2 />Cargado</BadgeEstado>}
-      <Input
-        type="file" accept={accept} disabled={disabled} aria-label={etiqueta}
-        onChange={(e) => {
-          const f = e.target.files?.[0]
-          if (f) onArchivo(f)
-          e.target.value = ''
-        }}
+      <CampoArchivo
+        archivo={null} accept={accept} disabled={disabled} aria-label={etiqueta}
+        onChange={(f) => { if (f) onArchivo(f) }}
       />
     </div>
   )

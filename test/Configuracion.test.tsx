@@ -508,7 +508,8 @@ describe('Datos / Backup', () => {
       new File(['x'], 'copia.zip', { type: 'application/zip' }),
     )
 
-    expect(await screen.findByText(/copia\.zip/)).toBeInTheDocument()
+    // Dos veces: en la caja del campo y en la pregunta de confirmación.
+    expect(await screen.findAllByText(/copia\.zip/)).toHaveLength(2)
     expect(pedidos.some((p) => p.url.includes('/restore'))).toBe(false)
   })
 

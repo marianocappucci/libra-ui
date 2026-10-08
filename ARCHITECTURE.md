@@ -58,7 +58,8 @@ Tres capas, de más genérico a más específico:
     `ConfiguracionSmtp`, `CambiarPassword`, `PasswordReset`, `Terminos`,
     `Facturas`/`FacturaDetalle`, `MpBandeja`.
   - Helpers y piezas compartidas: `AuthContext`, `api-client`, `data-table`
-    (sobre TanStack Table), `SelectBuscable`, `PasswordInput`, `acciones` /
+    (sobre TanStack Table), `SelectBuscable`, `PasswordInput`,
+    `CampoArchivo` (el único campo de archivo de la suite, ADR-037), `acciones` /
     `iconos-accion`, `iconos-identidad` (el catálogo de íconos del menú y los
     títulos, ADR-035), `badge-estado`, `titulo-pantalla` /
     `auditoria-de-titulos`, `medios-pago`, `mp`, `facturas`, `fechas` (formato

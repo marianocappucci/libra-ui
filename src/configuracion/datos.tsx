@@ -20,15 +20,15 @@
  *  El token queda en la instancia (`libracore.resguardo_enlace`) y la subida la
  *  sigue haciendo el cron del host. Ver `ResguardoExternoCard`.
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Cloud, Database, Download, Unlink, Upload } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
+import { CampoArchivo } from '../CampoArchivo'
 import { Button } from '@/components/ui/button'
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { fechaHora } from '@/lib/fechas'
@@ -360,7 +360,6 @@ export function DatosBackupCard({ basePath = '/api/config' }: { basePath?: strin
   const [aviso, setAviso] = useState<string | null>(null)
   const [ocupado, setOcupado] = useState(false)
   const [aRestaurar, setARestaurar] = useState<File | null>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
 
   const recargar = useCallback(async () => {
     setError(null)
@@ -375,7 +374,6 @@ export function DatosBackupCard({ basePath = '/api/config' }: { basePath?: strin
 
   function limpiarSeleccion() {
     setARestaurar(null)
-    if (inputRef.current) inputRef.current.value = ''
   }
 
   async function crear() {
@@ -455,10 +453,9 @@ export function DatosBackupCard({ basePath = '/api/config' }: { basePath?: strin
         </CardHeader>
         <CardContent className="grid gap-2">
           <Label htmlFor="backup-archivo">Archivo de backup (.zip)</Label>
-          <Input
-            id="backup-archivo" ref={inputRef} type="file" accept=".zip,application/zip"
-            disabled={ocupado}
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) setARestaurar(f) }}
+          <CampoArchivo
+            id="backup-archivo" archivo={aRestaurar} onChange={setARestaurar}
+            accept=".zip,application/zip" disabled={ocupado}
           />
         </CardContent>
       </Card>

@@ -3,13 +3,13 @@
 // ver wiki/analyses/ventalibra-gaps-despensa.md). Sube un .xlsx con código y costo; el precio de
 // venta se recalcula solo, manteniendo el margen que cada producto ya tenía
 // (`libracommerce.erp.actualizacion_masiva`).
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import type { ColumnDef } from '../data-table'
 import { api, ApiError } from '../api-client'
+import { CampoArchivo } from '../CampoArchivo'
 import type { LineaActualizada, ResultadoPlanilla } from './tipos'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { BadgeEstado } from '../badge-estado'
 import { DataTable } from '../data-table'
 import { FileSpreadsheet, Upload, CheckCircle2, TriangleAlert } from 'lucide-react'
@@ -24,7 +24,6 @@ function plural(n: number, singular: string, pluralForm: string): string {
 }
 
 export function ActualizacionMasivaPrecios() {
-  const inputRef = useRef<HTMLInputElement>(null)
   const [archivo, setArchivo] = useState<File | null>(null)
   const [resultado, setResultado] = useState<ResultadoPlanilla | null>(null)
   const [cargando, setCargando] = useState(false)
@@ -77,7 +76,6 @@ export function ActualizacionMasivaPrecios() {
     setResultado(null)
     setAplicado(false)
     setError(null)
-    if (inputRef.current) inputRef.current.value = ''
   }
 
   const columnas: ColumnDef<LineaActualizada>[] = [
@@ -119,16 +117,11 @@ export function ActualizacionMasivaPrecios() {
 
       <Card>
         <CardContent className="flex flex-wrap items-center gap-3 pt-6">
-          <Input
-            ref={inputRef} type="file" accept=".xlsx" className="max-w-sm" disabled={cargando || aplicando}
+          <CampoArchivo
+            archivo={archivo} accept=".xlsx" className="max-w-sm" disabled={cargando || aplicando}
             aria-label="Planilla de precios"
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) void elegirArchivo(f) }}
+            onChange={(f) => { if (f) void elegirArchivo(f); else limpiar() }}
           />
-          {archivo && (
-            <Button type="button" variant="outline" size="sm" onClick={limpiar} disabled={cargando || aplicando}>
-              Elegir otra
-            </Button>
-          )}
         </CardContent>
       </Card>
 
