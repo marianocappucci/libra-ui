@@ -64,7 +64,8 @@ Tres capas, de más genérico a más específico:
     títulos, ADR-035), `iconos-indicador` (el de lo que se mide en reportes y
     tableros, con `TarjetaReporte`, `TarjetaIndicador` e `IconoIndicador`,
     ADR-038), `badge-estado`, `titulo-pantalla` /
-    `auditoria-de-titulos`, `medios-pago`, `mp`, `facturas`, `fechas` (formato
+    `auditoria-de-titulos`, `auditoria-de-relleno` (el guard de que una pantalla
+    no duplica el relleno del `Layout`, ADR-040), `medios-pago`, `mp`, `facturas`, `fechas` (formato
     `dd-mm-aaaa` de familia), `branding`, `use-mobile`, `utils` (el `cn` de
     tailwind-merge).
 - **`src/agenda/` (10)** y **`src/configuracion/` (9) — bundles de feature**:

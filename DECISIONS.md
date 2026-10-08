@@ -649,3 +649,53 @@ El humano pidió el 2026-10-08: «agregar iconos en los reportes como tiene Cont
 **Consecuencias.** Es aditivo para el que no migra: ningún producto cambia hasta que sube el pin y empieza a pasar conceptos. Las pantallas del kit que cambian de ícono (punto 6) lo hacen en todos los consumidores a la vez. Queda a cargo de cada producto: pasar sus índices y tableros a las tarjetas (con un `Record<slug, ConceptoIndicador>` tipado cuando el catálogo de reportes lo manda el servidor, como en LibraCargo), llamar a `auditarIndicadores` desde su test y, donde el menú diverge del catálogo (LibraDesk: `AlertCircle` para incidencias y reclamos, `UserCog` para técnicos; LibraCargo: `ReceiptText` para los comprobantes de proveedores), moverlo en la misma tanda. Queda fuera: `Caja`, `Egresos` y `Margen` del kit (la lista de deuda), el ícono de cada medio de pago, los gráficos, y que las pantallas del kit reciban `producto` para tomar la excepción de LibraCargo (hoy `Proveedores` del kit rinde `Truck` en todos; igual que en ADR-035).
 
 **Cómo se agrega un concepto.** (1) Mirar si ya existe con otro nombre (`ICONOS`, sinónimos, propios); (2) la clave en `PROPIOS` de `src/iconos-indicador.ts` con un ícono de lucide que nadie use y una línea que diga qué mide y dónde se vio; (3) la fila en la tabla de `test/iconos-indicador.test.tsx` y en el README; (4) subir la versión del kit y, en la misma tanda, el pin de los productos que lo muestran. Un sinónimo es una línea en `SINONIMOS` y otra en el test.
+
+## ADR-040 — El título de la pantalla arranca a la altura de la marca del sidebar: el relleno de arriba es del `Layout`, no de la pantalla
+
+El humano pidió el 2026-10-08, con la captura del Dashboard de LibraCargo: «en la mayoría de las pantallas de los sistemas en el lado derecho queda un espacio vacío arriba, el título de la sección no está alineado a la misma altura que el nombre de la aplicación, y es un montón de lugar que se pierde y que queda feo, es algo que tenemos que cambiarlo a nivel libra-ui para que lo tomen todos». (ADR-039 lo toma otra rama del kit; esta numeración deja ese hueco.)
+
+**Qué ya existe** (se miró antes de diseñar, `reglas/producto.md`):
+- `Layout.tsx`: el contenedor del contenido ya era del kit, con `p-4 pt-14 md:p-6 md:pt-6`. `pt-14` en celular es el hueco del botón flotante del menú (44 px + 8, ADR-024), y no se toca. El `md:pt-6` es el que estaba mal.
+- `TituloPantalla` (ADR-035/038): la fila del título mide 32 px (el recuadro `size-8`; el `<h2>` `text-lg` sólo 28). Con `acciones` pasa por `EncabezadoDePantalla` (`flex-wrap items-center`).
+- El encabezado del sidebar: `SidebarHeader` (`p-2`, primitiva canónica `libra-ui/ui/sidebar`, que los productos re-exportan) y la fila de la marca `px-2 py-1.5` de `Layout.tsx`. La marca (`MarcaProducto`, `h-8 w-8`) son 32 px.
+- Los guards que leen fuentes con control positivo (`auditoria-de-titulos`, `auditoria-de-indicadores`, `campo-archivo-unico`): el patrón del guard nuevo.
+- Nada que mida o corrija el relleno de las pantallas: se buscó `p-6`/`py-N`/`container` en los `pages/` de los nueve productos y en el propio kit.
+
+**Lo que se midió** (Chromium 1243 contra el `Layout` y el `TituloPantalla` REALES del kit, con Tailwind 4.3.3 y el `tema.css`; una página de prueba fuera del repo, a 1280 px de ancho):
+
+| caso | borde de arriba de la marca | borde de arriba del título (recuadro) | centro marca / título |
+|---|---|---|---|
+| antes, pantalla sin relleno propio (`md:pt-6`) | 14 | 24 | 30 / 40 |
+| antes, pantalla con `<div className="p-6">` (LibraCargo) | 14 | 48 | 30 / 64 |
+| **después** (`md:pt-3.5`), pantalla sin relleno | 14 | **14** | **30 / 30** |
+| después, título con un botón `h-9` en la fila | 14 | 16 | 30 / 32 |
+| después, pantalla que todavía lleva `p-6` | 14 | 38 | 30 / 54 |
+| celular (390 px) | botón del menú 8–52 | 56 | sin cambios |
+
+La cuenta: hasta el borde de arriba de la marca hay `SidebarHeader` `p-2` (8) + fila `py-1.5` (6) = **14 px**; la marca mide 32 (`h-8`) y el recuadro del título también (`size-8`), de modo que con 14 px arriba **los dos bordes de arriba, los dos centros (30) y los dos de abajo (46) coinciden**. El `pt-6` anterior dejaba el título 10 px más abajo; el `p-6` que las pantallas de LibraCargo le sumaban encima, 34 px (el espacio de la captura). En el resto de los productos el hueco era sólo el de los 10 px del Layout: sus pantallas no duplican (inventario abajo), pero el título igual quedaba más abajo que el nombre de la app.
+
+**Decisión.**
+1. **`md:pt-6` pasa a `md:pt-3.5`** en el contenedor del contenido (`p-4 pt-14 md:p-6 md:pt-3.5`). Los costados y el pie siguen en 24 px, el celular no cambia (`pt-14`). Se elige alinear el borde de arriba del recuadro del título con el de la marca y no sólo los centros: con la marca de 32 px y el recuadro de 32 las dos cosas son la misma cuenta, y el borde no depende de que el nombre del producto tenga una o dos líneas. `test/Layout.test.tsx` repite la cuenta con las clases de verdad (el `SidebarHeader` real, la fila del Layout y el contenedor): si alguien cambia el relleno del encabezado o el del contenido, el test dice cuál cuenta dejó de cerrar.
+2. **Una pantalla no agrega relleno propio arriba.** El `Layout` la separa del borde y la alinea con la marca; un `<div className="p-6">` en la raíz lo duplica. Los bloques se separan con `space-y-N` o `gap-N`.
+3. **`libra-ui/auditoria-de-relleno` (de test, importa `node:fs`; lo copian los productos como `auditarIndicadores`).** `auditarRelleno(src, { esPantalla?, excepciones? })` lee `pages/**/*.tsx` y falla si el elemento raíz de una pantalla —el `return` del componente (el `export default`, o el que se llama como el archivo, o los exportados), también los de `if (cargando) return …`, una flecha de cuerpo-expresión o los hijos directos de un fragmento— lleva `p-N`, `py-N`, `pt-N`, `mt-N` o `my-N` (con o sin `sm:`…`2xl:`; `p-0` no; `container … py-N` sí, por el `py`). Un `py-N` sobre un mensaje `text-center` («Cargando…», «No hay nada») no cuenta: es el aire del mensaje, no el de la pantalla. Devuelve `archivos`, `pantallas` y `raices` (el control positivo: un parser ciego devuelve cero y una lista vacía se leería como «está todo bien»), las `infracciones` con archivo, línea y clases, y los mensajes dicen qué hacer. **Excepciones explícitas y con motivo** (`{ 'pages/KdsMonitor.tsx': 'pantalla completa, fuera del Layout' }`) para lo que se dibuja fuera del `Layout` (login, reseteo, páginas públicas, monitores, impresión); una excepción que ya no viola o no existe sale en `sobrantes` y el test del producto tiene que fallar, para que la lista no sólo crezca. `test/relleno-de-pantallas.test.ts` lo corre sobre las 55 pantallas del kit (`comercio/*` y las sueltas), prueba cada forma de escribirlo con fuentes de juguete y comprueba que se pone rojo con una violación (verificado con un `p-6` temporal en `comercio/Ventas.tsx`: `comercio/Ventas.tsx:383: la pantalla arranca con <div className="grid gap-4 p-6">…`).
+4. **Las pantallas del kit ya estaban limpias** (ninguna raíz de `comercio/*` ni de las sueltas lleva relleno): no hubo nada que corregir en `src/`, sólo el `Layout`. Lo que sí tiene `py-N` en el kit son piezas que no son pantalla (`agenda/chip`, `configuracion/tutoriales`), y el guard del kit no las mira.
+
+**Inventario por producto** (`origin/develop` de cada uno al 2026-10-08, guard sobre `frontend/src/pages/**` más `components/AbmMaestro.tsx` en LibraCargo; «pantallas» son los archivos medidos, «raíces» los `return` leídos):
+
+| producto | pantallas / raíces | con relleno propio |
+|---|---|---|
+| LibraCargo | 28 / 29 | **16 raíces en 15 archivos**: `p-6` en `Caja.tsx:219`, `CartasDePorte.tsx:221`, `CuentaCorriente.tsx:225`, `Entidades.tsx:56`, `Inicio.tsx:70`, `Logs.tsx:221`, `Ordenes.tsx:305`, `PreFactura.tsx:144` y `:156`, `PreFacturas.tsx:69`, `PreLiquidacionTransportistas.tsx:247`, `Reporte.tsx:333`, `ReportesIndice.tsx:58`, `Usuarios.tsx:20`; `p-4` en `FacturarPendientes.tsx:270`; `p-6` condicional (`encabezado ? 'p-6' : undefined`) en `components/AbmMaestro.tsx:362`, que usan las pantallas de `maestros/` |
+| LibraClub | 29 / 37 | `Torneo.tsx:60` (`p-6`, «Cargando…») y `:63` (`space-y-3 p-6`). El portal público (`portal/*`, `p-4`) está fuera de `pages/` y fuera del Layout: legítimo |
+| RestoLibra | 59 / 60 | `KdsMonitor.tsx:43` y `PedidosMonitor.tsx:67` (`min-h-svh … p-5`): pantallas completas fuera del Layout, excepciones |
+| ContaLibra | 47 / 47 | ninguna |
+| VentaLibra | 35 / 37 | ninguna |
+| LibraDesk | 47 / 75 | ninguna |
+| GestioLibra | 14 / 13 | ninguna |
+| MedLibra | 17 / 16 | ninguna |
+| libra-backoffice | 6 / 13 | ninguna |
+
+O sea que lo del relleno doble es casi todo de LibraCargo (14 de las 28 pantallas); en los demás productos el único cambio es el del `Layout`. El barrido amplio (`p-4`…`p-9`, `py-4`…, `container` en cualquier etiqueta de `pages/`) no encontró nada más a nivel de raíz: lo que queda son botones y rejillas adentro de diálogos.
+
+**Consecuencias.** Al subir el pin, los nueve productos suben el título 10 px (de 24 a 14) y quedan a la altura del nombre de la app; las pantallas de LibraCargo que siguen con `p-6` quedan 24 px más abajo hasta que lo saquen (es la tanda siguiente: quitar esas clases, cambiar `AbmMaestro` para que el `p-6` no exista, y declarar en cada producto el test con sus excepciones). Un título con un botón `h-9` en la fila (`acciones`) queda 2 px más abajo que la marca (la fila mide 36 y el recuadro se centra): se acepta, el borde del botón no es lo que se compara con el logo; un `size="sm"` (32) alinea exacto. Una marca más alta que 32 px (un `logo` propio con `h-9`) alinea el borde de arriba pero no el centro. Un producto que ponga un encabezado más alto en el sidebar tiene que tocar la cuenta, y el test se lo dice. Queda fuera: las pantallas que arman su raíz con un componente envoltorio propio (el guard mira la etiqueta que se escribe, no lo que el envoltorio hace por adentro), el `className` armado por una función, y las raíces que no son el componente de la pantalla.
+
+**Cómo se adopta en un producto.** (1) Subir el pin; (2) sacar el relleno propio de las raíces que el guard marca; (3) copiar el test: `auditarRelleno(resolve(__dirname, '..'), { excepciones })` con `expect(r.pantallas).toBeGreaterThan(0)`, `describirInfracciones(r.infracciones)` vacío y `describirSobrantes(r.sobrantes)` vacío, y escribir el motivo de cada excepción.
