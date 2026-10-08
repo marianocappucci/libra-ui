@@ -181,7 +181,7 @@ describe('el ítem activo del menú es del producto (ADR-036)', () => {
     libraclub: { fondo: '#ecfdf5', borde: '#82c3a9', texto: '#015c38' },
   } as const satisfies Record<Producto, object>
   const VERDE_DE_ANTES = { fondo: '#ecfdf5', borde: '#5ee9b5' }
-  const BARRA = '#fafafa'
+  const BARRA = '#ebebeb' // ADR-042: la barra es del kit y es más oscura que el contenido
 
   afterEach(() => {
     document.getElementById('libra-identidad')?.remove()
@@ -273,13 +273,13 @@ describe('defectosDelProducto', () => {
     }
   })
 
-  it('lo que no sale de la identidad es lo de COLORES_DE_TEMA (la barra #fafafa de shadcn, el éxito y el POS)', () => {
+  it('lo que no sale de la identidad es lo de COLORES_DE_TEMA (la barra #ebebeb del kit, el éxito y el POS)', () => {
     const d = defectosDelProducto('libradesk')
     for (const c of COLORES_DE_TEMA) {
       if (['acento', 'menuActivoFondo', 'menuActivoBorde'].includes(c.clave)) continue
       expect(d[c.clave], c.clave).toBe(c.porDefecto)
     }
-    expect(d.barraLateralFondo).toBe('#fafafa')
+    expect(d.barraLateralFondo).toBe('#ebebeb')
   })
 
   it('los ocho tienen defectos distintos de acento y de ítem activo (no hay un verde común)', () => {

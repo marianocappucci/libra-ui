@@ -48,10 +48,31 @@ html {
   color: var(--libra-menu-activo-texto);
 }
 
+/* ---- La barra lateral: fondo, hover y borde por defecto (ADR-042) -------------------------------------------------------------- */
+
+/* Pedido del dueño (2026-10-08): el menú un poco más oscuro que el contenido, que es blanco (antes `oklch(0.985 0 0)` = #fafafa contra #fff: 1,04:1,
+   no se distinguían). Elegido sobre una maqueta, tono «C». Hasta ADR-009 el defecto lo declaraba cada `index.css` de los nueve productos; ahora es del kit y
+   el producto NO lo declara (lo comprueba `auditoria-de-barra-lateral`): cambiar el tono es un cambio acá, no nueve.
+   Sólo estas tres variables. El texto (`--sidebar-foreground`), el acento (`--sidebar-primary`) y el anillo siguen siendo de shadcn y de `aplicarIdentidad`.
+   `aplicarTema` sigue ganando: lo que el superadmin elige en «Apariencia» va en línea sobre `<html>` y le gana a estos dos selectores.
+   Claro: #ebebeb de fondo (texto 16,6:1), hover #e1e1e1 (15,1:1), borde #dbdbdb. Oscuro: el mismo valor de siempre (`0.205` sobre el fondo `0.145`: ya
+   había la misma diferencia de luminosidad, 0,06, que el claro nuevo tiene con el blanco), así que no cambia. */
+:root {
+  --sidebar: oklch(0.94 0 0);
+  --sidebar-accent: oklch(0.91 0 0);
+  --sidebar-border: oklch(0.89 0 0);
+}
+
+.dark {
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+}
+
 /* ---- Colores ampliados (ADR-009, `v0.97.0`) ----------------------------------------------------------------------------------- */
 
-/* Éxito y encabezado del POS tienen defecto acá. El acento (`--primary`) y la barra lateral (`--sidebar`) NO: su defecto es el de cada
-   producto (lo declara su `index.css`, con su versión clara y oscura) y `aplicarTema` sólo los pisa cuando se elige uno. */
+/* Éxito y encabezado del POS tienen defecto acá. El acento (`--primary`) NO: su defecto es el de cada producto (lo fija `aplicarIdentidad`) y
+   `aplicarTema` sólo lo pisa cuando se elige uno. La barra lateral SÍ lo tiene desde ADR-042: ver el bloque de abajo. */
 :root {
   --libra-exito: #059669;
   --libra-exito-texto: #ffffff;

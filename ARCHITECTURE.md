@@ -62,8 +62,8 @@ Tres capas, de más genérico a más específico:
     `CampoArchivo` (el único campo de archivo de la suite, ADR-037), `auditoria-de-selects` (el guard de que todo desplegable de datos es `SelectBuscable`, que desde la 0.129.0 es un campo con lupa por defecto, ADR-039), `acciones` /
     `iconos-accion`, `iconos-identidad` (el catálogo de íconos del menú y los
     títulos, ADR-035), `iconos-indicador` (el de lo que se mide en reportes y
-    tableros, con `TarjetaReporte`, `TarjetaIndicador` e `IconoIndicador`,
-    ADR-038), `badge-estado`, `titulo-pantalla` /
+    tableros, con `TarjetaReporte`, `TarjetaIndicador` (vertical u horizontal), `GrillaDeIndicadores` e `IconoIndicador`,
+    ADR-038 y ADR-042), `auditoria-de-barra-lateral` (el guard de que la barra lateral toma su fondo de `tema.css`, ADR-042), `badge-estado`, `titulo-pantalla` /
     `auditoria-de-titulos`, `auditoria-de-relleno` (el guard de que una pantalla
     no duplica el relleno del `Layout`, ADR-040), `medios-pago`, `mp`, `facturas`, `fechas` (formato
     `dd-mm-aaaa` de familia), `branding`, `use-mobile`, `utils` (el `cn` de

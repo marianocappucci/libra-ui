@@ -9,6 +9,12 @@
  *
  *  Con `children` suma un desglose debajo de la cifra (los turnos por estado, los ingresos y egresos del período).
  *
+ *  Dos disposiciones (ADR-042). `vertical` (la de siempre): el ícono arriba a la derecha y la cifra debajo de la etiqueta. `horizontal`: el
+ *  ícono (recuadro de 40 px) a la izquierda, la etiqueta y la ayuda en el medio (pueden envolver) y **la cifra a la derecha**, sin cortar; es
+ *  una tarjeta del doble de ancho y mucho más baja, para tableros en dos columnas (`GrillaDeIndicadores variante="ancha"`). Con `children` en
+ *  horizontal el desglose va **debajo, a todo el ancho**, separado por una línea: una lista larga en el medio comería el lugar de la etiqueta.
+ *  La disposición sale de la grilla que contiene a la tarjeta; `disposicion` la fija a mano.
+ *
  *  Estados: `cargando` deja la etiqueta y el ícono y pone un esqueleto en lugar de la cifra (el layout no salta cuando llegan los datos);
  *  `a` la vuelve un enlace a lo que se mide (la tarjeta entera es clicable, con el foco visible).
  */
@@ -17,6 +23,7 @@ import { Link } from 'react-router-dom'
 import { ArrowDown, ArrowUp, Minus } from 'lucide-react'
 import { Card, CardContent, CardDescription } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useDisposicionDeIndicador, type DisposicionDeIndicador } from './GrillaDeIndicadores'
 import { iconoDelIndicador, type ConceptoIndicador } from './iconos-indicador'
 import type { Producto } from './identidad'
 import { cn } from './utils'
@@ -61,7 +68,7 @@ function Variacion({ porcentaje, subirEsBueno = true }: VariacionIndicador) {
 }
 
 export function TarjetaIndicador({
-  concepto, etiqueta, valor, ayuda, variacion, tono = 'neutro', cargando = false, a, producto, className, children,
+  concepto, etiqueta, valor, ayuda, variacion, tono = 'neutro', cargando = false, a, producto, className, children, disposicion,
 }: {
   /** Qué se mide: una clave de `iconos-indicador`. Define el ícono; no hay otra forma de elegirlo. */
   concepto: ConceptoIndicador
@@ -81,9 +88,38 @@ export function TarjetaIndicador({
   className?: string
   /** Un desglose debajo de la cifra (por estado, por medio de pago): la lista de «Turnos» del tablero de GestioLibra y MedLibra. */
   children?: ReactNode
+  /** `vertical` (defecto fuera de una grilla) o `horizontal` (ADR-042). Sin pasarla, la decide la `GrillaDeIndicadores` que la contiene. */
+  disposicion?: DisposicionDeIndicador
 }) {
   const t = TONOS[tono]
-  const tarjeta = (
+  const horizontal = useDisposicionDeIndicador(disposicion) === 'horizontal'
+  const icono = createElement(iconoDelIndicador(concepto, producto), { 'aria-hidden': 'true' })
+  const tarjeta = horizontal ? (
+    <Card
+      data-slot="tarjeta-indicador" data-concepto={concepto} data-disposicion="horizontal"
+      className={cn('gap-0 py-0', a && 'transition-colors hover:bg-accent', className)}
+    >
+      <CardContent data-slot="fila-indicador" className="flex flex-1 flex-wrap items-center gap-x-3.5 gap-y-1 px-4.5 py-3.5">
+        <span
+          data-slot="icono-tile"
+          className={cn('inline-flex size-10 shrink-0 items-center justify-center rounded-md [&>svg]:size-5', t.recuadro)}
+        >
+          {icono}
+        </span>
+        <div className="min-w-0 flex-1 basis-20">
+          <CardDescription>{etiqueta}</CardDescription>
+          {ayuda != null && !cargando && <CardDescription className="text-xs">{ayuda}</CardDescription>}
+          {variacion && !cargando && <Variacion {...variacion} />}
+        </div>
+        {cargando
+          ? <Skeleton data-slot="valor-cargando" className="ml-auto h-8 w-24 shrink-0" />
+          : <p data-slot="valor-indicador" className={cn('ml-auto shrink-0 text-right text-2xl font-bold whitespace-nowrap', t.cifra)}>{valor}</p>}
+      </CardContent>
+      {children != null && !cargando && (
+        <CardContent data-slot="detalle-indicador" className="border-t px-4.5 py-2.5 text-sm text-muted-foreground">{children}</CardContent>
+      )}
+    </Card>
+  ) : (
     <Card data-slot="tarjeta-indicador" data-concepto={concepto} className={cn(a && 'transition-colors hover:bg-accent', className)}>
       <CardContent className="flex items-start justify-between gap-3">
         <div className="min-w-0 [&_p]:truncate">
@@ -98,7 +134,7 @@ export function TarjetaIndicador({
           data-slot="icono-tile"
           className={cn('inline-flex size-9 shrink-0 items-center justify-center rounded-md [&>svg]:size-5', t.recuadro)}
         >
-          {createElement(iconoDelIndicador(concepto, producto), { 'aria-hidden': 'true' })}
+          {icono}
         </span>
       </CardContent>
       {children != null && !cargando && (

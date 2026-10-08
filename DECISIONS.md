@@ -777,3 +777,44 @@ El humano pidió el 2026-10-08, mirando la sección de certificados de Configura
 - `TutorialArcaCertificado` gana la prop `conPedido`: con ella, lo primero es el botón y el `openssl` queda como «Alternativa».
 - Fuera de alcance: presentar el `.csr` ante ARCA (se hace a mano), y copiar el contenido del `.csr` al portapapeles (se baja y se abre con un editor).
 - No verificado en un navegador real ni contra ARCA: los tests usan los stubs de shadcn del paquete (`test/stubs`), no el `Dialog` de Radix.
+
+## ADR-042 — La barra lateral un poco más oscura es un defecto del kit, y el tablero de LibraCargo, tarjetas anchas en dos columnas
+
+El humano pidió el 2026-10-08, aprobado sobre una maqueta: (1) **el menú lateral un poco más oscuro en toda la suite** (el menú era `#fafafa` y el contenido `#fff`: no contrastaban; eligió el tono «C») y (2) **las tarjetas del tablero el doble de anchas y más bajas, en dos columnas**. Después acotó el segundo punto: «lo del dashboard que sea solo para LibraCargo, los otros dashboard de las otras suites están bien». El primero sigue siendo de toda la suite. (La numeración deja ADR-039 y ADR-040 como están; si otra rama toma el 041, se renumera.)
+
+**Qué ya existe** (se miró antes de diseñar, `reglas/producto.md`):
+- `tema.css` + `COLORES_DE_TEMA` + `aplicarTema` (ADR-007/009): `barraLateralFondo` ya era editable por el superadmin. **El defecto lo declaraba cada `index.css`** (`--sidebar`, `--sidebar-accent`, `--sidebar-border`, en `:root` y `.dark`; los nueve con los valores de shadcn) y `aplicarTema` sólo lo pisa cuando se elige uno (`removeProperty` si no: vuelve al CSS). Es el comentario de `tema.css` que decía «su defecto es el de cada producto».
+- El ítem activo (ADR-036): `--libra-menu-activo-*`, que no depende de la barra, y `[data-active=true]` en `tema.css`. No se toca.
+- `TarjetaIndicador` (ADR-038), con `children`, `variacion`, `tono`, `cargando`, `a`. Los guards de fuentes (`auditoria-de-selects`, `auditoria-de-relleno`) como molde del guard nuevo.
+- Nada que agrupe las tarjetas: cada tablero escribía su `grid … cols` a mano (Dashboard, Reportes, Caja, Egresos, Margen del kit; LibraCargo `Inicio`; GestioLibra/MedLibra `Dashboard`; LibraClub `CajaPorMedio`; RestoLibra `ReportesSalon`).
+
+**Lo que se midió** (Chromium 1243 contra `ui/sidebar`, `TarjetaIndicador` y `GrillaDeIndicadores` REALES del kit, Tailwind 4.3.3, `tema.css`, identidad de LibraCargo; página de prueba fuera del repo):
+
+| | antes | después |
+|---|---|---|
+| barra / contenido, claro | `#fafafa` / `#fff`: 1,04:1 | `#ebebeb` / `#fff`: **1,19:1** |
+| barra / contenido, oscuro | `#171717` / `#0a0a0a`: 1,10:1 | igual: 1,10:1 |
+| texto del menú sobre la barra, claro | 18,97:1 | **16,61:1** (hover `#e1e1e1`: 15,1:1) |
+| rótulo de grupo (texto al 70%) | 7,49:1 | **7,09:1** |
+| ítem activo (LibraCargo): texto sobre su chip | 14,18:1 | 14,18:1 (no depende de la barra) |
+| ítem activo: borde sobre la barra / chip sobre la barra | 2,74 / 1,07 | 2,40 / 1,07 |
+| tarjeta de KPI, 1920 px (4 columnas) | 388 × 146 px | **793 × 70 px** (2,04× de ancho, 52% menos de alto) |
+| tarjeta de KPI, 1280 px (2 columnas) | 473 × 122 px | 473 × 70 px |
+
+**Decisión (a): el defecto lo da el kit.** `tema.css` declara `--sidebar: oklch(0.94 0 0)`, `--sidebar-accent: oklch(0.91 0 0)` y `--sidebar-border: oklch(0.89 0 0)` en `:root`, y los tres de siempre en `.dark`. Razones: «el arreglo de fondo vive en el kit» (con (b) el próximo ajuste de tono son nueve `index.css` y ya hubo dos divergencias de ese tipo en la historia de la suite), y no rompe nada de lo que hay: el `index.css` del producto va después y a igual especificidad ganaría (un producto que todavía no sacó su línea sigue como estaba, sin romperse); `aplicarTema` sigue ganando por estar en línea sobre `<html>`; el ítem activo tiene sus propias variables.
+1. **Oscuro sin cambios.** La barra oscura ya estaba 0,06 de luminosidad (OKLCH) por encima del fondo (`0.205` contra `0.145`), la misma diferencia que el claro nuevo tiene con el blanco (`0.94` contra `1`). Se declara en el kit igual (para que el producto no tenga que), pero con los mismos valores.
+2. **Sólo las tres variables.** `--sidebar-foreground`, `-primary`, `-primary-foreground`, `-accent-foreground` y `-ring` siguen en el producto (no cambian con el tono; `-primary` y `-ring` los pisa `aplicarIdentidad`).
+3. **`COLORES_DE_TEMA.barraLateralFondo`**: `porDefecto` pasa a `#ebebeb` y deja de ser `defectoPorProducto` (ya no es de cada producto; «Apariencia» muestra y valida el que pinta el kit).
+4. **Guard `libra-ui/auditoria-de-barra-lateral` (de test, importa `node:fs`).** `auditarBarraLateral(srcDelProducto)` lee las hojas `.css` y falla si alguna declara `--sidebar`, `--sidebar-accent` o `--sidebar-border` (con número de línea; el nombre es exacto, `--sidebar-accent-foreground` no cuenta; los comentarios no), y devuelve `hojas` (el control positivo) e `importaElTema` (sin `@import "libra-ui/tema.css"` el producto quedaría sin fondo de barra). `libra-backoffice` **no importa `tema.css`**: tiene que sumarlo (o declarar sus tres líneas con `excepciones`).
+5. **Dudoso, a mirar con ojos:** el borde del ítem activo (marca al 45% sobre `colorClaro`) baja ~10% contra la barra más oscura; el más bajo es VentaLibra (1,41:1, antes 1,61:1). El chip, en cambio, se despega igual o más (1,07–1,15:1). No se tocó `MEZCLA_DEL_BORDE_ACTIVO`: es un cambio de ADR-036 que afecta a los ocho.
+
+**Decisión: tarjetas horizontales, sólo para quien las pida.** El aspecto de siempre **no cambia**: no se migró ninguna pantalla del kit ni de otro producto, y no hay guard que obligue a usar la grilla.
+1. **`TarjetaIndicador` acepta `disposicion="vertical" | "horizontal"`** (defecto: la de siempre, salvo que la grilla que la contiene diga otra cosa). Horizontal: recuadro de ícono de 40 px a la izquierda, etiqueta y ayuda (`text-xs`) en el medio (`min-w-0 flex-1`, envuelven), cifra a la derecha (`text-2xl font-bold`, `whitespace-nowrap`, alineada a la derecha), `px-4.5 py-3.5`. Conserva `tono`, `variacion` (debajo de la ayuda), `cargando` (esqueleto en el lugar de la cifra), `a` (la tarjeta entera es el enlace) y el ícono del catálogo con la excepción del producto.
+2. **Con desglose (`children`) en horizontal: debajo, a todo ancho**, separado por una línea (`border-t`). Una lista en el medio le comería el lugar a la etiqueta. GestioLibra y MedLibra (`Dashboard`) la tienen: si pasan a la grilla ancha se ve así; si no, no cambia nada.
+3. **La fila es `flex-wrap`.** Si la cifra no entra al lado de un ícono y 80 px de etiqueta (celular con una cifra de ocho dígitos), baja a su propia línea, alineada a la derecha, en vez de salirse de la tarjeta. Y la fila es `flex-1`: cuando la grilla estira una tarjeta a la altura de la vecina, el contenido queda centrado y no pegado arriba.
+4. **`GrillaDeIndicadores` (`libra-ui/GrillaDeIndicadores`)**, `variante`: `estandar` (defecto: `grid gap-4 sm:grid-cols-2 2xl:grid-cols-4`, tarjetas verticales: lo de hoy) o `ancha` (`grid grid-cols-1 gap-4 lg:grid-cols-2`, tarjetas horizontales por contexto, sin repetir `disposicion` en cada una). `className` suma clases.
+5. **Dos columnas desde `lg` (1024 px) y no desde `md` (768 px)**, que era lo pedido: con el menú abierto (256 px) a 768 px quedan ~460 px de contenido; dos tarjetas de 217 px no alcanzan para un ícono de 40 px y una cifra de ocho dígitos (medido: la cifra salía 47–90 px de la tarjeta y la página scrolleaba en horizontal). Con `lg`, entre 768 y 1023 px hay una columna de 449 px; a 1024 px, dos de 345 px (la cifra de 177 px entra al lado de una etiqueta corta).
+
+**Cómo se adopta en un producto.** *Menú:* (1) subir el pin; (2) borrar de `frontend/src/index.css` las líneas `--sidebar`, `--sidebar-accent` y `--sidebar-border` del `:root` y del `.dark` (seis líneas); (3) copiar el test: `auditarBarraLateral(resolve(__dirname, '..'))` con `expect(r.hojas).toBeGreaterThan(0)`, `expect(r.importaElTema).toBe(true)` y `describirInfracciones(r.infracciones)` vacío. *Tablero ancho (LibraCargo):* cambiar el `<div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">` de `pages/Inicio.tsx` por `<GrillaDeIndicadores variante="ancha" className="mt-6">`.
+
+**Lo que no cubre.** Una barra con un color elegido por el superadmin en «Apariencia» (`aplicarTema`) sigue siendo la que él eligió, en claro y en oscuro; sólo cambia el «de siempre». Un `bg-[#fafafa]` escrito en un menú de producto no lo ve el guard. En jsdom no hay hoja de Tailwind: los tests de `TarjetaIndicador` miden clases y estructura; el aspecto está medido en Chromium (tabla de arriba).

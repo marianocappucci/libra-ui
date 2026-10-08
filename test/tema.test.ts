@@ -46,8 +46,8 @@ describe('el catálogo', () => {
 })
 
 describe('el ítem activo del menú (ADR-036)', () => {
-  it('fondo y borde son de cada producto: defectoPorProducto, como el acento y la barra', () => {
-    for (const clave of ['acento', 'barraLateralFondo', 'menuActivoFondo', 'menuActivoBorde']) {
+  it('fondo y borde son de cada producto: defectoPorProducto, como el acento (la barra ya no: es del kit, ADR-042)', () => {
+    for (const clave of ['acento', 'menuActivoFondo', 'menuActivoBorde']) {
       expect(COLORES_DE_TEMA.find((d) => d.clave === clave)?.defectoPorProducto, clave).toBe(true)
     }
   })
