@@ -10,15 +10,15 @@
 // comportamiento de Contalibra.
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import {
-  ArrowDownCircle, ArrowUpCircle, CheckCircle2, ClipboardList, History, Hourglass, Inbox, Receipt, Wallet,
-} from 'lucide-react'
+import { CheckCircle2, Inbox } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
 import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
+import { IconoIndicador } from '../IconoIndicador'
+import { TarjetaIndicador } from '../TarjetaIndicador'
 import type { DashboardData } from './tipos'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { fecha } from '@/lib/fechas'
@@ -97,51 +97,18 @@ export function Dashboard({
 
       {data && (
         <>
+          {/* Los cuatro KPI toman su ícono del catálogo de indicadores (ADR-038): se pasa el concepto, no un ícono de lucide. */}
           <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
-            <Card>
-              <CardContent className="flex items-start justify-between gap-3">
-                <div className="min-w-0 [&_p]:truncate">
-                  <CardDescription>Facturado este mes</CardDescription>
-                  <p className="text-2xl font-bold text-primary">{formatCurrency(data.facturado_mes)}</p>
-                  <CardDescription>
-                    {data.cant_facturas_mes} factura{data.cant_facturas_mes !== 1 ? 's' : ''}
-                  </CardDescription>
-                </div>
-                <span className="shrink-0 rounded-lg bg-primary/10 p-2 text-primary"><Receipt /></span>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="flex items-start justify-between gap-3">
-                <div className="min-w-0 [&_p]:truncate">
-                  <CardDescription>Cobrado este mes</CardDescription>
-                  <p className="text-2xl font-bold text-exito">{formatCurrency(data.cobrado_mes)}</p>
-                  <CardDescription>Ingresos en caja</CardDescription>
-                </div>
-                <span className="shrink-0 rounded-lg bg-exito/10 p-2 text-exito"><ArrowDownCircle /></span>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="flex items-start justify-between gap-3">
-                <div className="min-w-0 [&_p]:truncate">
-                  <CardDescription>Egresos este mes</CardDescription>
-                  <p className="text-2xl font-bold text-destructive">{formatCurrency(data.egresos_mes)}</p>
-                  <CardDescription>Gastos en caja</CardDescription>
-                </div>
-                <span className="shrink-0 rounded-lg bg-destructive/10 p-2 text-destructive"><ArrowUpCircle /></span>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="flex items-start justify-between gap-3">
-                <div className="min-w-0 [&_p]:truncate">
-                  <CardDescription>Saldo total en caja</CardDescription>
-                  <p className={data.saldo_total >= 0 ? 'text-2xl font-bold text-exito' : 'text-2xl font-bold text-destructive'}>
-                    {formatCurrency(data.saldo_total)}
-                  </p>
-                  <CardDescription>Histórico acumulado</CardDescription>
-                </div>
-                <span className={`shrink-0 rounded-lg p-2 ${data.saldo_total >= 0 ? 'bg-exito/10 text-exito' : 'bg-destructive/10 text-destructive'}`}><Wallet /></span>
-              </CardContent>
-            </Card>
+            <TarjetaIndicador
+              concepto="facturado" etiqueta="Facturado este mes" tono="primario" valor={formatCurrency(data.facturado_mes)}
+              ayuda={<>{data.cant_facturas_mes} factura{data.cant_facturas_mes !== 1 ? 's' : ''}</>}
+            />
+            <TarjetaIndicador concepto="cobros" etiqueta="Cobrado este mes" tono="exito" valor={formatCurrency(data.cobrado_mes)} ayuda="Ingresos en caja" />
+            <TarjetaIndicador concepto="egresos" etiqueta="Egresos este mes" tono="peligro" valor={formatCurrency(data.egresos_mes)} ayuda="Gastos en caja" />
+            <TarjetaIndicador
+              concepto="caja" etiqueta="Saldo total en caja" tono={data.saldo_total >= 0 ? 'exito' : 'peligro'}
+              valor={formatCurrency(data.saldo_total)} ayuda="Histórico acumulado"
+            />
           </div>
 
           {accionesRapidas.length > 0 && (
@@ -157,7 +124,7 @@ export function Dashboard({
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader className="flex items-center justify-between space-y-0">
-                <CardTitle className="flex items-center gap-2 text-base"><Hourglass className="size-4 text-amber-500" />Facturas sin cobrar</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-base"><IconoIndicador concepto="porCobrar" className="text-muted-foreground" />Facturas sin cobrar</CardTitle>
                 {rutaDeFacturas && <Button asChild size="sm" variant="outline"><Link to={rutaDeFacturas}>Ver todas</Link></Button>}
               </CardHeader>
               <CardContent>
@@ -189,7 +156,7 @@ export function Dashboard({
             {conPresupuestos && (
               <Card>
                 <CardHeader className="flex items-center justify-between space-y-0">
-                  <CardTitle className="flex items-center gap-2 text-base"><ClipboardList className="size-4 text-sky-500" />Presupuestos sin respuesta</CardTitle>
+                  <CardTitle className="flex items-center gap-2 text-base"><IconoIndicador concepto="presupuestos" className="text-muted-foreground" />Presupuestos sin respuesta</CardTitle>
                   <Button asChild size="sm" variant="outline"><Link to="/presupuestos">Ver todos</Link></Button>
                 </CardHeader>
                 <CardContent>
@@ -220,7 +187,7 @@ export function Dashboard({
 
           <Card>
             <CardHeader className="flex items-center justify-between space-y-0">
-              <CardTitle className="flex items-center gap-2 text-base"><History className="size-4" />Últimos movimientos de caja</CardTitle>
+              <CardTitle className="flex items-center gap-2 text-base"><IconoIndicador concepto="caja" className="text-muted-foreground" />Últimos movimientos de caja</CardTitle>
               {rutaDeCaja && <Button asChild size="sm" variant="outline"><Link to={rutaDeCaja}>Ver caja completa</Link></Button>}
             </CardHeader>
             <CardContent>

@@ -94,6 +94,13 @@ para que el motor de Tailwind v4 escanee las clases usadas dentro de
 | `libra-ui/utils` | `cn`, `normalizar`, `coincideBusqueda` | Helper `clsx` + `tailwind-merge` de shadcn, más los dos helpers de búsqueda que comparten `data-table` y `SelectBuscable` (sin acentos, todos los términos en cualquier orden). |
 | `libra-ui/iconos-accion` | ~60 componentes de icono (`Eye`, `Pencil`, `Trash2`, `FilePlus`…) | El **vocabulario de iconos de acción y estado** de la familia (`v0.18.0`). Vive acá y no copiado por producto porque la misma acción tiene que dibujarse igual en todos. **Requiere configuración en el consumidor — ver abajo.** |
 | `libra-ui/iconos-identidad` | `ICONOS`, `iconosDe(producto?)`, `iconoDelConcepto(concepto, producto?)`, `ICONOS_POR_PRODUCTO`, `type Concepto` | El **catálogo de íconos de identidad** de la familia (`v0.125.0`, ADR-035): un concepto, un ícono, en el menú y en el título de la pantalla. Ver «El catálogo de íconos de identidad». |
+| `libra-ui/iconos-indicador` | `INDICADORES`, `iconoDelIndicador(concepto, producto?)`, `conceptoCanonico`, `esDeIdentidad`, `type ConceptoIndicador` | El **catálogo de íconos de reportes e indicadores** (`v0.128.0`, ADR-038): un concepto, un ícono, para lo que se mide (cobros, stock bajo, órdenes de carga…). Incluye los 33 de identidad. Ver «Reportes e indicadores». |
+| `libra-ui/TarjetaReporte` | `TarjetaReporte({ concepto, titulo, descripcion?, nota?, a? \| onClick?, producto?, className? })` | La tarjeta de un reporte en el índice de reportes (`v0.128.0`): ícono del catálogo en el recuadro del título, título, qué pregunta responde. Enlace (`a`), botón (`onClick`) o informativa. |
+| `libra-ui/TarjetaIndicador` | `TarjetaIndicador({ concepto, etiqueta, valor?, ayuda?, variacion?, tono?, cargando?, a?, producto?, className?, children? })` | El KPI de un tablero (`v0.128.0`): etiqueta, cifra, ayuda, variación, estado de carga y el ícono del catálogo. |
+| `libra-ui/IconoIndicador` | `IconoIndicador({ concepto, producto?, className? })` | El ícono de un concepto (16 px) para el título de un bloque de un reporte. |
+| `libra-ui/titulo-pantalla` | `TituloPantalla({ icono, children, className?, acciones? })` | El título de pantalla con su ícono en el recuadro (`v0.34.0`). Desde `v0.128.0` acepta `acciones`: los botones a la altura del título, a la derecha. |
+| `libra-ui/auditoria-de-titulos` | `auditarTitulos`, `auditarMenuContraCatalogo`, `iconoDelTitulo`… | **De test.** El guard de que el ícono del título es el del menú (ADR-035). |
+| `libra-ui/auditoria-de-indicadores` | `auditarIndicadores(raizSrc, opciones?)`, `describirInfracciones`, `LUCIDE_PERMITIDOS`, `esPantallaDeIndicadores`, `iconosDeConceptoEn` | **De test.** El guard de que los reportes y tableros no importan íconos de lucide por su cuenta (ADR-038). |
 
 ## El logo del producto y el wordmark (`v0.23.0`)
 
@@ -329,6 +336,78 @@ expect(r.mal).toEqual([])
 3. `Usuarios`, `Logs` y `createConfiguracion` ya no necesitan que se les pase `icono`: usan el del catálogo.
 
 **Para agregar un concepto**, ver ADR-035: la fila en el wiki, la clave acá con un ícono que nadie más use, la fila en `test/iconos-identidad.test.tsx`, y subir la versión.
+
+## Reportes e indicadores: el catálogo de íconos y las tarjetas (`v0.128.0`, ADR-038)
+
+Pedido del humano (2026-10-08): íconos en los reportes «como tiene Contalibra», normalizados para toda la suite, y también en los dashboards. `libra-ui/iconos-indicador` es **el ícono de cada cosa que se mide**: la tarjeta de un reporte, el KPI de un tablero, el título de un bloque. Es el hermano de `iconos-identidad` (que responde «qué pantalla es»): incluye sus 33 conceptos con la misma clave y el mismo componente, y suma sinónimos y conceptos propios. **No se importa un ícono de lucide para esto: se pasa el concepto.**
+
+```tsx
+import { TarjetaIndicador } from 'libra-ui/TarjetaIndicador'
+import { TarjetaReporte } from 'libra-ui/TarjetaReporte'
+import { IconoIndicador } from 'libra-ui/IconoIndicador'
+import { iconoDelIndicador } from 'libra-ui/iconos-indicador'
+
+// El KPI de un tablero.
+<TarjetaIndicador concepto="cobros" etiqueta="Cobrado este mes" tono="exito"
+  valor={formatearImporte(mes.cobrado)} ayuda="Ingresos en caja" a="/caja"
+  variacion={{ porcentaje: 12.5 }} />          // subirEsBueno: false para egresos, morosidad…
+
+// La tarjeta del índice de reportes. El concepto puede venir de un mapa tipado slug → concepto.
+const CONCEPTO_DE: Record<string, ConceptoIndicador> = { saldos: 'saldos', 'por-fletero': 'fleteros', caja: 'caja' }
+<TarjetaReporte concepto={CONCEPTO_DE[r.slug]} titulo={r.titulo} descripcion={r.descripcion} a={`/reportes/${r.slug}`} />
+
+// El título de un bloque de un reporte.
+<CardTitle className="flex items-center gap-2"><IconoIndicador concepto="productos" />Productos más vendidos</CardTitle>
+
+// Un test compara con ===.
+expect(iconoDeLaTarjeta).toBe(iconoDelIndicador('cobros'))
+```
+
+Las dos tarjetas usan el recuadro del título de pantalla (`data-slot="icono-tile"`), son sobrias (sin color, la cifra es del color del texto; `tono` pinta cuando significa algo) y traen el modo oscuro. `TarjetaIndicador` con `cargando` deja la etiqueta y el ícono y pone un esqueleto en lugar de la cifra; con `children` suma un desglose debajo.
+
+**Los conceptos propios** (los de identidad, ver la tabla de arriba, valen con su misma clave):
+
+| Concepto | Ícono | Qué mide |
+|---|---|---|
+| `cobros` | `CircleArrowDown` (= `ArrowDownCircle`) | Plata que entró: cobrado, ingresos |
+| `pagos` | `CircleArrowUp` (= `ArrowUpCircle`) | Plata que salió: pagado. El rubro Egresos es `egresos` |
+| `montoVendido` | `DollarSign` | El monto de lo vendido; la cantidad es `ventas` |
+| `porCobrar` | `Hourglass` | Lo que todavía no se cobró |
+| `margen` | `TrendingUp` | Margen y rentabilidad |
+| `stockBajo` | `PackageMinus` | Productos por debajo de su mínimo |
+| `tiempo` | `Timer` | Horas invertidas, tiempos de comanda |
+| `recordatorios` | `Bell` | Recordatorios enviados |
+| `ordenesDeCarga` | `ClipboardList` | LibraCargo: las órdenes (el flete) |
+| `rutas` | `Route` | LibraCargo: origen → destino |
+| `toneladas` | `Weight` | LibraCargo: peso transportado |
+| `kilometros` | `Gauge` | LibraCargo: distancia |
+| `comisiones` | `BadgePercent` | LibraCargo: comisión de las órdenes |
+| `liquidaciones` | `Banknote` | LibraCargo: lo que se liquida a un transportista |
+| `cartasDePorte` | `FileBadge` | LibraCargo: las CPE |
+| `incidencias` | `Ticket` | LibraDesk: los tickets |
+| `equipos` | `Monitor` | LibraDesk: el parque instalado |
+| `garantias` | `ShieldCheck` | LibraDesk |
+| `contratos` | `FilePenLine` (= `FileSignature`) | LibraDesk: contratos de alquiler |
+| `reparaciones` | `Wrench` | LibraDesk: equipos en el taller |
+| `tecnicos` | `Headset` | LibraDesk: carga por técnico |
+| `insumos` | `Droplets` | LibraDesk: consumibles de los equipos |
+
+**Los sinónimos** (misma clave que su destino, mismo ícono): `facturado` → `comprobantes`, `gastos` → `egresos`, `saldos` → `cuentaCorriente`, `pacientes` → `clientes`, `turnos` → `agenda`, `iva` → `librosDeIva`, `mediosDePago` → `cajaPorMedio`, `auditoria` → `logDeActividad`, `fletes` → `ordenesDeCarga`, `horas` → `tiempo`, `foodCost` → `margen`.
+
+**El guard.** `auditarIndicadores` (`libra-ui/auditoria-de-indicadores`, de test) lee los fuentes de un producto y falla si una pantalla de reporte o de tablero (`Reporte*`, `Dashboard*`, `Tablero*`, `Inicio*`, `Indicador*`, `Kpi*`) importa de `lucide-react` un ícono que no sea de acción, de navegación o de estado:
+
+```ts
+import { resolve } from 'node:path'
+import { auditarIndicadores, describirInfracciones } from 'libra-ui/auditoria-de-indicadores'
+
+const r = auditarIndicadores(resolve(__dirname, '..'))   // el `src` del producto
+expect(r.pantallas).toBeGreaterThan(0)                    // que midió algo
+expect(describirInfracciones(r.infracciones)).toEqual([])
+```
+
+**`TituloPantalla` con `acciones`.** `<TituloPantalla icono={ICONOS.clientes} acciones={<Button>Nuevo cliente</Button>}>Clientes</TituloPantalla>` dibuja el título a la izquierda y los botones a la derecha, en la misma línea (en un celular bajan debajo del título). Es azúcar sobre `EncabezadoDePantalla` (`libra-ui/acciones`): la misma fila, no otra. Sin `acciones` rinde el mismo `<h2>` de siempre. Escribí `icono` primero.
+
+**Para agregar un concepto**, ver ADR-038: la clave en `src/iconos-indicador.ts` con un ícono que nadie más use, la fila en `test/iconos-indicador.test.tsx` y acá, y subir la versión.
 
 ## Peer dependencies
 

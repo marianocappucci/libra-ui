@@ -25,17 +25,29 @@
  *  vuelve a divergir de a una pantalla por vez y nadie se entera.
  */
 import type { ComponentType, ReactNode } from 'react'
+import { EncabezadoDePantalla } from './acciones'
 import { cn } from './utils'
 
-export function TituloPantalla({ icono: Icono, children, className }: {
+export function TituloPantalla({ icono: Icono, children, className, acciones }: {
   /** El icono de esta pantalla en el sidebar. **Obligatorio**: un `icono?`
    *  opcional deja que la próxima pantalla nazca sin él y nadie se entere, que
    *  es exactamente como se llegó a las tres formas de arriba. */
   icono: ComponentType<{ className?: string }>
   children: ReactNode
   className?: string
+  /** Los botones de la pantalla (Nuevo, Imprimir, Exportar…), **a la altura del
+   *  título**, a la derecha. Pedido del humano (2026-10-08): en todas las
+   *  secciones las acciones van en la línea del título y no debajo. Sin esta prop
+   *  el componente rinde exactamente el `<h2>` de siempre; con ella lo envuelve
+   *  en un `EncabezadoDePantalla` (`libra-ui/acciones`): título a la izquierda,
+   *  acciones a la derecha, y en un celular las acciones bajan abajo del título
+   *  (`flex-wrap`) en vez de aplastarlo.
+   *
+   *  📌 **Escribí `icono` primero y `acciones` después** (así lo leen los
+   *  guards del menú y de los títulos del kit y de los productos). */
+  acciones?: ReactNode
 }) {
-  return (
+  const titulo = (
     <h2 className={cn('flex items-center gap-2 text-lg font-semibold', className)}>
       {/* 32 px con el glifo a 20: el recuadro del título pesa más que el de la
           fila de una tabla porque encabeza la pantalla. Misma receta, otro
@@ -50,4 +62,8 @@ export function TituloPantalla({ icono: Icono, children, className }: {
       {children}
     </h2>
   )
+  if (!acciones) return titulo
+  // La fila ya existe y es una sola: `EncabezadoDePantalla` (`libra-ui/acciones`, que LibraDesk y LibraClub usan en casi todas sus pantallas).
+  // Esto es azúcar para quien ya tiene un `TituloPantalla`: no hay una segunda definición de dónde van los controles.
+  return <EncabezadoDePantalla titulo={titulo}>{acciones}</EncabezadoDePantalla>
 }
