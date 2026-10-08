@@ -611,6 +611,12 @@ vencimiento y «Probar conexión». El producto no declara nada en el kit: lo de
 (`build_arca_router(servicios=("wsfe", "wscpe"))`, libracore ADR-032). Con la facturación
 sola —o con un motor que no tiene la ruta— la tarjeta es la de siempre. Ver ADR-030.
 
+### «Generar pedido de certificado» (propuesta: `v0.130.0`)
+
+Para una empresa nueva —o una renovación— cada ambiente de la tarjeta de ARCA ofrece **Generar pedido de certificado**: un diálogo (CUIT, razón social y alias sugerido) que le pide al motor la clave **dentro del servidor** y entrega sólo el `.csr`, con los pasos de ARCA armados con el CUIT y el alias de esa empresa. Con el pedido pendiente la tarjeta dice *«Esperando el certificado de ARCA (pedido del dd-mm-aaaa)»*, deja bajar de nuevo el `.csr`, descartar el pedido (con confirmación: se pierde su clave) y subir el `.crt` **sin campo de clave**. El campo «Clave privada (.key)» queda como alternativa avanzada, en un desplegable.
+
+**El botón aparece sólo si el motor lo declara** (`admite_pedido` en `GET {basePath}/servicios`, libracore ADR-036): con un LibraCore anterior la tarjeta es la de siempre. Se ofrece cuando el par no está completo o está vencido o por vencer. `integraciones: { arca: { razonSocial } }` (o la prop de `ArcaCard`) prellena el diálogo; es opcional. Ver ADR-041.
+
 ### Con una sola integración no hay sub-navegación (`v0.49.0`)
 
 Una barra lateral de 192 px con un solo botón, ocupando el ancho de la pestaña

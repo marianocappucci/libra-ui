@@ -48,7 +48,27 @@ export type ParDeArca = {
   /** El CUIT del titular del certificado (`serialNumber=CUIT n` del sujeto). Sólo lo
    *  informa `GET /servicios` (libracore ADR-032); la facturación de siempre no lo manda. */
   cuit_certificado?: string
+  /** El pedido de certificado que espera su `.crt` (libracore ADR-036). **Sólo viene cuando
+   *  hay uno pendiente**; la clave privada que le corresponde no sale nunca del servidor. */
+  pedido?: PedidoPendiente
 }
+
+/** Un pedido de certificado generado en el servidor, a la espera del `.crt` de ARCA. */
+export type PedidoPendiente = {
+  pendiente: true
+  servicio: string
+  ambiente: string
+  alias: string
+  cuit: string
+  razon_social: string
+  /** El sujeto del `.csr` tal como lo lee el servidor (`CN=…,serialNumber=CUIT …`). */
+  sujeto?: string
+  /** `dd-mm-aaaa`, en hora argentina. */
+  creado: string
+}
+
+/** Lo que contesta `POST …/pedido`: el pedido, más el `.csr` (que es público) en PEM. */
+export type PedidoGenerado = PedidoPendiente & { csr: string }
 
 /** Lo mínimo que hace falta para decidir qué par mostrar. */
 export type ConPares = {
@@ -97,6 +117,9 @@ export type ServicioArca = {
   empresa?: string
   /** Hay un par completo en algún ambiente. NO dice que ande: eso lo dice «Probar». */
   configurado?: boolean
+  /** 🔑 El motor sabe generar el pedido de certificado (libracore ADR-036). Un LibraCore
+   *  anterior no manda la clave, y entonces la pantalla no muestra un botón que daría 404. */
+  admite_pedido?: boolean
   pares: Record<string, ParDeArca>
 }
 
@@ -126,4 +149,69 @@ export function serviciosValidos(respuesta: unknown): ServicioArca[] {
     && typeof (s as ServicioArca).etiqueta === 'string'
     && typeof (s as ServicioArca).pares === 'object' && (s as ServicioArca).pares !== null,
   )
+}
+
+/** Cuántos días antes de vencer se empieza a avisar. Un certificado dura dos
+ *  años: con un mes hay tiempo de sobra para renovarlo, y menos que eso
+ *  convierte el aviso en una urgencia. */
+export const DIAS_DE_AVISO = 30
+
+// ── El pedido de certificado (libracore ADR-036) ────────────────────────────
+
+/** ¿Tiene sentido ofrecer «Generar pedido de certificado» para este par?
+ *
+ *  Sí cuando **no hay un par completo** (una empresa nueva, o a la que sólo le falta una
+ *  mitad) y cuando el que hay **está vencido o por vencer** (la renovación es el mismo
+ *  trámite). Con un par vigente y lejos de vencer no se ofrece: pedir otro certificado ahí es,
+ *  casi siempre, un error. Con un pedido ya pendiente tampoco: se ve su estado en su lugar. */
+export function puedePedirCertificado(par: ParDeArca): boolean {
+  if (par.pedido?.pendiente) return false
+  if (!par.completo) return true
+  return Boolean(par.vencido) || (par.dias_para_vencer ?? Infinity) <= DIAS_DE_AVISO
+}
+
+/** El alias que se propone para el pedido: producto + servicio + ambiente, en minúsculas y sin
+ *  signos (`libracargowscpeprod`). ARCA no admite guiones ni espacios en el alias. Es una
+ *  sugerencia editable; el motor valida de 3 a 40 letras y números. */
+export function aliasSugerido(producto: string, servicio: string, ambiente: string): string {
+  const limpio = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]/g, '')
+  const final = `${limpio(servicio)}${ambiente === 'produccion' ? 'prod' : 'homo'}`
+  // El producto cede lugar antes que el servicio y el ambiente, que son lo que distingue un alias.
+  return `${limpio(producto).slice(0, Math.max(0, 40 - final.length))}${final}`
+}
+
+/** Cómo nombra ARCA a cada servicio, para el paso de habilitarlo. */
+const SERVICIO_EN_ARCA: Record<string, string> = {
+  wsfe: 'wsfe (Facturación electrónica)',
+  wscpe: 'wscpe (Carta de Porte Electrónica)',
+}
+
+/** Los pasos que hay que hacer en ARCA con el `.csr` en la mano, armados con el CUIT y el alias de
+ *  **este** pedido. Texto plano: la pantalla los numera.
+ *
+ *  Producción y homologación son dos trámites distintos en dos sitios distintos de ARCA, y
+ *  confundirlos es el error de siempre: un certificado de homologación no vale en producción. */
+export function pasosParaArca(
+  { ambiente, servicio, alias, cuit }: { ambiente: string; servicio: string; alias: string; cuit: string },
+): string[] {
+  const nombreDelServicio = SERVICIO_EN_ARCA[servicio] ?? servicio
+  const descargar = `Descargá el archivo ${alias}.csr con el botón de arriba.`
+  const subir = 'Subí el certificado (.crt) en esta misma pantalla. No hace falta cargar ninguna clave privada: ya está guardada en el servidor.'
+  if (ambiente === 'produccion') {
+    return [
+      descargar,
+      `Ingresá a ARCA con la clave fiscal del CUIT ${cuit} (nivel 3 o superior) y abrí el servicio «Administración de Certificados Digitales».`,
+      `Agregá un alias nuevo con el nombre ${alias} y subí el archivo .csr. Descargá el certificado (.crt) que ARCA genera.`,
+      `En «Administrador de Relaciones de Clave Fiscal» elegí «Nueva relación» y seleccioná el servicio ${nombreDelServicio}. Como representante, el CUIT del certificado (${cuit}); como computador fiscal, el alias ${alias}.`,
+      subir,
+    ]
+  }
+  return [
+    descargar,
+    'Ingresá a ARCA con tu clave fiscal y abrí el servicio «WSASS - Autogestión Certificados Homologación».',
+    `Elegí «Nuevo certificado», escribí ${alias} como nombre simbólico y pegá el contenido del archivo .csr. Descargá el certificado (.crt).`,
+    `En el mismo servicio elegí «Crear autorización a servicio»: seleccioná el certificado ${alias}, el CUIT ${cuit} y el servicio ${nombreDelServicio}.`,
+    subir,
+  ]
 }

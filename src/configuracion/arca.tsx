@@ -27,10 +27,11 @@ import { api, ApiError } from '../api-client'
 import { CampoArchivo } from '../CampoArchivo'
 import { AvisoEstado, BadgeEstado } from '../badge-estado'
 import {
-  AMBIENTES_ARCA, AYUDA_DEL_SERVICIO, NOMBRE_DEL_AMBIENTE, SERVICIO_FACTURACION,
+  AMBIENTES_ARCA, AYUDA_DEL_SERVICIO, DIAS_DE_AVISO, NOMBRE_DEL_AMBIENTE, SERVICIO_FACTURACION,
   nombreDelAmbiente, parDe, serviciosValidos,
   type AmbienteArca, type ParDeArca, type PruebaDeServicio, type ServicioArca,
 } from './arca-pares'
+import { BloqueDePedido, type ConfigPedido } from './arca-pedido'
 import { Campo, AccionesDeSeccion } from './campos'
 import { TutorialArcaCertificado, TutorialArcaPadron } from './tutoriales'
 import { Button } from '@/components/ui/button'
@@ -77,11 +78,6 @@ function vacia(empresa: string): ConfigArca {
     certificado_path: '', clave_path: '', tiene_certificado: false, tiene_clave: false,
   }
 }
-
-/** Cuántos días antes de vencer se empieza a avisar. Un certificado dura dos
- *  años: con un mes hay tiempo de sobra para renovarlo, y menos que eso
- *  convierte el aviso en una urgencia. */
-const DIAS_DE_AVISO = 30
 
 function describirError(err: unknown): string {
   if (err instanceof ApiError) return err.detail
@@ -231,7 +227,7 @@ function AvisoDelSelector({ cfg }: { cfg: ConfigArca }) {
  *  ambiente activo convierte el corte a facturación real en un salto a ciegas.
  */
 function ParDeCredenciales({
-  ambiente, par, enUso, disabled, onArchivo, onQuitar, contexto, detalle, acciones,
+  ambiente, par, enUso, disabled, onArchivo, onQuitar, contexto, detalle, acciones, pedido,
 }: {
   ambiente: AmbienteArca
   par: ParDeArca
@@ -245,8 +241,12 @@ function ParDeCredenciales({
   detalle?: ReactNode
   /** Botones propios del servicio, junto al de quitar (el «Probar» de cada ambiente). */
   acciones?: ReactNode
+  /** «Generar pedido de certificado» (libracore ADR-036). **Sólo si el motor lo admite**: sin esto
+   *  la tarjeta es exactamente la de antes —los dos campos de archivo, sin botón—. */
+  pedido?: ConfigPedido
 }) {
   const nombre = NOMBRE_DEL_AMBIENTE[ambiente]
+  const esperandoElCrt = Boolean(pedido && par.pedido?.pendiente)
   const botonQuitar = (par.tiene_certificado || par.tiene_clave) ? (
     <Button
       type="button" variant="outline" size="sm" className="w-fit"
@@ -267,17 +267,41 @@ function ParDeCredenciales({
       </div>
       {detalle}
 
+      {pedido && (
+        <BloqueDePedido
+          ambiente={ambiente} par={par} disabled={disabled} contexto={contexto} config={pedido}
+        />
+      )}
+
       <div className="grid gap-3 sm:grid-cols-2">
         <SubirMitad
           label="Certificado (.crt)" accept=".crt,.pem" cargado={par.tiene_certificado}
           disabled={disabled} idSufijo={ambiente} contexto={contexto}
           onArchivo={(f) => onArchivo('certificado', f)}
         />
-        <SubirMitad
-          label="Clave privada (.key)" accept=".key,.pem" cargado={par.tiene_clave}
-          disabled={disabled} idSufijo={ambiente} contexto={contexto}
-          onArchivo={(f) => onArchivo('clave', f)}
-        />
+        {/* 🔑 Con un pedido pendiente **no hay campo de clave**: la clave ya está en el servidor y el
+            `.crt` se empareja con ella. Con el pedido disponible pero sin generar, subir una clave hecha
+            afuera sigue pudiéndose, pero como alternativa avanzada y no como el camino. */}
+        {pedido ? (!esperandoElCrt && (
+          <details className="grid content-start gap-2 text-sm">
+            <summary className="cursor-pointer text-muted-foreground">
+              Ya tengo una clave privada hecha afuera (avanzado)
+            </summary>
+            <div className="mt-2">
+              <SubirMitad
+                label="Clave privada (.key)" accept=".key,.pem" cargado={par.tiene_clave}
+                disabled={disabled} idSufijo={ambiente} contexto={contexto}
+                onArchivo={(f) => onArchivo('clave', f)}
+              />
+            </div>
+          </details>
+        )) : (
+          <SubirMitad
+            label="Clave privada (.key)" accept=".key,.pem" cargado={par.tiene_clave}
+            disabled={disabled} idSufijo={ambiente} contexto={contexto}
+            onArchivo={(f) => onArchivo('clave', f)}
+          />
+        )}
       </div>
 
       {acciones ? (
@@ -300,10 +324,16 @@ function ParDeCredenciales({
  *
  *  El estado vive en `servicio` (lo trae la tarjeta) y los mensajes, acá: refrescar la lista
  *  después de subir no desmonta el bloque, así que el resultado de «Probar» no se pierde. */
-function BloqueDeServicio({ servicio, basePath, empresa, onCambio }: {
+function BloqueDeServicio({ servicio, basePath, empresa, onCambio, producto, cuit, razonSocial }: {
   servicio: ServicioArca
   basePath: string
   empresa: string
+  /** Para el alias sugerido del pedido de certificado. */
+  producto: string
+  /** Con qué se prellena el pedido (los datos de la empresa). El certificado de un servicio puede ir a
+   *  nombre de otra persona: es sólo una sugerencia editable. */
+  cuit: string
+  razonSocial: string
   /** Pide de nuevo la lista de servicios, sin desmontar nada. */
   onCambio: () => Promise<void>
 }) {
@@ -413,6 +443,10 @@ function BloqueDeServicio({ servicio, basePath, empresa, onCambio }: {
                 )}
               </>
             ) : undefined}
+            pedido={servicio.admite_pedido ? {
+              servicio: servicio.servicio, etiqueta: servicio.etiqueta, producto,
+              ruta: (tramo) => ruta(tramo, amb), cuit, razonSocial, onCambio,
+            } : undefined}
             acciones={par.completo ? (
               <Button
                 type="button" variant="outline" size="sm" className="w-fit"
@@ -456,10 +490,13 @@ function BloqueDeServicio({ servicio, basePath, empresa, onCambio }: {
  *  En una instancia que YA tiene fila no cambia nada: el `GET` devuelve el
  *  slug real y es ése el que viaja de vuelta.
  */
-export function ArcaCard({ producto, basePath = '/config/arca', empresa = 'default' }: {
+export function ArcaCard({ producto, basePath = '/config/arca', empresa = 'default', razonSocial = '' }: {
   producto: string
   basePath?: string
   empresa?: string
+  /** La razón social de la empresa, para prellenar el pedido de certificado. Opcional: sin ella el
+   *  campo del diálogo arranca vacío y se escribe ahí. */
+  razonSocial?: string
 }) {
   const [cfg, setCfg] = useState<ConfigArca | null>(null)
   // 🔴 El punto de venta va como STRING mientras se edita, aunque el backend lo
@@ -489,8 +526,10 @@ export function ArcaCard({ producto, basePath = '/config/arca', empresa = 'defau
     }
   }, [basePath])
 
-  const cargar = useCallback(async () => {
-    setCargando(true)
+  /** `silencioso` no pone la tarjeta en «Cargando…»: el diálogo del pedido de certificado vive adentro,
+   *  y desmontarla le borraría los pasos que el operador está leyendo. */
+  const cargar = useCallback(async (silencioso = false) => {
+    if (!silencioso) setCargando(true)
     try {
       const actual = await api.get<ConfigArca | null>(basePath)
       setCfg(actual ?? vacia(empresa))
@@ -499,7 +538,7 @@ export function ArcaCard({ producto, basePath = '/config/arca', empresa = 'defau
       setError(describirError(err))
       setCfg(vacia(empresa))
     } finally {
-      setCargando(false)
+      if (!silencioso) setCargando(false)
     }
     // El estado no bloquea la pantalla: una instancia con un LibraCore viejo no
     // tiene el endpoint y el formulario tiene que funcionar igual.
@@ -608,11 +647,13 @@ export function ArcaCard({ producto, basePath = '/config/arca', empresa = 'defau
   // Sólo con más de un servicio se rotulan los campos con el suyo: con uno solo la tarjeta
   // es, a propósito, la de siempre.
   const contextoDeFacturacion = variosServicios ? etiquetaDeFacturacion : undefined
+  // 🔑 El botón del pedido sólo con un motor que lo declara (`admite_pedido`): uno anterior contestaría 404.
+  const admitePedido = servicios.find((x) => x.servicio === SERVICIO_FACTURACION)?.admite_pedido === true
 
   const facturacion = (
     <>
       <div className="col-span-full">
-        <TutorialArcaCertificado />
+        <TutorialArcaCertificado conPedido={admitePedido} />
         <TutorialArcaPadron producto={producto} />
       </div>
 
@@ -652,6 +693,12 @@ export function ArcaCard({ producto, basePath = '/config/arca', empresa = 'defau
             contexto={contextoDeFacturacion}
             onArchivo={(tramo, f) => void subir(amb, tramo, f)}
             onQuitar={() => void quitarCredenciales(amb)}
+            pedido={admitePedido ? {
+              servicio: SERVICIO_FACTURACION, etiqueta: etiquetaDeFacturacion, producto,
+              ruta: (tramo) => `${basePath}/${tramo}?empresa=${encodeURIComponent(cfg.empresa)}`
+                + `&ambiente=${encodeURIComponent(amb)}`,
+              cuit: cfg.cuit, razonSocial, onCambio: () => cargar(true),
+            } : undefined}
           />
         ))}
       </div>
@@ -694,7 +741,7 @@ export function ArcaCard({ producto, basePath = '/config/arca', empresa = 'defau
             {otros.map((x) => (
               <BloqueDeServicio
                 key={x.servicio} servicio={x} basePath={basePath} empresa={cfg.empresa}
-                onCambio={cargarServicios}
+                onCambio={cargarServicios} producto={producto} cuit={cfg.cuit} razonSocial={razonSocial}
               />
             ))}
           </>
