@@ -116,11 +116,22 @@ export function TutorialMercadoPago() {
 }
 
 /** Cómo generar la clave privada, pedir el certificado y dar de alta el punto
- *  de venta en el portal de ARCA. */
-export function TutorialArcaCertificado() {
+ *  de venta en el portal de ARCA.
+ *
+ *  `conPedido` es que el motor sabe generar el pedido de certificado (libracore ADR-036, kit ADR-041):
+ *  el primer paso pasa a ser el botón de cada ambiente, y el `openssl` a mano queda como alternativa
+ *  para quien ya tiene un par hecho afuera. Con un motor anterior, el tutorial es el de siempre. */
+export function TutorialArcaCertificado({ conPedido = false }: { conPedido?: boolean }) {
   return (
     <Tutorial badge="ARCA / AFIP" badgeClassName={AZUL_ARCA} title="¿Cómo obtener el certificado digital y la clave privada?">
-      <TutorialStep title="1 — Generar la clave privada y el CSR (en tu PC)">
+      {conPedido && (
+        <TutorialStep title="Recomendado — Generar el pedido desde esta pantalla">
+          <li>En el ambiente que corresponda (abajo), apretá <strong>Generar pedido de certificado</strong> y completá el CUIT, la razón social y el alias</li>
+          <li>El sistema crea la <strong>clave privada dentro del servidor</strong>: no se descarga ni se sube, y no hace falta instalar nada. Vos descargás sólo el archivo <CodigoInline>.csr</CodigoInline></li>
+          <li>La pantalla te muestra los pasos para ARCA con el CUIT y el alias de esa empresa. Cuando ARCA te devuelva el <CodigoInline>.crt</CodigoInline>, subilo en ese mismo ambiente: <strong>no hay que cargar la clave</strong></li>
+        </TutorialStep>
+      )}
+      <TutorialStep title={conPedido ? 'Alternativa — Generar la clave privada y el CSR a mano (en tu PC)' : '1 — Generar la clave privada y el CSR (en tu PC)'}>
         <li>Instalá <strong>OpenSSL</strong> (en Windows podés usar Git Bash o WSL; en Linux/Mac ya viene incluido)</li>
         <li>
           Abrí una terminal y ejecutá:

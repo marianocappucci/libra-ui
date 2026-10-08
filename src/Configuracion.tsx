@@ -103,7 +103,12 @@ export type Integraciones = {
    *  que leen su facturación con un slug fijo TIENEN que declararlo: sin él,
    *  una instancia sin fila crea una llamada `default` que su servicio de
    *  facturación no lee nunca. Ver `ArcaCard`. */
-  arca?: boolean | { basePath?: string; empresa?: string }
+  arca?: boolean | {
+    basePath?: string
+    empresa?: string
+    /** La razón social, para prellenar «Generar pedido de certificado» (ADR-041). Opcional. */
+    razonSocial?: string
+  }
   email?: boolean | { basePath?: string }
   /** Integraciones propias del producto, en la misma sub-navegación. El caso
    *  vivo es la **Facturación de LibraDesk**, que no emite por ARCA sino que
