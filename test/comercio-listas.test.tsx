@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ListasPrecio } from '../src/comercio/ListasPrecio'
 import { ListaPrecioDetalle } from '../src/comercio/ListaPrecioDetalle'
 import type { ItemListaPrecio, ListaPrecio } from '../src/comercio/tipos'
+import { elegirEnBuscable } from './helpers-pantallas'
 
 const MAYORISTA: ListaPrecio = { id: 1, nombre: 'Mayorista', descripcion: 'volumen', activa: 1, es_default: 0 }
 const MINORISTA: ListaPrecio = { id: 2, nombre: 'Minorista', descripcion: '', activa: 0, es_default: 1 }
@@ -82,7 +83,7 @@ describe('ListasPrecio', () => {
     expect(await within(dialogo).findByText('El nombre es obligatorio')).toBeTruthy()
     await user.type(within(dialogo).getByLabelText('Nombre'), 'VIP')
     await user.click(within(dialogo).getByLabelText(/Copiar desde otra lista/))
-    await user.selectOptions(within(dialogo).getByRole('combobox', { name: 'Lista de origen' }), '1')
+    await elegirEnBuscable(user, within(dialogo).getByRole('combobox', { name: 'Lista de origen' }), 'Mayorista')
     await user.click(within(dialogo).getByRole('button', { name: 'Crear lista' }))
     await waitFor(() => expect(pedidas()).toContain('POST /api/listas-precio/3/importar'))
     expect(cuerpoDe('POST /api/listas-precio')).toEqual({ nombre: 'VIP', descripcion: '' })
@@ -191,7 +192,7 @@ describe('ListaPrecioDetalle', () => {
     fireEvent.change(screen.getByLabelText('Precio de Arroz'), { target: { value: '85' } })
     await user.click(screen.getByRole('button', { name: /Guardar precios/ }))
     await waitFor(() => expect(cuerpoDe('PUT /api/listas-precio/1/items')).toEqual({ precios: { '9': 90, '10': 85 } }))
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Filtrar por categoría' }), 'Almacén')
+    await elegirEnBuscable(user, screen.getByRole('combobox', { name: 'Filtrar por categoría' }), 'Almacén')
     await waitFor(() => expect(pedidas().some((p) => p.includes('/items?categoria=Almac%C3%A9n'))).toBe(true))
   })
 
@@ -204,7 +205,7 @@ describe('ListaPrecioDetalle', () => {
     let panel = await screen.findByRole('dialog')
     await user.type(within(panel).getByLabelText('Porcentaje de ajuste'), '10')
     await user.selectOptions(within(panel).getByRole('combobox', { name: 'Base de cálculo' }), 'costo')
-    await user.selectOptions(within(panel).getByRole('combobox', { name: 'Aplicar a' }), 'Almacén')
+    await elegirEnBuscable(user, within(panel).getByRole('combobox', { name: 'Aplicar a' }), 'Almacén')
     await user.click(within(panel).getByRole('button', { name: 'Aplicar' }))
     await waitFor(() => expect(cuerpoDe('POST /api/listas-precio/1/ajuste-porcentual')).toEqual({ porcentaje: 10, base: 'costo', categoria: 'Almacén' }))
 
@@ -213,7 +214,7 @@ describe('ListaPrecioDetalle', () => {
     await user.selectOptions(within(panel).getByRole('combobox', { name: 'Importar desde' }), 'lista')
     await user.click(within(panel).getByRole('button', { name: 'Importar' }))
     expect(await screen.findByText('Elegí la lista de origen.')).toBeTruthy()
-    await user.selectOptions(within(panel).getByRole('combobox', { name: 'Lista de origen' }), '2')
+    await elegirEnBuscable(user, within(panel).getByRole('combobox', { name: 'Lista de origen' }), 'Minorista')
     await user.click(within(panel).getByRole('button', { name: 'Importar' }))
     await waitFor(() => expect(cuerpoDe('POST /api/listas-precio/1/importar')).toEqual({ fuente: 'lista', fuente_lista_id: 2 }))
   })

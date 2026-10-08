@@ -17,9 +17,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
-import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogClose,
 } from '@/components/ui/dialog'
 import {
@@ -31,6 +28,7 @@ import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
 import { fecha } from '@/lib/fechas'
 import { hoyISO } from '../fechas'
+import { SelectBuscable } from '../SelectBuscable'
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
@@ -294,29 +292,33 @@ export function EgresoDetalle() {
                     <FormField control={pagoForm.control} name="caja_id" render={({ field }) => (
                       <FormItem>
                         <FormLabel>Caja</FormLabel>
-                        <Select value={field.value} onValueChange={field.onChange}>
-                          <FormControl><SelectTrigger className="w-40"><SelectValue placeholder="Elegir caja…" /></SelectTrigger></FormControl>
-                          <SelectContent>
-                            {cajas.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.nombre}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
+                        <FormControl>
+                          <SelectBuscable
+                            value={field.value}
+                            onChange={field.onChange}
+                            opciones={cajas.map((c) => ({ value: String(c.id), label: c.nombre }))}
+                            placeholder="Elegir caja…"
+                            className="w-40"
+                          />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )} />
                     <FormField control={pagoForm.control} name="medio_pago" render={({ field }) => (
                       <FormItem>
                         <FormLabel>Medio de pago</FormLabel>
-                        <Select value={field.value} onValueChange={field.onChange}>
-                          <FormControl><SelectTrigger className="w-44"><SelectValue placeholder="Elegir medio…" /></SelectTrigger></FormControl>
-                          <SelectContent>
-                            {/* El fallback sale del motor: la copia TypeScript
-                                ofrecía `cheque`, que el backend no tenía en su
-                                lista canónica, y escondía las tarjetas. */}
-                            {(cajaSeleccionada?.medios_pago ?? medios.map((x) => x.id)).map((m) => (
-                              <SelectItem key={m} value={m}>{etiquetaDeMedio(m)}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        {/* El fallback sale del motor: la copia TypeScript
+                            ofrecía `cheque`, que el backend no tenía en su
+                            lista canónica, y escondía las tarjetas. */}
+                        <FormControl>
+                          <SelectBuscable
+                            value={field.value}
+                            onChange={field.onChange}
+                            opciones={(cajaSeleccionada?.medios_pago ?? medios.map((x) => x.id)).map((m) => ({ value: m, label: etiquetaDeMedio(m) }))}
+                            placeholder="Elegir medio…"
+                            className="w-44"
+                          />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )} />

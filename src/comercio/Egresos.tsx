@@ -303,6 +303,7 @@ export function Egresos() {
               <FormField control={form.control} name="tipo_comprobante" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Comprobante</FormLabel>
+                  {/* select-cerrado: los tipos de comprobante son cuatro, fijos en el código (`TIPOS_COMPROBANTE`) */}
                   <Select value={field.value} onValueChange={field.onChange}>
                     <FormControl><SelectTrigger className="w-40"><SelectValue /></SelectTrigger></FormControl>
                     <SelectContent>

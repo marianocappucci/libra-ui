@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { Productos } from '../src/comercio/Productos'
 import type { Producto } from '../src/comercio/tipos'
+import { opcionesDe } from './helpers-pantallas'
 
 const YERBA: Producto = {
   id: 1, codigo: 'Y1', nombre: 'Yerba', descripcion: '', precio_venta: 1500, precio_costo: 900,
@@ -64,8 +65,9 @@ describe('Productos con las variantes de VentaLibra', () => {
     await waitFor(() => expect(pedidas()).toContain('GET /api/productos/unidades'))
     await user.click(screen.getByLabelText('Editar producto'))
     const dialogo = await screen.findByRole('dialog')
-    const selector = within(dialogo).getAllByRole('combobox').find((el) => el.tagName === 'SELECT' && (el as HTMLSelectElement).value === 'KG')!
-    expect(Array.from(selector.querySelectorAll('option')).map((o) => o.textContent)).toEqual(['KG', 'UN'])
+    const selector = within(dialogo).getByLabelText('Unidad')
+    expect(selector).toHaveValue('KG')
+    expect(await opcionesDe(user, selector)).toEqual(['KG', 'UN'])
   })
 
   it('si el backend no contesta las unidades, queda la lista de siempre', async () => {
@@ -75,9 +77,10 @@ describe('Productos con las variantes de VentaLibra', () => {
     await screen.findByText('Yerba')
     await user.click(screen.getByLabelText('Editar producto'))
     const dialogo = await screen.findByRole('dialog')
-    const selector = within(dialogo).getAllByRole('combobox').find((el) => el.tagName === 'SELECT' && (el as HTMLSelectElement).value === 'KG')!
+    const selector = within(dialogo).getByLabelText('Unidad')
+    expect(selector).toHaveValue('KG')
     // «KG» no está en la lista de siempre: se ofrece igual, para no perder la unidad del producto al guardar.
-    const opciones = Array.from(selector.querySelectorAll('option')).map((o) => o.textContent)
+    const opciones = await opcionesDe(user, selector)
     expect(opciones).toContain('kg')
     expect(opciones).toContain('KG')
   })

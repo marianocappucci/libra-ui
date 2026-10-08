@@ -87,7 +87,7 @@ para que el motor de Tailwind v4 escanee las clases usadas dentro de
 | `libra-ui/Login` | `createLogin({ productName, productInitial, redirectTo })` | Factory: recibe branding + ruta de redirect post-login. Acepta `logo` y `wordmarkClassName` — ver abajo. Desde `v0.70.0` abre el modal del segundo factor en dos pasos si el `useAuth` que recibe trae `confirmarCodigo` — ver abajo. |
 | `libra-ui/CodigoPorDigitos` | `CodigoPorDigitos({ value, onChange, onComplete?, length?, disabled?, autoFocus? })` | El recuadro de 6 dígitos del segundo factor (`v0.70.0`), uno por casillero. Controlado: el que llama tiene el código en `value` y lo resetea poniéndolo en `''`. No es exclusivo del modal de `Login` — cualquier pantalla con un código de un solo uso lo puede usar. |
 | `libra-ui/branding` | `type ProductLogo` | El tipo del logo de producto. Módulo aparte para que `Login` no tenga que importar de `Layout` y arrastrarse la sidebar entera al bundle de la pantalla que carga sin sesión. |
-| `libra-ui/SelectBuscable` | `SelectBuscable`, `type OpcionSelect` | Select con **búsqueda por teclado** (`v0.9.0`). El `Select` de shadcn/Radix obliga a encontrar la opción a ojo en una lista ordenada; con los cientos de clientes que puede tener una empresa real, eso deja de ser viable. Filtra sin acentos y exige todos los términos, igual que el buscador de `data-table` — comparten `coincideBusqueda`. **No necesita `cmdk` ni el primitivo `popover`**: se construye con `input`, `button` y `cn`, que ya están en los 5 consumidores. Desde `v0.25.0` **anda solo adentro de un `<FormControl>`**: declara el `id`, el `aria-describedby` y el `aria-invalid` que el Slot le inyecta, así el `htmlFor` del `<FormLabel>` lo nombra — ver abajo. Desde `v0.121.0`, con `buscarEscribiendo` el control cerrado es un **campo de texto con lupa** donde se escribe para buscar — ver «`SelectBuscable` en modo `buscarEscribiendo`». |
+| `libra-ui/SelectBuscable` | `SelectBuscable`, `type OpcionSelect` | Select con **búsqueda por teclado** (`v0.9.0`). El `Select` de shadcn/Radix obliga a encontrar la opción a ojo en una lista ordenada; con los cientos de clientes que puede tener una empresa real, eso deja de ser viable. Filtra sin acentos y exige todos los términos, igual que el buscador de `data-table` — comparten `coincideBusqueda`. **No necesita `cmdk` ni el primitivo `popover`**: se construye con `input`, `button` y `cn`, que ya están en los 5 consumidores. Desde `v0.25.0` **anda solo adentro de un `<FormControl>`**: declara el `id`, el `aria-describedby` y el `aria-invalid` que el Slot le inyecta, así el `htmlFor` del `<FormLabel>` lo nombra — ver abajo. Desde `v0.121.0` existe el modo de **campo de texto con lupa** donde se escribe para buscar, y desde **`v0.129.0` es el modo por defecto** (ADR-039): `buscarEscribiendo={false}` devuelve el botón. Suma `OpcionSelect.disabled`, `required`, `limpiable` y `title`, y un `Escape` con la lista abierta ya no cierra el diálogo de afuera — ver «Todo desplegable de datos se busca escribiendo». |
 | `libra-ui/CampoArchivo` | `CampoArchivo`, `formatearTamanio(bytes)` | El **campo de archivo de toda la suite** (`v0.127.0`, ADR-037): caja de la altura de un input, texto a la izquierda y un botón con el ícono de subir pegado al borde derecho. Props: `archivo: File \| null`, `onChange(archivo: File \| null)`, `accept?`, `placeholder?` (defecto «Ningún archivo»), `quitable?` (la X; defecto sí, salvo `required`/`disabled`), `error?` (debajo de la caja), `ayuda?` (texto chico debajo), más `id`, `name`, `disabled`, `required`, `aria-label`, `aria-describedby`, `className` (del contenedor) y `ref` (al `<input>`). Un click en cualquier parte abre el selector; se puede arrastrar y soltar (se valida `accept`). Elegido, muestra nombre y tamaño legible (`1,2 KB`). **Ningún `type="file"` fuera de este componente**: un guard lo verifica. |
 | `libra-ui/Configuracion` | `createConfiguracion({ icono, producto, integraciones, propias })`, `EmpresaCard`, `MercadoPagoCard`, `ArcaCard`, `EmailCard`, `DatosBackupCard`, los `Tutorial*` | **La pantalla de Configuración de la familia, entera** (`v0.47.0`). Tutoriales incluidos. Exige tres primitivos más del consumidor — ver abajo. |
 | `libra-ui/use-mobile` | `useIsMobile` | Hook de breakpoint, 100% genérico. |
@@ -101,6 +101,7 @@ para que el motor de Tailwind v4 escanee las clases usadas dentro de
 | `libra-ui/titulo-pantalla` | `TituloPantalla({ icono, children, className?, acciones? })` | El título de pantalla con su ícono en el recuadro (`v0.34.0`). Desde `v0.128.0` acepta `acciones`: los botones a la altura del título, a la derecha. |
 | `libra-ui/auditoria-de-titulos` | `auditarTitulos`, `auditarMenuContraCatalogo`, `iconoDelTitulo`… | **De test.** El guard de que el ícono del título es el del menú (ADR-035). |
 | `libra-ui/auditoria-de-relleno` | `auditarRelleno(raizSrc, opciones?)`, `describirInfracciones`, `describirSobrantes`, `analizarFuente`, `rellenoDeClases`, `esPantallaDeProducto` | **De test.** El guard de que una pantalla no agrega relleno propio arriba del que ya pone el `Layout` (ADR-040). |
+| `libra-ui/auditoria-de-selects` | `auditarSelects(raizSrc, opciones?)`, `describirInfracciones`, `desplegablesEn`, `MAX_CERRADO`, `MARCA_CERRADO` | **De test.** El guard de que todo desplegable de datos se busca escribiendo (ADR-039): falla si un `<Select>` o un `<select>` tiene opciones que arma el código (datos) o más de 8 fijas, y no es `SelectBuscable`. |
 | `libra-ui/auditoria-de-indicadores` | `auditarIndicadores(raizSrc, opciones?)`, `describirInfracciones`, `LUCIDE_PERMITIDOS`, `esPantallaDeIndicadores`, `iconosDeConceptoEn` | **De test.** El guard de que los reportes y tableros no importan íconos de lucide por su cuenta (ADR-038). |
 
 ## El logo del producto y el wordmark (`v0.23.0`)
@@ -266,14 +267,13 @@ Tres cosas que no son obvias:
 - **El `id` del desplegable es otro**, interno y con `useId()`. Si se lo pisara
   con el del control, el `aria-controls` del botón apuntaría al botón mismo.
 
-## `SelectBuscable` en modo `buscarEscribiendo` (`v0.121.0`)
+## Todo desplegable de datos se busca escribiendo (`v0.129.0`, ADR-039)
 
-Por defecto el control cerrado es un botón y el buscador está adentro del desplegable: quien lo ve no sabe que puede escribir. Con `buscarEscribiendo` el control **es un campo de texto con lupa** (ADR-031):
+El control cerrado de `SelectBuscable` **es un campo de texto con lupa** (ADR-031, `v0.121.0`; por defecto desde la `v0.129.0`). Quien lo ve sabe que puede escribir:
 
 ```tsx
 <Label htmlFor="cc-tercero">Cliente</Label>
 <SelectBuscable
-  buscarEscribiendo
   id="cc-tercero"
   value={terceroId}
   onChange={setTerceroId}
@@ -283,12 +283,47 @@ Por defecto el control cerrado es un botón y el buscador está adentro del desp
 />
 ```
 
-- **Escribir filtra y abre la lista al instante** (etiqueta + `hint`, sin acentos, todos los términos). Un click o `ArrowDown` abren la lista completa; las flechas mueven el resaltado, `Enter` elige, `Escape` cierra.
+- **Escribir filtra y abre la lista al instante** (etiqueta + `hint`, sin acentos, todos los términos). Un click o `ArrowDown` abren la lista completa; las flechas mueven el resaltado (saltean las opciones `disabled`), `Enter` elige, `Escape` cierra, `Tab` cierra y sigue.
 - **Con algo elegido el campo muestra su etiqueta**; al enfocar queda seleccionada, así escribir empieza una búsqueda nueva. Una **×** vacía la selección (`onChange('')`).
 - **Salir sin elegir** (click afuera, `Tab`, `Escape`) cierra la lista y devuelve la etiqueta elegida: lo escrito a medias se descarta.
-- **ARIA**: `role="combobox"`, `aria-expanded`, `aria-controls`, `aria-activedescendant`, `listbox`/`option`; `id`, `aria-describedby`, `aria-invalid` y `ariaLabel` van al `<input>`.
-- **`className` va al contenedor** (el ancho), no a un botón. El `placeholder` es lo que se ve con el campo vacío: que diga qué se busca.
-- No ofrezcas una opción con `value: ''` («Todos») en este modo: para «ninguno», el campo vacío.
+- **`Escape` con la lista abierta cierra la lista y nada más**, también adentro de un diálogo de Radix (que escucha el `Escape` en `document`, antes que React). Con la lista cerrada, la tecla sigue su camino.
+- **ARIA**: `role="combobox"`, `aria-expanded`, `aria-controls`, `aria-activedescendant`, `listbox`/`option`; `id`, `aria-describedby`, `aria-invalid` y `ariaLabel` van al `<input>`. Anda adentro de un `<FormControl>`.
+- **`className` va al contenedor** (el ancho), no a un botón. Sin `className` el campo ocupa el ancho de su contenedor. El `placeholder` es lo que se ve con el campo vacío: que diga qué se busca.
+
+**Para reemplazar a un `Select`:**
+
+| Prop | Qué hace |
+|---|---|
+| `opciones[].disabled` | La opción se ve pero no se elige (`aria-disabled`; las flechas la saltean; ni el click ni `Enter` la eligen). |
+| una opción `{ value: '', label: 'Todas' }` | El «ninguno» / «todas» de un filtro. Con el valor vacío el campo muestra esa etiqueta. Reemplaza a los centinelas `__todas__` que el `Select` de Radix obligaba a usar (no admite `value=""`). La × no se ofrece si está. |
+| `required` | `required` en el `<input>` (el navegador no deja enviar vacío) y `aria-required`. Un campo obligatorio no ofrece la ×. |
+| `limpiable` | Si se ofrece la ×. Por defecto sí, salvo `required` o una opción de valor `''`. `limpiable={false}` donde vaciar no es una elección (una caja, un depósito). |
+| `title` | El tooltip nativo, para cuando la etiqueta elegida se corta. |
+| `buscarEscribiendo={false}` | Vuelve al botón con el buscador adentro. Se conserva por compatibilidad; no se recomienda: la gente no descubre que puede escribir. |
+
+**El criterio** (ADR-039): un desplegable es **de datos** si las opciones las arma el código (un `.map` sobre una lista, una variable, una llamada, un componente): clientes, fleteros, choferes, vehículos, localidades, productos, profesionales, pacientes, depósitos, cajas, cuentas, categorías… **y entonces es `SelectBuscable`**. Es **cerrado** si son `<SelectItem>` o `<option>` escritos a mano, hasta 8 (estado, tipo, sí/no, alícuota, orden, cantidad por página): puede seguir siendo un `Select`, porque en un celular un campo de texto abre el teclado y para tres valores no hay nada que buscar. Más de 8 opciones fijas (provincias, meses) se buscan igual.
+
+**Una lista corta que sale de una constante** (`ESTADOS.map(…)`, `IVA_CONDITIONS.map(…)`) el guard no la puede distinguir de una de datos: se marca, con el motivo, en el mismo renglón del `<Select>` o en los tres de arriba:
+
+```tsx
+{/* select-cerrado: las condiciones frente al IVA son un catálogo cerrado de ARCA, fijo en el código */}
+<Select value={field.value} onValueChange={field.onChange}>
+```
+
+**El guard.** `auditarSelects` (`libra-ui/auditoria-de-selects`, de test) lee los fuentes de un producto y falla si un `<Select>` de shadcn o un `<select>` nativo tiene opciones de datos, o más de 8 fijas, sin la marca:
+
+```ts
+import { resolve } from 'node:path'
+import { auditarSelects, describirInfracciones } from 'libra-ui/auditoria-de-selects'
+
+const r = auditarSelects(resolve(__dirname, '..'))   // el `src` del producto
+expect(r.desplegables).toBeGreaterThan(0)             // que midió algo
+expect(describirInfracciones(r.infracciones)).toEqual([])
+```
+
+Cada infracción dice archivo, renglón, de dónde salen las opciones y qué cambiar. `{ prohibirNativos: true }` rechaza además cualquier `<select>` nativo, aun cerrado. No ve un desplegable armado con un envoltorio propio que reciba las opciones como `children`: se audita el envoltorio.
+
+**Migración de un test:** la lista de un `SelectBuscable` existe en el DOM sólo mientras está abierta. `await user.selectOptions(combo, '2')` pasa a `await user.click(combo); await user.click(await screen.findByRole('option', { name: 'Caja 2' }))` (en el kit, `elegirEnBuscable` y `opcionesDe` de `test/helpers-pantallas.tsx`); `expect(select.value).toBe('2')` pasa a `expect(combo).toHaveValue('Caja 2')`.
 
 ## El catálogo de íconos de identidad (`v0.125.0`, ADR-035)
 

@@ -29,9 +29,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
-import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -488,12 +485,14 @@ function RecibirMercaderiaDialog({
         <div className="flex flex-wrap items-end gap-3">
           <div className="grid gap-2">
             <Label htmlFor="recepcion-deposito">Depósito de destino</Label>
-            <Select value={locationId} onValueChange={setLocationId}>
-              <SelectTrigger id="recepcion-deposito" className="w-48"><SelectValue placeholder="Depósito…" /></SelectTrigger>
-              <SelectContent>
-                {locations.map((loc) => <SelectItem key={loc.id} value={String(loc.id)}>{loc.nombre}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <SelectBuscable
+              id="recepcion-deposito"
+              value={locationId}
+              onChange={setLocationId}
+              opciones={locations.map((loc) => ({ value: String(loc.id), label: loc.nombre }))}
+              placeholder="Depósito…"
+              className="w-48"
+            />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="recepcion-remito">Remito / comprobante</Label>
@@ -627,12 +626,14 @@ function ConfirmarRecepcionDialog({
 
         <div className="grid gap-2">
           <Label htmlFor="confirmar-deposito">Depósito de destino</Label>
-          <Select value={locationId} onValueChange={setLocationId}>
-            <SelectTrigger id="confirmar-deposito" className="w-48"><SelectValue placeholder="Depósito…" /></SelectTrigger>
-            <SelectContent>
-              {locations.map((loc) => <SelectItem key={loc.id} value={String(loc.id)}>{loc.nombre}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <SelectBuscable
+            id="confirmar-deposito"
+            value={locationId}
+            onChange={setLocationId}
+            opciones={locations.map((loc) => ({ value: String(loc.id), label: loc.nombre }))}
+            placeholder="Depósito…"
+            className="w-48"
+          />
         </div>
 
         <DialogFooter>

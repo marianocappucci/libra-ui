@@ -462,6 +462,7 @@ export function MpBandeja() {
             <div className="grid gap-2"><Label>Domicilio</Label><Input value={direccion} onChange={(e) => setDireccion(e.target.value)} className="w-48" placeholder="Opcional" /></div>
             <div className="grid gap-2">
               <Label>Condición IVA</Label>
+              {/* select-cerrado: las condiciones frente al IVA son un catálogo cerrado de ARCA, fijo en el código (`IVA_CONDITIONS`) */}
               <Select value={ivaCond} onValueChange={setIvaCond}>
                 <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
                 <SelectContent>

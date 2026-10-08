@@ -228,6 +228,7 @@ export function Proveedores() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Condición de IVA</FormLabel>
+                      {/* select-cerrado: las condiciones frente al IVA son un catálogo cerrado de ARCA, fijo en el código (`IVA_CONDITIONS`) */}
                       <Select value={field.value} onValueChange={field.onChange}>
                         <FormControl>
                           <SelectTrigger className="w-52">

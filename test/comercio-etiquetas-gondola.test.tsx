@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { EtiquetasGondola } from '../src/comercio/EtiquetasGondola'
 import type { ItemListaPrecio, ListaPrecio, Producto } from '../src/comercio/tipos'
-import { fetchMock, montar, pedidas, prepararFetch, responder } from './helpers-pantallas'
+import { elegirEnBuscable, fetchMock, montar, pedidas, prepararFetch, responder } from './helpers-pantallas'
 
 function producto(id: number, resto: Partial<Producto>): Producto {
   return {
@@ -116,7 +116,7 @@ describe('el listado', () => {
     expect(screen.getByText('Gaseosa Cola 2,25 lt')).toBeInTheDocument()
 
     await user.clear(screen.getByLabelText('Buscar producto'))
-    await user.selectOptions(screen.getByLabelText('Categoría'), 'Panadería')
+    await elegirEnBuscable(user, screen.getByLabelText('Categoría'), 'Panadería')
     expect(screen.queryByText('Yerba Mate 500g')).not.toBeInTheDocument()
     expect(screen.getByText('Pan al peso')).toBeInTheDocument()
   })
@@ -169,13 +169,13 @@ describe('el precio de la etiqueta', () => {
     const user = await montarPantalla()
     await waitFor(() => expect(screen.getByText(/3\.300,00/)).toBeInTheDocument())
 
-    await user.selectOptions(screen.getByLabelText('Precio'), '10')
+    await elegirEnBuscable(user, screen.getByLabelText('Precio'), 'Mayorista')
     await waitFor(() => expect(screen.getByText(/2\.900,00/)).toBeInTheDocument())
     expect(screen.queryByText(/3\.300,00/)).not.toBeInTheDocument()
     // La gaseosa no está en la Mayorista: vuelve al precio del producto.
     expect(screen.getByText(/2\.500,00/)).toBeInTheDocument()
 
-    await user.selectOptions(screen.getByLabelText('Precio'), '__catalogo__')
+    await elegirEnBuscable(user, screen.getByLabelText('Precio'), 'Precio de venta del producto')
     expect(screen.getByText(/3\.000,00/)).toBeInTheDocument()
   })
 
@@ -184,7 +184,7 @@ describe('el precio de la etiqueta', () => {
     await montarPantalla()
     await screen.findByText(/No se pudieron leer los precios de la lista/)
     expect(screen.getByText(/3\.000,00/)).toBeInTheDocument()
-    expect((screen.getByLabelText('Precio') as HTMLSelectElement).value).toBe('__catalogo__')
+    expect(screen.getByLabelText('Precio')).toHaveValue('Precio de venta del producto')
   })
 })
 
@@ -204,11 +204,11 @@ describe('elegir productos', () => {
     backend()
     const user = await montarAsentada()
 
-    await user.selectOptions(screen.getByLabelText('Categoría'), 'Bebidas')
+    await elegirEnBuscable(user, screen.getByLabelText('Categoría'), 'Bebidas')
     await user.click(screen.getByRole('button', { name: 'Elegir los 1 que se ven' }))
     expect(screen.getByText('1 elegido')).toBeInTheDocument()
 
-    await user.selectOptions(screen.getByLabelText('Categoría'), '__todas__')
+    await elegirEnBuscable(user, screen.getByLabelText('Categoría'), 'Todas las categorías')
     expect(screen.getByRole('checkbox', { name: 'Etiqueta de Gaseosa Cola 2,25 lt' })).toBeChecked()
     expect(screen.getByRole('checkbox', { name: 'Etiqueta de Yerba Mate 500g' })).not.toBeChecked()
     await user.click(screen.getByRole('button', { name: 'Elegir los 3 que se ven' }))

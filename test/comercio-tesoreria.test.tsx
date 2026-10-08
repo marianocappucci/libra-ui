@@ -9,7 +9,7 @@ import { MovTipoBadge, Tesoreria } from '../src/comercio/Tesoreria'
 import { TesoreriaDetalle } from '../src/comercio/TesoreriaDetalle'
 import type { CuentaTesoreria, MovimientoTesoreria } from '../src/comercio/tipos'
 import {
-  cuerpoDe, montar, pedidas, prepararFetch, responder, selectConOpcion,
+  cuerpoDe, elegirEnBuscable, montar, opcionesDe, pedidas, prepararFetch, responder, selectConOpcion,
 } from './helpers-pantallas'
 import { render } from '@testing-library/react'
 
@@ -86,10 +86,10 @@ describe('Tesoreria', () => {
     dialogo = screen.getByRole('dialog')
     const transferir = within(dialogo).getByRole('button', { name: 'Transferir' })
     expect(transferir).toBeDisabled()
-    const [origen, destino] = within(dialogo).getAllByRole('combobox') as HTMLSelectElement[]
-    expect(within(origen).getByRole('option', { name: /Banco Galicia — \$\s?1\.500,00/ })).toBeTruthy()
-    await user.selectOptions(origen, '1')
-    await user.selectOptions(destino, '2')
+    const [origen, destino] = within(dialogo).getAllByRole('combobox')
+    expect(await opcionesDe(user, origen)).toContainEqual(expect.stringMatching(/Banco Galicia — \$\s?1\.500,00/))
+    await elegirEnBuscable(user, origen, /Banco Galicia/)
+    await elegirEnBuscable(user, destino, /Caja chica/)
     fireEvent.change(within(dialogo).getByRole('spinbutton'), { target: { value: '300' } })
     fireEvent.change(dialogo.querySelector('input[type="date"]')!, { target: { value: '2026-09-05' } })
     fireEvent.change(within(dialogo).getByDisplayValue('Transferencia entre cuentas'), { target: { value: 'Fondeo' } })
@@ -119,8 +119,8 @@ describe('Tesoreria', () => {
     await user.click(screen.getByRole('button', { name: 'Transferir' }))
     const dialogo = screen.getByRole('dialog')
     const [origen, destino] = within(dialogo).getAllByRole('combobox')
-    await user.selectOptions(origen, '2')
-    await user.selectOptions(destino, '1')
+    await elegirEnBuscable(user, origen, /Caja chica/)
+    await elegirEnBuscable(user, destino, /Banco Galicia/)
     fireEvent.change(within(dialogo).getByRole('spinbutton'), { target: { value: '9' } })
     await user.click(within(dialogo).getByRole('button', { name: 'Transferir' }))
     expect(await screen.findByText('Saldo insuficiente')).toBeTruthy()
@@ -192,8 +192,8 @@ describe('TesoreriaDetalle', () => {
     let dialogo = screen.getByRole('dialog')
     expect(dialogo.textContent).toContain('Transferir desde Banco Galicia')
     // Las otras cuentas, sin la propia.
-    expect(within(dialogo).getAllByRole('option').map((o) => o.textContent)).toEqual([expect.stringContaining('Caja chica'), expect.stringContaining('Vieja')])
-    await user.selectOptions(within(dialogo).getByRole('combobox'), '2')
+    expect(await opcionesDe(user, within(dialogo).getByRole('combobox'))).toEqual([expect.stringContaining('Caja chica'), expect.stringContaining('Vieja')])
+    await elegirEnBuscable(user, within(dialogo).getByRole('combobox'), /Caja chica/)
     fireEvent.change(within(dialogo).getByRole('spinbutton'), { target: { value: '25' } })
     fireEvent.change(dialogo.querySelector('input[type="date"]')!, { target: { value: '2026-09-07' } })
     fireEvent.change(within(dialogo).getByDisplayValue('Transferencia entre cuentas'), { target: { value: 'A caja' } })
@@ -244,7 +244,7 @@ describe('TesoreriaDetalle', () => {
     await user.click(screen.getByRole('button', { name: 'Eliminar' }))
     expect(await screen.findByText('Conciliado')).toBeTruthy()
     await user.click(await screen.findByRole('button', { name: 'Transferir' }))
-    await user.selectOptions(within(screen.getByRole('dialog')).getByRole('combobox'), '2')
+    await elegirEnBuscable(user, within(screen.getByRole('dialog')).getByRole('combobox'), /Caja chica/)
     fireEvent.change(within(screen.getByRole('dialog')).getByRole('spinbutton'), { target: { value: '1' } })
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Transferir' }))
     expect(await screen.findByText('Sin saldo')).toBeTruthy()

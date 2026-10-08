@@ -52,9 +52,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
-import {
   Tabs, TabsContent, TabsList, TabsTrigger,
 } from '@/components/ui/tabs'
 import {
@@ -64,6 +61,7 @@ import {
 import type { ComponentType, ReactNode } from 'react'
 import { TituloPantalla } from './titulo-pantalla'
 import { ICONOS } from './iconos-identidad'
+import { SelectBuscable } from './SelectBuscable'
 
 const TODOS = '__todos__'
 
@@ -319,27 +317,31 @@ export function Logs({ basePath = '/logs', icono = ICONOS.logDeActividad }: {
                     y un lector de pantalla anuncia el select sin nombre. */}
                 <div className="grid gap-2">
                   <Label htmlFor="filtro-entidad">Entidad</Label>
-                  <Select value={entidad} onValueChange={filtrar(setEntidad)}>
-                    <SelectTrigger id="filtro-entidad" className="w-48"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={TODOS}>Todas</SelectItem>
-                      {data.entidades.map((e) => (
-                        <SelectItem key={e} value={e}>{e.replace('_', ' ')}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SelectBuscable
+                    id="filtro-entidad"
+                    value={entidad}
+                    onChange={filtrar(setEntidad)}
+                    opciones={[
+                      { value: TODOS, label: 'Todas' },
+                      ...data.entidades.map((e) => ({ value: e, label: e.replace('_', ' ') })),
+                    ]}
+                    limpiable={false}
+                    className="w-48"
+                  />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="filtro-usuario">Usuario</Label>
-                  <Select value={usuario} onValueChange={filtrar(setUsuario)}>
-                    <SelectTrigger id="filtro-usuario" className="w-48"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={TODOS}>Todos</SelectItem>
-                      {data.usuarios.map((u) => (
-                        <SelectItem key={u} value={u}>{u}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SelectBuscable
+                    id="filtro-usuario"
+                    value={usuario}
+                    onChange={filtrar(setUsuario)}
+                    opciones={[
+                      { value: TODOS, label: 'Todos' },
+                      ...data.usuarios.map((u) => ({ value: u, label: u })),
+                    ]}
+                    limpiable={false}
+                    className="w-48"
+                  />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="desde">Desde</Label>

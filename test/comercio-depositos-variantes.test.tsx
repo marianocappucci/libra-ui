@@ -10,6 +10,7 @@ import { DepositoDetalle } from '../src/comercio/DepositoDetalle'
 import { DepositoTransferencia } from '../src/comercio/DepositoTransferencia'
 import { Stock } from '../src/comercio/Stock'
 import type { Deposito, Producto, StockItem } from '../src/comercio/tipos'
+import { elegirEnBuscable } from './helpers-pantallas'
 
 const TIPOS: TipoDeDeposito[] = [
   { valor: 'store', etiqueta: 'Sucursal', plural: 'Sucursales' }, { valor: 'warehouse', etiqueta: 'Depósito' },
@@ -167,10 +168,8 @@ describe('DepositoTransferencia con historial', () => {
     expect(await screen.findByText('reposición')).toBeTruthy()
     await user.click(screen.getByRole('combobox', { name: 'Producto' }))
     await user.click(await screen.findByRole('option', { name: /Milanesa/ }))
-    const selects = () => screen.getAllByRole('combobox').filter((el) => el.tagName === 'SELECT')
-    await waitFor(() => expect(selects()).toHaveLength(2))
-    await user.selectOptions(selects()[0], '1')
-    await user.selectOptions(selects()[1], '2')
+    await elegirEnBuscable(user, await screen.findByRole('combobox', { name: 'Depósito origen' }), /Salón/)
+    await elegirEnBuscable(user, screen.getByRole('combobox', { name: 'Depósito destino' }), 'Bodega')
     await user.type(screen.getByLabelText('Cantidad'), '4')
     const antes = pedidas().filter((p) => p === 'GET /api/depositos/transferencias').length
     await user.click(screen.getByRole('button', { name: /Confirmar transferencia/ }))
@@ -247,10 +246,10 @@ describe('Stock por depósito', () => {
     await user.click(screen.getByLabelText('Ajustar stock'))
     const dialogo = await screen.findByRole('dialog')
     const selector = within(dialogo).getByRole('combobox', { name: 'Depósito' })
-    expect(selector).toHaveValue('1')
+    expect(selector).toHaveValue('Salón')
     // «Fijar en…» arranca con el stock del depósito, no con el total.
     expect(within(dialogo).getByRole('spinbutton', { name: /Stock nuevo/ })).toHaveValue(10)
-    await user.selectOptions(selector, '2')
+    await elegirEnBuscable(user, selector, 'Bodega')
     expect(within(dialogo).getByRole('spinbutton', { name: /Stock nuevo/ })).toHaveValue(3)
     await user.click(within(dialogo).getByRole('button', { name: 'Salida' }))
     await user.type(within(dialogo).getByRole('spinbutton', { name: /Cantidad/ }), '1')

@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { Productos } from '../src/comercio/Productos'
 import type { Producto } from '../src/comercio/tipos'
-import { cuerpoDe, fetchMock, montar, pedidas, prepararFetch, responder } from './helpers-pantallas'
+import { cuerpoDe, elegirEnBuscable, fetchMock, montar, opcionesDe, pedidas, prepararFetch, responder } from './helpers-pantallas'
 
 const producto = (id: number, nombre: string, extra: Partial<Producto> = {}): Producto => ({
   id, codigo: `P${id}`, nombre, descripcion: '', precio_venta: 100, precio_costo: 60, unidad: 'u', categoria: '', stock_minimo: 0,
@@ -378,7 +378,7 @@ describe('Productos: plazo y stock máximo de reposición', () => {
   // ── Proveedor habitual (motor >= 0.33.0, ADR-021) ──
   const LISTA = [{ id: 7, nombre: 'Distribuidora Norte' }, { id: 8, nombre: 'Mayorista Sur' }]
   const CON_PROV = { ...PROPIOS, proveedor_id: 7, proveedor: 'Distribuidora Norte' }
-  const selectorProveedor = () => within(dialogo()).getByLabelText('Proveedor habitual') as HTMLSelectElement
+  const selectorProveedor = () => within(dialogo()).getByLabelText('Proveedor habitual')
 
   it('con un motor que no devuelve proveedor_id no hay selector de proveedor', async () => {
     responder({ ...base, [`GET ${RUTA}`]: PROPIOS, '/api/proveedores': LISTA })
@@ -394,7 +394,7 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     const user = userEvent.setup()
     montar('/productos', <Productos conParametrosDeReposicion />)
     await editar(user)
-    await waitFor(() => expect(selectorProveedor().value).toBe('7'))
+    await waitFor(() => expect(selectorProveedor()).toHaveValue('Distribuidora Norte'))
     fireEvent.change(plazo(), { target: { value: '9' } })
     await guardar(user)
     await waitFor(() => expect(puts()).toHaveLength(1))
@@ -407,8 +407,8 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     const user = userEvent.setup()
     montar('/productos', <Productos conParametrosDeReposicion />)
     await editar(user)
-    await waitFor(() => expect(selectorProveedor().value).toBe('7'))
-    await user.selectOptions(selectorProveedor(), '8')
+    await waitFor(() => expect(selectorProveedor()).toHaveValue('Distribuidora Norte'))
+    await elegirEnBuscable(user, selectorProveedor(), 'Mayorista Sur')
     await guardar(user)
     await waitFor(() => expect(puts()).toHaveLength(1))
     expect(cuerpoDe(`PUT ${RUTA}`)).toEqual({ plazo_entrega_dias: 7, stock_maximo: 40, proveedor_id: 8 })
@@ -420,8 +420,8 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     const user = userEvent.setup()
     montar('/productos', <Productos conParametrosDeReposicion />)
     await editar(user)
-    await waitFor(() => expect(selectorProveedor().value).toBe('7'))
-    await user.selectOptions(selectorProveedor(), '__sin__')
+    await waitFor(() => expect(selectorProveedor()).toHaveValue('Distribuidora Norte'))
+    await elegirEnBuscable(user, selectorProveedor(), 'Sin proveedor')
     await guardar(user)
     await waitFor(() => expect(puts()).toHaveLength(1))
     expect(cuerpoDe(`PUT ${RUTA}`)).toMatchObject({ proveedor_id: null })
@@ -432,8 +432,8 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     const user = userEvent.setup()
     montar('/productos', <Productos conParametrosDeReposicion />)
     await editar(user)
-    await waitFor(() => expect(selectorProveedor().value).toBe('7'))
-    expect(within(selectorProveedor()).getByRole('option', { name: 'Distribuidora Norte' })).toBeTruthy()
+    await waitFor(() => expect(selectorProveedor()).toHaveValue('Distribuidora Norte'))
+    expect(selectorProveedor()).toHaveValue('Distribuidora Norte')
   })
 
   it('en el alta el selector de proveedor está desde el primer momento (el motor se sondea con el primer producto) y el proveedor viaja con el id creado', async () => {
@@ -446,7 +446,7 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     await waitFor(() => expect(pedidas()).toContain(`GET ${RUTA}`))          // el sondeo
     await user.click(screen.getByRole('button', { name: /Nuevo producto/ }))
     fireEvent.change(within(dialogo()).getByLabelText('Nombre'), { target: { value: 'Nuevo' } })
-    await user.selectOptions(selectorProveedor(), '8')
+    await elegirEnBuscable(user, selectorProveedor(), 'Mayorista Sur')
     await user.click(within(dialogo()).getByRole('button', { name: 'Crear producto' }))
     await waitFor(() => expect(pedidas()).toContain('PUT /api/productos/9/reposicion'))
     expect(cuerpoDe('PUT /api/productos/9/reposicion')).toEqual({ plazo_entrega_dias: null, stock_maximo: null, proveedor_id: 8 })
@@ -510,10 +510,10 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     soltar(CON_PROV)                                                          // el sondeo termina con el diálogo abierto
     await waitFor(() => expect(selectorProveedor()).toBeTruthy())
     fireEvent.change(within(dialogo()).getByLabelText('Nombre'), { target: { value: 'Nuevo' } })
-    await user.selectOptions(selectorProveedor(), '8')
+    await elegirEnBuscable(user, selectorProveedor(), 'Mayorista Sur')
     await user.click(within(dialogo()).getByRole('button', { name: 'Crear producto' }))
     expect(await within(dialogo()).findByText(/El producto se guardó, pero/)).toBeTruthy()
-    expect(selectorProveedor().value).toBe('8')                               // el selector sigue ahí, con lo elegido
+    expect(selectorProveedor()).toHaveValue('Mayorista Sur')                               // el selector sigue ahí, con lo elegido
     await user.click(within(dialogo()).getByRole('button', { name: 'Guardar cambios' }))
     await waitFor(() => expect(pedidas().filter((p) => p === 'PUT /api/productos/9/reposicion')).toHaveLength(2))
     const envios = fetchMock.mock.calls.filter((c) => (c[1] as RequestInit | undefined)?.method === 'PUT' && String(c[0]) === '/api/productos/9/reposicion')
@@ -533,8 +533,8 @@ describe('Productos: plazo y stock máximo de reposición', () => {
     await waitFor(() => expect(pedidas()).toContain('GET /api/proveedores'))
     await waitFor(() => expect(pedidas()).toContain(`GET ${RUTA}`))          // el sondeo también corre
     await editar(user)
-    await waitFor(() => expect(selectorProveedor().value).toBe('7'))
-    expect(within(selectorProveedor()).getByRole('option', { name: 'Mayorista Sur' })).toBeTruthy()      // la lista completa, no sólo el actual
+    await waitFor(() => expect(selectorProveedor()).toHaveValue('Distribuidora Norte'))
+    expect(await opcionesDe(user, selectorProveedor())).toContain('Mayorista Sur')      // la lista completa, no sólo el actual
   })
 
   it('una búsqueda que vacía la lista mientras el sondeo está pendiente no lo cancela: el selector del alta aparece igual', async () => {

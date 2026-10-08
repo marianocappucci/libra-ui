@@ -32,6 +32,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { Logs } from '../src/Logs'
+import { elegirEnBuscable, opcionesDe } from './helpers-pantallas'
 
 function IconoFalso({ className }: { className?: string }) {
   return <svg data-testid="icono" className={className} />
@@ -100,13 +101,12 @@ function listaDeAccesos(): HTMLElement {
   return screen.getByRole('list')
 }
 
-// El stub de shadcn no propaga el `id` del trigger al `<select>` nativo, así
-// que los dos filtros de lista se toman por orden: entidad, usuario. La acción
-// ya no está acá: desde el 2026-08-22 se filtra con las píldoras de color.
-const FILTROS = { entidad: 0, usuario: 1 }
+// Los dos filtros de lista son `SelectBuscable` (ADR-039) con su `<Label htmlFor>`: se toman por el nombre
+// accesible. La acción ya no está acá: desde el 2026-08-22 se filtra con las píldoras de color.
+const FILTROS = { entidad: 'Entidad', usuario: 'Usuario' }
 
-function selectDe(cual: keyof typeof FILTROS): HTMLSelectElement {
-  return screen.getAllByRole('combobox')[FILTROS[cual]] as HTMLSelectElement
+function selectDe(cual: keyof typeof FILTROS): HTMLElement {
+  return screen.getByRole('combobox', { name: FILTROS[cual] })
 }
 
 // La píldora de una acción, por su etiqueta ("Editado", "Borrado"). Se toma el
@@ -203,8 +203,7 @@ describe('Logs — el backend manda', () => {
     render(<Logs icono={IconoFalso} />)
     await esperarCarga()
 
-    const opciones = within(selectDe('entidad')).getAllByRole('option').map((o) => o.textContent)
-    expect(opciones).toEqual(['Todas', 'paciente', 'receta', 'estudio'])
+    expect(await opcionesDe(userEvent.setup(), selectDe('entidad'))).toEqual(['Todas', 'paciente', 'receta', 'estudio'])
   })
 })
 
@@ -214,7 +213,7 @@ describe('Logs — filtros', () => {
     await esperarCarga()
     urls = []
 
-    await userEvent.selectOptions(selectDe('entidad'), 'turno')
+    await elegirEnBuscable(userEvent.setup(), selectDe('entidad'), 'turno')
 
     await waitFor(() => expect(urls.some((u) => u.includes('entidad=turno'))).toBe(true))
   })
@@ -257,7 +256,7 @@ describe('Logs — filtros', () => {
     await esperarCarga()
 
     await userEvent.click(pildoraDe('Editado'))
-    await userEvent.selectOptions(selectDe('entidad'), 'turno')
+    await elegirEnBuscable(userEvent.setup(), selectDe('entidad'), 'turno')
     await userEvent.type(screen.getByLabelText('Desde'), '2026-08-01')
     await waitFor(() => expect(urls.some((u) => u.includes('desde=2026-08-01'))).toBe(true))
     urls = []
@@ -290,7 +289,7 @@ describe('Logs — filtros', () => {
     await waitFor(() => expect(urls.some((u) => u.includes('page=2'))).toBe(true))
     urls = []
 
-    await userEvent.selectOptions(selectDe('usuario'), 'tecnico1')
+    await elegirEnBuscable(userEvent.setup(), selectDe('usuario'), 'tecnico1')
 
     await waitFor(() => expect(urls.some((u) => u.includes('page=1'))).toBe(true))
     expect(urls.every((u) => !u.includes('page=2'))).toBe(true)

@@ -45,9 +45,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
@@ -543,12 +541,14 @@ export function Stock({
             {conDepositos && (
               <div className="grid gap-2">
                 <Label htmlFor="ajuste-deposito">Depósito</Label>
-                <Select value={depositoAjuste} onValueChange={(v) => v && cambiarDeposito(v)}>
-                  <SelectTrigger id="ajuste-deposito" className="w-64"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {depositos.map((d) => <SelectItem key={d.id} value={String(d.id)}>{d.nombre}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <SelectBuscable
+                  id="ajuste-deposito"
+                  value={depositoAjuste}
+                  onChange={cambiarDeposito}
+                  opciones={depositos.map((d) => ({ value: String(d.id), label: d.nombre }))}
+                  limpiable={false}
+                  className="w-64"
+                />
               </div>
             )}
 
@@ -589,12 +589,14 @@ export function Stock({
               {modo === 'merma' && (
                 <div className="grid gap-2">
                   <Label>Motivo</Label>
-                  <Select value={motivo} onValueChange={setMotivo}>
-                    <SelectTrigger className="w-48" aria-label="Motivo de la merma"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {motivosMerma.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <SelectBuscable
+                    value={motivo}
+                    onChange={setMotivo}
+                    opciones={motivosMerma.map((m) => ({ value: m, label: m }))}
+                    ariaLabel="Motivo de la merma"
+                    limpiable={false}
+                    className="w-48"
+                  />
                 </div>
               )}
               <div className="grid gap-2"><Label>Fecha</Label><Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="w-40" /></div>

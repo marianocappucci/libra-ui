@@ -1,7 +1,7 @@
 // El harness que comparten los tests de pantalla del kit (nació con P9-M4, y desde
 // el pase de comprobantes lo usan también los de comprobantes): el `fetch`
 // falso por tabla de rutas, el router de prueba y las lecturas de lo pedido.
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import type userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { vi } from 'vitest'
@@ -76,6 +76,16 @@ export function selectConOpcion(texto: string): HTMLSelectElement {
 export async function elegirEnBuscable(user: ReturnType<typeof userEvent.setup>, combobox: HTMLElement, texto: string | RegExp) {
   await user.click(combobox)
   await user.click(await screen.findByRole('option', { name: texto }))
+}
+
+/** Las etiquetas de las opciones de un `SelectBuscable`. La lista sólo existe en el DOM mientras está abierta, así que se abre, se lee y se cierra
+ *  con Escape: un test que antes miraba los `<option>` del `<select>` del stub tiene que pasar por acá. */
+export async function opcionesDe(user: ReturnType<typeof userEvent.setup>, combobox: HTMLElement): Promise<string[]> {
+  await user.click(combobox)
+  const lista = await screen.findByRole('listbox')
+  const textos = within(lista).queryAllByRole('option').map((o) => o.textContent ?? '')
+  await user.keyboard('{Escape}')
+  return textos
 }
 
 /** Una ventana falsa para `window.open`: la usan las pantallas que abren un PDF. */

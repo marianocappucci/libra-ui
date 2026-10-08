@@ -17,7 +17,7 @@ import type { Presupuesto } from '../src/facturas'
 import type { Cliente } from '../src/mp'
 import type { ListaPrecio, ProductoBusqueda } from '../src/comercio/tipos'
 import {
-  campoJunto, cuerpoDe, montar, pedidas, prepararFetch, responder, selectConOpcion,
+  campoJunto, cuerpoDe, elegirEnBuscable, montar, pedidas, prepararFetch, responder, selectConOpcion,
 } from './helpers-pantallas'
 
 const BASE: Presupuesto = {
@@ -374,7 +374,7 @@ describe('PresupuestoForm — la cotización por lista', () => {
     montar('/presupuestos/nuevo', <PresupuestoForm conSelectorDeLista />)
     await waitFor(() => expect(pedidas()).toContain('GET /api/listas-precio'))
     expect(await screen.findByText('Lista de precios')).toBeInTheDocument()
-    expect(selectConOpcion('Mayorista')).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Lista de precios' })).toBeInTheDocument()
   })
 
   it('elegir un cliente preselecciona su lista asignada', async () => {
@@ -386,7 +386,7 @@ describe('PresupuestoForm — la cotización por lista', () => {
     await user.click(screen.getByRole('combobox', { name: 'Cliente' }))
     await user.click(await screen.findByRole('option', { name: /Ana/ }))
     await waitFor(() => expect(pedidas()).toContain('GET /api/clientes/1/lista-precio'))
-    await waitFor(() => expect(selectConOpcion('Mayorista')).toHaveValue('3'))
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Lista de precios' })).toHaveValue('Mayorista'))
   })
 
   it('🔴 `conQuiebres` re-cotiza el renglón al cambiar la cantidad', async () => {
@@ -403,7 +403,7 @@ describe('PresupuestoForm — la cotización por lista', () => {
 
     await user.click(screen.getByRole('combobox', { name: 'Cliente' }))
     await user.click(await screen.findByRole('option', { name: /Ana/ }))
-    await waitFor(() => expect(selectConOpcion('Mayorista')).toHaveValue('3'))
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Lista de precios' })).toHaveValue('Mayorista'))
 
     // Al elegir el producto ya re-cotiza, con la cantidad del renglón (1).
     await user.type(screen.getByPlaceholderText('Descripción o producto…'), 'ca')
@@ -429,7 +429,7 @@ describe('PresupuestoForm — la cotización por lista', () => {
 
     await user.click(screen.getByRole('combobox', { name: 'Cliente' }))
     await user.click(await screen.findByRole('option', { name: /Ana/ }))
-    await waitFor(() => expect(selectConOpcion('Mayorista')).toHaveValue('3'))
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Lista de precios' })).toHaveValue('Mayorista'))
 
     await user.type(screen.getByPlaceholderText('Descripción o producto…'), 'ca')
     await user.click(await screen.findByRole('button', { name: /Café molido/ }))
@@ -447,11 +447,11 @@ describe('PresupuestoForm — la cotización por lista', () => {
     montar('/presupuestos/nuevo', <PresupuestoForm conSelectorDeLista />)
     await screen.findByText('Lista de precios')
 
-    await user.selectOptions(selectConOpcion('Mayorista'), '3')
+    await elegirEnBuscable(user, screen.getByRole('combobox', { name: 'Lista de precios' }), 'Mayorista')
     await user.type(screen.getByPlaceholderText('Descripción o producto…'), 'ca')
     await waitFor(() => expect(pedidas().some((p) => p.includes('lista_id=3'))).toBe(true))
 
-    await user.selectOptions(selectConOpcion('Mayorista'), '__base__')
+    await elegirEnBuscable(user, screen.getByRole('combobox', { name: 'Lista de precios' }), '— Precio de venta base —')
     await user.type(screen.getByPlaceholderText('Descripción o producto…'), 'fe')
     await waitFor(() => expect(pedidas().at(-1)).toBe('GET /productos/buscar?q=cafe'))
   })
@@ -464,7 +464,7 @@ describe('PresupuestoForm — la cotización por lista', () => {
 
     await user.click(screen.getByRole('combobox', { name: 'Cliente' }))
     await user.click(await screen.findByRole('option', { name: /Ana/ }))
-    await waitFor(() => expect(selectConOpcion('Mayorista')).toHaveValue('3'))
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Lista de precios' })).toHaveValue('Mayorista'))
 
     await user.type(screen.getByPlaceholderText('Descripción o producto…'), 'ca')
     await waitFor(() => expect(pedidas().some((p) => p.includes('/productos/buscar?q=ca&lista_id=3'))).toBe(true))

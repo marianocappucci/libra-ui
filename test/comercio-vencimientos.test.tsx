@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Vencimientos } from '../src/comercio/Vencimientos'
 import { _reiniciarPendientesEnMemoria } from '../src/comercio/vencimientos-pendientes'
 import type { VencimientoLote, VencimientoSinLote, VencimientosData } from '../src/comercio/tipos'
-import { elegirEnBuscable, fetchMock, json, montar, pedidas, prepararFetch, responder } from './helpers-pantallas'
+import { elegirEnBuscable, fetchMock, json, montar, opcionesDe, pedidas, prepararFetch, responder } from './helpers-pantallas'
 
 const lote = (o: Partial<VencimientoLote>): VencimientoLote => ({
   producto_id: 1, codigo: null, nombre: '', unidad: 'u', categoria: '', deposito_id: 1, deposito: 'Depósito Centro',
@@ -275,10 +275,10 @@ describe('Vencimientos: lo que pide', () => {
     const user = userEvent.setup()
     await abrir()
     const selector = await screen.findByLabelText('Sucursal')
-    expect(within(selector).getAllByRole('option').map((o) => o.textContent)).toEqual(['Toda la instancia', 'Centro', 'Norte'])
-    await user.selectOptions(selector, '2')
+    expect(await opcionesDe(user, selector)).toEqual(['Toda la instancia', 'Centro', 'Norte'])
+    await elegirEnBuscable(user, selector, 'Norte')
     await waitFor(() => expect(ultimaConsulta()).toBe(pide('&sucursal_id=2')))
-    await user.selectOptions(selector, 'Toda la instancia')
+    await elegirEnBuscable(user, selector, 'Toda la instancia')
     await waitFor(() => expect(ultimaConsulta()).toBe(pide()))
   })
 
@@ -286,10 +286,10 @@ describe('Vencimientos: lo que pide', () => {
     const user = userEvent.setup()
     await abrir()
     const selector = await screen.findByLabelText('Categoría')
-    expect(within(selector).getAllByRole('option').map((o) => o.textContent)).toEqual(['Todas las categorías', 'Almacén', 'Lácteos'])
-    await user.selectOptions(selector, 'Lácteos')
+    expect(await opcionesDe(user, selector)).toEqual(['Todas las categorías', 'Almacén', 'Lácteos'])
+    await elegirEnBuscable(user, selector, 'Lácteos')
     await waitFor(() => expect(ultimaConsulta()).toBe(pide('&categoria=L%C3%A1cteos')))
-    await user.selectOptions(selector, 'Todas las categorías')
+    await elegirEnBuscable(user, selector, 'Todas las categorías')
     await waitFor(() => expect(ultimaConsulta()).toBe(pide()))
 
     cleanup()
@@ -468,8 +468,8 @@ describe('Vencimientos: orden y CSV', () => {
     await abrir()
     expect(screen.getByRole('link', { name: /CSV/ }).getAttribute('href')).toBe(`${RUTA}/export?${consulta()}`)
 
-    await user.selectOptions(await screen.findByLabelText('Sucursal'), '2')
-    await user.selectOptions(screen.getByLabelText('Categoría'), 'Almacén')
+    await elegirEnBuscable(user, await screen.findByLabelText('Sucursal'), 'Norte')
+    await elegirEnBuscable(user, screen.getByLabelText('Categoría'), 'Almacén')
     fireEvent.change(screen.getByLabelText('Días de anticipación'), { target: { value: '60' } })
     await user.click(screen.getByLabelText('Incluir vencidos'))
     await waitFor(() => expect(screen.getByRole('link', { name: /CSV/ }).getAttribute('href')).toBe(
@@ -1603,10 +1603,10 @@ describe('Vencimientos: cargar stock con lote (entrada)', () => {
       .toEqual([expect.stringContaining('Yerba'), expect.stringContaining('Crema')])
     await user.click(screen.getByRole('option', { name: /Yerba/ }))
 
-    const deposito = await within(dialogo()).findByLabelText('Depósito') as HTMLSelectElement
-    expect(deposito.value).toBe('1')
+    const deposito = await within(dialogo()).findByLabelText('Depósito')
+    expect(deposito).toHaveValue('Centro · Depósito Centro')
     // Con el nombre de su sucursal cuando la tiene; uno inactivo no se ofrece.
-    expect(Array.from(deposito.options).map((o) => o.textContent)).toEqual(['Centro · Depósito Centro', 'Norte · Depósito Norte'])
+    expect(await opcionesDe(user, deposito)).toEqual(['Centro · Depósito Centro', 'Norte · Depósito Norte'])
     expect((within(dialogo()).getByLabelText('Fecha de vencimiento') as HTMLInputElement).type).toBe('date')
     expect(pedidas().filter((p) => p === 'GET /api/depositos')).toHaveLength(1)
   })
@@ -1617,7 +1617,7 @@ describe('Vencimientos: cargar stock con lote (entrada)', () => {
     fireEvent.change(screen.getByLabelText('Días de anticipación'), { target: { value: '20' } })
     await waitFor(() => expect(pedidasAlReporte()).toHaveLength(2))
     await abrirEntrada(user)
-    await user.selectOptions(within(dialogo()).getByLabelText('Depósito'), '2')
+    await elegirEnBuscable(user, within(dialogo()).getByLabelText('Depósito'), 'Norte · Depósito Norte')
     completarEntrada('  L-2026 ', '2027-03-15', '12.5')
     fireEvent.change(within(dialogo()).getByLabelText('Nota'), { target: { value: ' pallet 4 ' } })
     await user.click(confirmar())
@@ -1708,14 +1708,14 @@ describe('Vencimientos: cargar stock con lote (entrada)', () => {
     ]
     await abrir({ ...TODO_ENTRADA, '/api/productos/1/variantes': VARIANTES })
     await abrirEntrada(user)
-    const selector = await within(dialogo()).findByLabelText('Variante') as HTMLSelectElement
-    expect(Array.from(selector.options).map((o) => o.textContent)).toEqual(['Sin variante', 'x500 (Y-500)', 'x1kg (Y-1K)'])
+    const selector = await within(dialogo()).findByLabelText('Variante')
+    expect(await opcionesDe(user, selector)).toEqual(['Sin variante', 'x500 (Y-500)', 'x1kg (Y-1K)'])
     completarEntrada()
     await user.click(confirmar())
     expect(await within(dialogo()).findByText('Elegí la variante, o «Sin variante».')).toBeTruthy()
     expect(enviosA(ENTRADA)).toHaveLength(0)
 
-    await user.selectOptions(selector, '8')
+    await elegirEnBuscable(user, selector, 'x1kg (Y-1K)')
     await user.click(confirmar())
     await waitFor(() => expect(enviosA(ENTRADA)).toHaveLength(1))
     expect(enviosA(ENTRADA)[0]).toMatchObject({ producto_id: 1, variante_id: 8 })
@@ -1725,7 +1725,7 @@ describe('Vencimientos: cargar stock con lote (entrada)', () => {
     prepararFetch()
     await abrir({ ...TODO_ENTRADA, '/api/productos/1/variantes': VARIANTES })
     await abrirEntrada(user)
-    await user.selectOptions(await within(dialogo()).findByLabelText('Variante'), '__base__')
+    await elegirEnBuscable(user, await within(dialogo()).findByLabelText('Variante'), 'Sin variante')
     completarEntrada()
     await user.click(confirmar())
     await waitFor(() => expect(enviosA(ENTRADA)).toHaveLength(1))
@@ -1957,7 +1957,7 @@ describe('Vencimientos: cargar stock con lote (entrada)', () => {
       completarEntrada('L-2026', '2027-03-15', '12')
       expect(panel()).toBeTruthy()
     }
-    await user.selectOptions(within(dialogo()).getByLabelText('Depósito'), '2')
+    await elegirEnBuscable(user, within(dialogo()).getByLabelText('Depósito'), 'Norte · Depósito Norte')
     expect(panel()).toBeNull()
     await user.click(confirmar())
     await waitFor(() => expect(enviosA(ENTRADA)).toHaveLength(4))
@@ -2103,7 +2103,7 @@ describe('Vencimientos: cargar stock con lote: las variantes se conocen ANTES de
     // Con variantes hay que elegir: sin elegir, tampoco sale.
     await user.click(confirmar())
     expect(enviosA(ENTRADA)).toHaveLength(0)
-    await user.selectOptions(within(dialogo()).getByLabelText('Variante'), '7')
+    await elegirEnBuscable(user, within(dialogo()).getByLabelText('Variante'), 'x500 (Y-500)')
     await user.click(confirmar())
     await waitFor(() => expect(enviosA(ENTRADA)).toHaveLength(1))
     expect(enviosA(ENTRADA)[0]).toMatchObject({ producto_id: 1, variante_id: 7 })
@@ -2129,7 +2129,7 @@ describe('Vencimientos: cargar stock con lote: las variantes se conocen ANTES de
     expect(within(dialogo()).queryByRole('button', { name: 'Reintentar' })).toBeNull()
     // Lo tipeado sigue ahí.
     expect((within(dialogo()).getByLabelText('Lote') as HTMLInputElement).value).toBe('L-2026')
-    await user.selectOptions(within(dialogo()).getByLabelText('Variante'), '__base__')
+    await elegirEnBuscable(user, within(dialogo()).getByLabelText('Variante'), 'Sin variante')
     await user.click(confirmar())
     await waitFor(() => expect(enviosA(ENTRADA)).toHaveLength(1))
     expect(enviosA(ENTRADA)[0]).toMatchObject({ producto_id: 1, variante_id: null })
@@ -2191,7 +2191,7 @@ describe('Vencimientos: cargar stock con lote: las variantes se conocen ANTES de
       '/api/vencimientos/productos/2/lotes': FICHA_DE(true, 'u', 2, 'Crema'),
     })
     await abrirEntrada(user)
-    await user.selectOptions(within(dialogo()).getByLabelText('Variante'), '8')
+    await elegirEnBuscable(user, within(dialogo()).getByLabelText('Variante'), 'x1kg (Y-1K)')
     await elegir(user, /Crema/)
     await waitFor(() => expect((within(dialogo()).getByLabelText('Variante') as HTMLSelectElement)).toBeTruthy())
     completarEntrada()

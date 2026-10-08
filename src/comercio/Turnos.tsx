@@ -10,9 +10,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
 import { BadgeEstado } from '../badge-estado'
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose,
@@ -22,6 +19,7 @@ import { PlayCircle, StopCircle, Eye, ArrowUpCircle, ArrowDownCircle, CheckCircl
 import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
 import { fechaHora } from '@/lib/fechas'
+import { SelectBuscable } from '../SelectBuscable'
 
 // El backend guarda "YYYY-MM-DD HH:MM:SS"; en el listado los segundos son
 // ruido y cuestan ~18px de ancho por columna (son dos). Se recortan solo si
@@ -204,14 +202,14 @@ export function Turnos({ esAdmin = false, conCaja = false }: TurnosProps = {}) {
                 {conCaja && (
                   <div className="grid gap-2">
                     <Label htmlFor="turno-caja">Caja</Label>
-                    <Select value={cajaId} onValueChange={(v) => v && setCajaId(v)}>
-                      <SelectTrigger id="turno-caja"><SelectValue placeholder="No hay una caja libre" /></SelectTrigger>
-                      <SelectContent>
-                        {cajas.map((c) => (
-                          <SelectItem key={c.id} value={String(c.id)}>{c.nombre}{c.sucursal_nombre ? ` — ${c.sucursal_nombre}` : ''}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <SelectBuscable
+                      id="turno-caja"
+                      value={cajaId}
+                      onChange={setCajaId}
+                      opciones={cajas.map((c) => ({ value: String(c.id), label: `${c.nombre}${c.sucursal_nombre ? ` — ${c.sucursal_nombre}` : ''}` }))}
+                      placeholder="No hay una caja libre"
+                      limpiable={false}
+                    />
                   </div>
                 )}
                 <div className="grid gap-2"><Label htmlFor="turno-fondo">Fondo inicial</Label><Input id="turno-fondo" type="number" step="0.01" value={montoInicial} onChange={(e) => setMontoInicial(e.target.value)} /></div>

@@ -363,6 +363,7 @@ export function Usuarios({
             )}
             <div className="grid gap-2">
               <Label htmlFor="usr-role">Rol</Label>
+              {/* select-cerrado: los roles los fija cada producto en el código (prop `roles`), no salen de la base */}
               <Select value={form.role} onValueChange={(role) => setForm({ ...form, role })}>
                 <SelectTrigger id="usr-role" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>

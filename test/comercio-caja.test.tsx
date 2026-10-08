@@ -12,6 +12,7 @@ import { Turnos } from '../src/comercio/Turnos'
 import { TurnoDetalle } from '../src/comercio/TurnoDetalle'
 import { TurnoCerrar } from '../src/comercio/TurnoCerrar'
 import { _resetCacheDeMedios } from '../src/comercio/medios-pago'
+import { elegirEnBuscable, opcionesDe } from './helpers-pantallas'
 import type { CajaConfig, CajaMovimiento, ResumenTurno, Turno } from '../src/comercio/tipos'
 
 const MEDIOS = [{ id: 'efectivo', label: 'Efectivo' }, { id: 'transferencia', label: 'Transferencia' }, { id: 'mercadopago', label: 'MercadoPago' }]
@@ -103,7 +104,7 @@ describe('Caja', () => {
     expect(screen.getByText('Saldo actual').parentElement?.textContent).toMatch(/-?\$\s?5,00/)
     expect(screen.getByText('Caja / Medio')).toBeTruthy()
     // Filtro por caja y período: cada cambio recarga.
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Caja' }), '2')
+    await elegirEnBuscable(user, screen.getByRole('combobox', { name: 'Caja' }), 'POS 2')
     await waitFor(() => expect(pedidas().at(-1)).toMatch(/GET \/api\/caja\?desde=.*&caja_id=2$/))
     fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '2026-01-01' } })
     await waitFor(() => expect(pedidas().at(-1)).toMatch(/desde=2026-01-01/))
@@ -125,9 +126,9 @@ describe('Caja', () => {
     const dialogo = await screen.findByRole('dialog')
     expect(within(dialogo).getByRole('button', { name: /Guardar movimiento/ })).toBeDisabled()
     // La caja principal sólo tiene efectivo; la POS 2 no tiene medios: caen todos los del motor.
-    expect(within(dialogo).getAllByRole('option').map((o) => o.textContent)).toContain('Efectivo')
-    await user.selectOptions(within(dialogo).getByRole('combobox', { name: 'Caja' }), '2')
-    await user.selectOptions(within(dialogo).getByRole('combobox', { name: 'Medio de pago' }), 'transferencia')
+    expect(await opcionesDe(user, within(dialogo).getByRole('combobox', { name: 'Medio de pago' }))).toContain('Efectivo')
+    await elegirEnBuscable(user, within(dialogo).getByRole('combobox', { name: 'Caja' }), 'POS 2')
+    await elegirEnBuscable(user, within(dialogo).getByRole('combobox', { name: 'Medio de pago' }), 'Transferencia')
     await user.selectOptions(within(dialogo).getByRole('combobox', { name: 'Tipo' }), 'egreso')
     fireEvent.change(within(dialogo).getByLabelText('Fecha'), { target: { value: '2026-09-06' } })
     fireEvent.change(within(dialogo).getByLabelText('Concepto'), { target: { value: 'Cobro' } })
@@ -400,7 +401,7 @@ describe('Cajas con sucursales', () => {
     expect(screen.getByText('Sucursal: Depósito Norte')).toBeTruthy()
     expect(screen.getAllByText('Turno abierto')).toHaveLength(1)
     expect(screen.queryByText('Ver movimientos')).toBeNull()
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Filtrar por sucursal' }), '3')
+    await elegirEnBuscable(user, screen.getByRole('combobox', { name: 'Filtrar por sucursal' }), 'Centro')
     expect(screen.queryByText('Caja 1')).toBeNull()
     expect(screen.getByText('Caja Centro')).toBeTruthy()
   })
@@ -413,8 +414,8 @@ describe('Cajas con sucursales', () => {
     await user.click(screen.getByRole('button', { name: /Nueva caja/ }))
     const dialogo = await screen.findByRole('dialog')
     const selector = within(dialogo).getByRole('combobox', { name: 'Sucursal' })
-    expect(Array.from(selector.querySelectorAll('option')).map((o) => o.textContent)).toEqual(['Salón', 'Centro'])
-    await user.selectOptions(selector, '3')
+    expect(await opcionesDe(user, selector)).toEqual(['Salón', 'Centro'])
+    await elegirEnBuscable(user, selector, 'Centro')
     fireEvent.change(within(dialogo).getByLabelText('Nombre'), { target: { value: 'Caja 2' } })
     await user.click(within(dialogo).getByRole('button', { name: /Crear caja/ }))
     await waitFor(() => expect(pedidas()).toContain('POST /api/cajas'))
@@ -483,8 +484,8 @@ describe('Turnos con caja', () => {
     const dialogo = await screen.findByRole('dialog')
     const selector = await within(dialogo).findByRole('combobox', { name: 'Caja' })
     // Caja 1 tiene turno abierto y Caja vieja está inactiva.
-    await waitFor(() => expect(Array.from(selector.querySelectorAll('option')).map((o) => o.textContent)).toEqual(['Caja Centro']))
-    expect(selector).toHaveValue('11')
+    await waitFor(async () => expect(await opcionesDe(user, selector)).toEqual(['Caja Centro']))
+    expect(selector).toHaveValue('Caja Centro')
     await user.click(within(dialogo).getByRole('button', { name: /Abrir turno ahora/ }))
     await waitFor(() => expect(pedidas()).toContain('POST /api/turnos/abrir'))
     expect(cuerpoDe('POST /api/turnos/abrir')).toEqual({ monto_inicial: 0, notas: '', caja_id: 11 })

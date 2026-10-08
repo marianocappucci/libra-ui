@@ -20,6 +20,13 @@
 // **campo de texto con lupa** y no un botón: se escribe encima y la lista se
 // abre filtrada. En el modo por defecto (el botón que abre un desplegable con
 // el buscador adentro) la gente no descubre que puede escribir. Ver ADR-031.
+//
+// **v0.129.0 (2026-10-08)**: el modo de campo pasa a ser **el de siempre**: sin
+// `buscarEscribiendo` (o con `true`) el control es el campo con lupa. El botón
+// queda sólo para el que pasa `buscarEscribiendo={false}`. Todo desplegable de
+// datos de la suite se busca escribiendo (ADR-039). Suma `disabled` por opción,
+// `required` y `limpiable`, y arregla que un Escape con la lista abierta
+// cerraba también el diálogo de afuera.
 import {
   useEffect, useId, useMemo, useRef, useState,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -37,6 +44,8 @@ export type OpcionSelect = {
   label: string
   /** Texto secundario: se muestra atenuado y **también entra en la búsqueda**. */
   hint?: string
+  /** La opción se ve pero no se puede elegir (p. ej. una caja que ya tiene un turno abierto). Las flechas la saltean y Enter no la elige. */
+  disabled?: boolean
 }
 
 type Props = {
@@ -51,12 +60,25 @@ type Props = {
    *  `buscarEscribiendo` va al contenedor del campo, que es lo que tiene ancho. */
   className?: string
   ariaLabel?: string
+  /** El tooltip nativo del control: sirve cuando la etiqueta elegida es más larga que el ancho y se corta. */
+  title?: string
   /** Modo «escribir para buscar» (v0.121.0, ADR-031): el control cerrado es un
    *  campo de texto con lupa, no un botón. Escribir filtra y abre la lista al
    *  instante; con algo elegido el campo muestra su etiqueta y una × lo vacía.
-   *  Por defecto (`false`) todo es como antes. El `placeholder` es lo que se ve
-   *  con el campo vacío: conviene que diga qué se busca («Buscar cliente…»). */
+   *  **Desde v0.129.0 (ADR-039) es el modo por defecto**: no hace falta pasarlo.
+   *  Con `false` vuelve el botón que abre un desplegable con el buscador adentro,
+   *  que es lo único que conserva (y no se recomienda: la gente no descubre que
+   *  puede escribir). El `placeholder` es lo que se ve con el campo vacío:
+   *  conviene que diga qué se busca («Buscar cliente…»). */
   buscarEscribiendo?: boolean
+  /** Marca el campo como obligatorio: `required` en el `<input>` (el navegador
+   *  no deja enviar el formulario vacío) y `aria-required`. Con él la × no se
+   *  ofrece: vaciar un campo obligatorio no es una elección. */
+  required?: boolean
+  /** Si se ofrece la × que vacía la selección (sólo en el modo de campo). Por
+   *  defecto sí, salvo que el campo sea `required` o que la lista ya tenga una
+   *  opción de valor `''` («Todos»), que es la forma explícita de vaciar. */
+  limpiable?: boolean
   // --- Lo que inyecta un `FormControl` de shadcn ---------------------------
   //
   // `FormControl` es un `Slot.Root`: le pasa estas tres props **al hijo**, sin
@@ -80,7 +102,39 @@ type Props = {
 }
 
 export function SelectBuscable(props: Props) {
-  return props.buscarEscribiendo ? <SelectDeCampo {...props} /> : <SelectDeBoton {...props} />
+  return props.buscarEscribiendo === false ? <SelectDeBoton {...props} /> : <SelectDeCampo {...props} />
+}
+
+/** Las opciones que se pueden elegir se recorren con las flechas; las deshabilitadas se saltean. Devuelve el índice al que se llega desde `desde`
+ *  moviéndose `paso` (1 o -1), o `desde` si no hay ninguna habilitada en esa dirección. */
+function mover(lista: OpcionSelect[], desde: number, paso: 1 | -1): number {
+  for (let i = desde + paso; i >= 0 && i < lista.length; i += paso) if (!lista[i].disabled) return i
+  return desde
+}
+
+/** La primera opción habilitada (0 si no hay ninguna: no se resalta nada que se pueda elegir). */
+function primeraHabilitada(lista: OpcionSelect[]): number {
+  const i = lista.findIndex((o) => !o.disabled)
+  return i >= 0 ? i : 0
+}
+
+/** Con la lista abierta, Escape la cierra y **no sigue**. Un diálogo de Radix escucha el Escape en `document`, en la fase de captura, antes de que
+ *  llegue a cualquier manejador de React: sin esto, cerrar la lista cerraba también el diálogo y se perdía lo cargado (medido con un `Dialog` de
+ *  `radix-ui`). Se escucha en `window`, que va antes, y sólo si el foco está en este control. */
+function useEscapeQueCierra(abierto: boolean, contenedor: RefObject<HTMLElement | null>, cerrar: () => void) {
+  const cerrarRef = useRef(cerrar)
+  useEffect(() => { cerrarRef.current = cerrar })
+  useEffect(() => {
+    if (!abierto) return
+    const alTeclear = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || !contenedor.current?.contains(e.target as Node)) return
+      e.stopPropagation()
+      e.preventDefault()
+      cerrarRef.current()
+    }
+    window.addEventListener('keydown', alTeclear, true)
+    return () => window.removeEventListener('keydown', alTeclear, true)
+  }, [abierto, contenedor])
 }
 
 /** Las opciones del desplegable, que comparten los dos modos. `idOpcion` sólo lo
@@ -110,12 +164,14 @@ function ListaDeOpciones({
             id={idOpcion?.(i)}
             role="option"
             aria-selected={o.value === value}
+            aria-disabled={o.disabled || undefined}
             data-resaltada={i === resaltada}
-            onClick={() => elegir(o)}
-            onMouseEnter={() => setResaltada(i)}
+            onClick={() => { if (!o.disabled) elegir(o) }}
+            onMouseEnter={() => { if (!o.disabled) setResaltada(i) }}
             className={cn(
               'flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm',
               i === resaltada && 'bg-accent text-accent-foreground',
+              o.disabled && 'cursor-not-allowed opacity-50',
             )}
           >
             <Check className={cn('size-4 shrink-0', o.value !== value && 'opacity-0')} />
@@ -130,7 +186,7 @@ function ListaDeOpciones({
 
 function SelectDeBoton({
   value, onChange, opciones, placeholder = 'Elegí una opción…',
-  emptyMessage = 'Sin resultados.', disabled, className, ariaLabel,
+  emptyMessage = 'Sin resultados.', disabled, required, className, ariaLabel, title,
   id, 'aria-describedby': describedBy, 'aria-invalid': invalido,
 }: Props) {
   const [abierto, setAbierto] = useState(false)
@@ -158,13 +214,15 @@ function SelectDeBoton({
     if (!abierto) return
     setConsulta('')
     const i = opciones.findIndex((o) => o.value === value)
-    setResaltada(i >= 0 ? i : 0)
+    setResaltada(i >= 0 ? i : primeraHabilitada(opciones))
     campo.current?.focus()
   }, [abierto, opciones, value])
 
   // Escribir mueve el resaltado al primer resultado: si no, Enter elegiría
   // una opción que quedó fuera del filtro.
-  useEffect(() => { setResaltada(0) }, [consulta])
+  useEffect(() => { setResaltada(primeraHabilitada(filtradas)) }, [consulta]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEscapeQueCierra(abierto, contenedor, () => setAbierto(false))
 
   // Click afuera cierra. Sin esto el desplegable queda abierto tapando la
   // pantalla, que es el defecto clásico de un dropdown hecho a mano.
@@ -191,14 +249,14 @@ function SelectDeBoton({
   function alTeclear(e: ReactKeyboardEvent) {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      setResaltada((i) => Math.min(i + 1, filtradas.length - 1))
+      setResaltada((i) => mover(filtradas, i, 1))
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
-      setResaltada((i) => Math.max(i - 1, 0))
+      setResaltada((i) => mover(filtradas, i, -1))
     } else if (e.key === 'Enter') {
       e.preventDefault()
       const opcion = filtradas[resaltada]
-      if (opcion) elegir(opcion)
+      if (opcion && !opcion.disabled) elegir(opcion)
     } else if (e.key === 'Escape') {
       e.preventDefault()
       setAbierto(false)
@@ -218,8 +276,10 @@ function SelectDeBoton({
         aria-haspopup="listbox"
         aria-controls={abierto ? `${idInterno}-lista` : undefined}
         aria-label={ariaLabel}
+        title={title}
         aria-describedby={describedBy}
         aria-invalid={invalido}
+        aria-required={required}
         disabled={disabled}
         onClick={() => setAbierto((v) => !v)}
         className={cn('justify-between font-normal', !seleccionada && 'text-muted-foreground', className)}
@@ -264,12 +324,13 @@ function SelectDeBoton({
  *  a `null`: la etiqueta elegida reaparece y lo escrito a medias se descarta. */
 function SelectDeCampo({
   value, onChange, opciones, placeholder = 'Buscar…',
-  emptyMessage = 'Sin resultados.', disabled, className, ariaLabel,
+  emptyMessage = 'Sin resultados.', disabled, required, limpiable, className, ariaLabel, title,
   id, 'aria-describedby': describedBy, 'aria-invalid': invalido,
 }: Props) {
   const [abierto, setAbierto] = useState(false)
   const [consulta, setConsulta] = useState<string | null>(null)
   const [resaltada, setResaltada] = useState(0)
+  const contenedor = useRef<HTMLDivElement>(null)
   const campo = useRef<HTMLInputElement>(null)
   const lista = useRef<HTMLDivElement>(null)
   // Para el primer `mouseup` tras enfocar con el mouse: los navegadores lo usan
@@ -302,7 +363,7 @@ function SelectDeCampo({
   function abrir() {
     setConsulta(null)
     const i = opciones.findIndex((o) => o.value === value)
-    setResaltada(i >= 0 ? i : 0)
+    setResaltada(i >= 0 ? i : primeraHabilitada(opciones))
     setAbierto(true)
   }
 
@@ -310,6 +371,12 @@ function SelectDeCampo({
     setAbierto(false)
     setConsulta(null)
   }
+
+  useEscapeQueCierra(abierto, contenedor, cerrar)
+
+  // La × vacía la selección. No se ofrece si el campo es obligatorio ni si la lista ya trae su opción de «ninguno» (`value: ''`, p. ej. «Todos»):
+  // ésa es la forma explícita de vaciar y el campo la muestra como etiqueta.
+  const conCruz = value !== '' && !disabled && (limpiable ?? (!required && !opciones.some((o) => o.value === '')))
 
   function elegir(opcion: OpcionSelect) {
     onChange(opcion.value)
@@ -324,24 +391,24 @@ function SelectDeCampo({
 
   function alEscribir(e: ChangeEvent<HTMLInputElement>) {
     setConsulta(e.target.value)
-    setResaltada(0)
+    setResaltada(primeraHabilitada(opciones.filter((o) => coincideBusqueda(`${o.label} ${o.hint ?? ''}`, e.target.value))))
     setAbierto(true)
   }
 
   function alTeclear(e: ReactKeyboardEvent) {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      if (abierto) setResaltada((i) => Math.min(i + 1, filtradas.length - 1))
+      if (abierto) setResaltada((i) => mover(filtradas, i, 1))
       else abrir()
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
-      if (abierto) setResaltada((i) => Math.max(i - 1, 0))
+      if (abierto) setResaltada((i) => mover(filtradas, i, -1))
     } else if (e.key === 'Enter') {
       // Cerrada, Enter no es nuestro: que siga su camino (enviar el formulario).
       if (!abierto) return
       e.preventDefault()
       const opcion = filtradas[resaltada]
-      if (opcion) elegir(opcion)
+      if (opcion && !opcion.disabled) elegir(opcion)
     } else if (e.key === 'Escape') {
       if (!abierto) return
       e.preventDefault()
@@ -355,6 +422,7 @@ function SelectDeCampo({
 
   return (
     <div
+      ref={contenedor}
       className={cn('relative', className)}
       // Cierra cuando el foco sale del control entero —campo, × y lista—, que
       // cubre el click afuera y el Tab. Elegir con el mouse no lo dispara
@@ -376,17 +444,20 @@ function SelectDeCampo({
         onClick={() => { if (!abierto) abrir() }}
         placeholder={placeholder}
         disabled={disabled}
+        required={required}
+        aria-required={required}
         aria-expanded={abierto}
         aria-haspopup="listbox"
         aria-controls={abierto ? idLista : undefined}
         aria-activedescendant={activa ? idOpcion(resaltada) : undefined}
         aria-autocomplete="list"
         aria-label={ariaLabel}
+        title={title}
         aria-describedby={describedBy}
         aria-invalid={invalido}
-        className={cn('w-full pl-9', value !== '' && !disabled && 'pr-9')}
+        className={cn('w-full pl-9', conCruz && 'pr-9')}
       />
-      {value !== '' && !disabled && (
+      {conCruz && (
         <Button
           type="button"
           variant="ghost"

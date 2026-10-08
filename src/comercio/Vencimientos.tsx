@@ -66,7 +66,6 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { fecha } from '@/lib/fechas'
 import { CalendarClock, CalendarPlus, Check, Download, PackagePlus, TriangleAlert, Trash2 } from 'lucide-react'
@@ -759,15 +758,17 @@ function DialogoEntrada({ productos, errorDeProductos, sucursales, puedeMarcar, 
           {mostrarCampos && (
             <>
               <Campo id="entrada-deposito" etiqueta="Depósito" error={intentado ? errorDelDeposito : (depositos?.error ?? null)}>
-                <Select value={depositoId} onValueChange={setDepositoId} disabled={bloqueado}>
-                  <SelectTrigger id="entrada-deposito"><SelectValue placeholder="Depósito…" /></SelectTrigger>
-                  <SelectContent>
-                    {(depositos?.lista ?? []).map((d) => {
-                      const suc = nombreDeSucursal(d.branch_id)
-                      return <SelectItem key={d.id} value={String(d.id)}>{suc ? `${suc} · ${d.nombre}` : d.nombre}</SelectItem>
-                    })}
-                  </SelectContent>
-                </Select>
+                <SelectBuscable
+                  id="entrada-deposito"
+                  value={depositoId}
+                  onChange={setDepositoId}
+                  opciones={(depositos?.lista ?? []).map((d) => {
+                    const suc = nombreDeSucursal(d.branch_id)
+                    return { value: String(d.id), label: suc ? `${suc} · ${d.nombre}` : d.nombre }
+                  })}
+                  placeholder="Depósito…"
+                  disabled={bloqueado}
+                />
               </Campo>
               {cargandoVariantes && <p role="status" className="text-sm text-muted-foreground">Consultando variantes…</p>}
               {variantesDelProducto?.error && (
@@ -782,13 +783,18 @@ function DialogoEntrada({ productos, errorDeProductos, sucursales, puedeMarcar, 
               )}
               {tieneVariantes && (
                 <Campo id="entrada-variante" etiqueta="Variante" error={intentado ? errorDeLaVariante : null}>
-                  <Select value={varianteId} onValueChange={setVarianteId} disabled={bloqueado}>
-                    <SelectTrigger id="entrada-variante"><SelectValue placeholder="Variante…" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={SIN_VARIANTE}>Sin variante</SelectItem>
-                      {variantesDelProducto!.lista.map((v) => <SelectItem key={v.id} value={String(v.id)}>{v.nombre} ({v.sku})</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <SelectBuscable
+                    id="entrada-variante"
+                    value={varianteId}
+                    onChange={setVarianteId}
+                    opciones={[
+                      { value: SIN_VARIANTE, label: 'Sin variante' },
+                      ...variantesDelProducto!.lista.map((v) => ({ value: String(v.id), label: `${v.nombre} (${v.sku})` })),
+                    ]}
+                    placeholder="Variante…"
+                    limpiable={false}
+                    disabled={bloqueado}
+                  />
                 </Campo>
               )}
               <Campo id="entrada-lote" etiqueta="Lote" error={intentado ? errorDelLote : null}>
@@ -1042,25 +1048,33 @@ export function Vencimientos({ puedeMover = true, puedeMarcar = true }: { puedeM
         {sucursales.length > 0 && (
           <div className="grid gap-2">
             <Label htmlFor="vencimientos-sucursal">Sucursal</Label>
-            <Select value={sucursal} onValueChange={setSucursal}>
-              <SelectTrigger id="vencimientos-sucursal" className="w-56"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={TODAS}>Toda la instancia</SelectItem>
-                {sucursales.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.nombre}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <SelectBuscable
+              id="vencimientos-sucursal"
+              value={sucursal}
+              onChange={setSucursal}
+              opciones={[
+                { value: TODAS, label: 'Toda la instancia' },
+                ...sucursales.map((s) => ({ value: String(s.id), label: s.nombre })),
+              ]}
+              limpiable={false}
+              className="w-56"
+            />
           </div>
         )}
         {categorias.length > 0 && (
           <div className="grid gap-2">
             <Label htmlFor="vencimientos-categoria">Categoría</Label>
-            <Select value={categoria} onValueChange={setCategoria}>
-              <SelectTrigger id="vencimientos-categoria" className="w-56"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={TODAS}>Todas las categorías</SelectItem>
-                {categorias.map((c) => <SelectItem key={c.id} value={c.nombre}>{c.nombre}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <SelectBuscable
+              id="vencimientos-categoria"
+              value={categoria}
+              onChange={setCategoria}
+              opciones={[
+                { value: TODAS, label: 'Todas las categorías' },
+                ...categorias.map((c) => ({ value: c.nombre, label: c.nombre })),
+              ]}
+              limpiable={false}
+              className="w-56"
+            />
           </div>
         )}
         <div className="grid gap-2">
