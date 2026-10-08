@@ -100,6 +100,7 @@ para que el motor de Tailwind v4 escanee las clases usadas dentro de
 | `libra-ui/IconoIndicador` | `IconoIndicador({ concepto, producto?, className? })` | El ícono de un concepto (16 px) para el título de un bloque de un reporte. |
 | `libra-ui/titulo-pantalla` | `TituloPantalla({ icono, children, className?, acciones? })` | El título de pantalla con su ícono en el recuadro (`v0.34.0`). Desde `v0.128.0` acepta `acciones`: los botones a la altura del título, a la derecha. |
 | `libra-ui/auditoria-de-titulos` | `auditarTitulos`, `auditarMenuContraCatalogo`, `iconoDelTitulo`… | **De test.** El guard de que el ícono del título es el del menú (ADR-035). |
+| `libra-ui/auditoria-de-relleno` | `auditarRelleno(raizSrc, opciones?)`, `describirInfracciones`, `describirSobrantes`, `analizarFuente`, `rellenoDeClases`, `esPantallaDeProducto` | **De test.** El guard de que una pantalla no agrega relleno propio arriba del que ya pone el `Layout` (ADR-040). |
 | `libra-ui/auditoria-de-indicadores` | `auditarIndicadores(raizSrc, opciones?)`, `describirInfracciones`, `LUCIDE_PERMITIDOS`, `esPantallaDeIndicadores`, `iconosDeConceptoEn` | **De test.** El guard de que los reportes y tableros no importan íconos de lucide por su cuenta (ADR-038). |
 
 ## El logo del producto y el wordmark (`v0.23.0`)
@@ -404,6 +405,23 @@ const r = auditarIndicadores(resolve(__dirname, '..'))   // el `src` del product
 expect(r.pantallas).toBeGreaterThan(0)                    // que midió algo
 expect(describirInfracciones(r.infracciones)).toEqual([])
 ```
+
+**El relleno de arriba es del `Layout`, no de la pantalla (ADR-040).** El contenido de `createLayout` lleva `p-4 md:p-6` y arriba, en escritorio, `md:pt-3.5` (14 px): lo que mide el sidebar hasta el borde de arriba de la marca (`SidebarHeader` `p-2` + fila `py-1.5`). Con eso la fila del título (el recuadro `size-8` de `TituloPantalla`, 32 px, igual que la marca) arranca a la altura del logo y del nombre del producto. En celular queda `pt-14`, el hueco del botón del menú. **Una pantalla NO se envuelve en su propio `<div className="p-6">`**: lo duplica y baja el título 24 px más (32 px debajo de la marca en total, 10 de más sólo por el `pt-6` anterior). Para separar bloques, `space-y-N` o `gap-N`. El guard:
+
+```ts
+import { resolve } from 'node:path'
+import { auditarRelleno, describirInfracciones, describirSobrantes } from 'libra-ui/auditoria-de-relleno'
+
+const r = auditarRelleno(resolve(__dirname, '..'), {
+  // Las pantallas que se dibujan FUERA del Layout sí llevan su relleno: ruta relativa al `src` → motivo.
+  excepciones: { 'pages/KdsMonitor.tsx': 'pantalla completa, fuera del Layout' },
+})
+expect(r.pantallas).toBeGreaterThan(0)                    // que midió algo (r.raices: cuántos `return` leyó)
+expect(describirInfracciones(r.infracciones)).toEqual([])
+expect(describirSobrantes(r.sobrantes)).toEqual([])      // una excepción que ya no hace falta se saca
+```
+
+Mide `pages/**/*.tsx` (o lo que diga `opciones.esPantalla`): el elemento raíz de cada pantalla —los `return` del componente, también los de `if (cargando) return …`— no lleva `p-N`, `py-N`, `pt-N`, `mt-N` ni `my-N`.
 
 **`TituloPantalla` con `acciones`.** `<TituloPantalla icono={ICONOS.clientes} acciones={<Button>Nuevo cliente</Button>}>Clientes</TituloPantalla>` dibuja el título a la izquierda y los botones a la derecha, en la misma línea (en un celular bajan debajo del título). Es azúcar sobre `EncabezadoDePantalla` (`libra-ui/acciones`): la misma fila, no otra. Sin `acciones` rinde el mismo `<h2>` de siempre. Escribí `icono` primero.
 

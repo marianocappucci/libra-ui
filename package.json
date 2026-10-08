@@ -39,6 +39,7 @@
     "./agenda": "./src/agenda/index.ts",
     "./api-client": "./src/api-client.ts",
     "./auditoria-de-indicadores": "./src/auditoria-de-indicadores.ts",
+    "./auditoria-de-relleno": "./src/auditoria-de-relleno.ts",
     "./auditoria-de-titulos": "./src/auditoria-de-titulos.ts",
     "./badge-estado": "./src/badge-estado.tsx",
     "./branding": "./src/branding.ts",

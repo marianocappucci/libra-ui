@@ -9,6 +9,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { createLayout } from '../src/Layout'
+import { SidebarHeader } from '../src/ui/sidebar'
 
 type Usuario = { role?: string; name?: string; demo_readonly?: boolean }
 
@@ -300,7 +301,32 @@ describe('la barra superior no existe más', () => {
     expect(main.tagName).toBe('DIV')
     expect(document.querySelectorAll('main main')).toHaveLength(0)   // dos <main> anidados dejaban dos landmarks para los lectores de pantalla
     expect(main.className).toContain('pt-14')
-    expect(main.className).toContain('md:pt-6')
+    expect(main.className).toContain('md:pt-3.5')
+  })
+
+  it('🔴 en desktop el título arranca a la altura de la marca del sidebar (ADR-040)', () => {
+    // Pedido del humano (2026-10-08): «el título de la sección no está alineado a la misma altura que el nombre de la aplicación». La cuenta
+    // se hace con las clases de verdad, no con un 14 escrito a mano: lo que mide el sidebar hasta el borde de arriba de la marca (el
+    // relleno de `SidebarHeader` más el de la fila de la marca) es lo que tiene que valer el relleno de arriba del contenido. Si alguien
+    // toca uno de los dos, este test dice cuál es la cuenta que ya no cierra.
+    //
+    // `SidebarHeader` es el REAL (`src/ui/sidebar`, la primitiva canónica que los productos re-exportan): el `@/components/ui/sidebar` de
+    // estos tests es un stub sin clases. La fila y la marca salen del Layout.
+    const { container } = render(<SidebarHeader />)
+    const encabezado = container.firstElementChild as HTMLElement
+    montarLayout()
+    const marca = screen.getByText('M')                       // la inicial: el recuadro de la marca (`h-8 w-8`)
+    const fila = marca.parentElement as HTMLElement           // la fila de la marca (`px-2 py-1.5`)
+    const main = screen.getAllByText('contenido')[0].parentElement as HTMLElement
+    const clases = (el: HTMLElement) => el.className.split(/\s+/)
+    const px = (clase: string | undefined) => Number((clase as string).replace(/^.*-/, '')) * 4   // la escala de Tailwind: 1 unidad = 4 px
+    const hastaLaMarca =
+      px(clases(encabezado).find((c) => /^p-[\d.]+$/.test(c))) + px(clases(fila).find((c) => /^py-[\d.]+$/.test(c)))
+    const arriba = px(clases(main).find((c) => /^md:pt-[\d.]+$/.test(c)))
+    expect(hastaLaMarca).toBe(14)
+    expect(arriba).toBe(hastaLaMarca)
+    // La marca y el recuadro del título (`size-8`) miden lo mismo, 32 px: sus bordes de arriba, sus centros y los de abajo coinciden.
+    expect(clases(marca)).toContain('h-8')
   })
 })
 

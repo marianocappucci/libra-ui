@@ -482,10 +482,17 @@ export function createLayout<TUser = { role?: string; name?: string }>({
               horizontal de las tablas (overflow-x-auto) puedan encogerse
               dentro del flex en vez de desbordarlo -- sin esto, una tabla
               ancha empuja el layout entero en vez de scrollear.
-              El pt-12 de mobile es el hueco del trigger flotante.
+              El pt-14 de mobile es el hueco del trigger flotante.
               Es un <div> y no un <main>: `SidebarInset` YA es el <main> de la pantalla, y dos <main> anidados dejan dos landmarks «main» para los
               lectores de pantalla (medido en la verificación de VentaLibra). */}
-          <div className="min-w-0 flex-1 space-y-4 p-4 pt-14 md:p-6 md:pt-6">{children}</div>
+          {/* El relleno de arriba en desktop, `md:pt-3.5` (14 px), NO es `md:pt-6` (ADR-040). Lo decide el encabezado de la sidebar: `SidebarHeader`
+              `p-2` (8 px) + la fila de la marca `py-1.5` (6 px) = 14 px hasta el borde de arriba de la marca, que mide 32 (`h-8`). El título de
+              una pantalla (`TituloPantalla`) es una fila de 32 px (el recuadro `size-8`): con 14 px arriba su borde de arriba, su centro (30 px)
+              y su borde de abajo (46 px) caen en los de la marca, y la fila del título queda a la altura del nombre del producto. Con `pt-6` (24)
+              quedaba 10 px más abajo; con el `p-6` que las pantallas de los productos le sumaban encima (48 px), 34 px más abajo (el pedido
+              del humano, 2026-10-08). Si cambia el relleno del encabezado o el tamaño de la marca, cambia esta cuenta: `test/Layout.test.tsx` la
+              repite. Las pantallas NO agregan relleno propio arriba (`libra-ui/auditoria-de-relleno`). */}
+          <div className="min-w-0 flex-1 space-y-4 p-4 pt-14 md:p-6 md:pt-3.5">{children}</div>
         </SidebarInset>
       </SidebarProvider>
     )
