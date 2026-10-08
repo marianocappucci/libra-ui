@@ -330,12 +330,13 @@ describe('SelectBuscable en modo de campo (campo de texto con lupa): el modo por
   // es el campo donde se escribe. (ADR-031)
 
   function Campo({
-    inicial = '', onChange, id,
-  }: { inicial?: string; onChange?: (v: string) => void; id?: string }) {
+    inicial = '', onChange, id, limpiable,
+  }: { inicial?: string; onChange?: (v: string) => void; id?: string; limpiable?: boolean }) {
     const [value, setValue] = useState(inicial)
     return (
       <SelectBuscable
         id={id}
+        limpiable={limpiable}
         value={value}
         onChange={(v) => { setValue(v); onChange?.(v) }}
         opciones={CLIENTES}
@@ -482,7 +483,7 @@ describe('SelectBuscable en modo de campo (campo de texto con lupa): el modo por
   it('la × vacía la selección, cierra y deja el foco en el campo', async () => {
     const user = userEvent.setup()
     const alElegir = vi.fn()
-    render(<Campo inicial="2" onChange={alElegir} />)
+    render(<Campo inicial="2" onChange={alElegir} limpiable />)
     expect(combo()).toHaveValue('Hospital Esteban Iribarne')
 
     await user.click(screen.getByRole('button', { name: 'Quitar la selección' }))
@@ -788,8 +789,13 @@ describe('SelectBuscable, la × y los formularios nativos', () => {
   const CAJAS: OpcionSelect[] = [{ value: '1', label: 'Caja 1' }, { value: '3', label: 'Caja 3' }]
   const cruz = () => screen.queryByRole('button', { name: 'Quitar la selección' })
 
-  it('la × se ofrece con algo elegido', () => {
+  it('por defecto la × NO se ofrece (0.129.1): un `\'\'` inesperado rompe a quien usa un centinela para «todos»', () => {
     render(<SelectBuscable ariaLabel="Caja" value="1" onChange={vi.fn()} opciones={CAJAS} />)
+    expect(cruz()).not.toBeInTheDocument()
+  })
+
+  it('con `limpiable` la × se ofrece con algo elegido', () => {
+    render(<SelectBuscable ariaLabel="Caja" limpiable value="1" onChange={vi.fn()} opciones={CAJAS} />)
     expect(cruz()).toBeInTheDocument()
   })
 
