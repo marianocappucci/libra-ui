@@ -38,9 +38,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { SelectBuscable } from '../SelectBuscable'
 
 // Radix Select no admite value="" (reservado): «todas» y «sin lista» viajan como un sentinel, mismo patrón que
 // Egresos ("__sin__") y Productos ("__ninguna__").
@@ -105,6 +104,7 @@ function VistaDeImpresion({ filas, onCerrar }: { filas: Fila[]; onCerrar: () => 
         </p>
         <div className="ml-auto flex items-center gap-2">
           <Label htmlFor="etiquetas-columnas">Columnas</Label>
+          {/* select-cerrado: las columnas de la hoja son 2, 3 o 4, fijas en el código (`COLUMNAS`) */}
           <Select value={columnas} onValueChange={setColumnas}>
             <SelectTrigger id="etiquetas-columnas" className="w-20">
               <SelectValue />
@@ -290,33 +290,33 @@ export function EtiquetasGondola() {
             {categorias.length > 0 && (
               <div className="grid gap-2">
                 <Label htmlFor="etiquetas-categoria">Categoría</Label>
-                <Select value={categoria} onValueChange={setCategoria}>
-                  <SelectTrigger id="etiquetas-categoria" className="w-56">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={TODAS}>Todas las categorías</SelectItem>
-                    {categorias.map((c) => <SelectItem key={c.id} value={c.nombre}>{c.nombre}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <SelectBuscable
+                  id="etiquetas-categoria"
+                  value={categoria}
+                  onChange={setCategoria}
+                  opciones={[
+                    { value: TODAS, label: 'Todas las categorías' },
+                    ...categorias.map((c) => ({ value: c.nombre, label: c.nombre })),
+                  ]}
+                  limpiable={false}
+                  className="w-56"
+                />
               </div>
             )}
             {listas.length > 0 && (
               <div className="grid gap-2">
                 <Label htmlFor="etiquetas-lista">Precio</Label>
-                <Select value={listaId} onValueChange={setListaId}>
-                  <SelectTrigger id="etiquetas-lista" className="w-64">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={SIN_LISTA}>Precio de venta del producto</SelectItem>
-                    {listas.filter((l) => l.activa).map((l) => (
-                      <SelectItem key={l.id} value={String(l.id)}>
-                        {l.nombre}{l.es_default ? ' (predeterminada)' : ''}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SelectBuscable
+                  id="etiquetas-lista"
+                  value={listaId}
+                  onChange={setListaId}
+                  opciones={[
+                    { value: SIN_LISTA, label: 'Precio de venta del producto' },
+                    ...listas.filter((l) => l.activa).map((l) => ({ value: String(l.id), label: `${l.nombre}${l.es_default ? ' (predeterminada)' : ''}` })),
+                  ]}
+                  limpiable={false}
+                  className="w-64"
+                />
               </div>
             )}
           </div>

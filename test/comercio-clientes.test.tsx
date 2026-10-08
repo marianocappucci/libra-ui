@@ -14,7 +14,7 @@ import type { ClienteConAlias, MovimientoCC } from '../src/comercio/tipos'
 import { IVA_CONDITIONS } from '../src/facturas'
 import type { Cliente } from '../src/mp'
 import {
-  cuerpoDe, montar, pedidas, prepararFetch, responder, selectConOpcion, ventanaFalsa,
+  cuerpoDe, elegirEnBuscable, montar, pedidas, prepararFetch, responder, selectConOpcion, ventanaFalsa,
 } from './helpers-pantallas'
 
 const ANA: Cliente = { id: 1, name: 'Ana', address: 'Calle 1', cuit_dni: '20-12345678-9', email: 'ana@x.com', phone: '111', iva_condition: IVA_CONDITIONS[0], auto_facturar: 0, activo: 1 }
@@ -316,15 +316,15 @@ describe('ClienteDetalle', () => {
     const user = userEvent.setup()
     montar('/clientes/1', <ClienteDetalle conListaDePrecio />)
     expect(await screen.findByText('Lista de precios (mayorista)')).toBeTruthy()
-    const select = selectConOpcion('Distribuidor')
-    await waitFor(() => expect(select.value).toBe('2'))
-    await user.selectOptions(select, '1')
+    const select = screen.getByRole('combobox', { name: 'Lista asignada' })
+    await waitFor(() => expect(select).toHaveValue('Distribuidor'))
+    await elegirEnBuscable(user, select, 'Mayorista')
     await waitFor(() => expect(cuerpoDe('PUT /api/clientes/1/lista-precio')).toEqual({ lista_id: 1 }))
-    await user.selectOptions(select, '__base__')
+    await elegirEnBuscable(user, select, '— Precio de venta base —')
     await waitFor(() => expect(cuerpoDe('PUT /api/clientes/1/lista-precio', pedidas().length - 1)).toEqual({ lista_id: null }))
     // Y el error al guardar.
     responder({ '/api/clientes/1': FICHA, 'PUT /api/clientes/1/lista-precio': { status: 400, detail: 'Lista inválida' } })
-    await user.selectOptions(select, '1')
+    await elegirEnBuscable(user, select, 'Mayorista')
     expect(await screen.findByText('Lista inválida')).toBeTruthy()
   })
 })
@@ -388,13 +388,14 @@ describe('CuentaCorrienteDetalle', () => {
     const dialogo = screen.getByRole('dialog')
     expect(dialogo.textContent).toContain('Saldo pendiente:')
     expect((within(dialogo).getByRole('spinbutton') as HTMLInputElement).value).toBe('721')
-    await user.selectOptions(selectConOpcion('Transferencia'), 'transferencia')
+    await elegirEnBuscable(user, within(dialogo).getByRole('combobox', { name: 'Medio de pago' }), 'Transferencia')
     fireEvent.change(within(dialogo).getByPlaceholderText('N° transferencia, cheque…'), { target: { value: 'op-9' } })
     fireEvent.change(within(dialogo).getByDisplayValue('Pago a cuenta'), { target: { value: 'Adelanto' } })
     fireEvent.change(dialogo.querySelector('input[type="date"]')!, { target: { value: '2026-09-04' } })
     // La caja se puede no registrar.
-    await user.selectOptions(selectConOpcion('— No registrar en caja —'), 'ninguna')
-    await user.selectOptions(selectConOpcion('— No registrar en caja —'), '1')
+    const caja = within(dialogo).getByRole('combobox', { name: 'Registrar en caja' })
+    await elegirEnBuscable(user, caja, '— No registrar en caja —')
+    await elegirEnBuscable(user, caja, CAJA.nombre)
     await user.click(within(dialogo).getByRole('button', { name: 'Registrar pago' }))
     await waitFor(() => expect(cuerpoDe('POST /api/cuenta-corriente/1/pagar')).toMatchObject({ monto: 721, fecha: '2026-09-04', concepto: 'Adelanto', referencia: 'op-9', medio_pago: 'transferencia', caja_id: 1 }))
     expect(abrir).not.toHaveBeenCalled()

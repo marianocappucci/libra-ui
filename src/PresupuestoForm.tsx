@@ -20,9 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Trash2 } from 'lucide-react'
 import { SelectBuscable } from './SelectBuscable'
 import { TituloPantalla } from './titulo-pantalla'
@@ -250,13 +248,17 @@ export function PresupuestoForm({ conSelectorDeLista = false, conQuiebres = fals
               {conSelectorDeLista && listasPrecio.length > 0 && (
                 <div className="grid gap-2">
                   <Label>Lista de precios</Label>
-                  <Select value={listaPrecioId || '__base__'} onValueChange={(v) => setListaPrecioId(v === '__base__' ? '' : v)}>
-                    <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__base__">— Precio de venta base —</SelectItem>
-                      {listasPrecio.map((l) => <SelectItem key={l.id} value={String(l.id)}>{l.nombre}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <SelectBuscable
+                    value={listaPrecioId}
+                    onChange={setListaPrecioId}
+                    opciones={[
+                      { value: '', label: '— Precio de venta base —' },
+                      ...listasPrecio.map((l) => ({ value: String(l.id), label: l.nombre })),
+                    ]}
+                    ariaLabel="Lista de precios"
+                    limpiable={false}
+                    className="w-48"
+                  />
                 </div>
               )}
             </div>

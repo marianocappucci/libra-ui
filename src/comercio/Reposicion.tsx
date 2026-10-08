@@ -53,11 +53,11 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { AlertTriangle, Download, FilePlus2, PackagePlus, TrendingDown } from 'lucide-react'
 import { nuevaClaveDeOperacion } from './clave-de-operacion'
 import { DialogoGenerarOrdenes } from './reposicion-ordenes'
 import { borrarIntentoPendiente, leerIntentoPendiente, type IntentoDeOrdenes, type ParametrosDeOrdenes } from './reposicion-ordenes-pendiente'
+import { SelectBuscable } from '../SelectBuscable'
 
 const RUTA = '/api/reportes/reposicion'
 /** El relleno de las celdas de la tabla (ADR-012): 6 px a los lados en vez de 12: con las 13 columnas (las dos opcionales, Estacional y Por vencer, prendidas) son unos 150 px menos de ancho y la tabla entra en 1440 px sin desplazarse. */
@@ -321,37 +321,52 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
         {sucursales.length > 0 && (
           <div className="grid w-full gap-2 sm:w-auto">
             <Label htmlFor="reposicion-sucursal">Sucursal</Label>
-            <Select value={sucursal} onValueChange={setSucursal}>
-              <SelectTrigger id="reposicion-sucursal" className="w-full min-w-0 sm:w-64" title={tituloDe(sucursal, sucursales.map((x) => [String(x.id), x.nombre]))}><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={TODAS}>Toda la instancia</SelectItem>
-                {sucursales.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.nombre}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <SelectBuscable
+              id="reposicion-sucursal"
+              value={sucursal}
+              onChange={setSucursal}
+              opciones={[
+                { value: TODAS, label: 'Toda la instancia' },
+                ...sucursales.map((s) => ({ value: String(s.id), label: s.nombre })),
+              ]}
+              limpiable={false}
+              title={tituloDe(sucursal, sucursales.map((x) => [String(x.id), x.nombre]))}
+              className="w-full min-w-0 sm:w-64"
+            />
           </div>
         )}
         {categorias.length > 0 && (
           <div className="grid w-full gap-2 sm:w-auto">
             <Label htmlFor="reposicion-categoria">Categoría</Label>
-            <Select value={categoria} onValueChange={setCategoria}>
-              <SelectTrigger id="reposicion-categoria" className="w-full min-w-0 sm:w-64" title={tituloDe(categoria, categorias.map((x) => [x.nombre, x.nombre]))}><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={TODAS}>Todas las categorías</SelectItem>
-                {categorias.map((c) => <SelectItem key={c.id} value={c.nombre}>{c.nombre}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <SelectBuscable
+              id="reposicion-categoria"
+              value={categoria}
+              onChange={setCategoria}
+              opciones={[
+                { value: TODAS, label: 'Todas las categorías' },
+                ...categorias.map((c) => ({ value: c.nombre, label: c.nombre })),
+              ]}
+              limpiable={false}
+              title={tituloDe(categoria, categorias.map((x) => [x.nombre, x.nombre]))}
+              className="w-full min-w-0 sm:w-64"
+            />
           </div>
         )}
         {conProveedor && proveedores.length > 0 && (
           <div className="grid w-full gap-2 sm:w-auto">
             <Label htmlFor="reposicion-proveedor">Proveedor</Label>
-            <Select value={proveedor} onValueChange={setProveedor}>
-              <SelectTrigger id="reposicion-proveedor" className="w-full min-w-0 sm:w-64" title={tituloDe(proveedor, proveedores.map((x) => [String(x.id), x.nombre]))}><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={TODAS}>Todos los proveedores</SelectItem>
-                {proveedores.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.nombre}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <SelectBuscable
+              id="reposicion-proveedor"
+              value={proveedor}
+              onChange={setProveedor}
+              opciones={[
+                { value: TODAS, label: 'Todos los proveedores' },
+                ...proveedores.map((p) => ({ value: String(p.id), label: p.nombre })),
+              ]}
+              limpiable={false}
+              title={tituloDe(proveedor, proveedores.map((x) => [String(x.id), x.nombre]))}
+              className="w-full min-w-0 sm:w-64"
+            />
           </div>
         )}
         {PARAMETROS.map((p) => (

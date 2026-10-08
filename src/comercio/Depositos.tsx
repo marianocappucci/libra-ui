@@ -237,6 +237,7 @@ export function Depositos({
                 // Se elige al crear: una sucursal sigue siendo sucursal y un depósito, depósito.
                 <p id="deposito-tipo" className="text-sm">{etiquetaDeTipo(tipo)}</p>
               ) : (
+                // select-cerrado: los tipos de ubicación los fija cada producto en el código (prop `tipos`), no salen de la base
                 <Select value={tipo} onValueChange={(v) => v && setTipo(v)}>
                   <SelectTrigger id="deposito-tipo"><SelectValue /></SelectTrigger>
                   <SelectContent>

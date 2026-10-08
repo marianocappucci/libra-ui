@@ -10,7 +10,7 @@ import { Logs, aFechaLocal } from '../src/comercio/Logs'
 import { Reportes } from '../src/comercio/Reportes'
 import { CajaMedios } from '../src/comercio/CajaMedios'
 import type { CajaMediosData, LibrosIvaData, LogsData, ReportesData } from '../src/comercio/tipos'
-import { montar, pedidas, prepararFetch, responder, selectConOpcion } from './helpers-pantallas'
+import { elegirEnBuscable, montar, pedidas, prepararFetch, responder, selectConOpcion } from './helpers-pantallas'
 
 const LIBROS: LibrosIvaData = {
   desde: '2026-09-01', hasta: '2026-09-30', empresa_cuit: '30-1',
@@ -148,7 +148,7 @@ describe('Logs (actividad)', () => {
     expect(screen.getByRole('link', { name: 'Exportar CSV' }).getAttribute('href')).toBe('/admin/logs/export?tipo=caja%2Cstock')
     await user.click(screen.getByRole('button', { name: 'Venta' }))
     await waitFor(() => expect(pedidas().at(-1)).toBe('GET /api/logs?page=1'))
-    await user.selectOptions(selectConOpcion('Cajero (cajero)'), '7')
+    await elegirEnBuscable(user, screen.getByRole('combobox', { name: 'Usuario' }), 'Cajero (cajero)')
     await waitFor(() => expect(pedidas().at(-1)).toBe('GET /api/logs?page=1&usuario_id=7'))
     fireEvent.change(screen.getByPlaceholderText('Todos'), { target: { value: '3' } })
     await waitFor(() => expect(pedidas().at(-1)).toBe('GET /api/logs?page=1&usuario_id=7&turno_id=3'))
@@ -260,7 +260,7 @@ describe('CajaMedios', () => {
     expect(screen.getByText('Subtotal POS 2').closest('tr')?.textContent).toMatch(/-\s?\$\s?100,00/)
     expect(screen.getByRole('link', { name: 'Exportar CSV' }).getAttribute('href')).toMatch(/^\/reportes\/caja-medios\/export\?desde=.*&caja_id=0$/)
     expect(screen.getByRole('link', { name: 'Reportes' }).getAttribute('href')).toBe('/reportes')
-    await user.selectOptions(selectConOpcion('Todas las cajas'), '2')
+    await elegirEnBuscable(user, screen.getByRole('combobox', { name: 'Caja' }), 'POS 2')
     await waitFor(() => expect(pedidas().at(-1)).toMatch(/caja_id=2$/))
     const [desde, hasta] = document.querySelectorAll('input[type="date"]')
     fireEvent.change(hasta, { target: { value: '2026-09-15' } })

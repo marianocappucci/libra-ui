@@ -24,9 +24,7 @@ import { BadgeEstado, type TonoEstado } from '../badge-estado'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
 } from '@/components/ui/form'
@@ -38,6 +36,7 @@ import { ArrowLeft, ArrowLeftRight, BarChart3, CheckCircle2, Eye, Inbox, Loader2
 import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
 import { fecha } from '@/lib/fechas'
+import { SelectBuscable } from '../SelectBuscable'
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
@@ -416,6 +415,7 @@ export function ClienteDetalle(
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Condición de IVA</FormLabel>
+                          {/* select-cerrado: las condiciones frente al IVA son un catálogo cerrado de ARCA, fijo en el código (`IVA_CONDITIONS`) */}
                           <Select value={field.value} onValueChange={field.onChange}>
                             <FormControl>
                               <SelectTrigger className="w-52">
@@ -544,17 +544,18 @@ export function ClienteDetalle(
                 {listaError && <p className="text-sm text-destructive">{listaError}</p>}
                 <div className="flex items-center gap-2">
                   <Label className="shrink-0">Lista asignada</Label>
-                  <Select
-                    value={listaAsignada === null ? '__base__' : String(listaAsignada)}
-                    onValueChange={(v) => guardarLista(v === '__base__' ? null : Number(v))}
+                  <SelectBuscable
+                    value={listaAsignada === null ? '' : String(listaAsignada)}
+                    onChange={(v) => guardarLista(v === '' ? null : Number(v))}
+                    opciones={[
+                      { value: '', label: '— Precio de venta base —' },
+                      ...listas.map((l) => ({ value: String(l.id), label: l.nombre })),
+                    ]}
+                    ariaLabel="Lista asignada"
                     disabled={guardandoLista}
-                  >
-                    <SelectTrigger className="w-64"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__base__">— Precio de venta base —</SelectItem>
-                      {listas.map((l) => <SelectItem key={l.id} value={String(l.id)}>{l.nombre}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                    limpiable={false}
+                    className="w-64"
+                  />
                 </div>
               </CardContent>
             </Card>

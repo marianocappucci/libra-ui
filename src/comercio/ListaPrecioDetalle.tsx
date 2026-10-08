@@ -23,9 +23,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog'
@@ -33,6 +31,7 @@ import {
   Sheet, SheetClose, SheetContent, SheetFooter, SheetHeader, SheetTitle, SheetTrigger,
 } from '@/components/ui/sheet'
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { SelectBuscable } from '../SelectBuscable'
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
@@ -465,13 +464,15 @@ export function ListaPrecioDetalle({ conQuiebres = false, conVigencias = false, 
                   </div>
                   <div className="grid gap-2">
                     <Label>Aplicar a</Label>
-                    <Select value={loteCategoria || '__todas__'} onValueChange={(v) => setLoteCategoria(v === '__todas__' ? '' : v)}>
-                      <SelectTrigger aria-label="Aplicar a"><SelectValue placeholder="Todos los productos" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__todas__">Todos los productos</SelectItem>
-                        {categorias.map((c) => <SelectItem key={c.id} value={c.nombre}>{c.nombre}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <SelectBuscable
+                      value={loteCategoria}
+                      onChange={setLoteCategoria}
+                      opciones={[
+                        { value: '', label: 'Todos los productos' },
+                        ...categorias.map((c) => ({ value: c.nombre, label: c.nombre })),
+                      ]}
+                      ariaLabel="Aplicar a"
+                    />
                   </div>
                   <p className="text-sm text-muted-foreground">
                     Esta acción reemplaza los precios calculados. Los precios que no estén en la lista se van a insertar.
@@ -510,14 +511,13 @@ export function ListaPrecioDetalle({ conQuiebres = false, conVigencias = false, 
                   {importFuente === 'lista' && (
                     <div className="grid gap-2">
                       <Label>Lista de origen</Label>
-                      <Select value={importFuenteListaId} onValueChange={setImportFuenteListaId}>
-                        <SelectTrigger aria-label="Lista de origen"><SelectValue placeholder="Elegir lista…" /></SelectTrigger>
-                        <SelectContent>
-                          {otrasListas.filter((l) => l.id !== listaId).map((l) => (
-                            <SelectItem key={l.id} value={String(l.id)}>{l.nombre}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <SelectBuscable
+                        value={importFuenteListaId}
+                        onChange={setImportFuenteListaId}
+                        opciones={otrasListas.filter((l) => l.id !== listaId).map((l) => ({ value: String(l.id), label: l.nombre }))}
+                        placeholder="Elegir lista…"
+                        ariaLabel="Lista de origen"
+                      />
                     </div>
                   )}
                 </div>
@@ -579,13 +579,16 @@ export function ListaPrecioDetalle({ conQuiebres = false, conVigencias = false, 
             <CardHeader className="flex-row flex-wrap items-center justify-between gap-3 space-y-0">
               <CardTitle className="text-base">Precios</CardTitle>
               <div className="flex flex-wrap items-center gap-2">
-                <Select value={categoriaFiltro || '__todas__'} onValueChange={(v) => aplicarFiltroCategoria(v === '__todas__' ? '' : v)}>
-                  <SelectTrigger className="w-48" aria-label="Filtrar por categoría"><SelectValue placeholder="Todas las categorías" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__todas__">Todas las categorías</SelectItem>
-                    {categorias.map((c) => <SelectItem key={c.id} value={c.nombre}>{c.nombre}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <SelectBuscable
+                  value={categoriaFiltro}
+                  onChange={aplicarFiltroCategoria}
+                  opciones={[
+                    { value: '', label: 'Todas las categorías' },
+                    ...categorias.map((c) => ({ value: c.nombre, label: c.nombre })),
+                  ]}
+                  ariaLabel="Filtrar por categoría"
+                  className="w-48"
+                />
                 <span className="text-sm text-muted-foreground">{items.length} producto{items.length !== 1 ? 's' : ''}</span>
                 <Button onClick={guardarPrecios} disabled={savingItems}>
                   <Check />{savingItems ? 'Guardando…' : 'Guardar precios'}

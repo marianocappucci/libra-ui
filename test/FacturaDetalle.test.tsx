@@ -14,6 +14,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FacturaDetalle } from '../src/FacturaDetalle'
+import { elegirEnBuscable, opcionesDe } from './helpers-pantallas'
 import type { FacturaDetalle as FacturaDetalleType } from '../src/facturas'
 
 const SIN_CAE: FacturaDetalleType = {
@@ -170,14 +171,16 @@ describe('lo que la pantalla muestra del comprobante', () => {
     // opción y la afirmación pasaría por no encontrar nada, no por el filtro.
     // Sin cajas configuradas la pantalla cae al listado por defecto, que es
     // justamente el que tiene que venir filtrado.
+    const user = userEvent.setup()
     montar(CON_CAE)
-    await userEvent.click(await screen.findByRole('button', { name: /Registrar cobro/ }))
+    await user.click(await screen.findByRole('button', { name: /Registrar cobro/ }))
 
     // Primero que el diálogo abrió y hay opciones: si esto falla, lo de abajo
-    // no prueba nada.
-    expect(await screen.findByRole('option', { name: 'Efectivo' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: 'Transferencia' })).toBeInTheDocument()
-    expect(screen.queryByRole('option', { name: 'Cuenta corriente' })).not.toBeInTheDocument()
+    // no prueba nada. La lista de un `SelectBuscable` existe sólo abierta.
+    const etiquetas = await opcionesDe(user, await screen.findByRole('combobox', { name: 'Medio de pago 1' }))
+    expect(etiquetas).toContain('Efectivo')
+    expect(etiquetas).toContain('Transferencia')
+    expect(etiquetas).not.toContain('Cuenta corriente')
   })
 })
 
@@ -210,21 +213,23 @@ describe('cobro', () => {
     montarConCajas()
     await userEvent.click(await screen.findByRole('button', { name: /Registrar cobro/ }))
 
-    const selects = screen.getAllByRole('combobox')
-    expect(selects[0]).toHaveValue('1')
+    expect(screen.getByRole('combobox', { name: 'Caja' })).toHaveValue('Caja mostrador')
   })
 
   it('los medios salen de la caja elegida, sin la cuenta corriente', async () => {
+    const user = userEvent.setup()
     montarConCajas()
-    await userEvent.click(await screen.findByRole('button', { name: /Registrar cobro/ }))
+    await user.click(await screen.findByRole('button', { name: /Registrar cobro/ }))
 
     // Caja mostrador declara efectivo + cuenta corriente: sólo el primero es
     // un medio de cobro real de un comprobante.
-    expect(await screen.findByRole('option', { name: 'Efectivo' })).toBeInTheDocument()
-    expect(screen.queryByRole('option', { name: 'Cuenta corriente' })).not.toBeInTheDocument()
+    const medio = await screen.findByRole('combobox', { name: 'Medio de pago 1' })
+    const deLaPrimera = await opcionesDe(user, medio)
+    expect(deLaPrimera).toContain('Efectivo')
+    expect(deLaPrimera).not.toContain('Cuenta corriente')
 
-    await userEvent.selectOptions(screen.getAllByRole('combobox')[0], '2')
-    expect(await screen.findByRole('option', { name: 'Transferencia' })).toBeInTheDocument()
+    await elegirEnBuscable(user, screen.getByRole('combobox', { name: 'Caja' }), 'Caja online')
+    expect(await opcionesDe(user, medio)).toContain('Transferencia')
   })
 
   it('el monto se prellena con lo pendiente y el POST manda lo que corresponde', async () => {
@@ -435,7 +440,7 @@ describe('editar los campos del cobro y del email', () => {
     await userEvent.click(await screen.findByRole('button', { name: /Registrar cobro/ }))
 
     // Sin cajas configuradas hay un solo combobox: el del medio.
-    await userEvent.selectOptions(screen.getByRole('combobox'), 'transferencia')
+    await elegirEnBuscable(userEvent.setup(), screen.getByRole('combobox'), 'Transferencia')
     const [monto, referencia] = screen.getAllByRole('textbox').length
       ? [screen.getByDisplayValue('1000'), screen.getByPlaceholderText('Referencia')]
       : [screen.getByDisplayValue('1000'), screen.getByPlaceholderText('Referencia')]
@@ -700,7 +705,7 @@ describe('los medios de cobro que pasa el producto', () => {
     })
 
     await user.click(await screen.findByRole('button', { name: /Registrar cobro/ }))
-    const etiquetas = (await screen.findAllByRole('option')).map((o) => o.textContent)
+    const etiquetas = await opcionesDe(user, await screen.findByRole('combobox', { name: 'Medio de pago 1' }))
     expect(etiquetas).toContain('Efectivo')
     expect(etiquetas).toContain('Tarjeta de débito')
   })
@@ -713,6 +718,6 @@ describe('los medios de cobro que pasa el producto', () => {
     montarSinRutasDelMotor({ muestraCobros: true })
 
     await user.click(await screen.findByRole('button', { name: /Registrar cobro/ }))
-    expect(screen.queryAllByRole('option')).toEqual([])
+    expect(await opcionesDe(user, await screen.findByRole('combobox', { name: 'Medio de pago 1' }))).toEqual([])
   })
 })

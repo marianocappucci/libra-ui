@@ -1,9 +1,15 @@
 // El select con búsqueda. Nació del problema real: una empresa con cientos
 // de clientes no puede elegirlos recorriendo una lista ordenada.
-import { render, screen, within } from '@testing-library/react'
+//
+// Desde la v0.129.0 (ADR-039) el modo por defecto es el campo de texto con lupa;
+// el botón que abre un desplegable con el buscador adentro es `buscarEscribiendo={false}`.
+// Los dos primeros bloques prueban ese modo explícito (es lo que conservan los que no migran);
+// el tercero, el de campo, no pasa la prop: prueba que es el de siempre.
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { useState } from 'react'
+import { Dialog } from 'radix-ui'
 import { SelectBuscable, type OpcionSelect } from '../src/SelectBuscable'
 
 const CLIENTES: OpcionSelect[] = [
@@ -18,6 +24,7 @@ function ConEstado({ inicial = '', onChange }: { inicial?: string; onChange?: (v
   const [value, setValue] = useState(inicial)
   return (
     <SelectBuscable
+      buscarEscribiendo={false}
       value={value}
       onChange={(v) => { setValue(v); onChange?.(v) }}
       opciones={CLIENTES}
@@ -32,7 +39,7 @@ const abrir = async (user: ReturnType<typeof userEvent.setup>) =>
 
 const opciones = () => within(screen.getByRole('listbox')).queryAllByRole('option').map((o) => o.textContent)
 
-describe('SelectBuscable', () => {
+describe('SelectBuscable en modo botón (`buscarEscribiendo={false}`)', () => {
   it('cerrado muestra el placeholder cuando no hay nada elegido', () => {
     render(<ConEstado />)
     expect(screen.getByRole('combobox', { name: 'Cliente' })).toHaveTextContent('Cliente…')
@@ -205,7 +212,7 @@ describe('SelectBuscable', () => {
   it('deshabilitado no abre', async () => {
     const user = userEvent.setup()
     render(
-      <SelectBuscable value="" onChange={vi.fn()} opciones={CLIENTES} ariaLabel="Cliente" disabled />,
+      <SelectBuscable buscarEscribiendo={false} value="" onChange={vi.fn()} opciones={CLIENTES} ariaLabel="Cliente" disabled />,
     )
     await user.click(screen.getByRole('combobox', { name: 'Cliente' }))
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
@@ -214,7 +221,7 @@ describe('SelectBuscable', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('SelectBuscable dentro de un formulario', () => {
+describe('SelectBuscable (modo botón) dentro de un formulario', () => {
   // `FormControl` de shadcn es un `Slot.Root`: le pasa `id`, `aria-describedby`
   // y `aria-invalid` al hijo sin saber qué componente es. Un `<input>` o el
   // `SelectTrigger` de Radix las reciben como atributos del DOM; un componente
@@ -233,7 +240,7 @@ describe('SelectBuscable dentro de un formulario', () => {
     render(
       <>
         <label htmlFor="cliente">Cliente (locatario)</label>
-        <SelectBuscable id="cliente" value="" onChange={vi.fn()} opciones={CLIENTES} placeholder="Cliente…" />
+        <SelectBuscable buscarEscribiendo={false} id="cliente" value="" onChange={vi.fn()} opciones={CLIENTES} placeholder="Cliente…" />
       </>,
     )
 
@@ -251,7 +258,7 @@ describe('SelectBuscable dentro de un formulario', () => {
     render(
       <>
         <label htmlFor="cliente">La etiqueta visible</label>
-        <SelectBuscable id="cliente" ariaLabel="El aria-label" value="" onChange={vi.fn()} opciones={CLIENTES} />
+        <SelectBuscable buscarEscribiendo={false} id="cliente" ariaLabel="El aria-label" value="" onChange={vi.fn()} opciones={CLIENTES} />
       </>,
     )
     expect(screen.getByRole('combobox', { name: 'El aria-label' })).toBeInTheDocument()
@@ -265,6 +272,7 @@ describe('SelectBuscable dentro de un formulario', () => {
       <>
         <label htmlFor="cliente">Cliente</label>
         <SelectBuscable
+          buscarEscribiendo={false}
           id="cliente"
           aria-describedby="cliente-msg"
           aria-invalid
@@ -286,7 +294,7 @@ describe('SelectBuscable dentro de un formulario', () => {
     // botón repetido en el div— romperían el `aria-controls`.
     const user = userEvent.setup()
     render(
-      <SelectBuscable id="cliente" ariaLabel="Cliente" value="" onChange={vi.fn()} opciones={CLIENTES} />,
+      <SelectBuscable buscarEscribiendo={false} id="cliente" ariaLabel="Cliente" value="" onChange={vi.fn()} opciones={CLIENTES} />,
     )
 
     const combo = screen.getByRole('combobox', { name: 'Cliente' })
@@ -316,7 +324,7 @@ describe('SelectBuscable dentro de un formulario', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('SelectBuscable en modo `buscarEscribiendo` (campo de texto con lupa)', () => {
+describe('SelectBuscable en modo de campo (campo de texto con lupa): el modo por defecto desde la v0.129.0', () => {
   // El modo por defecto es un botón que abre un desplegable con el buscador
   // adentro: la gente no descubre que puede escribir. Acá el control cerrado ya
   // es el campo donde se escribe. (ADR-031)
@@ -327,7 +335,6 @@ describe('SelectBuscable en modo `buscarEscribiendo` (campo de texto con lupa)',
     const [value, setValue] = useState(inicial)
     return (
       <SelectBuscable
-        buscarEscribiendo
         id={id}
         value={value}
         onChange={(v) => { setValue(v); onChange?.(v) }}
@@ -574,7 +581,7 @@ describe('SelectBuscable en modo `buscarEscribiendo` (campo de texto con lupa)',
       render(
         <>
           <label htmlFor="cliente">Cliente (locatario)</label>
-          <SelectBuscable buscarEscribiendo id="cliente" value="" onChange={vi.fn()} opciones={CLIENTES} />
+          <SelectBuscable id="cliente" value="" onChange={vi.fn()} opciones={CLIENTES} />
         </>,
       )
       expect(screen.getByRole('combobox', { name: 'Cliente (locatario)' })).toHaveAttribute('id', 'cliente')
@@ -584,7 +591,7 @@ describe('SelectBuscable en modo `buscarEscribiendo` (campo de texto con lupa)',
       render(
         <>
           <SelectBuscable
-            buscarEscribiendo ariaLabel="Cliente" aria-describedby="msg" aria-invalid
+            ariaLabel="Cliente" aria-describedby="msg" aria-invalid
             value="" onChange={vi.fn()} opciones={CLIENTES}
           />
           <p id="msg">Elegí un cliente</p>
@@ -597,7 +604,7 @@ describe('SelectBuscable en modo `buscarEscribiendo` (campo de texto con lupa)',
     it('el `className` va al contenedor, que es lo que tiene ancho', () => {
       const { container } = render(
         <SelectBuscable
-          buscarEscribiendo ariaLabel="Cliente" className="w-64"
+          ariaLabel="Cliente" className="w-64"
           value="" onChange={vi.fn()} opciones={CLIENTES}
         />,
       )
@@ -609,7 +616,7 @@ describe('SelectBuscable en modo `buscarEscribiendo` (campo de texto con lupa)',
     const user = userEvent.setup()
     render(
       <SelectBuscable
-        buscarEscribiendo ariaLabel="Cliente" value="1" onChange={vi.fn()} opciones={CLIENTES} disabled
+        ariaLabel="Cliente" value="1" onChange={vi.fn()} opciones={CLIENTES} disabled
       />,
     )
     expect(combo()).toBeDisabled()
@@ -618,8 +625,211 @@ describe('SelectBuscable en modo `buscarEscribiendo` (campo de texto con lupa)',
     expect(screen.queryByRole('button', { name: 'Quitar la selección' })).not.toBeInTheDocument()
   })
 
-  it('sin `buscarEscribiendo` sigue siendo el botón de siempre', () => {
+  it('🔴 sin pasar nada es el campo de texto; el botón es sólo `buscarEscribiendo={false}`', () => {
+    // Éste es el cambio de la v0.129.0: antes el campo era opt-in (`buscarEscribiendo`) y el botón el defecto.
+    const { unmount } = render(
+      <SelectBuscable ariaLabel="Cliente" value="" onChange={vi.fn()} opciones={CLIENTES} />,
+    )
+    expect(combo().tagName).toBe('INPUT')
+    unmount()
+
+    render(<SelectBuscable buscarEscribiendo ariaLabel="Cliente" value="" onChange={vi.fn()} opciones={CLIENTES} />)
+    expect(combo().tagName).toBe('INPUT')
+  })
+
+  it('con `buscarEscribiendo={false}` sigue siendo el botón de siempre', () => {
     render(<ConEstado />)
     expect(screen.getByRole('combobox', { name: 'Cliente' }).tagName).toBe('BUTTON')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe.each([
+  ['campo (el defecto)', {}],
+  ['botón (`buscarEscribiendo={false}`)', { buscarEscribiendo: false }],
+] as const)('SelectBuscable, lo que le hace falta para reemplazar a un Select: modo %s', (_nombre, modo) => {
+  const enBoton = 'buscarEscribiendo' in modo
+
+  const CAJAS: OpcionSelect[] = [
+    { value: '1', label: 'Caja 1' },
+    { value: '2', label: 'Caja 2 (turno abierto)', disabled: true },
+    { value: '3', label: 'Caja 3' },
+  ]
+
+  function Cajas({ onChange, inicial = '' }: { onChange?: (v: string) => void; inicial?: string }) {
+    const [value, setValue] = useState(inicial)
+    return (
+      <SelectBuscable
+        {...modo} ariaLabel="Caja" value={value} opciones={CAJAS}
+        onChange={(v) => { setValue(v); onChange?.(v) }}
+      />
+    )
+  }
+  const caja = () => screen.getByRole('combobox', { name: 'Caja' })
+
+  it('una opción deshabilitada se ve, está marcada para un lector de pantalla y un click no la elige', async () => {
+    const user = userEvent.setup()
+    const alElegir = vi.fn()
+    render(<Cajas onChange={alElegir} />)
+    await user.click(caja())
+
+    const deshabilitada = screen.getByRole('option', { name: /Caja 2/ })
+    expect(deshabilitada).toHaveAttribute('aria-disabled', 'true')
+    expect(screen.getByRole('option', { name: /Caja 1/ })).not.toHaveAttribute('aria-disabled')
+    await user.click(deshabilitada)
+    expect(alElegir).not.toHaveBeenCalled()
+    expect(screen.getByRole('listbox')).toBeInTheDocument()
+  })
+
+  it('las flechas saltean la deshabilitada y Enter nunca la elige', async () => {
+    const user = userEvent.setup()
+    const alElegir = vi.fn()
+    render(<Cajas onChange={alElegir} />)
+    await user.click(caja())
+
+    await user.keyboard('{ArrowDown}{Enter}')
+    expect(alElegir).toHaveBeenCalledWith('3')
+  })
+
+  it('si la primera está deshabilitada, el resaltado arranca en la primera que se puede elegir', async () => {
+    const user = userEvent.setup()
+    const alElegir = vi.fn()
+    render(
+      <SelectBuscable
+        {...modo} ariaLabel="Caja" value="" onChange={alElegir}
+        opciones={[{ value: 'a', label: 'Ocupada', disabled: true }, { value: 'b', label: 'Libre' }]}
+      />,
+    )
+    await user.click(caja())
+    await user.keyboard('{Enter}')
+    expect(alElegir).toHaveBeenCalledWith('b')
+  })
+
+  it('una lista con una opción de valor vacío («Todas») la muestra como etiqueta cuando no hay filtro', async () => {
+    // Es lo que reemplaza a los centinelas `__todas__` de los Select de Radix, que no admiten `value=""`.
+    const user = userEvent.setup()
+    const alElegir = vi.fn()
+    function Filtro() {
+      const [v, setV] = useState('')
+      return (
+        <SelectBuscable
+          {...modo} ariaLabel="Caja" value={v} placeholder="Elegí una caja…"
+          onChange={(x) => { setV(x); alElegir(x) }}
+          opciones={[{ value: '', label: 'Todas las cajas' }, ...CAJAS]}
+        />
+      )
+    }
+    render(<Filtro />)
+    if (enBoton) expect(caja()).toHaveTextContent('Todas las cajas')
+    else expect(caja()).toHaveValue('Todas las cajas')
+
+    await user.click(caja())
+    await user.click(screen.getByRole('option', { name: 'Caja 3' }))
+    expect(alElegir).toHaveBeenLastCalledWith('3')
+    await user.click(caja())
+    await user.click(screen.getByRole('option', { name: 'Todas las cajas' }))
+    expect(alElegir).toHaveBeenLastCalledWith('')
+    if (enBoton) expect(caja()).toHaveTextContent('Todas las cajas')
+    else expect(caja()).toHaveValue('Todas las cajas')
+  })
+
+  it('`required` queda en el campo para que lo lea un lector de pantalla', () => {
+    render(<SelectBuscable {...modo} ariaLabel="Caja" required value="" onChange={vi.fn()} opciones={CAJAS} />)
+    expect(caja()).toHaveAttribute('aria-required', 'true')
+    if (!enBoton) expect(caja()).toBeRequired()
+  })
+
+  it('sin `required` no aparece ningún atributo de obligatorio', () => {
+    render(<SelectBuscable {...modo} ariaLabel="Caja" value="" onChange={vi.fn()} opciones={CAJAS} />)
+    expect(caja()).not.toHaveAttribute('aria-required')
+    expect(caja()).not.toBeRequired()
+  })
+
+  it('un valor que no está en la lista (los datos todavía no llegaron) muestra el placeholder, no revienta', () => {
+    render(
+      <SelectBuscable {...modo} ariaLabel="Caja" value="99" placeholder="Elegí una caja…" onChange={vi.fn()} opciones={[]} />,
+    )
+    if (enBoton) expect(caja()).toHaveTextContent('Elegí una caja…')
+    else {
+      expect(caja()).toHaveValue('')
+      expect(caja()).toHaveAttribute('placeholder', 'Elegí una caja…')
+    }
+  })
+
+  it('Escape con la lista abierta, dentro de un diálogo de Radix, cierra la lista y NO el diálogo', async () => {
+    // 🔴 Medido: Radix escucha el Escape en `document`, en captura, antes que React. Sin el arreglo de la v0.129.0 cerrar la lista cerraba
+    // también el diálogo y se perdía lo cargado en el formulario. Una segunda vez, con la lista ya cerrada, el diálogo sí se cierra.
+    const user = userEvent.setup()
+    const alCerrarElDialogo = vi.fn()
+    render(
+      <Dialog.Root open onOpenChange={(abierto) => { if (!abierto) alCerrarElDialogo() }}>
+        <Dialog.Portal>
+          <Dialog.Content aria-describedby={undefined}>
+            <Dialog.Title>Cobrar</Dialog.Title>
+            <Cajas />
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>,
+    )
+    await user.click(caja())
+    expect(screen.getByRole('listbox')).toBeInTheDocument()
+
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    expect(alCerrarElDialogo).not.toHaveBeenCalled()
+
+    await user.keyboard('{Escape}')
+    expect(alCerrarElDialogo).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('SelectBuscable, la × y los formularios nativos', () => {
+  const CAJAS: OpcionSelect[] = [{ value: '1', label: 'Caja 1' }, { value: '3', label: 'Caja 3' }]
+  const cruz = () => screen.queryByRole('button', { name: 'Quitar la selección' })
+
+  it('la × se ofrece con algo elegido', () => {
+    render(<SelectBuscable ariaLabel="Caja" value="1" onChange={vi.fn()} opciones={CAJAS} />)
+    expect(cruz()).toBeInTheDocument()
+  })
+
+  it('un campo `required` no ofrece la ×: vaciarlo no es una elección', () => {
+    render(<SelectBuscable ariaLabel="Caja" required value="1" onChange={vi.fn()} opciones={CAJAS} />)
+    expect(cruz()).not.toBeInTheDocument()
+  })
+
+  it('`limpiable={false}` la saca; `limpiable` la fuerza aunque sea `required`', () => {
+    const { unmount } = render(<SelectBuscable ariaLabel="Caja" limpiable={false} value="1" onChange={vi.fn()} opciones={CAJAS} />)
+    expect(cruz()).not.toBeInTheDocument()
+    unmount()
+    render(<SelectBuscable ariaLabel="Caja" required limpiable value="1" onChange={vi.fn()} opciones={CAJAS} />)
+    expect(cruz()).toBeInTheDocument()
+  })
+
+  it('con una opción «Todas» (valor vacío) en la lista tampoco: ésa es la forma explícita de vaciar', () => {
+    render(
+      <SelectBuscable ariaLabel="Caja" value="1" onChange={vi.fn()} opciones={[{ value: '', label: 'Todas' }, ...CAJAS]} />,
+    )
+    expect(cruz()).not.toBeInTheDocument()
+  })
+
+  it('un `required` vacío frena el envío del formulario y con algo elegido lo deja pasar', () => {
+    const { rerender } = render(
+      <form><SelectBuscable ariaLabel="Caja" required value="" onChange={vi.fn()} opciones={CAJAS} /></form>,
+    )
+    const formulario = document.querySelector('form')!
+    expect(formulario.checkValidity()).toBe(false)
+
+    rerender(<form><SelectBuscable ariaLabel="Caja" required value="1" onChange={vi.fn()} opciones={CAJAS} /></form>)
+    expect(formulario.checkValidity()).toBe(true)
+  })
+
+  it('escribir a medias y no elegir nada no cuenta como valor: el formulario sigue sin pasar', () => {
+    render(<form><SelectBuscable ariaLabel="Caja" required value="" onChange={vi.fn()} opciones={CAJAS} /></form>)
+    const campo = screen.getByRole('combobox', { name: 'Caja' })
+    fireEvent.change(campo, { target: { value: 'caj' } })
+    fireEvent.blur(campo)
+    expect(campo).toHaveValue('')
+    expect(document.querySelector('form')!.checkValidity()).toBe(false)
   })
 })

@@ -43,9 +43,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
 } from '@/components/ui/form'
@@ -54,6 +52,7 @@ import {
   Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { SelectBuscable } from '../SelectBuscable'
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
@@ -88,10 +87,6 @@ const EMPTY_VALUES: Valores = {
   nombre: '', codigo: '', descripcion: '', precio_venta: 0, precio_costo: 0,
   unidad: '', categoria: '', stock_minimo: 0, tipo: 'producto', estacion: '', vendible: true, vence: false, activo: true,
 }
-
-// Radix Select no admite value="" (reservado): la estación vacía viaja como un
-// sentinel, mismo patrón que Egresos ("__sin__") y Ventas ("__none__").
-const SIN_ESTACION = '__ninguna__'
 
 export type ProductosProps = {
   /** Muestra el selector y la columna **Tipo** (producto / servicio). Es la
@@ -150,7 +145,6 @@ const MAX_PLAZO_REPOSICION = 180
 type ParametrosReposicion = { plazo_entrega_dias: number | null; stock_maximo: number | null }
 /** Lo que devuelve `GET /api/productos/{id}/reposicion`; `proveedor_id` y `proveedor` sólo con un motor >= 0.33.0 (ADR-021). */
 type ParametrosLeidos = ParametrosReposicion & { proveedor_id?: number | null; proveedor?: string | null }
-const SIN_PROVEEDOR = '__sin__'
 type EstadoReposicion = 'sin' | 'cargando' | 'listo' | 'error'
 
 /** Una fila de «Mínimo por sucursal»: el texto del campo, el mínimo PROPIO que había (`null` = usa el global) y el texto con el que se cargó. Se manda sólo lo que
@@ -933,16 +927,16 @@ export function Productos({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Unidad</FormLabel>
-                        <Select value={field.value} onValueChange={field.onChange} disabled={soloReposicion}>
-                          <FormControl>
-                            <SelectTrigger className={`w-28${claseSoloLectura}`}>
-                              <SelectValue placeholder="Elegir…" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {opcionesDeUnidad.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
+                        <FormControl>
+                          <SelectBuscable
+                            value={field.value}
+                            onChange={field.onChange}
+                            opciones={opcionesDeUnidad.map((u) => ({ value: u, label: u }))}
+                            placeholder="Elegir…"
+                            disabled={soloReposicion}
+                            className={`w-28${claseSoloLectura}`}
+                          />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -977,22 +971,16 @@ export function Productos({
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Estación (comanda)</FormLabel>
-                          <Select
-                            value={field.value || SIN_ESTACION}
-                            onValueChange={(v) => field.onChange(v === SIN_ESTACION ? '' : v)}
-                            disabled={soloReposicion}
-                          >
-                            <FormControl>
-                              <SelectTrigger className={`w-40${claseSoloLectura}`}>
-                                <SelectValue />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {estaciones!.map((e) => (
-                                <SelectItem key={e.value || SIN_ESTACION} value={e.value || SIN_ESTACION}>{e.label}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <FormControl>
+                            <SelectBuscable
+                              value={field.value}
+                              onChange={field.onChange}
+                              opciones={estaciones!.map((e) => ({ value: e.value, label: e.label }))}
+                              disabled={soloReposicion}
+                              limpiable={false}
+                              className={`w-40${claseSoloLectura}`}
+                            />
+                          </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -1063,17 +1051,21 @@ export function Productos({
                           {proveedorDisponible && (
                             <div className="grid gap-2">
                               <Label htmlFor="repo-proveedor">Proveedor habitual</Label>
-                              <Select value={repoProveedor === '' ? SIN_PROVEEDOR : repoProveedor}
-                                onValueChange={(v) => setRepoProveedor(v === SIN_PROVEEDOR ? '' : v)} disabled={repoEstado === 'cargando' || saving}>
-                                <SelectTrigger id="repo-proveedor" className="w-56"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value={SIN_PROVEEDOR}>Sin proveedor</SelectItem>
-                                  {repoProveedor !== '' && !proveedoresLista.some((p) => String(p.id) === repoProveedor) && (
-                                    <SelectItem value={repoProveedor}>{repoProveedorNombre || `Proveedor ${repoProveedor}`}</SelectItem>
-                                  )}
-                                  {proveedoresLista.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.nombre}</SelectItem>)}
-                                </SelectContent>
-                              </Select>
+                              <SelectBuscable
+                                id="repo-proveedor"
+                                value={repoProveedor}
+                                onChange={setRepoProveedor}
+                                opciones={[
+                                  { value: '', label: 'Sin proveedor' },
+                                  // El proveedor guardado puede no estar en la lista (se dio de baja): se ofrece igual, con el nombre que trajo el motor.
+                                  ...(repoProveedor !== '' && !proveedoresLista.some((p) => String(p.id) === repoProveedor)
+                                    ? [{ value: repoProveedor, label: repoProveedorNombre || `Proveedor ${repoProveedor}` }]
+                                    : []),
+                                  ...proveedoresLista.map((p) => ({ value: String(p.id), label: p.nombre })),
+                                ]}
+                                disabled={repoEstado === 'cargando' || saving}
+                                className="w-56"
+                              />
                             </div>
                           )}
                           <p className="w-full text-xs text-muted-foreground">

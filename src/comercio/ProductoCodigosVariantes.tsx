@@ -109,6 +109,7 @@ export function ProductoCodigosVariantes({ producto, onClose, conEdicionDelProdu
           {conEdicionDelProducto && <div className="flex items-end gap-2">
             <div className="grid gap-2">
               <Label htmlFor="codigo-tipo">Tipo</Label>
+              {/* select-cerrado: los tipos de código son cinco, fijos en el código (`TIPOS_DE_CODIGO`) */}
               <Select value={tipo} onValueChange={(v) => v && setTipo(v)}>
                 <SelectTrigger id="codigo-tipo" className="w-48"><SelectValue /></SelectTrigger>
                 <SelectContent>

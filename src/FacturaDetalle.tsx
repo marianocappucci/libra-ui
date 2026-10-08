@@ -22,9 +22,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
-import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose,
 } from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/confirm-dialog'
@@ -35,6 +32,7 @@ import {
 } from 'lucide-react'
 
 import { hoyISO } from './fechas'
+import { SelectBuscable } from './SelectBuscable'
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
@@ -589,22 +587,26 @@ export function FacturaDetalle({
                 {cajas.length > 1 && (
                   <div className="grid gap-2">
                     <Label>Caja</Label>
-                    <Select value={cajaId} onValueChange={setCajaId}>
-                      <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {cajas.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.nombre}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <SelectBuscable
+                      value={cajaId}
+                      onChange={setCajaId}
+                      opciones={cajas.map((c) => ({ value: String(c.id), label: c.nombre }))}
+                      ariaLabel="Caja"
+                      limpiable={false}
+                      className="w-52"
+                    />
                   </div>
                 )}
                 {cobroPagos.map((p, i) => (
                   <div key={i} className="flex flex-wrap items-center gap-2">
-                    <Select value={p.medio} onValueChange={(v) => setCobroPagos((rows) => rows.map((r, idx) => idx === i ? { ...r, medio: v } : r))}>
-                      <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {mediosDisponibles.map((k) => <SelectItem key={k} value={k}>{medioLabel(k)}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <SelectBuscable
+                      value={p.medio}
+                      onChange={(v) => setCobroPagos((rows) => rows.map((r, idx) => idx === i ? { ...r, medio: v } : r))}
+                      opciones={mediosDisponibles.map((k) => ({ value: k, label: medioLabel(k) }))}
+                      ariaLabel={`Medio de pago ${i + 1}`}
+                      limpiable={false}
+                      className="w-44"
+                    />
                     <Input type="number" step="0.01" value={p.monto} onChange={(e) => setCobroPagos((rows) => rows.map((r, idx) => idx === i ? { ...r, monto: e.target.value } : r))} className="w-28" />
                     <Input value={p.referencia} onChange={(e) => setCobroPagos((rows) => rows.map((r, idx) => idx === i ? { ...r, referencia: e.target.value } : r))} className="w-40" placeholder="Referencia" />
                   </div>

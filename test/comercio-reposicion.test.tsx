@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { Reposicion } from '../src/comercio/Reposicion'
 import type { ReposicionData, ReposicionProducto } from '../src/comercio/tipos'
-import { fetchMock, json, montar, pedidas, prepararFetch, responder } from './helpers-pantallas'
+import { elegirEnBuscable, fetchMock, json, montar, opcionesDe, pedidas, prepararFetch, responder } from './helpers-pantallas'
 
 const base: ReposicionProducto = {
   producto_id: 0, codigo: null, nombre: '', unidad: 'u', categoria: '', stock: 0, en_camino: 0, en_camino_sin_sucursal: 0,
@@ -131,7 +131,7 @@ describe('Reposición: lo que muestra', () => {
     const select = await screen.findByLabelText('Sucursal')
     expect(select.getAttribute('title')).toBeNull()
     responder({ ...TODO, '/api/sucursales': sucursales, [RUTA]: { ...DATA, sucursal_id: 3 } })
-    await user.selectOptions(select, '3')
+    await elegirEnBuscable(user, select, LARGO)
     await waitFor(() => expect(screen.getByLabelText('Sucursal').getAttribute('title')).toBe(LARGO))
   })
 
@@ -142,7 +142,7 @@ describe('Reposición: lo que muestra', () => {
     expect(texto(fila('Yerba'))).not.toContain('sin sucursal')
 
     responder({ ...TODO, [RUTA]: { ...DATA, sucursal_id: 2, productos: [YERBA, HARINA] } })
-    await user.selectOptions(await screen.findByLabelText('Sucursal'), '2')
+    await elegirEnBuscable(user, await screen.findByLabelText('Sucursal'), 'Norte')
     await waitFor(() => expect(texto(fila('Yerba'))).toContain('incluye 4 de órdenes sin sucursal, contadas en esta sucursal'))
     // Harina no tiene nada en camino sin sucursal: no hay aviso.
     expect(texto(fila('Harina'))).not.toContain('sin sucursal')
@@ -158,7 +158,7 @@ describe('Reposición: lo que muestra', () => {
       ...TODO,
       [RUTA]: { ...DATA, sucursal_id: 2, productos: [{ ...YERBA, stock_minimo_propio: true }, { ...HARINA, stock_minimo_propio: false }, SAL] },
     })
-    await user.selectOptions(await screen.findByLabelText('Sucursal'), '2')
+    await elegirEnBuscable(user, await screen.findByLabelText('Sucursal'), 'Norte')
     // A la vista dice «propio» (la celda es angosta); el texto completo está en el `title` y para el lector de pantalla (ADR-012).
     await waitFor(() => expect(within(fila('Yerba')).getByTitle('propio de la sucursal')).toBeTruthy())
     expect(within(fila('Yerba')).getByTitle('propio de la sucursal').closest('td')?.textContent).toBe('5propio de la sucursal')
@@ -188,14 +188,14 @@ describe('Reposición: lo que pide', () => {
     const user = userEvent.setup()
     await abrir()
     const selector = await screen.findByLabelText('Sucursal')
-    expect(within(selector).getAllByRole('option').map((o) => o.textContent)).toEqual(['Toda la instancia', 'Centro', 'Norte'])
+    expect(await opcionesDe(user, selector)).toEqual(['Toda la instancia', 'Centro', 'Norte'])
     expect(pedidasAlReporte()).toEqual([pide()])
 
-    await user.selectOptions(selector, '2')
+    await elegirEnBuscable(user, selector, 'Norte')
     await waitFor(() => expect(ultimaConsulta()).toBe(pide('&sucursal_id=2')))
-    await user.selectOptions(selector, '1')
+    await elegirEnBuscable(user, selector, 'Centro')
     await waitFor(() => expect(ultimaConsulta()).toBe(pide('&sucursal_id=1')))
-    await user.selectOptions(selector, 'Toda la instancia')
+    await elegirEnBuscable(user, selector, 'Toda la instancia')
     await waitFor(() => expect(ultimaConsulta()).toBe(pide()))
   })
 
@@ -212,10 +212,10 @@ describe('Reposición: lo que pide', () => {
     const user = userEvent.setup()
     await abrir()
     const selector = await screen.findByLabelText('Categoría')
-    expect(within(selector).getAllByRole('option').map((o) => o.textContent)).toEqual(['Todas las categorías', 'Almacén', 'Bebidas'])
-    await user.selectOptions(selector, 'Bebidas')
+    expect(await opcionesDe(user, selector)).toEqual(['Todas las categorías', 'Almacén', 'Bebidas'])
+    await elegirEnBuscable(user, selector, 'Bebidas')
     await waitFor(() => expect(ultimaConsulta()).toBe(pide('&categoria=Bebidas')))
-    await user.selectOptions(selector, 'Todas las categorías')
+    await elegirEnBuscable(user, selector, 'Todas las categorías')
     await waitFor(() => expect(ultimaConsulta()).toBe(pide()))
   })
 
@@ -379,8 +379,8 @@ describe('Reposición: CSV', () => {
     await abrir()
     expect(screen.getByRole('link', { name: /CSV/ }).getAttribute('href')).toBe(`${RUTA}/export?${consulta()}`)
 
-    await user.selectOptions(await screen.findByLabelText('Sucursal'), '2')
-    await user.selectOptions(screen.getByLabelText('Categoría'), 'Bebidas')
+    await elegirEnBuscable(user, await screen.findByLabelText('Sucursal'), 'Norte')
+    await elegirEnBuscable(user, screen.getByLabelText('Categoría'), 'Bebidas')
     fireEvent.change(screen.getByLabelText('Días de rotación'), { target: { value: '60' } })
     await user.click(screen.getByLabelText('Sólo lo que hay que pedir'))
     await waitFor(() => expect(screen.getByRole('link', { name: /CSV/ }).getAttribute('href')).toBe(
@@ -524,10 +524,11 @@ describe('Reposición: proveedor habitual (motor >= 0.33.0, ADR-021)', () => {
 
   it('los tres selects de filtro llevan `min-w-0`: sin él, en móvil un nombre largo ensancha la página (0.112.4)', async () => {
     // jsdom no mide el layout. Medido en Chromium (390, 360 y 320 px): un `SelectTrigger` con `w-full` es un ítem de grid con `nowrap`; sin `min-w-0` el track crece al
-    // `min-content` del texto elegido y la página gana scroll horizontal (451 a 461 px). `max-width` o `min-w-0` en los ancestros no alcanzan: va en el trigger.
+    // `min-content` del texto elegido y la página gana scroll horizontal (451 a 461 px). Desde ADR-039 los filtros son `SelectBuscable`: el ítem de grid es el contenedor
+    // del campo (ahí va el `className`) y el `<input>` de adentro es `w-full min-w-0`, así que el texto elegido ya no empuja el track. Se conserva el `min-w-0` del contenedor.
     await abrir(TODO_CON)
     for (const nombre of ['Sucursal', 'Categoría', 'Proveedor']) {
-      expect((await screen.findByLabelText(nombre)).className).toContain('min-w-0')
+      expect((await screen.findByLabelText(nombre)).parentElement!.className).toContain('min-w-0')
     }
   })
 
@@ -542,9 +543,9 @@ describe('Reposición: proveedor habitual (motor >= 0.33.0, ADR-021)', () => {
   it('elegir un proveedor lo manda como proveedor_id, y «Todos los proveedores» lo saca', async () => {
     const user = userEvent.setup()
     await abrir(TODO_CON)
-    await user.selectOptions(await screen.findByLabelText('Proveedor'), '7')
+    await elegirEnBuscable(user, await screen.findByLabelText('Proveedor'), 'Distribuidora Norte')
     await waitFor(() => expect(ultimaConsulta()).toBe(pide('&proveedor_id=7')))
-    await user.selectOptions(screen.getByLabelText('Proveedor'), '__todas__')
+    await elegirEnBuscable(user, screen.getByLabelText('Proveedor'), 'Todos los proveedores')
     await waitFor(() => expect(ultimaConsulta()).toBe(pide()))
   })
 

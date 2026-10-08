@@ -21,9 +21,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
+import { SelectBuscable } from '../SelectBuscable'
 
 export function LineasDePago({
   lineas, onChange, medios, aPagar, formatCurrency, deshabilitado = false,
@@ -87,16 +85,15 @@ export function LineasDePago({
             <div className="flex flex-wrap items-end gap-2">
               <div className="grid min-w-0 flex-1 basis-40 gap-2">
                 <Label htmlFor={`pago-medio-${i}`} className="text-xs">Medio de pago</Label>
-                <Select
+                <SelectBuscable
+                  id={`pago-medio-${i}`}
                   value={linea.medio}
+                  onChange={(v) => actualizar(i, { medio: v })}
+                  opciones={medios.map((m) => ({ value: m.id, label: m.label }))}
                   disabled={deshabilitado}
-                  onValueChange={(v) => actualizar(i, { medio: v })}
-                >
-                  <SelectTrigger id={`pago-medio-${i}`} className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {medios.map((m) => <SelectItem key={m.id} value={m.id}>{m.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                  limpiable={false}
+                  className="w-full"
+                />
               </div>
 
               <div className="grid min-w-0 basis-32 gap-2">

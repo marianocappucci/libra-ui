@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { Productos } from '../src/comercio/Productos'
 import { ProductoCodigosVariantes } from '../src/comercio/ProductoCodigosVariantes'
 import type { Producto } from '../src/comercio/tipos'
-import { cuerpoDe, fetchMock, montar, pedidas, prepararFetch, responder } from './helpers-pantallas'
+import { cuerpoDe, fetchMock, montar, opcionesDe, pedidas, prepararFetch, responder } from './helpers-pantallas'
 
 const producto = (extra: Partial<Producto> = {}): Producto => ({
   id: 1, codigo: 'Y1', nombre: 'Yerba', descripcion: '', precio_venta: 100, precio_costo: 60, unidad: 'UN', categoria: '', stock_minimo: 0,
@@ -26,8 +26,8 @@ beforeEach(() => {
 })
 
 const dialogo = () => screen.getByRole('dialog')
-const selectDeUnidad = () => within(dialogo()).getAllByRole('combobox').find((el) => el.tagName === 'SELECT') as HTMLSelectElement
-const opcionesDe = (s: HTMLSelectElement) => Array.from(s.querySelectorAll('option')).map((o) => o.textContent)
+// La unidad es un `SelectBuscable` (ADR-039), con su `FormLabel`: el campo se toma por la etiqueta y las opciones, abriéndolo.
+const selectDeUnidad = () => within(dialogo()).getByLabelText('Unidad')
 const escrituras = () => pedidas().filter((p) => p.startsWith('PUT ') || p.startsWith('POST ') || p.startsWith('DELETE '))
 
 describe('Gestionar códigos y variantes: errores en castellano', () => {
@@ -137,8 +137,8 @@ describe('Productos: la unidad del alta sale del catálogo', () => {
 
   it('sin «u» en el catálogo arranca con la primera unidad real y manda ESA', async () => {
     const user = await abrirAlta(['UN', 'KG'])
-    await waitFor(() => expect(selectDeUnidad().value).toBe('UN'))
-    expect(opcionesDe(selectDeUnidad())).toEqual(['UN', 'KG'])
+    await waitFor(() => expect(selectDeUnidad()).toHaveValue('UN'))
+    expect(await opcionesDe(user, selectDeUnidad())).toEqual(['UN', 'KG'])
     await crear(user)
     await waitFor(() => expect(escrituras()).toContain('POST /api/productos'))
     expect(cuerpoDe('POST /api/productos').unidad).toBe('UN')
@@ -146,7 +146,7 @@ describe('Productos: la unidad del alta sale del catálogo', () => {
 
   it('con «u» en el catálogo arranca con «u», como siempre (aunque no sea la primera)', async () => {
     const user = await abrirAlta(['kg', 'u', 'caja'])
-    await waitFor(() => expect(selectDeUnidad().value).toBe('u'))
+    await waitFor(() => expect(selectDeUnidad()).toHaveValue('u'))
     await crear(user)
     await waitFor(() => expect(escrituras()).toContain('POST /api/productos'))
     expect(cuerpoDe('POST /api/productos').unidad).toBe('u')
@@ -154,7 +154,7 @@ describe('Productos: la unidad del alta sale del catálogo', () => {
 
   it('si el backend no tiene el endpoint de unidades queda la lista de siempre y arranca con «u»', async () => {
     const user = await abrirAlta({ status: 404, detail: 'not found' })
-    await waitFor(() => expect(selectDeUnidad().value).toBe('u'))
+    await waitFor(() => expect(selectDeUnidad()).toHaveValue('u'))
     await crear(user)
     await waitFor(() => expect(escrituras()).toContain('POST /api/productos'))
     expect(cuerpoDe('POST /api/productos').unidad).toBe('u')
@@ -162,8 +162,8 @@ describe('Productos: la unidad del alta sale del catálogo', () => {
 
   it('con el catálogo vacío no inventa «u»: pide elegir y no manda nada', async () => {
     const user = await abrirAlta([])
-    expect(opcionesDe(selectDeUnidad())).toEqual([])
-    expect(selectDeUnidad().value).toBe('')
+    expect(await opcionesDe(user, selectDeUnidad())).toEqual([])
+    expect(selectDeUnidad()).toHaveValue('')
     await crear(user)
     expect(await within(dialogo()).findByText('Elegí una unidad.')).toBeTruthy()
     expect(escrituras()).toEqual([])
@@ -182,10 +182,10 @@ describe('Productos: la unidad del alta sale del catálogo', () => {
     await screen.findByText('Yerba')
     await user.click(screen.getByRole('button', { name: /Nuevo producto/ }))
     await screen.findByRole('dialog')
-    expect(opcionesDe(selectDeUnidad())).toEqual([])
-    expect(selectDeUnidad().value).toBe('')
+    expect(await opcionesDe(user, selectDeUnidad())).toEqual([])
+    expect(selectDeUnidad()).toHaveValue('')
     soltar(new Response(JSON.stringify(['UN']), { status: 200, headers: { 'content-type': 'application/json' } }))
-    await waitFor(() => expect(selectDeUnidad().value).toBe('UN'))
+    await waitFor(() => expect(selectDeUnidad()).toHaveValue('UN'))
     // (el `<select>` nativo muestra la primera opción aunque el formulario no tenga valor: lo que cuenta es lo que se manda.)
     await crear(user)
     await waitFor(() => expect(escrituras()).toContain('POST /api/productos'))
@@ -200,8 +200,8 @@ describe('Productos: la unidad del alta sale del catálogo', () => {
     await waitFor(() => expect(pedidas()).toContain('GET /api/productos/unidades'))
     await user.click(screen.getByLabelText('Editar producto'))
     await screen.findByRole('dialog')
-    expect(selectDeUnidad().value).toBe('bulto')
-    expect(opcionesDe(selectDeUnidad())).toEqual(['UN', 'KG', 'bulto'])
+    expect(selectDeUnidad()).toHaveValue('bulto')
+    expect(await opcionesDe(user, selectDeUnidad())).toEqual(['UN', 'KG', 'bulto'])
     await user.click(within(dialogo()).getByRole('button', { name: 'Guardar cambios' }))
     await waitFor(() => expect(escrituras()).toContain('PUT /api/productos/1'))
     expect(cuerpoDe('PUT /api/productos/1').unidad).toBe('bulto')
@@ -219,8 +219,8 @@ describe('Productos: la unidad del alta sale del catálogo', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     await user.click(screen.getByRole('button', { name: /Nuevo producto/ }))
     await screen.findByRole('dialog')
-    expect(selectDeUnidad().value).toBe('UN')
-    expect(opcionesDe(selectDeUnidad())).toEqual(['UN', 'KG'])
+    expect(selectDeUnidad()).toHaveValue('UN')
+    expect(await opcionesDe(user, selectDeUnidad())).toEqual(['UN', 'KG'])
   })
 })
 

@@ -43,9 +43,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog'
@@ -414,13 +412,18 @@ export function Ventas({
                 {listasPrecio.length > 0 && (
                   <div className="grid gap-2">
                     <Label htmlFor="venta-lista">Lista de precios</Label>
-                    <Select value={listaPrecioId || '__base__'} onValueChange={(v) => setListaPrecioId(v === '__base__' ? '' : v)}>
-                      <SelectTrigger id="venta-lista" aria-label="Lista de precios" className="w-48"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__base__">— Precio de venta —</SelectItem>
-                        {listasPrecio.map((l) => <SelectItem key={l.id} value={String(l.id)}>{l.nombre}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <SelectBuscable
+                      id="venta-lista"
+                      value={listaPrecioId}
+                      onChange={setListaPrecioId}
+                      opciones={[
+                        { value: '', label: '— Precio de venta —' },
+                        ...listasPrecio.map((l) => ({ value: String(l.id), label: l.nombre })),
+                      ]}
+                      ariaLabel="Lista de precios"
+                      limpiable={false}
+                      className="w-48"
+                    />
                   </div>
                 )}
                 <div className="grid gap-2"><Label htmlFor="venta-obs">Observaciones</Label><Input id="venta-obs" value={observaciones} onChange={(e) => setObservaciones(e.target.value)} className="w-64" /></div>
@@ -432,6 +435,7 @@ export function Ventas({
                   <div className="grid gap-2"><Label htmlFor="nc-cuit">CUIT/DNI</Label><Input id="nc-cuit" value={ncCuit} onChange={(e) => setNcCuit(e.target.value)} className="w-32" /></div>
                   <div className="grid gap-2">
                     <Label htmlFor="nc-iva">Condición IVA</Label>
+                    {/* select-cerrado: las condiciones frente al IVA son un catálogo cerrado de ARCA, fijo en el código (`IVA_CONDITIONS`) */}
                     <Select value={ncIva || '__none__'} onValueChange={(v) => setNcIva(v === '__none__' ? '' : v)}>
                       <SelectTrigger id="nc-iva" aria-label="Condición IVA" className="w-44"><SelectValue placeholder="— Sin especificar —" /></SelectTrigger>
                       <SelectContent>

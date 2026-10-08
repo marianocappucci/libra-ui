@@ -18,6 +18,7 @@ import { StockMovimientos } from '../src/comercio/StockMovimientos'
 import { Depositos } from '../src/comercio/Depositos'
 import { DepositoTransferencia } from '../src/comercio/DepositoTransferencia'
 import type { Deposito, MovimientoStock, Producto, StockItem } from '../src/comercio/tipos'
+import { elegirEnBuscable } from './helpers-pantallas'
 
 const PLATO: Producto = {
   id: 1, codigo: 'BEB-0001', nombre: 'Milanesa', descripcion: '', precio_venta: 5000, precio_costo: 2000,
@@ -210,14 +211,11 @@ describe('StockMovimientos y depósitos', () => {
     const user = userEvent.setup()
     render(<MemoryRouter><DepositoTransferencia /></MemoryRouter>)
     await screen.findByText('Transferir stock entre depósitos')
-    // El producto es un SelectBuscable (combobox con listbox); los depósitos son
-    // Selects de shadcn, que el stub rendea como <select> nativos, en orden.
+    // El producto y los dos depósitos son `SelectBuscable` (combobox con listbox).
     await user.click(screen.getByRole('combobox', { name: 'Producto' }))
     await user.click(await screen.findByRole('option', { name: /Milanesa/ }))
-    const selects = () => screen.getAllByRole('combobox').filter((el) => el.tagName === 'SELECT')
-    await waitFor(() => expect(selects()).toHaveLength(2))
-    await user.selectOptions(selects()[0], '1')
-    await user.selectOptions(selects()[1], '2')
+    await elegirEnBuscable(user, await screen.findByRole('combobox', { name: 'Depósito origen' }), /Central/)
+    await elegirEnBuscable(user, screen.getByRole('combobox', { name: 'Depósito destino' }), 'Sucursal')
     await user.type(screen.getByLabelText('Cantidad'), '4')
     await user.click(screen.getByRole('button', { name: /Confirmar transferencia/ }))
     await waitFor(() => expect(pedidas()).toContain('POST /api/depositos/transferir'))

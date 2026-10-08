@@ -14,9 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { BadgeEstado } from '../badge-estado'
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose,
 } from '@/components/ui/dialog'
@@ -28,6 +26,7 @@ import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
 import { fecha } from '@/lib/fechas'
 import { hoyISO } from '../fechas'
+import { SelectBuscable } from '../SelectBuscable'
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
@@ -173,21 +172,23 @@ export function Tesoreria() {
                 <div className="grid gap-3">
                   <div className="grid gap-2">
                     <Label>Cuenta origen</Label>
-                    <Select value={tOrigen} onValueChange={setTOrigen}>
-                      <SelectTrigger><SelectValue placeholder="Cuenta…" /></SelectTrigger>
-                      <SelectContent>
-                        {cuentas.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.nombre} — {formatCurrency(c.saldo)}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <SelectBuscable
+                      value={tOrigen}
+                      onChange={setTOrigen}
+                      opciones={cuentas.map((c) => ({ value: String(c.id), label: `${c.nombre} — ${formatCurrency(c.saldo)}` }))}
+                      placeholder="Cuenta…"
+                      ariaLabel="Cuenta origen"
+                    />
                   </div>
                   <div className="grid gap-2">
                     <Label>Cuenta destino</Label>
-                    <Select value={tDestino} onValueChange={setTDestino}>
-                      <SelectTrigger><SelectValue placeholder="Cuenta…" /></SelectTrigger>
-                      <SelectContent>
-                        {cuentas.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.nombre}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <SelectBuscable
+                      value={tDestino}
+                      onChange={setTDestino}
+                      opciones={cuentas.map((c) => ({ value: String(c.id), label: c.nombre }))}
+                      placeholder="Cuenta…"
+                      ariaLabel="Cuenta destino"
+                    />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="grid gap-2"><Label>Monto</Label><Input type="number" step="0.01" min="0.01" value={tMonto} onChange={(e) => setTMonto(e.target.value)} /></div>
@@ -228,6 +229,7 @@ export function Tesoreria() {
                 </div>
                 <div className="grid gap-2">
                   <Label>Tipo</Label>
+                  {/* select-cerrado: los tipos de cuenta son cuatro, fijos en el código (`TIPOS_CUENTA_TESORERIA`) */}
                   <Select value={cuentaForm.tipo} onValueChange={(v) => setCuentaForm({ ...cuentaForm, tipo: v })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>

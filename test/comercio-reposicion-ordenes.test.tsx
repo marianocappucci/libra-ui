@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { Reposicion } from '../src/comercio/Reposicion'
 import type { GenerarOrdenesResultado, ReposicionData, ReposicionProducto } from '../src/comercio/tipos'
-import { cuerpoDe, fetchMock, json, montar, pedidas, prepararFetch, responder } from './helpers-pantallas'
+import { cuerpoDe, elegirEnBuscable, fetchMock, json, montar, pedidas, prepararFetch, responder } from './helpers-pantallas'
 
 const base: ReposicionProducto = {
   producto_id: 0, codigo: null, nombre: '', unidad: 'u', categoria: '', stock: 0, en_camino: 0, en_camino_sin_sucursal: 0,
@@ -106,9 +106,9 @@ describe('Reposición: generar órdenes en borrador', () => {
       ...TODO, '/api/sucursales': [{ id: 2, nombre: 'Norte', codigo: null, direccion: null, activa: 1, es_default: 0, deposito_predeterminado_id: 2, depositos: 1 }],
       '/api/productos/categorias': [{ id: 1, nombre: 'Almacén' }],
     })
-    await user.selectOptions(await screen.findByLabelText('Sucursal'), '2')
-    await user.selectOptions(screen.getByLabelText('Categoría'), 'Almacén')
-    await user.selectOptions(screen.getByLabelText('Proveedor'), '7')
+    await elegirEnBuscable(user, await screen.findByLabelText('Sucursal'), 'Norte')
+    await elegirEnBuscable(user, screen.getByLabelText('Categoría'), 'Almacén')
+    await elegirEnBuscable(user, screen.getByLabelText('Proveedor'), 'Distribuidora Norte')
     await waitFor(() => expect(pedidas().filter((p) => p.includes('proveedor_id=7')).length).toBeGreaterThan(0))
     await user.click(await screen.findByRole('button', { name: /Generar órdenes en borrador/ }))
     await user.click(within(dialogo()).getByRole('button', { name: /^Crear/ }))
@@ -247,7 +247,7 @@ describe('Reposición: generar órdenes en borrador', () => {
     expect(await within(dialogo()).findByRole('alert')).toBeTruthy()
     await user.click(within(dialogo()).getByRole('button', { name: 'Cancelar' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    await user.selectOptions(screen.getByLabelText('Categoría'), 'Almacén')                      // cambia un filtro entre tanto
+    await elegirEnBuscable(user, screen.getByLabelText('Categoría'), 'Almacén')                      // cambia un filtro entre tanto
     await user.click(await screen.findByRole('button', { name: /Generar órdenes en borrador/ }))
     expect(within(dialogo()).getByText(/Un pedido anterior se cortó y no se sabe si llegó/)).toBeTruthy()
     await user.click(within(dialogo()).getByRole('button', { name: 'Crear 2 órdenes' }))
@@ -330,7 +330,7 @@ describe('Reposición: generar órdenes en borrador', () => {
     await within(dialogo()).findByRole('alert')
     await user.click(within(dialogo()).getByRole('button', { name: 'Cancelar' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    await user.selectOptions(screen.getByLabelText('Categoría'), 'Almacén')                 // la lista queda vacía
+    await elegirEnBuscable(user, screen.getByLabelText('Categoría'), 'Almacén')                 // la lista queda vacía
     await screen.findByText('0 productos')
     expect(boton()).toBeDisabled()                                                          // el botón de generar no sirve (no hay nada)...
     await user.click(screen.getByRole('button', { name: 'Reintentar el pedido anterior' })) // ...pero el reintento sí

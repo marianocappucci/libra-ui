@@ -13,7 +13,7 @@ import { _resetCacheDeMedios } from '../src/comercio/medios-pago'
 import type { Egreso, PagoEgreso, Proveedor } from '../src/comercio/tipos'
 import { IVA_CONDITIONS } from '../src/facturas'
 import {
-  cuerpoDe, elegirEnBuscable, montar, pedidas, prepararFetch, responder, selectConOpcion,
+  cuerpoDe, elegirEnBuscable, montar, opcionesDe, pedidas, prepararFetch, responder, selectConOpcion,
 } from './helpers-pantallas'
 
 const ACME: Proveedor = { id: 1, nombre: 'ACME', cuit_dni: '30-11111111-1', email: 'acme@x.com', phone: '222', address: 'Ruta 8', iva_condition: IVA_CONDITIONS[0] }
@@ -286,13 +286,14 @@ describe('EgresoDetalle', () => {
     await user.click(screen.getByRole('button', { name: 'Registrar pago' }))
     const dialogo = screen.getByRole('dialog')
     expect((within(dialogo).getByLabelText('Monto') as HTMLInputElement).value).toBe('1210')
-    expect((within(dialogo).getByLabelText('Caja') as HTMLSelectElement).value).toBe('1')
+    expect(within(dialogo).getByLabelText('Caja')).toHaveValue('Caja principal')
     // Los medios son los de la caja elegida; al cambiar de caja se acotan.
-    expect(within(dialogo).getAllByRole('option').map((o) => o.textContent)).toContain('Transferencia')
-    await user.selectOptions(within(dialogo).getByLabelText('Caja'), '2')
-    expect(within(dialogo).getAllByRole('option').map((o) => o.textContent)).not.toContain('Transferencia')
-    await user.selectOptions(within(dialogo).getByLabelText('Caja'), '1')
-    await user.selectOptions(within(dialogo).getByLabelText('Medio de pago'), 'transferencia')
+    const medio = within(dialogo).getByLabelText('Medio de pago')
+    expect(await opcionesDe(user, medio)).toContain('Transferencia')
+    await elegirEnBuscable(user, within(dialogo).getByLabelText('Caja'), 'Caja 2')
+    expect(await opcionesDe(user, medio)).not.toContain('Transferencia')
+    await elegirEnBuscable(user, within(dialogo).getByLabelText('Caja'), 'Caja principal')
+    await elegirEnBuscable(user, medio, 'Transferencia')
     fireEvent.change(within(dialogo).getByLabelText('Monto'), { target: { value: '700' } })
     fireEvent.change(within(dialogo).getByLabelText('Referencia'), { target: { value: 'op-7' } })
     await user.click(within(dialogo).getByRole('button', { name: 'Confirmar pago' }))

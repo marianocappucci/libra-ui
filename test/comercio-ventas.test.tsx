@@ -17,6 +17,7 @@ import {
   MEDIO_DEL_QR, lineaVacia, numero, pagosPayload, redondear, totalDeclarado, vueltoDe, type LineaDePago,
 } from '../src/comercio/pagos'
 import { etiquetaDeEstadoDeVenta, formatoMoneda, opcionesCliente, type Venta } from '../src/comercio/tipos'
+import { elegirEnBuscable } from './helpers-pantallas'
 
 const MEDIOS = [
   { id: 'efectivo', label: 'Efectivo' }, { id: 'transferencia', label: 'Transferencia' },
@@ -170,15 +171,15 @@ describe('LineasDePago', () => {
     render(<Armador inicial={[{ ...lineaVacia('efectivo', '400'), recibido: '500' }]} />)
     await user.click(screen.getByRole('button', { name: /Agregar otro medio/ }))
     expect(estado()[1].monto).toBe('600')
-    await user.selectOptions(screen.getByLabelText('Medio de pago', { selector: '#pago-medio-1' }), 'mercadopago')
+    await elegirEnBuscable(user, screen.getByLabelText('Medio de pago', { selector: '#pago-medio-1' }), 'MercadoPago')
     expect(screen.getByLabelText('Referencia (opcional)')).toBeTruthy()
     await user.click(screen.getByLabelText('Cobrar con QR ahora'))
     expect(estado()[1].cobrarConQr).toBe(true)
     fireEvent.change(screen.getByLabelText('Referencia (opcional)'), { target: { value: 'op-1' } })
     expect(estado()[1].referencia).toBe('op-1')
-    await user.selectOptions(screen.getByLabelText('Medio de pago', { selector: '#pago-medio-1' }), 'transferencia')
+    await elegirEnBuscable(user, screen.getByLabelText('Medio de pago', { selector: '#pago-medio-1' }), 'Transferencia')
     expect(estado()[1].cobrarConQr).toBe(false)
-    await user.selectOptions(screen.getByLabelText('Medio de pago', { selector: '#pago-medio-0' }), 'tarjeta_debito')
+    await elegirEnBuscable(user, screen.getByLabelText('Medio de pago', { selector: '#pago-medio-0' }), 'Tarjeta de débito')
     expect(estado()[0].recibido).toBe('')
     await user.click(screen.getByLabelText('Quitar el pago 2'))
     expect(estado()).toHaveLength(1)
@@ -356,7 +357,7 @@ describe('Ventas', () => {
     await user.click(screen.getByRole('button', { name: /Nueva venta/ }))
     const dialogo = await screen.findByRole('dialog')
     await waitFor(() => expect(pedidas()).toContain('GET /api/clientes'))
-    await user.selectOptions(within(dialogo).getByRole('combobox', { name: 'Lista de precios' }), '5')
+    await elegirEnBuscable(user, within(dialogo).getByRole('combobox', { name: 'Lista de precios' }), 'Mayorista')
     // Un texto corto no busca; dos letras sí, con la lista elegida.
     await user.type(within(dialogo).getByLabelText('Ítem 1'), 'Y')
     expect(pedidas().some((p) => p.includes('/productos/buscar'))).toBe(false)

@@ -24,9 +24,6 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { BadgeEstado } from '../badge-estado'
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
-import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose,
 } from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/confirm-dialog'
@@ -39,6 +36,7 @@ import { ICONOS } from '../iconos-identidad'
 // Alias: `fecha` ya es el estado del campo de fecha del formulario de pago.
 import { fecha as formatearFecha } from '@/lib/fechas'
 import { hoyISO } from '../fechas'
+import { SelectBuscable } from '../SelectBuscable'
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
@@ -330,14 +328,15 @@ export function CuentaCorrienteDetalle({ esAdmin = false, conRecibos = false }: 
                   <div className="grid grid-cols-2 gap-3">
                     <div className="grid gap-2">
                       <Label>Medio de pago</Label>
-                      <Select value={medioPago} onValueChange={setMedioPago}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {/* Del motor, no de una copia TypeScript: ésa tenía
-                              `cheque` de más y le faltaban las tarjetas. */}
-                          {medios.map((m) => <SelectItem key={m.id} value={m.id}>{m.label}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
+                      {/* Del motor, no de una copia TypeScript: ésa tenía
+                          `cheque` de más y le faltaban las tarjetas. */}
+                      <SelectBuscable
+                        value={medioPago}
+                        onChange={setMedioPago}
+                        opciones={medios.map((m) => ({ value: m.id, label: m.label }))}
+                        ariaLabel="Medio de pago"
+                        limpiable={false}
+                      />
                     </div>
                     <div className="grid gap-2">
                       <Label>Referencia <span className="font-normal text-muted-foreground">(opcional)</span></Label>
@@ -347,13 +346,15 @@ export function CuentaCorrienteDetalle({ esAdmin = false, conRecibos = false }: 
                   {cajas.length > 0 && (
                     <div className="grid gap-2">
                       <Label>Registrar en caja <span className="font-normal text-muted-foreground">(opcional)</span></Label>
-                      <Select value={cajaId || 'ninguna'} onValueChange={(v) => setCajaId(v === 'ninguna' ? '' : v)}>
-                        <SelectTrigger><SelectValue placeholder="— No registrar en caja —" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="ninguna">— No registrar en caja —</SelectItem>
-                          {cajas.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.nombre}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
+                      <SelectBuscable
+                        value={cajaId}
+                        onChange={setCajaId}
+                        opciones={[
+                          { value: '', label: '— No registrar en caja —' },
+                          ...cajas.map((c) => ({ value: String(c.id), label: c.nombre })),
+                        ]}
+                        ariaLabel="Registrar en caja"
+                      />
                     </div>
                   )}
                 </div>

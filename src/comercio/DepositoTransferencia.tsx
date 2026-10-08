@@ -15,9 +15,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
 
 export type DepositoTransferenciaProps = {
   rutaDeDepositos?: string
@@ -141,21 +138,23 @@ export function DepositoTransferencia({ rutaDeDepositos = '/depositos', conHisto
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="grid gap-2">
                 <Label>Depósito origen <span className="text-destructive">*</span></Label>
-                <Select value={origenId} onValueChange={setOrigenId}>
-                  <SelectTrigger aria-label="Depósito origen"><SelectValue placeholder="— Origen —" /></SelectTrigger>
-                  <SelectContent>
-                    {depositos.filter((d) => d.activo).map((d) => <SelectItem key={d.id} value={String(d.id)}>{d.nombre}{d.es_default ? ' ★' : ''}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <SelectBuscable
+                  value={origenId}
+                  onChange={setOrigenId}
+                  opciones={depositos.filter((d) => d.activo).map((d) => ({ value: String(d.id), label: `${d.nombre}${d.es_default ? ' ★' : ''}` }))}
+                  placeholder="— Origen —"
+                  ariaLabel="Depósito origen"
+                />
               </div>
               <div className="grid gap-2">
                 <Label>Depósito destino <span className="text-destructive">*</span></Label>
-                <Select value={destinoId} onValueChange={setDestinoId}>
-                  <SelectTrigger aria-label="Depósito destino"><SelectValue placeholder="— Destino —" /></SelectTrigger>
-                  <SelectContent>
-                    {depositos.filter((d) => d.activo).map((d) => <SelectItem key={d.id} value={String(d.id)}>{d.nombre}{d.es_default ? ' ★' : ''}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <SelectBuscable
+                  value={destinoId}
+                  onChange={setDestinoId}
+                  opciones={depositos.filter((d) => d.activo).map((d) => ({ value: String(d.id), label: `${d.nombre}${d.es_default ? ' ★' : ''}` }))}
+                  placeholder="— Destino —"
+                  ariaLabel="Depósito destino"
+                />
               </div>
             </div>
 

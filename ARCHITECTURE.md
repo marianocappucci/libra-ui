@@ -59,7 +59,7 @@ Tres capas, de más genérico a más específico:
     `Facturas`/`FacturaDetalle`, `MpBandeja`.
   - Helpers y piezas compartidas: `AuthContext`, `api-client`, `data-table`
     (sobre TanStack Table), `SelectBuscable`, `PasswordInput`,
-    `CampoArchivo` (el único campo de archivo de la suite, ADR-037), `acciones` /
+    `CampoArchivo` (el único campo de archivo de la suite, ADR-037), `auditoria-de-selects` (el guard de que todo desplegable de datos es `SelectBuscable`, que desde la 0.129.0 es un campo con lupa por defecto, ADR-039), `acciones` /
     `iconos-accion`, `iconos-identidad` (el catálogo de íconos del menú y los
     títulos, ADR-035), `iconos-indicador` (el de lo que se mide en reportes y
     tableros, con `TarjetaReporte`, `TarjetaIndicador` e `IconoIndicador`,

@@ -17,12 +17,10 @@ import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogClose,
 } from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/confirm-dialog'
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
 import { Plus, Eye, Pencil, Trash2, Star, Check, Power, PowerOff } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
+import { SelectBuscable } from '../SelectBuscable'
 
 // 🔴 Aca habia un `TODOS_MEDIOS = Object.keys(MEDIOS_PAGO_LABELS)`, o sea la
 // copia TypeScript de la lista del motor. **Esta es la pantalla donde mas
@@ -190,13 +188,16 @@ export function Cajas({ sucursales, conActivarDesactivar = false, verMovimientos
         <TituloPantalla icono={ICONOS.cajas}>Cajas</TituloPantalla>
         <div className="flex flex-wrap items-center gap-2">
           {sucursales && sucursales.length > 1 && (
-            <Select value={sucursalFiltro || 'todas'} onValueChange={(v) => setSucursalFiltro(v === 'todas' ? '' : v)}>
-              <SelectTrigger className="h-9 w-56" aria-label="Filtrar por sucursal"><SelectValue placeholder="Todas las sucursales" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todas">Todas las sucursales</SelectItem>
-                {sucursales.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.nombre}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <SelectBuscable
+              value={sucursalFiltro}
+              onChange={setSucursalFiltro}
+              opciones={[
+                { value: '', label: 'Todas las sucursales' },
+                ...sucursales.map((s) => ({ value: String(s.id), label: s.nombre })),
+              ]}
+              ariaLabel="Filtrar por sucursal"
+              className="h-9 w-56"
+            />
           )}
           <Button onClick={abrirNueva} disabled={!!sucursales && sucursalesDeAlta.length === 0}><Plus />Nueva caja</Button>
         </div>
@@ -281,12 +282,14 @@ export function Cajas({ sucursales, conActivarDesactivar = false, verMovimientos
             {sucursales && !editingCaja && (
               <div className="grid gap-2">
                 <Label htmlFor="caja-sucursal">Sucursal</Label>
-                <Select value={sucursalId} onValueChange={(v) => v && setSucursalId(v)}>
-                  <SelectTrigger id="caja-sucursal"><SelectValue placeholder="Elegí una sucursal…" /></SelectTrigger>
-                  <SelectContent>
-                    {sucursalesDeAlta.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.nombre}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <SelectBuscable
+                  id="caja-sucursal"
+                  value={sucursalId}
+                  onChange={setSucursalId}
+                  opciones={sucursalesDeAlta.map((s) => ({ value: String(s.id), label: s.nombre }))}
+                  placeholder="Elegí una sucursal…"
+                  limpiable={false}
+                />
               </div>
             )}
             <div className="grid grid-cols-2 gap-3">

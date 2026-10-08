@@ -165,6 +165,7 @@ export function EmpresaCard({ basePath = '/api/config/empresa' }: { basePath?: s
         <Campo id="cfg-empresa_iibb" label="Ingresos Brutos" value={datos.empresa_iibb} onChange={(v) => setDatos({ ...datos, empresa_iibb: v })} />
         <div className="grid gap-2">
           <Label>Condición de IVA</Label>
+          {/* select-cerrado: las condiciones de un emisor son tres, fijas en el código (`CONDICIONES_IVA`) */}
           <Select
             value={datos.empresa_iva_condition}
             onValueChange={(v) => setDatos({ ...datos, empresa_iva_condition: v })}

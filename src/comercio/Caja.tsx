@@ -14,9 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { BadgeEstado } from '../badge-estado'
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose,
 } from '@/components/ui/dialog'
@@ -27,6 +25,7 @@ import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
 import { fecha } from '@/lib/fechas'
 import { hoyISO, primerDiaDelMesISO } from '../fechas'
+import { SelectBuscable } from '../SelectBuscable'
 
 export function Caja() {
   const { medios, etiqueta: etiquetaDeMedio } = useMediosPago()
@@ -272,22 +271,26 @@ export function Caja() {
               {cajas.length > 1 && (
                 <div className="grid gap-2">
                   <Label>Caja</Label>
-                  <Select value={cajaIdMov} onValueChange={setCajaIdMov}>
-                    <SelectTrigger id="mov-caja" aria-label="Caja"><SelectValue placeholder="Por defecto" /></SelectTrigger>
-                    <SelectContent>
-                      {cajas.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.nombre}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <SelectBuscable
+                    id="mov-caja"
+                    value={cajaIdMov}
+                    onChange={setCajaIdMov}
+                    opciones={cajas.map((c) => ({ value: String(c.id), label: c.nombre }))}
+                    placeholder="Por defecto"
+                    ariaLabel="Caja"
+                  />
                 </div>
               )}
               <div className="grid gap-2">
                 <Label>Medio de pago</Label>
-                <Select value={medioPagoMov} onValueChange={setMedioPagoMov}>
-                  <SelectTrigger id="mov-medio" aria-label="Medio de pago"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {mediosDisponiblesMov.map((k) => <SelectItem key={k} value={k}>{etiquetaDeMedio(k)}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <SelectBuscable
+                  id="mov-medio"
+                  value={medioPagoMov}
+                  onChange={setMedioPagoMov}
+                  opciones={mediosDisponiblesMov.map((k) => ({ value: k, label: etiquetaDeMedio(k) }))}
+                  ariaLabel="Medio de pago"
+                  limpiable={false}
+                />
               </div>
             </div>
             <DialogFooter>
@@ -316,13 +319,16 @@ export function Caja() {
           <span className="text-muted-foreground">—</span>
           <Input type="date" aria-label="Hasta" value={hasta} onChange={(e) => setHasta(e.target.value)} className="w-40" />
           {cajas.length > 1 && (
-            <Select value={cajaId || 'todas'} onValueChange={(v) => setCajaId(v === 'todas' ? '' : v)}>
-              <SelectTrigger className="w-44" aria-label="Caja"><SelectValue placeholder="Todas las cajas" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todas">Todas las cajas</SelectItem>
-                {cajas.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.nombre}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <SelectBuscable
+              value={cajaId}
+              onChange={setCajaId}
+              opciones={[
+                { value: '', label: 'Todas las cajas' },
+                ...cajas.map((c) => ({ value: String(c.id), label: c.nombre })),
+              ]}
+              ariaLabel="Caja"
+              className="w-44"
+            />
           )}
           <Button variant="outline" size="icon" onClick={load} aria-label="Recargar" title="Recargar"><Filter /></Button>
           {(cajaId || desde !== primerDiaDelMesISO() || hasta !== hoyISO()) && (

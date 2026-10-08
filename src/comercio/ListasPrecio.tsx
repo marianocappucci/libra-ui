@@ -21,9 +21,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
-import {
   Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
 } from '@/components/ui/form'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
@@ -31,6 +28,7 @@ import {
   Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { SelectBuscable } from '../SelectBuscable'
 
 const listaSchema = z.object({
   nombre: z.string().trim().min(1, 'El nombre es obligatorio'),
@@ -253,12 +251,14 @@ export function ListasPrecio({ rutaDelDetalle = (id) => `/listas-precio/${id}` }
                     )}
                   </RadioGroup>
                   {importarInicial === 'lista' && (
-                    <Select value={importarInicialListaId} onValueChange={setImportarInicialListaId}>
-                      <SelectTrigger className="ml-6 w-64" aria-label="Lista de origen"><SelectValue placeholder="Elegir lista…" /></SelectTrigger>
-                      <SelectContent>
-                        {listas.map((l) => <SelectItem key={l.id} value={String(l.id)}>{l.nombre}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <SelectBuscable
+                      value={importarInicialListaId}
+                      onChange={setImportarInicialListaId}
+                      opciones={listas.map((l) => ({ value: String(l.id), label: l.nombre }))}
+                      placeholder="Elegir lista…"
+                      ariaLabel="Lista de origen"
+                      className="ml-6 w-64"
+                    />
                   )}
                 </div>
 

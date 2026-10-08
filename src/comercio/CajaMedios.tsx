@@ -12,15 +12,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
-import {
   Download, ArrowLeft, ArrowUp, ArrowDown,
 } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
 import { iconoDe } from '../medios-pago'
 import { hoyISO, primerDiaDelMesISO } from '../fechas'
+import { SelectBuscable } from '../SelectBuscable'
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
@@ -80,13 +78,17 @@ export function CajaMedios() {
           {data && data.cajas_config.length > 1 && (
             <div className="grid gap-2">
               <Label>Caja</Label>
-              <Select value={cajaId} onValueChange={setCajaId}>
-                <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="0">Todas las cajas</SelectItem>
-                  {data.cajas_config.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.nombre}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <SelectBuscable
+                value={cajaId}
+                onChange={setCajaId}
+                opciones={[
+                  { value: '0', label: 'Todas las cajas' },
+                  ...data.cajas_config.map((c) => ({ value: String(c.id), label: c.nombre })),
+                ]}
+                ariaLabel="Caja"
+                limpiable={false}
+                className="w-44"
+              />
             </div>
           )}
           <Button asChild size="sm" variant="outline" className="ml-auto">

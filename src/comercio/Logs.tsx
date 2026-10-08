@@ -16,15 +16,13 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
-import {
   Tabs, TabsContent, TabsList, TabsTrigger,
 } from '@/components/ui/tabs'
 import { BookText, Boxes, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Clock, Download, ExternalLink, FileText, Inbox, LogIn, LogOut, PackageCheck, PiggyBank, Shield, ShoppingCart, User as UserIcon, XCircle } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
 import { fecha, fechaHora, horaConSegundos } from '@/lib/fechas'
+import { SelectBuscable } from '../SelectBuscable'
 
 // Orden y set canonico de tipos -- coincide con TIPO_META de
 // web/api/logs.py (que a su vez preserva el dict del router Jinja2 viejo,
@@ -210,13 +208,17 @@ export function Logs() {
               <div className="flex flex-wrap items-end gap-3">
                 <div className="grid gap-2">
                   <Label>Usuario</Label>
-                  <Select value={usuarioId} onValueChange={(v) => { setPage(1); setUsuarioId(v) }}>
-                    <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="0">— Todos —</SelectItem>
-                      {data?.usuarios.map((u) => <SelectItem key={u.id} value={String(u.id)}>{u.nombre} ({u.role})</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <SelectBuscable
+                    value={usuarioId}
+                    onChange={(v) => { setPage(1); setUsuarioId(v) }}
+                    opciones={[
+                      { value: '0', label: '— Todos —' },
+                      ...(data?.usuarios.map((u) => ({ value: String(u.id), label: `${u.nombre} (${u.role})` })) ?? []),
+                    ]}
+                    ariaLabel="Usuario"
+                    limpiable={false}
+                    className="w-48"
+                  />
                 </div>
                 <div className="grid gap-2">
                   <Label>Turno #</Label>

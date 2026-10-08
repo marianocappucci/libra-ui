@@ -17,6 +17,7 @@ import { Depositos } from '../src/comercio/Depositos'
 import { DepositoDetalle } from '../src/comercio/DepositoDetalle'
 import { DepositoTransferencia } from '../src/comercio/DepositoTransferencia'
 import { opcionesProducto, type Deposito, type MovimientoStock, type Producto, type StockItem } from '../src/comercio/tipos'
+import { elegirEnBuscable } from './helpers-pantallas'
 
 const PLATO: Producto = {
   id: 1, codigo: 'BEB-0001', nombre: 'Milanesa', descripcion: 'con papas', precio_venta: 5000, precio_costo: 2000,
@@ -341,10 +342,8 @@ describe('Depósitos: alta, edición, default, borrado y detalle', () => {
     expect(screen.queryByRole('option', { name: /Viejo/ })).toBeNull()
     await user.click(await screen.findByRole('option', { name: /Milanesa/ }))
     expect(await screen.findByText(/Stock disponible por depósito/)).toBeTruthy()
-    const selects = () => screen.getAllByRole('combobox').filter((el) => el.tagName === 'SELECT')
-    await waitFor(() => expect(selects()).toHaveLength(2))
-    await user.selectOptions(selects()[0], '1')
-    await user.selectOptions(selects()[1], '2')
+    await elegirEnBuscable(user, await screen.findByRole('combobox', { name: 'Depósito origen' }), /Central/)
+    await elegirEnBuscable(user, screen.getByRole('combobox', { name: 'Depósito destino' }), 'Sucursal')
     await user.type(screen.getByLabelText('Cantidad'), '40')
     await user.click(screen.getByRole('button', { name: /Confirmar transferencia/ }))
     expect(await screen.findByText(/Stock insuficiente en depósito origen/)).toBeTruthy()
