@@ -18,7 +18,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { faviconDeMarca } from './marcas'
-import { COLORES_DE_TEMA, ajustarContraste, mezclar, type ClaveDeTema } from './tema'
+import { COLORES_DE_TEMA, ajustarContraste, type ClaveDeTema } from './tema'
 
 export type Producto =
   | 'contalibra'
@@ -138,29 +138,28 @@ const ID_DEL_ESTILO = 'libra-identidad'
 // #34d399 entre ellos, quedan arriba de 7:1 contra esto), así que el texto del botón se lee en los ocho.
 export const TEXTO_SOBRE_ACENTO_OSCURO = '#0b1324'
 
-// Cuánto del color de marca lleva el borde del ítem activo, mezclado con `colorClaro`. Con 0,45 el borde se distingue de la barra (era #fafafa; desde ADR-042, #ebebeb) con
-// 1,6:1 a 2,7:1 según el producto, nunca menos que el verde de antes (#5ee9b5, 1,46:1), y sigue siendo un borde y no un marco: el 100% del color
-// de marca alrededor de un chip pálido pesaba más que el texto.
-const MEZCLA_DEL_BORDE_ACTIVO = 0.45
+// El fondo del ítem activo sobre la barra grafito (ADR-043): un grafito un punto más claro que la barra (`oklch(0.305 0.012 265)`), el mismo en los
+// ocho y en los dos modos. Contra la barra: se despega 1,24:1 en claro y 1,45:1 en oscuro; lo que lo marca de verdad es la franja.
+export const FONDO_DEL_ITEM_ACTIVO = '#2c2f35'
 // Contraste mínimo del texto del ítem activo sobre su fondo (WCAG AA, texto normal).
 const CONTRASTE_DEL_TEXTO_ACTIVO = 4.5
 
 export type MenuActivoDeProducto = {
-  /** El fondo del chip: el fondo suave del producto (`colorClaro`). */
+  /** El fondo del ítem: el grafito de `FONDO_DEL_ITEM_ACTIVO`, igual en los ocho. */
   fondo: string
-  /** El borde: el color de marca mezclado con el fondo, para que se distinga de la barra sin gritar. */
+  /** La franja de la izquierda: el color del producto para fondos oscuros (`colorSobreOscuro`); de 4,5:1 a 8:1 contra el fondo. */
   borde: string
-  /** El texto (y el ícono): `colorOscuro` oscurecido, si hace falta, hasta llegar a 4,5:1 contra el fondo. */
+  /** El texto (y el ícono): blanco, o lo más claro que llegue a 4,5:1 contra el fondo. */
   texto: string
 }
 
-/** Los tres colores del ítem activo del menú lateral para un producto (ADR-036). Función pura, sin DOM. */
+/** Los tres colores del ítem activo del menú lateral para un producto (ADR-036; desde ADR-043, sobre la barra grafito). Función pura, sin DOM. */
 export function menuActivoDeProducto(producto: Producto): MenuActivoDeProducto {
-  const { color, colorOscuro, colorClaro } = IDENTIDAD[producto]
+  const { colorSobreOscuro } = IDENTIDAD[producto]
   return {
-    fondo: colorClaro,
-    borde: mezclar(colorClaro, color, MEZCLA_DEL_BORDE_ACTIVO),
-    texto: ajustarContraste(colorOscuro, colorClaro, CONTRASTE_DEL_TEXTO_ACTIVO),
+    fondo: FONDO_DEL_ITEM_ACTIVO,
+    borde: colorSobreOscuro,
+    texto: ajustarContraste('#ffffff', FONDO_DEL_ITEM_ACTIVO, CONTRASTE_DEL_TEXTO_ACTIVO),
   }
 }
 
@@ -171,7 +170,7 @@ export function menuActivoDeProducto(producto: Producto): MenuActivoDeProducto {
  *
  * - `acento`: el `colorAccion` del producto (lo que `aplicarIdentidad` fija en `--primary`, en modo claro).
  * - `menuActivoFondo` / `menuActivoBorde`: los de `menuActivoDeProducto`.
- * - `barraLateralFondo`: no sale de la identidad. Desde ADR-042 el defecto es del kit (`tema.css`: `oklch(0.94 0 0)` = `#ebebeb`) y ningún producto lo
+ * - `barraLateralFondo`: no sale de la identidad. Desde ADR-042 el defecto es del kit (ADR-043: el grafito `#1c1e22` de `tema.css`) y ningún producto lo
  *   cambia, así que vale la referencia de `COLORES_DE_TEMA`. Si un producto pasa a tener la barra de otro color, se agrega acá.
  * - El resto (éxito, encabezado del POS): el mismo en todos, el de `COLORES_DE_TEMA`.
  */
@@ -191,8 +190,8 @@ export function cssDeIdentidad(producto: Producto): string {
   // `.dark.dark` va después de `:root:root` en la misma hoja, así que en modo oscuro (mismo elemento, 0,2,0 los dos) gana el oscuro.
   // Un color puesto en línea (`aplicarTema` fija `--primary` en `document.documentElement.style`) sigue ganando a esto: el backoffice puede
   // cambiar el acento de una instancia por encima de la identidad del producto.
-  // El ítem activo del menú (ADR-036) va sólo en `:root:root`: el chip es claro en los dos modos (un chip claro sobre la barra oscura), así que
-  // no hay variante `.dark`. Si el backoffice elige `menuActivoFondo`, `aplicarTema` pone en línea fondo y texto, y ganan a esto.
+  // El ítem activo del menú (ADR-036, ADR-043) va sólo en `:root:root`: la barra es grafito en los dos modos y el ítem también, así que no hay
+  // variante `.dark`. Si el backoffice elige `menuActivoFondo`, `aplicarTema` pone en línea fondo y texto, y ganan a esto.
   return `:root:root {
   --primary: ${colorAccion};
   --primary-foreground: #ffffff;

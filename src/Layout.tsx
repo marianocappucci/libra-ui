@@ -266,9 +266,12 @@ export function createLayout<TUser = { role?: string; name?: string }>({
 
             Va para los seis: este encabezado se dibuja una sola vez, aca. */}
         <div className="flex min-w-0 flex-col justify-center group-data-[collapsible=icon]:hidden">
-          <span className={cn('truncate font-semibold leading-none', wordmarkClassName)}>{productName}</span>
+          {/* `text-sidebar-foreground` va DESPUÉS de `wordmarkClassName` a propósito (ADR-043): los productos pasan el color del nombre pensado
+              para el login, sobre blanco (`text-[#2d2d2d]`), y en la barra grafito no se leía. `cn` (tailwind-merge) descarta el color del
+              producto y se queda con el de la barra; el tamaño y el peso del producto se conservan. */}
+          <span className={cn('truncate font-semibold leading-none', wordmarkClassName, 'text-sidebar-foreground dark:text-sidebar-foreground')}>{productName}</span>
           {getUserSubtitle && user && getUserSubtitle(user) && (
-            <span className="truncate text-xs leading-tight text-muted-foreground">{getUserSubtitle(user)}</span>
+            <span className="truncate text-xs leading-tight text-sidebar-foreground/70">{getUserSubtitle(user)}</span>
           )}
         </div>
       </>
@@ -277,7 +280,7 @@ export function createLayout<TUser = { role?: string; name?: string }>({
     const FooterContent = (
       <>
         <span className="truncate text-sm font-medium">{user && getUserName ? getUserName(user) : (user as { name?: string } | null)?.name}</span>
-        <span className="truncate text-xs text-muted-foreground capitalize">{(user as { role?: string } | null)?.role}</span>
+        <span className="truncate text-xs text-sidebar-foreground/70 capitalize">{(user as { role?: string } | null)?.role}</span>
       </>
     )
 
@@ -384,7 +387,7 @@ export function createLayout<TUser = { role?: string; name?: string }>({
                 className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-sidebar-accent group-data-[collapsible=icon]:flex-none group-data-[collapsible=icon]:justify-center"
               >
                 <Avatar className="h-8 w-8">
-                  <AvatarFallback>{user && getUserName ? initials(getUserName(user)) : (user as { name?: string } | null)?.name ? initials((user as { name: string }).name) : '?'}</AvatarFallback>
+                  <AvatarFallback className="bg-sidebar-accent text-sidebar-foreground">{user && getUserName ? initials(getUserName(user)) : (user as { name?: string } | null)?.name ? initials((user as { name: string }).name) : '?'}</AvatarFallback>
                 </Avatar>
                 <span className="flex min-w-0 flex-1 flex-col overflow-hidden group-data-[collapsible=icon]:hidden">
                   {FooterContent}
