@@ -1,6 +1,6 @@
-// La barra lateral (ADR-042): su fondo, su hover y su borde por defecto son del kit, y ningún producto los vuelve a declarar.
+// La barra lateral (ADR-042, grafito desde ADR-043): su fondo, su hover y su borde por defecto son del kit, y ningún producto los vuelve a declarar.
 //
-// Dos cosas: (1) los valores que el dueño aprobó sobre la maqueta (tono «C») están en `tema.css`, en claro y en oscuro, y el texto y el ítem activo se
+// Dos cosas: (1) los valores que el dueño aprobó sobre la maqueta (grafito, «C» de la segunda maqueta) están en `tema.css`, en claro y en oscuro, y el texto y el ítem activo se
 // leen sobre ellos con el contraste que se midió; (2) el guard `auditoria-de-barra-lateral` ve lo que dice ver, con hojas de juguete, porque lo copian
 // los productos. Lo que este archivo NO puede probar es cómo se ve en un navegador: eso se midió en Chromium y está en el ADR.
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -17,9 +17,9 @@ import { COLORES_DE_TEMA, contraste, mezclar, validarTema } from '../src/tema'
 
 const CSS = readFileSync(resolve(__dirname, '..', 'src', 'tema.css'), 'utf8')
 
-/** El valor de una variable dentro del bloque de un selector de `tema.css` (`:root` / `.dark`), el último que la declara. */
-function valorEn(selector: ':root' | '.dark', variable: string): string | undefined {
-  const bloques = [...CSS.matchAll(new RegExp(`^${selector.replace('.', '\\.')}\\s*\\{([^}]*)\\}`, 'gm'))].map((m) => m[1])
+/** El valor de una variable dentro del bloque de un selector de `tema.css` (`:root:root` / `.dark.dark`), el último que la declara. */
+function valorEn(selector: ':root:root' | '.dark.dark', variable: string): string | undefined {
+  const bloques = [...CSS.matchAll(new RegExp(`^${selector.replace(/\./g, '\\.')}\\s*\\{([^}]*)\\}`, 'gm'))].map((m) => m[1])
   let valor: string | undefined
   for (const b of bloques) {
     const m = b.match(new RegExp(`(?<![\\w-])${variable}\\s*:\\s*([^;]+);`))
@@ -28,22 +28,34 @@ function valorEn(selector: ':root' | '.dark', variable: string): string | undefi
   return valor
 }
 
-// Los hex de los oklch grises (L³ -> sRGB), medidos con un script aparte; son los que el navegador pinta.
-const BARRA = '#ebebeb' // oklch(0.94 0 0)
-const HOVER = '#e1e1e1' // oklch(0.91 0 0)
-const TEXTO = '#0a0a0a' // --sidebar-foreground: oklch(0.145 0 0)
+// Los hex de los oklch (OKLab -> sRGB), medidos con un script aparte; son los que el navegador pinta.
+const BARRA = '#1c1e22' // oklch(0.235 0.008 265)
+const HOVER = '#282a2f' // oklch(0.285 0.01 265)
+const BARRA_OSCURA = '#101215' // oklch(0.18 0.008 265)
+const HOVER_OSCURO = '#1b1d22' // oklch(0.23 0.01 265)
+const TEXTO = '#f4f4f5'
 const CONTENIDO = '#ffffff'
+const CONTENIDO_OSCURO = '#0a0a0a' // --background oscuro: oklch(0.145 0 0)
 
-describe('tema.css da el defecto de la barra lateral (tono «C», 2026-10-08)', () => {
+describe('tema.css da el defecto de la barra lateral (grafito, ADR-043, 2026-10-09)', () => {
   it.each([
-    [':root', '--sidebar', 'oklch(0.94 0 0)'],
-    [':root', '--sidebar-accent', 'oklch(0.91 0 0)'],
-    [':root', '--sidebar-border', 'oklch(0.89 0 0)'],
-    ['.dark', '--sidebar', 'oklch(0.205 0 0)'],
-    ['.dark', '--sidebar-accent', 'oklch(0.269 0 0)'],
-    ['.dark', '--sidebar-border', 'oklch(1 0 0 / 10%)'],
+    [':root:root', '--sidebar', 'oklch(0.235 0.008 265)'],
+    [':root:root', '--sidebar-accent', 'oklch(0.285 0.01 265)'],
+    [':root:root', '--sidebar-border', 'oklch(0.295 0.01 265)'],
+    [':root:root', '--sidebar-foreground', TEXTO],
+    [':root:root', '--sidebar-accent-foreground', TEXTO],
+    ['.dark.dark', '--sidebar', 'oklch(0.18 0.008 265)'],
+    ['.dark.dark', '--sidebar-accent', 'oklch(0.23 0.01 265)'],
+    ['.dark.dark', '--sidebar-border', 'oklch(0.24 0.01 265)'],
+    ['.dark.dark', '--sidebar-foreground', TEXTO],
+    ['.dark.dark', '--sidebar-accent-foreground', TEXTO],
   ] as const)('%s declara %s: %s', (selector, variable, esperado) => {
     expect(valorEn(selector, variable)).toBe(esperado)
+  })
+
+  it('🔴 el texto de la barra va con especificidad 0,2,0: el `:root` del producto (texto oscuro de la barra clara) no le gana', () => {
+    expect(CSS).not.toMatch(/^:root\s*\{[^}]*--sidebar-foreground/m)
+    expect(CSS).not.toMatch(/^\.dark\s*\{[^}]*--sidebar-foreground/m)
   })
 
   it('declara exactamente las variables que el guard prohíbe en los productos', () => {
@@ -52,44 +64,55 @@ describe('tema.css da el defecto de la barra lateral (tono «C», 2026-10-08)', 
     expect(declaradas).toHaveLength(VARIABLES_DE_LA_BARRA.length * 2) // claro y oscuro
   })
 
-  it('🔴 la barra se distingue del contenido (era 1,04:1 con #fafafa) y el hover de la barra', () => {
-    expect(contraste(BARRA, CONTENIDO)).toBeGreaterThanOrEqual(1.15)
+  it('🔴 la barra se distingue del contenido en los dos modos, y el hover de la barra', () => {
+    expect(contraste(BARRA, CONTENIDO)).toBeGreaterThanOrEqual(10)
+    expect(contraste(BARRA_OSCURA, CONTENIDO_OSCURO)).toBeGreaterThanOrEqual(1.05)
     expect(contraste(HOVER, BARRA)).toBeGreaterThanOrEqual(1.09)
+    expect(contraste(HOVER_OSCURO, BARRA_OSCURA)).toBeGreaterThanOrEqual(1.09)
   })
 
-  it('🔴 el texto del menú llega a 4,5:1 sobre la barra, sobre el hover y atenuado al 70% (los rótulos de grupo)', () => {
-    expect(contraste(TEXTO, BARRA)).toBeGreaterThanOrEqual(4.5)
-    expect(contraste(TEXTO, HOVER)).toBeGreaterThanOrEqual(4.5)
-    expect(contraste(mezclar(TEXTO, BARRA, 0.3), BARRA)).toBeGreaterThanOrEqual(4.5)
+  it.each([
+    ['claro', BARRA, HOVER],
+    ['oscuro', BARRA_OSCURA, HOVER_OSCURO],
+  ])('🔴 %s: el texto del menú llega a 4,5:1 sobre la barra, sobre el hover y atenuado al 70% (rótulos, empresa, rol)', (_, barra, hover) => {
+    expect(contraste(TEXTO, barra)).toBeGreaterThanOrEqual(4.5)
+    expect(contraste(TEXTO, hover)).toBeGreaterThanOrEqual(4.5)
+    expect(contraste(mezclar(TEXTO, barra, 0.3), barra)).toBeGreaterThanOrEqual(4.5)
   })
 
-  it('el «de siempre» de Apariencia es el que pinta tema.css, y el catálogo ya no lo trata como de cada producto', () => {
+  it('el «de siempre» de Apariencia es el que pinta tema.css, y el catálogo no lo trata como de cada producto', () => {
     const def = COLORES_DE_TEMA.find((d) => d.clave === 'barraLateralFondo')!
     expect(def.porDefecto).toBe(BARRA)
     expect(def.defectoPorProducto).toBeUndefined()
-    // …y como ya no es de cada producto, un tema que lo trae entero (el defecto) valida.
     expect(validarTema({ barraLateralFondo: def.porDefecto }).errores).toEqual({})
   })
 })
 
-describe('el ítem activo sobre la barra nueva', () => {
+describe('el ítem activo sobre la barra grafito', () => {
   const PRODUCTOS = Object.keys(IDENTIDAD) as Producto[]
 
-  it.each(PRODUCTOS)('🔴 %s: el texto del ítem activo llega a 4,5:1 sobre su chip (que ya no depende de la barra)', (p) => {
+  it.each(PRODUCTOS)('🔴 %s: el texto del ítem activo llega a 4,5:1 sobre su fondo', (p) => {
     const { fondo, texto } = menuActivoDeProducto(p)
     expect(contraste(texto, fondo)).toBeGreaterThanOrEqual(4.5)
   })
 
-  // Medido: el borde (que mezcla la marca al 45%) baja ~10% de contraste contra la barra más oscura (de 1,61-2,74:1 a 1,41-2,40:1; el más bajo es
-  // VentaLibra, ámbar). El chip, en cambio, se despega más (de 1,00-1,07:1 a 1,07-1,15:1, salvo LibraDesk y LibraCargo que quedan en 1,07): las dos cosas juntas se leen igual. Y el piso de
-  // ADR-036 —nunca menos que el verde de antes sobre la MISMA barra— lo sigue comprobando `identidad.test.ts` con la barra nueva.
-  it.each(PRODUCTOS)('%s: el chip se despega de la barra nueva (>= 1,05:1; pasa de más oscuro a más claro que la barra en LibraDesk, LibraCargo y GestioLibra)', (p) => {
-    expect(contraste(menuActivoDeProducto(p).fondo, BARRA)).toBeGreaterThanOrEqual(1.05)
+  // La franja no es texto: el piso de WCAG para un componente gráfico es 3:1 (1.4.11). Medido: de 4,50:1 (LibraDesk) a 8,04:1 (VentaLibra) sobre el ítem.
+  it.each(PRODUCTOS)('🔴 %s: la franja del color del producto se ve sobre el ítem y sobre la barra, en los dos modos', (p) => {
+    const { fondo, borde } = menuActivoDeProducto(p)
+    expect(contraste(borde, fondo)).toBeGreaterThanOrEqual(3)
+    expect(contraste(borde, BARRA)).toBeGreaterThanOrEqual(4.5)
+    expect(contraste(borde, BARRA_OSCURA)).toBeGreaterThanOrEqual(4.5)
   })
 
-  it.each(PRODUCTOS)('%s: el chip sigue siendo más claro que la barra (se lee como una pastilla, no como un hueco)', (p) => {
-    expect(contraste(menuActivoDeProducto(p).fondo, BARRA)).toBeGreaterThanOrEqual(1)
-    expect(menuActivoDeProducto(p).fondo.toLowerCase() > BARRA).toBe(true)
+  it.each(PRODUCTOS)('%s: el ítem es un punto más claro que la barra (se lee como una pastilla, no como un hueco)', (p) => {
+    const { fondo } = menuActivoDeProducto(p)
+    expect(contraste(fondo, BARRA)).toBeGreaterThanOrEqual(1.2)
+    expect(contraste(fondo, HOVER)).toBeGreaterThan(1)
+  })
+
+  it('🔴 la regla del ítem activo pinta una franja a la izquierda, no un marco', () => {
+    expect(CSS).toContain('box-shadow: inset 3px 0 0 var(--libra-menu-activo-borde);')
+    expect(CSS).not.toContain('inset 0 0 0 1px var(--libra-menu-activo-borde)')
   })
 })
 

@@ -77,8 +77,9 @@ export const COLORES_DE_TEMA: readonly DefinicionDeColor[] = [
     etiqueta: 'Barra lateral: fondo',
     ayuda: 'El fondo del menú lateral. El texto, los íconos, el borde y el color al pasar el mouse se calculan solos.',
     variable: '--sidebar',
-    // El defecto lo da `tema.css` (ADR-042: `oklch(0.94 0 0)`); sin `defectoPorProducto`, porque ya no es de cada producto.
-    porDefecto: '#ebebeb',
+    // El defecto lo da `tema.css` (ADR-043: grafito, `oklch(0.235 0.008 265)`; antes ADR-042, `#ebebeb`); sin `defectoPorProducto`, porque no es de
+    // cada producto. Es el del modo claro: en oscuro el kit usa uno un punto más hondo (`#101215`).
+    porDefecto: '#1c1e22',
     textoSobre: { variable: '--sidebar-foreground', tambien: ['--sidebar-accent-foreground'], contrasteMinimo: 4.5 },
     derivadas: [
       { variable: '--sidebar-accent', mezcla: 0.08 },
@@ -115,18 +116,18 @@ export const COLORES_DE_TEMA: readonly DefinicionDeColor[] = [
     etiqueta: 'Ítem activo del menú: fondo',
     ayuda: 'El fondo de la opción del menú lateral en la que estás parado.',
     variable: '--libra-menu-activo-fondo',
-    // Neutro (neutral-100): es el último recurso de `tema.css` para un producto que no llama a `aplicarIdentidad`. El de cada producto es su
-    // `colorClaro` (ADR-036).
-    porDefecto: '#f5f5f5',
+    // El último recurso de `tema.css` para un producto que no llama a `aplicarIdentidad`: un grafito un punto más claro que la barra. El de cada
+    // producto es el mismo grafito (ADR-043; antes, su `colorClaro`, ADR-036).
+    porDefecto: '#2c2f35',
     defectoPorProducto: true,
     textoSobre: { variable: '--libra-menu-activo-texto', contrasteMinimo: 4.5 },
   },
   {
     clave: 'menuActivoBorde',
-    etiqueta: 'Ítem activo del menú: borde',
-    ayuda: 'El borde de esa misma opción. Tiene que distinguirse del fondo de la barra.',
+    etiqueta: 'Ítem activo del menú: franja',
+    ayuda: 'La franja de la izquierda de esa misma opción. Tiene que distinguirse del fondo de la barra.',
     variable: '--libra-menu-activo-borde',
-    porDefecto: '#d4d4d4',
+    porDefecto: '#a1a1aa',
     defectoPorProducto: true,
   },
 ]

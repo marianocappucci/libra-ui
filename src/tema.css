@@ -23,22 +23,23 @@ html {
 :root {
   /* Ítem activo del menú lateral (pedido del humano, 2026-10-01). El texto sale del contraste sobre el fondo: `aplicarTema` lo
      recalcula. El defecto es de cada producto, no de la suite: `aplicarIdentidad` (`libra-ui/identidad`) lo fija con el fondo suave, el
-     borde y el texto de su color (ADR-036). Lo de acá es el último recurso, para un producto que no la llama: un neutro sin marca (era el
-     verde de VentaLibra, que quedaba mal en los otros siete). */
-  --libra-menu-activo-fondo: #f5f5f5;
-  --libra-menu-activo-borde: #d4d4d4;
-  --libra-menu-activo-texto: #171717;
+     franja de su color (ADR-036, ADR-043). Lo de acá es el último recurso, para un producto que no la llama: un neutro sin marca sobre la
+     barra grafito (era el verde de VentaLibra, que quedaba mal en los otros siete). */
+  --libra-menu-activo-fondo: #2c2f35;
+  --libra-menu-activo-borde: #a1a1aa;
+  --libra-menu-activo-texto: #ffffff;
 }
 
-/* El borde es un `box-shadow` inset y no un `border`: el ítem no se corre 1 px respecto de los demás. El fondo es el mismo en modo
-   oscuro (un chip claro sobre la barra oscura) y el texto se recalcula con él, así que el contraste vale en los dos modos. */
+/* El «borde» es una franja de 3 px a la izquierda, del color del producto (ADR-043; antes, un marco de 1 px alrededor de un chip claro). Va como
+   `box-shadow` inset y no como `border`: el ítem no se corre respecto de los demás. El fondo es el mismo en los dos modos (la barra es grafito en
+   los dos) y el texto se recalcula con él, así que el contraste vale en los dos. */
 [data-sidebar="menu-button"][data-active="true"],
 [data-sidebar="menu-button"][data-active="true"]:hover,
 [data-sidebar="menu-sub-button"][data-active="true"],
 [data-sidebar="menu-sub-button"][data-active="true"]:hover {
   background-color: var(--libra-menu-activo-fondo);
   color: var(--libra-menu-activo-texto);
-  box-shadow: inset 0 0 0 1px var(--libra-menu-activo-borde);
+  box-shadow: inset 3px 0 0 var(--libra-menu-activo-borde);
 }
 
 /* Los íconos de un subítem llevan su propio color (`text-sidebar-accent-foreground` en el SVG, no el del botón): sin esto el
@@ -48,25 +49,32 @@ html {
   color: var(--libra-menu-activo-texto);
 }
 
-/* ---- La barra lateral: fondo, hover y borde por defecto (ADR-042) -------------------------------------------------------------- */
+/* ---- La barra lateral: grafito en los dos modos (ADR-043, antes ADR-042) ------------------------------------------------------- */
 
-/* Pedido del dueño (2026-10-08): el menú un poco más oscuro que el contenido, que es blanco (antes `oklch(0.985 0 0)` = #fafafa contra #fff: 1,04:1,
-   no se distinguían). Elegido sobre una maqueta, tono «C». Hasta ADR-009 el defecto lo declaraba cada `index.css` de los nueve productos; ahora es del kit y
-   el producto NO lo declara (lo comprueba `auditoria-de-barra-lateral`): cambiar el tono es un cambio acá, no nueve.
-   Sólo estas tres variables. El texto (`--sidebar-foreground`), el acento (`--sidebar-primary`) y el anillo siguen siendo de shadcn y de `aplicarIdentidad`.
-   `aplicarTema` sigue ganando: lo que el superadmin elige en «Apariencia» va en línea sobre `<html>` y le gana a estos dos selectores.
-   Claro: #ebebeb de fondo (texto 16,6:1), hover #e1e1e1 (15,1:1), borde #dbdbdb. Oscuro: el mismo valor de siempre (`0.205` sobre el fondo `0.145`: ya
-   había la misma diferencia de luminosidad, 0,06, que el claro nuevo tiene con el blanco), así que no cambia. */
-:root {
-  --sidebar: oklch(0.94 0 0);
-  --sidebar-accent: oklch(0.91 0 0);
-  --sidebar-border: oklch(0.89 0 0);
+/* Pedido del dueño (2026-10-09, «vamos con la C» sobre la maqueta `diseños/barra-lateral-colores-propuestas.html` del wiki): una sola barra
+   grafito, casi negra con un dejo frío, igual en los nueve productos y en los dos modos. El color de cada producto queda en la marca y en la
+   franja del ítem activo, que es lo único con color en la barra. Reemplaza al gris claro de ADR-042 (`oklch(0.94 0 0)`).
+   El defecto sigue siendo del kit y el producto NO declara `--sidebar`, `--sidebar-accent` ni `--sidebar-border` (`auditoria-de-barra-lateral`).
+   🔴 Ahora el kit fija también el TEXTO (`--sidebar-foreground`, `--sidebar-accent-foreground`): con la barra oscura en modo claro, el texto
+   oscuro que cada `index.css` declara para la barra clara quedaba ilegible. Va con `:root:root` / `.dark.dark` (0,2,0) porque esta hoja se
+   importa ANTES que el `:root` del producto, y a igual especificidad ganaría el producto. `aplicarTema` sigue ganando (en línea sobre `<html>`):
+   si el superadmin eligió una barra en «Apariencia», su texto se recalcula como siempre.
+   Medido: claro #1c1e22 (texto #f4f4f5 15,2:1; texto al 70% 7,0:1), hover #282a2f (13,1:1); oscuro #101215 (17,1:1), hover #1b1d22.
+   La barra oscura queda 0,035 de luminosidad OKLCH por encima del fondo oscuro (`0.145`): se separa por el borde. */
+:root:root {
+  --sidebar: oklch(0.235 0.008 265);
+  --sidebar-foreground: #f4f4f5;
+  --sidebar-accent: oklch(0.285 0.01 265);
+  --sidebar-accent-foreground: #f4f4f5;
+  --sidebar-border: oklch(0.295 0.01 265);
 }
 
-.dark {
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
+.dark.dark {
+  --sidebar: oklch(0.18 0.008 265);
+  --sidebar-foreground: #f4f4f5;
+  --sidebar-accent: oklch(0.23 0.01 265);
+  --sidebar-accent-foreground: #f4f4f5;
+  --sidebar-border: oklch(0.24 0.01 265);
 }
 
 /* ---- Colores ampliados (ADR-009, `v0.97.0`) ----------------------------------------------------------------------------------- */
