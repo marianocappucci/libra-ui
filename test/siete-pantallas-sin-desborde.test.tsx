@@ -83,7 +83,13 @@ describe('Configuración', () => {
     abrir('/configuracion?seccion=integraciones')
     const botones = (await screen.findByRole('button', { name: /MercadoPago/ })).parentElement!
     tiene(botones, 'flex-row', 'flex-wrap')
-    tiene(botones.nextElementSibling, 'min-w-0', 'max-w-2xl')
+    tiene(botones.nextElementSibling, 'min-w-0', 'flex-1')
+  })
+
+  it('el contenido de Integraciones usa todo el ancho: sin tope (antes `max-w-2xl`, 672 px con media pantalla vacía)', async () => {
+    abrir('/configuracion?seccion=integraciones')
+    const botones = (await screen.findByRole('button', { name: /MercadoPago/ })).parentElement!
+    expect(String(botones.nextElementSibling!.className)).not.toMatch(/\bmax-w-/)
   })
 
   it('el selector de alícuota de MercadoPago ocupa su columna y no la ensancha (277 px de valor en una columna de 97)', async () => {

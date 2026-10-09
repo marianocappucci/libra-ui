@@ -835,3 +835,19 @@ El dueño eligió el 2026-10-09, sobre una maqueta con tres propuestas (`diseño
 **Medido** (WCAG 2.x): texto del menú 15,2:1 sobre la barra clara y 17,1:1 sobre la oscura; atenuado al 70%, más de 7:1; texto del ítem activo 12,2:1; la franja contra el ítem, de 4,50:1 (LibraDesk) a 8,04:1 (VentaLibra), y contra la barra, más de 5:1. Visto en Chromium 1243 sobre el `dist` de LibraCargo con la API simulada, en claro y oscuro.
 
 **Lo que no cubre.** Una barra o un ítem activo que el superadmin eligió en «Apariencia» siguen siendo los elegidos (su texto se recalcula como siempre). Algo que un producto dibuje dentro de la barra con colores propios (`text-muted-foreground`, `bg-[#…]`) no lo cambia el kit: se mira con ojos al desplegar.
+
+## ADR-044 — La factura de crédito MiPyME en la tarjeta de ARCA (varias cuentas con alias, la predeterminada y la modalidad) e Integraciones a todo el ancho (propuesta: 0.132.0)
+
+El humano, el 2026-10-09: *«quiero que haya una pantalla en configuración donde cargar el CBU y que pueda seleccionar la modalidad de transmisión»*, *«el dueño de la empresa puede querer que le depositen en una u otra cuenta, así que se debe poder cargar más de un CBU»* y *«agregale un alias a cada CBU, así se puede elegir por alias o por CBU»*; más el texto de cuándo conviene SCA y cuándo ADC.
+
+**Qué ya existe** (se miró antes de cambiar): el motor guarda `arca_config.fce_cbu` y `fce_transmision` y los acepta en el PUT de `build_arca_router` desde la FCE (libracore ADR de la FCE MiPyME); `AvisoFce` del kit ya le decía al usuario que los cargara «en la configuración de ARCA», **donde no había campos**. La lista de cuentas con alias la agrega el motor en este mismo cambio (`fce_cbus`, con `fce_cbu` como predeterminada).
+
+**Decisión.**
+1. **`ArcaCard`** suma un recuadro «Factura de crédito electrónica MiPyME»: una lista de cuentas (CBU de 22 dígitos, alias bancario opcional y un nombre), «Agregar CBU», «Quitar», un radio «Predeterminado» y el selector de modalidad (SCA / ADC / sin cargar) con la leyenda de cuál elegir (`AYUDA_MODALIDAD_FCE`).
+2. **Se manda como lo guarda el motor:** `fce_cbus` (CBU sólo dígitos, alias en minúsculas, nombre sin espacios de más), `fce_cbu` = el CBU de la predeterminada (`""` con la lista vacía) y `fce_transmision` (`""` borra). Un CBU o un alias mal escritos, o repetidos, se dicen con el número de fila y **no se manda nada**.
+3. **Sólo con un motor que conoce la lista** (`fce_cbus` en el GET, o sin fila todavía): con uno anterior la tarjeta es la de siempre y el PUT no lleva ninguno de los tres campos, para no pisar con vacío lo que ese motor tenga.
+4. Los ayudantes (`cbuLimpio`, `aliasLimpio`, `problemaDelCbu`, `problemaDelAlias`, `problemaDeLosCbus`, `MODALIDADES_FCE`, `AYUDA_MODALIDAD_FCE`, el tipo `CbuFce`) viven en `configuracion/arca-fce.ts`, para que `arca.tsx` exporte sólo componentes. El selector de modalidad lleva `select-cerrado`: son las dos que acepta ARCA.
+
+5. **Integraciones usa todo el ancho.** El humano, el mismo día: *«configuración, integraciones, ARCA y las otras que están dentro de integraciones no ocupan el total del ancho de la pantalla»*. El contenido al lado de la sub-navegación tenía `max-w-2xl` (672 px): se saca, y queda `min-w-0 flex-1` (lo que lo deja achicarse a 320 px). Las demás pestañas y el `Layout` no tenían tope. Un test fija que no vuelva a tener `max-w-*`.
+
+**Lo que no cubre.** Elegir la cuenta **al facturar** es de cada pantalla de facturación (en LibraCargo, la pre factura); el formulario de facturas del kit sigue emitiendo con la predeterminada. Que cada CBU esté informado en ARCA («Registro de Facturas de Crédito Electrónica MiPyMEs» → Cuentas) no se puede verificar desde acá: lo dice la leyenda.
