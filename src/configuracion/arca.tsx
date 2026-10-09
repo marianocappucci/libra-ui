@@ -21,7 +21,7 @@
  *  aparte de la configuración y su resultado encabeza la tarjeta.
  */
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { CheckCircle2, KeyRound, Save, Send, ShieldCheck } from 'lucide-react'
+import { CheckCircle2, KeyRound, Plus, Save, Send, ShieldCheck, Trash2 } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
 import { CampoArchivo } from '../CampoArchivo'
@@ -31,6 +31,10 @@ import {
   nombreDelAmbiente, parDe, serviciosValidos,
   type AmbienteArca, type ParDeArca, type PruebaDeServicio, type ServicioArca,
 } from './arca-pares'
+import {
+  AYUDA_MODALIDAD_FCE, MODALIDADES_FCE, aliasLimpio, cbuLimpio, problemaDeLosCbus, problemaDelAlias, problemaDelCbu,
+  type CbuFce,
+} from './arca-fce'
 import { BloqueDePedido, type ConfigPedido } from './arca-pedido'
 import { Campo, AccionesDeSeccion } from './campos'
 import { TutorialArcaCertificado, TutorialArcaPadron } from './tutoriales'
@@ -55,7 +59,18 @@ export type ConfigArca = {
   /** 🔑 Opcional: un producto con un LibraCore anterior al 2026-09-01 no lo
    *  manda, y la pantalla tiene que seguir funcionando con un solo par. */
   pares?: Record<string, ParDeArca>
+  /** Factura de crédito electrónica MiPyME (libracore, varios CBU): las cuentas del emisor donde se cobra, la
+   *  predeterminada (`fce_cbu`, la que sale si al facturar no se elige otra) y la modalidad de transmisión (`SCA` o
+   *  `ADC`). Sin predeterminado y modalidad el producto no ofrece la FCE (`AvisoFce`). 🔑 Opcionales: un motor que
+   *  todavía no conoce la lista no devuelve `fce_cbus`, y entonces la pantalla no los muestra ni los manda. */
+  fce_cbus?: CbuFce[]
+  fce_cbu?: string
+  fce_transmision?: string
 }
+
+
+/** El `Select` no admite un valor vacío: «sin cargar» va con un centinela y se manda como `""` (borrar). */
+const SIN_MODALIDAD = 'sin-cargar'
 
 /** Lo que devuelve `GET {basePath}/estado`. */
 export type EstadoArca = {
@@ -505,6 +520,12 @@ export function ArcaCard({ producto, basePath = '/config/arca', empresa = 'defau
   // **17**: no hay forma de reemplazar el valor sin que quede el anterior
   // adelante. La conversión va una sola vez, al guardar.
   const [puntoVenta, setPuntoVenta] = useState('1')
+  // Los datos de la FCE, como se escriben. Sólo se muestran y se mandan si el motor los devuelve (`admiteFce`).
+  // `predeterminado` es el índice en la lista: los CBU se editan, y atarlo al texto lo perdería en cada tecla.
+  const [cbus, setCbus] = useState<CbuFce[]>([])
+  const [predeterminado, setPredeterminado] = useState(0)
+  const [fceTransmision, setFceTransmision] = useState('')
+  const [admiteFce, setAdmiteFce] = useState(false)
   const [estado, setEstado] = useState<EstadoArca | null>(null)
   // 🔑 Los demás servicios de ARCA (libracore ADR-032). Vacío —y la tarjeta es la de
   // siempre— mientras el backend no liste más que la facturación o no tenga la ruta.
@@ -534,6 +555,13 @@ export function ArcaCard({ producto, basePath = '/config/arca', empresa = 'defau
       const actual = await api.get<ConfigArca | null>(basePath)
       setCfg(actual ?? vacia(empresa))
       setPuntoVenta(String((actual ?? vacia(empresa)).punto_venta))
+      // Sin fila todavía no se sabe qué conoce el motor: se muestran igual, y uno que no los conoce los ignora.
+      setAdmiteFce(actual === null || 'fce_cbus' in actual)
+      // Un motor anterior al alias no lo manda: se completa vacío para que el campo sea controlado.
+      const lista = (actual?.fce_cbus ?? []).map((c) => ({ cbu: c.cbu, alias: c.alias ?? '', etiqueta: c.etiqueta ?? '' }))
+      setCbus(lista)
+      setPredeterminado(Math.max(0, lista.findIndex((c) => c.cbu === actual?.fce_cbu)))
+      setFceTransmision((actual?.fce_transmision ?? '').toUpperCase())
     } catch (err) {
       setError(describirError(err))
       setCfg(vacia(empresa))
@@ -554,6 +582,12 @@ export function ArcaCard({ producto, basePath = '/config/arca', empresa = 'defau
 
   async function guardar() {
     if (!cfg) return
+    const problema = admiteFce ? problemaDeLosCbus(cbus) : null
+    if (problema) {
+      setError(problema)
+      return
+    }
+    const lista = cbus.map((c) => ({ cbu: cbuLimpio(c.cbu), alias: aliasLimpio(c.alias), etiqueta: c.etiqueta.trim() }))
     setOcupado(true)
     setError(null)
     setAviso(null)
@@ -561,6 +595,10 @@ export function ArcaCard({ producto, basePath = '/config/arca', empresa = 'defau
       await api.put(basePath, {
         empresa: cfg.empresa, cuit: cfg.cuit, punto_venta: Number(puntoVenta) || 1,
         ambiente: cfg.ambiente, alias: cfg.alias,
+        // 🔑 `""` borra en el motor y una clave ausente no toca: sin `admiteFce` no se mandan.
+        ...(admiteFce ? {
+          fce_cbus: lista, fce_cbu: lista[predeterminado]?.cbu ?? '', fce_transmision: fceTransmision,
+        } : {}),
       })
       setAviso('Guardado.')
       await cargar()
@@ -677,6 +715,82 @@ export function ArcaCard({ producto, basePath = '/config/arca', empresa = 'defau
         </Select>
       </div>
       <Campo id="arca-alias" label="Alias" value={cfg.alias} onChange={(v) => setCfg({ ...cfg, alias: v })} />
+
+      {admiteFce && (
+        <fieldset aria-label="Factura de crédito electrónica MiPyME"
+                  className="col-span-full grid gap-3 rounded-md border p-4">
+          <legend className="px-1 text-sm font-medium">Factura de crédito electrónica MiPyME</legend>
+          <p className="text-xs text-muted-foreground">
+            Sólo si la empresa emite facturas de crédito. Cargá las cuentas donde puede cobrarlas (cada una tiene que
+            estar informada en ARCA), con su alias si lo tiene, y marcá la predeterminada: al facturar se puede elegir
+            otra, por alias o por CBU. Sin cuentas o sin modalidad no se ofrece la factura de crédito.
+          </p>
+          {cbus.length > 0 && (
+            <ul aria-label="Cuentas para cobrar" className="grid gap-3">
+              {cbus.map((c, i) => {
+                const problema = c.cbu ? problemaDelCbu(c.cbu) : null
+                const problemaAlias = problemaDelAlias(c.alias)
+                return (
+                  <li key={i} className="grid gap-2 rounded-md border p-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto] lg:items-end">
+                    <Campo
+                      id={`arca-fce-cbu-${i}`} label={`CBU ${i + 1}`} value={c.cbu} placeholder="22 dígitos"
+                      ayuda={problema ?? undefined}
+                      onChange={(v) => setCbus(cbus.map((x, k) => (k === i ? { ...x, cbu: v } : x)))}
+                    />
+                    <Campo
+                      id={`arca-fce-alias-${i}`} label={`Alias ${i + 1}`} value={c.alias}
+                      placeholder="Ej.: suitrans.cobros" ayuda={problemaAlias ?? undefined}
+                      onChange={(v) => setCbus(cbus.map((x, k) => (k === i ? { ...x, alias: v } : x)))}
+                    />
+                    <Campo
+                      id={`arca-fce-etiqueta-${i}`} label={`Nombre de la cuenta ${i + 1}`} value={c.etiqueta}
+                      placeholder="Ej.: Banco Nación cuenta corriente"
+                      onChange={(v) => setCbus(cbus.map((x, k) => (k === i ? { ...x, etiqueta: v } : x)))}
+                    />
+                    <div className="flex flex-wrap items-center gap-3 pb-1">
+                      <label className="flex items-center gap-2 text-sm">
+                        <input type="radio" name="arca-fce-predeterminado" checked={predeterminado === i}
+                               onChange={() => setPredeterminado(i)} aria-label={`CBU ${i + 1} predeterminado`} />
+                        Predeterminado
+                      </label>
+                      <Button type="button" variant="ghost" size="sm" aria-label={`Quitar CBU ${i + 1}`}
+                              onClick={() => {
+                                setCbus(cbus.filter((_, k) => k !== i))
+                                setPredeterminado(predeterminado === i ? 0
+                                  : predeterminado > i ? predeterminado - 1 : predeterminado)
+                              }}>
+                        <Trash2 />Quitar
+                      </Button>
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+          <div>
+            <Button type="button" variant="outline" size="sm"
+                    onClick={() => setCbus([...cbus, { cbu: '', alias: '', etiqueta: '' }])}>
+              <Plus />Agregar CBU
+            </Button>
+          </div>
+          <div className="grid gap-2 sm:max-w-md">
+            <Label htmlFor="arca-fce-transmision">Modalidad de transmisión</Label>
+            {/* select-cerrado: las dos modalidades de transmisión de una FCE que acepta ARCA, fijas en el código (`MODALIDADES_FCE`) */}
+            <Select value={fceTransmision || SIN_MODALIDAD}
+                    onValueChange={(v) => setFceTransmision(v === SIN_MODALIDAD ? '' : v)}>
+              <SelectTrigger id="arca-fce-transmision"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={SIN_MODALIDAD}>Sin cargar</SelectItem>
+                {MODALIDADES_FCE.map((m) => <SelectItem key={m.valor} value={m.valor}>{m.etiqueta}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <ul aria-label="Cuál elegir" className="grid gap-1 text-xs text-muted-foreground">
+              <li>{AYUDA_MODALIDAD_FCE.SCA}</li>
+              <li>{AYUDA_MODALIDAD_FCE.ADC}</li>
+            </ul>
+          </div>
+        </fieldset>
+      )}
 
       <div className="col-span-full grid gap-3">
         {/* 🔑 El aviso va ANTES de los dos bloques: es la respuesta a "¿puedo

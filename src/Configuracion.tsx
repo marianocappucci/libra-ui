@@ -72,6 +72,8 @@ export type { DatosEmpresa } from './configuracion/empresa'
 // eligen de una lista.
 export { CONDICIONES_IVA } from './configuracion/empresa'
 export type { ConfigArca, EstadoArca } from './configuracion/arca'
+export type { CbuFce } from './configuracion/arca-fce'
+export { AYUDA_MODALIDAD_FCE, MODALIDADES_FCE } from './configuracion/arca-fce'
 export type { ServicioArca } from './configuracion/arca-pares'
 export type { ConfigMercadoPago, TextoAutoFacturar } from './configuracion/mercadopago'
 export { ArcaCard, DatosBackupCard, EmailCard, EmpresaCard, MercadoPagoCard, ResguardoExternoCard }
@@ -156,7 +158,9 @@ function SubNavegacion({ secciones }: { secciones: SeccionConfig[] }) {
           )
         })}
       </div>
-      <div className="min-w-0 max-w-2xl flex-1">{actual.contenido}</div>
+      {/* Todo el ancho que deja la sub-navegación (pedido del humano, 2026-10-09: con `max-w-2xl` ARCA, MercadoPago y el
+          resto quedaban en 672 px con media pantalla vacía). `min-w-0` sigue: es lo que deja achicarse a 320 px. */}
+      <div className="min-w-0 flex-1">{actual.contenido}</div>
     </div>
   )
 }
