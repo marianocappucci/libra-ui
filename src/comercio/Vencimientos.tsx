@@ -49,6 +49,7 @@ import { api, ApiError } from '../api-client'
 import { SelectBuscable } from '../SelectBuscable'
 import { ZONA_AR } from '../fechas'
 import { TituloPantalla } from '../titulo-pantalla'
+import { nuevaClaveDeOperacion } from './clave-de-operacion'
 import { esFechaISOValida } from './fecha-iso'
 import {
   firmaDeAsignacion, firmaDeEntrada, firmaDeMerma, guardarPendiente, leerPendientes, quitarPendiente, type Payload, type Pendiente,
@@ -106,17 +107,6 @@ function errorDeCantidad(valor: string, saldo: number): string | null {
   const n = Number(valor)
   if (valor.trim() === '' || !Number.isFinite(n) || n <= 0) return 'Tiene que ser un número mayor a 0.'
   return n > saldo ? `No puede pasar del saldo (${numero(saldo)}).` : null
-}
-
-/** Un identificador único por intento. `randomUUID` sólo existe en contextos seguros (https o localhost): en un
- *  producto servido por http en la red local cae al generador de `getRandomValues`, que sí está siempre. */
-function nuevaClaveDeOperacion(): string {
-  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
-  const b = crypto.getRandomValues(new Uint8Array(16))
-  b[6] = (b[6] & 0x0f) | 0x40
-  b[8] = (b[8] & 0x3f) | 0x80
-  const h = Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('')
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`
 }
 
 /** El mensaje de un error del motor o de la red. 503 es la base sin la revisión `0002`; 409 (regla de negocio o clave

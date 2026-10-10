@@ -851,3 +851,16 @@ El humano, el 2026-10-09: *«quiero que haya una pantalla en configuración dond
 5. **Integraciones usa todo el ancho.** El humano, el mismo día: *«configuración, integraciones, ARCA y las otras que están dentro de integraciones no ocupan el total del ancho de la pantalla»*. El contenido al lado de la sub-navegación tenía `max-w-2xl` (672 px): se saca, y queda `min-w-0 flex-1` (lo que lo deja achicarse a 320 px). Las demás pestañas y el `Layout` no tenían tope. Un test fija que no vuelva a tener `max-w-*`.
 
 **Lo que no cubre.** Elegir la cuenta **al facturar** es de cada pantalla de facturación (en LibraCargo, la pre factura); el formulario de facturas del kit sigue emitiendo con la predeterminada. Que cada CBU esté informado en ARCA («Registro de Facturas de Crédito Electrónica MiPyMEs» → Cuentas) no se puede verificar desde acá: lo dice la leyenda.
+
+## ADR-045 — El generador de la clave de operación se exporta del kit (`libra-ui/comercio/clave-de-operacion`, 0.133.0)
+
+**Qué ya existe** (se miró antes de cambiar): `src/comercio/clave-de-operacion.ts` ya tenía `nuevaClaveDeOperacion()` y lo usa `Reposicion`; `Vencimientos` llevaba una copia idéntica en el código (sólo cambiaba el comentario) y VentaLibra copiaba una tercera en `frontend/src/lib/clave-de-operacion.ts` para la devolución (ADR-041 de libracommerce), porque el kit no la exportaba.
+
+**Decisión.**
+1. **`package.json`** suma el subpath `./comercio/clave-de-operacion` (como `./comercio/medios-pago` y `./comercio/pagos`). Un producto importa `nuevaClaveDeOperacion` del kit en vez de copiarla.
+2. **`Vencimientos`** borra su copia local e importa la del módulo.
+3. **Contrato:** devuelve un UUID v4; usa `crypto.randomUUID` si existe y, si no (contexto no seguro: http en la red local), arma el UUID con `crypto.getRandomValues`, que sí está siempre. Un test (`test/clave-de-operacion.test.ts`) fija las dos ramas.
+
+**Cómo se adopta en un producto.** Subir el pin a 0.133.0 y reemplazar la función copiada por `import { nuevaClaveDeOperacion } from 'libra-ui/comercio/clave-de-operacion'`.
+
+**Lo que no cubre.** No cambia cómo cada pantalla decide cuándo renovar la clave (por intento, atada a la firma de los datos): eso sigue siendo de la pantalla.
