@@ -537,6 +537,10 @@ type PropsDeArcaCard = {
   /** La razón social de la empresa, para prellenar el pedido de certificado. Opcional: sin ella el
    *  campo del diálogo arranca vacío y se escribe ahí. */
   razonSocial?: string
+  /** Lo que el producto agrega AL PIE de la pestaña de un servicio, por id de servicio (ADR-047). Lo usa LibraCargo para poner
+   *  «Emitir Cartas de Porte reales» dentro de la pestaña «CTG y Carta de Porte», junto a los certificados que habilita
+   *  (pedido del dueño, 2026-10-10). Un servicio que el producto no tiene no muestra nada; sin la prop, nada cambia. */
+  alPieDeServicio?: Partial<Record<string, ReactNode>>
 }
 
 function ArcaConUrl(props: PropsDeArcaCard) {
@@ -562,7 +566,7 @@ function ArcaConEstado(props: PropsDeArcaCard) {
 }
 
 function ArcaTarjeta({
-  producto, basePath = '/config/arca', empresa = 'default', razonSocial = '', pestanaPedida, onPestana,
+  producto, basePath = '/config/arca', empresa = 'default', razonSocial = '', alPieDeServicio, pestanaPedida, onPestana,
 }: PropsDeArcaCard & {
   /** La pestaña que pide quien monta la tarjeta (la URL o el estado local); si no existe, General. */
   pestanaPedida: string | null
@@ -1021,6 +1025,9 @@ function ArcaTarjeta({
                 pruebas={pruebas[x.servicio] ?? {}}
                 onPrueba={(ambiente, prueba) => cambiarPrueba(x.servicio, ambiente, prueba)}
               />
+              {alPieDeServicio?.[x.servicio] && (
+                <div data-al-pie-de={x.servicio} className="mt-4 border-t pt-4">{alPieDeServicio[x.servicio]}</div>
+              )}
             </TabsContent>
           ))}
         </Tabs>

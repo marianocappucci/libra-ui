@@ -550,3 +550,30 @@ describe('ARCA en pestañas — la pestaña va en la URL (?arca=)', () => {
     expect(pestanaSeleccionada()).toHaveTextContent('Producción')
   })
 })
+
+describe('🔴 el producto agrega contenido al pie de la pestaña de un servicio (alPieDeServicio)', () => {
+  it('se ve sólo dentro de su pestaña: no en General ni en los ambientes de la facturación', async () => {
+    // LibraCargo pone «Emitir Cartas de Porte reales» junto a los certificados del CTG y la Carta de Porte (pedido del dueño).
+    servir({ servicios: [FACTURACION, wscpe(pares(LLENO, VACIO))] })
+    const usuario = userEvent.setup()
+    render(<ArcaCard producto="LibraCargo" alPieDeServicio={{ wscpe: <p>Emitir Cartas de Porte reales</p>, otro: <p>Nunca</p> }} />)
+
+    await screen.findByRole('tab', { name: /^CTG y Carta de Porte/ })
+    expect(screen.queryByText('Emitir Cartas de Porte reales')).toBeNull()
+    await abrirPestana(usuario, /^Producción/)
+    expect(screen.queryByText('Emitir Cartas de Porte reales')).toBeNull()
+    await abrirPestana(usuario, /^CTG y Carta de Porte/)
+    expect(await screen.findByText('Emitir Cartas de Porte reales')).toBeInTheDocument()
+    // Un servicio que el producto no tiene no aparece por estar en el pie.
+    expect(screen.queryByText('Nunca')).toBeNull()
+  })
+
+  it('sin la prop, la pestaña del servicio no tiene pie', async () => {
+    servir({ servicios: [FACTURACION, wscpe(pares(LLENO, LLENO))] })
+    const usuario = userEvent.setup()
+    const { container } = render(<ArcaCard producto="LibraCargo" />)
+    await abrirPestana(usuario, /^CTG y Carta de Porte/)
+    await screen.findByRole('button', { name: /Probar conexión — CTG y Carta de Porte — Homologación/ })
+    expect(container.querySelector('[data-al-pie-de]')).toBeNull()
+  })
+})
