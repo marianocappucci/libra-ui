@@ -29,6 +29,16 @@ export function nombreDelAmbiente(ambiente: string): string {
   return NOMBRE_DEL_AMBIENTE[ambiente as AmbienteArca] ?? ambiente
 }
 
+/** El nombre sin el aclarado entre paréntesis: el de las pestañas y la pastilla del encabezado. */
+export const NOMBRE_CORTO_DEL_AMBIENTE: Record<AmbienteArca, string> = {
+  homologacion: 'Homologación',
+  produccion: 'Producción',
+}
+
+export function nombreCortoDelAmbiente(ambiente: string): string {
+  return NOMBRE_CORTO_DEL_AMBIENTE[ambiente as AmbienteArca] ?? ambiente
+}
+
 /** El estado de UN par de credenciales, tal como lo informa el backend.
  *
  *  🔑 `completo` viene del servidor y **no se recalcula acá**: con la cuenta

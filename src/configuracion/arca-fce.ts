@@ -63,3 +63,20 @@ export const AYUDA_MODALIDAD_FCE = {
   SCA: 'Elegí SCA si vas a operar, ceder o descontar el documento directamente a través de bancos.',
   ADC: 'Elegí ADC si vas a operar o descontar la factura mediante el Mercado de Valores (Bolsa).',
 } as const
+
+/** Cómo se reconoce una cuenta en el resumen: su nombre, si no su alias y, a falta de los dos, los últimos dígitos del CBU. */
+function nombreDeLaCuenta(c: CbuFce): string {
+  const cbu = cbuLimpio(c.cbu)
+  return c.etiqueta.trim() || aliasLimpio(c.alias) || (cbu ? `CBU …${cbu.slice(-4)}` : 'sin datos')
+}
+
+/** El resumen de una línea de la factura de crédito, para mostrarlo con el editor cerrado: cuántas cuentas hay, cuál es la
+ *  predeterminada y la modalidad de transmisión. «Sin cargar» cuando no hay ni una cosa ni la otra. */
+export function resumenDeLaFce(cbus: CbuFce[], predeterminado: number, transmision: string): string {
+  if (cbus.length === 0 && !transmision) return 'Sin cargar'
+  const partes = [cbus.length === 0 ? 'Sin cuentas' : `${cbus.length} ${cbus.length === 1 ? 'cuenta' : 'cuentas'}`]
+  const cuenta = cbus[predeterminado]
+  if (cuenta) partes.push(`predeterminada: ${nombreDeLaCuenta(cuenta)}`)
+  partes.push(transmision || 'sin modalidad')
+  return partes.join(' · ')
+}

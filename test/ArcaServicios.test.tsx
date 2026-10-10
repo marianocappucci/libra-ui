@@ -3,8 +3,10 @@
  *  🔴 **Lo que esta pantalla tiene que hacer imposible**, en este orden:
  *
  *  1. Que los productos que facturan y nada más vean **otra cosa**. Con la facturación sola
- *     —el backend no tiene `/servicios`, o lista un único servicio— la tarjeta es la de
- *     siempre: el snapshot de abajo se generó contra el código *anterior* a este cambio.
+ *     —el backend no tiene `/servicios`, o lista un único servicio— la tarjeta es la misma que
+ *     sin la ruta. (Hasta 0.134.0 el snapshot fijaba además que fuera byte a byte la de antes de
+ *     existir los servicios; en 0.135.0 el dueño pidió reordenarla en pestañas, ADR-047, y el
+ *     snapshot se regeneró: ahora fija el diseño nuevo.)
  *  2. Que un certificado de un servicio caiga en **otro servicio o en otro ambiente**. Hay dos
  *     «Certificado (.crt) — Producción» en pantalla; cada subida tiene que decir a cuál va.
  *  3. Que «Probar» diga «OK» de un par que ya no está, o que oculte por qué ARCA lo rechazó.
@@ -15,6 +17,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ArcaCard } from '../src/configuracion/arca'
 import { serviciosValidos } from '../src/configuracion/arca-pares'
+import { abrirPestana } from './helpers-arca'
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -101,13 +104,20 @@ beforeEach(() => {
   vi.unstubAllGlobals()
 })
 
+/** Monta LibraCargo y abre la pestaña del CTG y la Carta de Porte, donde están los dos ambientes del servicio. */
+async function montarEnCtg() {
+  render(<ArcaCard producto="LibraCargo" />)
+  const usuario = userEvent.setup()
+  await abrirPestana(usuario, /^CTG y Carta de Porte/)
+  return usuario
+}
+
 describe('ARCA — con la facturación sola, la tarjeta es la de siempre', () => {
-  it('🔴 el HTML es el mismo que antes de existir los servicios (snapshot del código anterior)', async () => {
-    // El snapshot se generó con `arca.tsx` de c4b288b —sin `/servicios`—. Si esto se pone
-    // rojo, un producto que sólo factura está viendo otra pantalla.
-    // 2026-10-08 (ADR-037): se regeneró UNA vez porque los cuatro `<input type="file">` pasaron a
-    // `CampoArchivo`. Se comprobó que es lo único que cambió: sacando esos cuatro campos, el
-    // resto del HTML es byte a byte el de c4b288b.
+  it('🔴 el HTML de la pestaña General de un producto que sólo factura no cambia de rebote (snapshot)', async () => {
+    // Fija el HTML de la pestaña General de un producto que sólo factura. Si esto se pone rojo,
+    // esa pantalla cambió: que sea a propósito (y con un ADR), no de rebote.
+    // Historia: se generó contra `arca.tsx` de c4b288b —sin `/servicios`— y se regeneró 2026-10-08
+    // (ADR-037, `CampoArchivo`) y 2026-10-10 (0.135.0, ADR-047: la tarjeta pasó a pestañas).
     servir(null)
     const { container } = render(<ArcaCard producto="Contalibra" />)
     await screen.findByLabelText(/^CUIT$/)
@@ -134,6 +144,7 @@ describe('ARCA — con la facturación sola, la tarjeta es la de siempre', () =>
     await screen.findByLabelText(/^CUIT$/)
     expect(screen.getByText('ARCA (facturación electrónica)')).toBeInTheDocument()
     // Sin el servicio en el nombre: con uno solo no hace falta.
+    await abrirPestana(userEvent.setup(), /^Producción/)
     expect(screen.getByLabelText('Certificado (.crt) — Producción')).toBeInTheDocument()
     expect(screen.queryByRole('heading', { level: 3 })).toBeNull()
   })
@@ -153,22 +164,27 @@ describe('ARCA — con la facturación sola, la tarjeta es la de siempre', () =>
 })
 
 describe('ARCA — con más de un servicio, un bloque por servicio', () => {
-  it('pinta la facturación y el CTG, cada uno en su región', async () => {
+  it('pinta la facturación (General y sus dos ambientes) y el CTG, cada uno en su pestaña', async () => {
     servir([FACTURACION, wscpe()])
     render(<ArcaCard producto="LibraCargo" />)
+    const usuario = userEvent.setup()
 
-    const cpe = await screen.findByRole('region', { name: 'CTG y Carta de Porte' })
-    expect(screen.getByRole('region', { name: 'Facturación electrónica' })).toBeInTheDocument()
+    await screen.findByRole('tab', { name: /^CTG y Carta de Porte/ })
+    expect(screen.getAllByRole('tab').map((t) => t.textContent?.replace(/(Cargado|Sin cargar|En uso|Falta producción).*$/, '')))
+      .toEqual(['General', 'Homologación', 'Producción', 'CTG y Carta de Porte'])
     expect(screen.getByText('ARCA')).toBeInTheDocument()
     expect(screen.queryByText('ARCA (facturación electrónica)')).toBeNull()
-    // El formulario de facturación sigue estando, una sola vez.
+    // El formulario de facturación sigue estando, una sola vez, y el CTG no lo tiene.
     expect(screen.getAllByLabelText(/^CUIT$/)).toHaveLength(1)
+    await abrirPestana(usuario, /^CTG y Carta de Porte/)
+    const cpe = await screen.findByRole('region', { name: 'CTG y Carta de Porte' })
+    expect(screen.queryByLabelText(/^CUIT$/)).toBeNull()
     expect(within(cpe).queryByLabelText(/^CUIT$/)).toBeNull()
   })
 
   it('el bloque del CTG dice de quién es el certificado y hasta cuándo', async () => {
     servir([FACTURACION, wscpe()])
-    render(<ArcaCard producto="LibraCargo" />)
+    await montarEnCtg()
 
     const homo = await screen.findByRole('region', { name: /Credenciales de Homologación.*CTG y Carta de Porte/ })
     expect(homo).toHaveTextContent('CUIT del certificado: 20000000001')
@@ -179,13 +195,13 @@ describe('ARCA — con más de un servicio, un bloque por servicio', () => {
 
   it('muestra la ayuda sobre la persona que representa a la empresa', async () => {
     servir([FACTURACION, wscpe()])
-    render(<ArcaCard producto="LibraCargo" />)
+    await montarEnCtg()
     expect(await screen.findByText(/a nombre de la persona que representa a la empresa/)).toBeInTheDocument()
   })
 
   it('y si el motor no manda la ayuda, la pone el kit', async () => {
     servir([FACTURACION, wscpe({ ayuda: '' })])
-    render(<ArcaCard producto="LibraCargo" />)
+    await montarEnCtg()
     expect(await screen.findByText(/a nombre de la persona que representa a la empresa/)).toBeInTheDocument()
   })
 
@@ -199,7 +215,7 @@ describe('ARCA — con más de un servicio, un bloque por servicio', () => {
         produccion: { ambiente: 'produccion', ...PAR_VACIO },
       },
     })])
-    render(<ArcaCard producto="LibraCargo" />)
+    await montarEnCtg()
     const homo = await screen.findByRole('region', { name: /Credenciales de Homologación.*CTG/ })
     expect(homo).toHaveTextContent('Vencido el 01-01-2026')
   })
@@ -211,7 +227,7 @@ describe('ARCA — con más de un servicio, un bloque por servicio', () => {
         produccion: { ambiente: 'produccion', ...PAR_VACIO },
       },
     })])
-    render(<ArcaCard producto="LibraCargo" />)
+    await montarEnCtg()
     const homo = await screen.findByRole('region', { name: /Credenciales de Homologación.*CTG/ })
     expect(homo).toHaveTextContent('Falta la clave privada')
     // y «Probar» no se ofrece sobre un par incompleto
@@ -220,8 +236,7 @@ describe('ARCA — con más de un servicio, un bloque por servicio', () => {
 
   it('🔴 cada subida dice a qué servicio y a qué ambiente va', async () => {
     servir([FACTURACION, wscpe()])
-    render(<ArcaCard producto="LibraCargo" />)
-    const usuario = userEvent.setup()
+    const usuario = await montarEnCtg()
 
     await usuario.upload(
       await screen.findByLabelText(/Certificado.*CTG y Carta de Porte.*Producción/),
@@ -244,6 +259,7 @@ describe('ARCA — con más de un servicio, un bloque por servicio', () => {
     render(<ArcaCard producto="LibraCargo" />)
     const usuario = userEvent.setup()
 
+    await abrirPestana(usuario, /^Producción/)
     await usuario.upload(
       await screen.findByLabelText(/Certificado.*Facturación electrónica.*Producción/),
       new File(['x'], 'real.crt'),
@@ -255,8 +271,7 @@ describe('ARCA — con más de un servicio, un bloque por servicio', () => {
 
   it('quitar el par del CTG nombra el ambiente y no toca la facturación', async () => {
     servir([FACTURACION, wscpe()])
-    render(<ArcaCard producto="LibraCargo" />)
-    const usuario = userEvent.setup()
+    const usuario = await montarEnCtg()
 
     const homo = await screen.findByRole('region', { name: /Credenciales de Homologación.*CTG/ })
     await usuario.click(within(homo).getByRole('button', { name: /Quitar el par de homologaci/i }))
@@ -268,8 +283,7 @@ describe('ARCA — con más de un servicio, un bloque por servicio', () => {
 
   it('después de subir se vuelve a pedir la lista de servicios', async () => {
     servir([FACTURACION, wscpe()])
-    render(<ArcaCard producto="LibraCargo" />)
-    const usuario = userEvent.setup()
+    const usuario = await montarEnCtg()
     await usuario.upload(
       await screen.findByLabelText(/Certificado.*CTG y Carta de Porte.*Producción/),
       new File(['x'], 'real.crt'),
@@ -285,8 +299,7 @@ describe('ARCA — con más de un servicio, un bloque por servicio', () => {
     servir([FACTURACION, wscpe()], {
       '/servicios/wscpe/certificado': () => json({ detail: 'El certificado no parece un certificado PEM.' }, 422),
     })
-    render(<ArcaCard producto="LibraCargo" />)
-    const usuario = userEvent.setup()
+    const usuario = await montarEnCtg()
     await usuario.upload(
       await screen.findByLabelText(/Certificado.*CTG y Carta de Porte.*Producción/),
       new File(['x'], 'mal.crt'),
@@ -304,8 +317,7 @@ describe('ARCA — «Probar» de un servicio', () => {
         mensaje: 'Autenticado con ARCA para CTG y Carta de Porte (homologacion).',
       }),
     })
-    render(<ArcaCard producto="LibraCargo" />)
-    const usuario = userEvent.setup()
+    const usuario = await montarEnCtg()
 
     await usuario.click(await screen.findByRole('button', {
       name: /Probar conexión — CTG y Carta de Porte — Homologación/,
@@ -323,8 +335,7 @@ describe('ARCA — «Probar» de un servicio', () => {
     servir([FACTURACION, wscpe()], {
       '/servicios/wscpe/probar': () => json({ detail }, 502),
     })
-    render(<ArcaCard producto="LibraCargo" />)
-    const usuario = userEvent.setup()
+    const usuario = await montarEnCtg()
 
     await usuario.click(await screen.findByRole('button', { name: /Probar conexión — CTG.*Homologación/ }))
     const homo = screen.getByRole('region', { name: /Credenciales de Homologación.*CTG/ })
@@ -341,8 +352,7 @@ describe('ARCA — «Probar» de un servicio', () => {
     servir([FACTURACION, wscpe()], {
       '/servicios/wscpe/probar': () => json({ ok: true, mensaje: 'Autenticado con ARCA.' }),
     })
-    render(<ArcaCard producto="LibraCargo" />)
-    const usuario = userEvent.setup()
+    const usuario = await montarEnCtg()
 
     await usuario.click(await screen.findByRole('button', { name: /Probar conexión — CTG.*Homologación/ }))
     expect(await screen.findByText('Autenticado con ARCA.')).toBeInTheDocument()
@@ -359,8 +369,7 @@ describe('ARCA — «Probar» de un servicio', () => {
     servir([FACTURACION, wscpe()], {
       '/servicios/wscpe/probar': () => json({ ok: true, mensaje: 'Autenticado con ARCA.' }),
     })
-    render(<ArcaCard producto="LibraCargo" />)
-    const usuario = userEvent.setup()
+    const usuario = await montarEnCtg()
 
     await usuario.click(await screen.findByRole('button', { name: /Probar conexión — CTG.*Homologación/ }))
     expect(await screen.findByText('Autenticado con ARCA.')).toBeInTheDocument()

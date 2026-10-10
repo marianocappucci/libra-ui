@@ -21,26 +21,32 @@
  *  aparte de la configuración y su resultado encabeza la tarjeta.
  */
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { CheckCircle2, KeyRound, Plus, Save, Send, ShieldCheck, Trash2 } from 'lucide-react'
+import { CheckCircle2, KeyRound, Pencil, Plus, Save, Send, ShieldCheck, Trash2 } from 'lucide-react'
+import { useInRouterContext, useSearchParams } from 'react-router-dom'
 
 import { api, ApiError } from '../api-client'
 import { CampoArchivo } from '../CampoArchivo'
 import { AvisoEstado, BadgeEstado } from '../badge-estado'
 import {
   AMBIENTES_ARCA, AYUDA_DEL_SERVICIO, DIAS_DE_AVISO, NOMBRE_DEL_AMBIENTE, SERVICIO_FACTURACION,
-  nombreDelAmbiente, parDe, serviciosValidos,
+  nombreCortoDelAmbiente, nombreDelAmbiente, parDe, serviciosValidos,
   type AmbienteArca, type ParDeArca, type PruebaDeServicio, type ServicioArca,
 } from './arca-pares'
 import {
   AYUDA_MODALIDAD_FCE, MODALIDADES_FCE, aliasLimpio, cbuLimpio, problemaDeLosCbus, problemaDelAlias, problemaDelCbu,
-  type CbuFce,
+  resumenDeLaFce, type CbuFce,
 } from './arca-fce'
 import { BloqueDePedido, type ConfigPedido } from './arca-pedido'
+import {
+  PARAM_PESTANA, PESTANA_GENERAL, estadoDelAmbiente, estadoDelServicio, pestanaActual,
+  type EtiquetaDeEstado,
+} from './arca-pestanas'
 import { Campo, AccionesDeSeccion } from './campos'
 import { TutorialArcaCertificado, TutorialArcaPadron } from './tutoriales'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
@@ -242,7 +248,7 @@ function AvisoDelSelector({ cfg }: { cfg: ConfigArca }) {
  *  ambiente activo convierte el corte a facturación real en un salto a ciegas.
  */
 function ParDeCredenciales({
-  ambiente, par, enUso, disabled, onArchivo, onQuitar, contexto, detalle, acciones, pedido,
+  ambiente, par, enUso, disabled, onArchivo, onQuitar, contexto, detalle, acciones, pedido, compacto = false,
 }: {
   ambiente: AmbienteArca
   par: ParDeArca
@@ -259,6 +265,9 @@ function ParDeCredenciales({
   /** «Generar pedido de certificado» (libracore ADR-036). **Sólo si el motor lo admite**: sin esto
    *  la tarjeta es exactamente la de antes —los dos campos de archivo, sin botón—. */
   pedido?: ConfigPedido
+  /** El par va en media columna (los dos ambientes de un servicio, lado a lado): el certificado y la clave se apilan
+   *  siempre, porque `sm:` mide la pantalla y no el ancho que le tocó a este par. */
+  compacto?: boolean
 }) {
   const nombre = NOMBRE_DEL_AMBIENTE[ambiente]
   const esperandoElCrt = Boolean(pedido && par.pedido?.pendiente)
@@ -288,7 +297,7 @@ function ParDeCredenciales({
         />
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className={compacto ? 'grid gap-3' : 'grid gap-3 sm:grid-cols-2'}>
         <SubirMitad
           label="Certificado (.crt)" accept=".crt,.pem" cargado={par.tiene_certificado}
           disabled={disabled} idSufijo={ambiente} contexto={contexto}
@@ -326,6 +335,10 @@ function ParDeCredenciales({
   )
 }
 
+/** El resultado de «Probar» de un ambiente de un servicio, tal como se muestra. */
+type PruebaVista = { ok: boolean; texto: string }
+type PruebasDelServicio = Partial<Record<AmbienteArca, PruebaVista>>
+
 /** Un servicio de ARCA que **no** es la facturación (hoy `wscpe`, el CTG y la Carta de Porte).
  *
  *  Sólo son credenciales: no tiene CUIT, punto de venta ni selector de ambiente propios, y
@@ -339,7 +352,9 @@ function ParDeCredenciales({
  *
  *  El estado vive en `servicio` (lo trae la tarjeta) y los mensajes, acá: refrescar la lista
  *  después de subir no desmonta el bloque, así que el resultado de «Probar» no se pierde. */
-function BloqueDeServicio({ servicio, basePath, empresa, onCambio, producto, cuit, razonSocial }: {
+function BloqueDeServicio({
+  servicio, basePath, empresa, onCambio, producto, cuit, razonSocial, pruebas, onPrueba,
+}: {
   servicio: ServicioArca
   basePath: string
   empresa: string
@@ -351,12 +366,16 @@ function BloqueDeServicio({ servicio, basePath, empresa, onCambio, producto, cui
   razonSocial: string
   /** Pide de nuevo la lista de servicios, sin desmontar nada. */
   onCambio: () => Promise<void>
+  /** El resultado de «Probar» de cada ambiente. Lo guarda la tarjeta y no este bloque: cada servicio es una
+   *  pestaña, y al cambiar de pestaña el bloque se desmonta; si el resultado viviera acá se perdería. */
+  pruebas: PruebasDelServicio
+  /** Guarda el resultado de «Probar» de un ambiente, o lo borra con `null`. */
+  onPrueba: (ambiente: AmbienteArca, prueba: PruebaVista | null) => void
 }) {
   const [ocupado, setOcupado] = useState(false)
   const [probando, setProbando] = useState<AmbienteArca | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
-  const [pruebas, setPruebas] = useState<Partial<Record<AmbienteArca, { ok: boolean; texto: string }>>>({})
 
   const ruta = (tramo: string, ambiente: AmbienteArca) =>
     `${basePath}/servicios/${encodeURIComponent(servicio.servicio)}/${tramo}`
@@ -366,10 +385,7 @@ function BloqueDeServicio({ servicio, basePath, empresa, onCambio, producto, cui
   /** Lo que cambió el par de un ambiente invalida su prueba: «Autenticado OK» de un
    *  certificado que ya no está sería exactamente la mentira que esta pantalla evita. */
   function olvidarPrueba(ambiente: AmbienteArca) {
-    setPruebas((p) => {
-      const { [ambiente]: _quitada, ...resto } = p
-      return resto
-    })
+    onPrueba(ambiente, null)
   }
 
   async function subir(ambiente: AmbienteArca, tramo: 'certificado' | 'clave', archivo: File) {
@@ -411,69 +427,71 @@ function BloqueDeServicio({ servicio, basePath, empresa, onCambio, producto, cui
     setAviso(null)
     try {
       const r = await api.post<PruebaDeServicio>(ruta('probar', ambiente), {})
-      setPruebas((p) => ({
-        ...p,
-        [ambiente]: { ok: true, texto: r.mensaje || `Autenticado con ARCA (${ambiente}).` },
-      }))
+      onPrueba(ambiente, { ok: true, texto: r.mensaje || `Autenticado con ARCA (${ambiente}).` })
     } catch (err) {
-      setPruebas((p) => ({ ...p, [ambiente]: { ok: false, texto: describirError(err) } }))
+      onPrueba(ambiente, { ok: false, texto: describirError(err) })
     } finally {
       setProbando(null)
     }
   }
 
   return (
-    <section aria-label={servicio.etiqueta} className="col-span-full grid gap-3 border-t pt-4">
+    <section aria-label={servicio.etiqueta} className="grid gap-3">
       <h3 className="flex items-center gap-2 text-sm font-medium">
         <KeyRound className="size-4" />{servicio.etiqueta}
       </h3>
       {ayuda && <p className="text-xs text-muted-foreground">{ayuda}</p>}
 
-      {AMBIENTES_ARCA.map((amb) => {
-        const par = parDe(
-          { ambiente: '', tiene_certificado: false, tiene_clave: false, pares: servicio.pares }, amb)
-        const prueba = pruebas[amb]
-        return (
-          <ParDeCredenciales
-            key={amb}
-            ambiente={amb}
-            par={par}
-            enUso={false}
-            disabled={ocupado}
-            contexto={servicio.etiqueta}
-            onArchivo={(tramo, f) => void subir(amb, tramo, f)}
-            onQuitar={() => void quitar(amb)}
-            detalle={(par.cuit_certificado || prueba) ? (
-              <>
-                {par.cuit_certificado && (
-                  <p className="text-xs text-muted-foreground">
-                    CUIT del certificado: {par.cuit_certificado}
-                  </p>
-                )}
-                {/* 🔑 Un BLOQUE y no una pastilla: el texto de ARCA es de largo arbitrario. */}
-                {prueba && (
-                  <AvisoEstado tono={prueba.ok ? 'ok' : 'negativo'} role={prueba.ok ? 'status' : 'alert'}>
-                    {prueba.texto}
-                  </AvisoEstado>
-                )}
-              </>
-            ) : undefined}
-            pedido={servicio.admite_pedido ? {
-              servicio: servicio.servicio, etiqueta: servicio.etiqueta, producto,
-              ruta: (tramo) => ruta(tramo, amb), cuit, razonSocial, onCambio,
-            } : undefined}
-            acciones={par.completo ? (
-              <Button
-                type="button" variant="outline" size="sm" className="w-fit"
-                aria-label={`Probar conexión — ${servicio.etiqueta} — ${nombreDelAmbiente(amb)}`}
-                disabled={ocupado || probando !== null} onClick={() => void probar(amb)}
-              >
-                <Send />{probando === amb ? 'Probando…' : 'Probar conexión'}
-              </Button>
-            ) : undefined}
-          />
-        )
-      })}
+      {/* Los dos ambientes lado a lado en pantalla ancha y apilados en el celular. `xl` y no `lg`: junto a la barra de
+          Configuración quedan unos 500 px a 1024, y dos pares de media columna no entran. */}
+      <div className="grid items-start gap-3 xl:grid-cols-2">
+        {AMBIENTES_ARCA.map((amb) => {
+          const par = parDe(
+            { ambiente: '', tiene_certificado: false, tiene_clave: false, pares: servicio.pares }, amb)
+          const prueba = pruebas[amb]
+          return (
+            <ParDeCredenciales
+              key={amb}
+              ambiente={amb}
+              par={par}
+              enUso={false}
+              compacto
+              disabled={ocupado}
+              contexto={servicio.etiqueta}
+              onArchivo={(tramo, f) => void subir(amb, tramo, f)}
+              onQuitar={() => void quitar(amb)}
+              detalle={(par.cuit_certificado || prueba) ? (
+                <>
+                  {par.cuit_certificado && (
+                    <p className="text-xs text-muted-foreground">
+                      CUIT del certificado: {par.cuit_certificado}
+                    </p>
+                  )}
+                  {/* 🔑 Un BLOQUE y no una pastilla: el texto de ARCA es de largo arbitrario. */}
+                  {prueba && (
+                    <AvisoEstado tono={prueba.ok ? 'ok' : 'negativo'} role={prueba.ok ? 'status' : 'alert'}>
+                      {prueba.texto}
+                    </AvisoEstado>
+                  )}
+                </>
+              ) : undefined}
+              pedido={servicio.admite_pedido ? {
+                servicio: servicio.servicio, etiqueta: servicio.etiqueta, producto,
+                ruta: (tramo) => ruta(tramo, amb), cuit, razonSocial, onCambio,
+              } : undefined}
+              acciones={par.completo ? (
+                <Button
+                  type="button" variant="outline" size="sm" className="w-fit"
+                  aria-label={`Probar conexión — ${servicio.etiqueta} — ${nombreDelAmbiente(amb)}`}
+                  disabled={ocupado || probando !== null} onClick={() => void probar(amb)}
+                >
+                  <Send />{probando === amb ? 'Probando…' : 'Probar conexión'}
+                </Button>
+              ) : undefined}
+            />
+          )
+        })}
+      </div>
 
       {(error || aviso) && (
         <div className="flex flex-wrap items-center gap-3">
@@ -505,13 +523,50 @@ function BloqueDeServicio({ servicio, basePath, empresa, onCambio, producto, cui
  *  En una instancia que YA tiene fila no cambia nada: el `GET` devuelve el
  *  slug real y es ése el que viaja de vuelta.
  */
-export function ArcaCard({ producto, basePath = '/config/arca', empresa = 'default', razonSocial = '' }: {
+export function ArcaCard(props: PropsDeArcaCard) {
+  // 🔑 La pestaña va en la URL (`?arca=produccion`) cuando hay un router, que es siempre en la pantalla de Configuración:
+  // así «atrás» vuelve a la pestaña anterior y un enlace abre la que se mira. Una tarjeta montada sin router (un test, una
+  // pantalla propia de un producto) llevaría un `useSearchParams` que tira; ahí la pestaña es estado local.
+  return useInRouterContext() ? <ArcaConUrl {...props} /> : <ArcaConEstado {...props} />
+}
+
+type PropsDeArcaCard = {
   producto: string
   basePath?: string
   empresa?: string
   /** La razón social de la empresa, para prellenar el pedido de certificado. Opcional: sin ella el
    *  campo del diálogo arranca vacío y se escribe ahí. */
   razonSocial?: string
+}
+
+function ArcaConUrl(props: PropsDeArcaCard) {
+  const [params, setParams] = useSearchParams()
+  return (
+    <ArcaTarjeta
+      {...props}
+      pestanaPedida={params.get(PARAM_PESTANA)}
+      onPestana={(pestana) => setParams((previos) => {
+        // Se parte de lo que hay (`seccion`, `integracion`): `setParams` reemplaza el query entero.
+        const nuevos = new URLSearchParams(previos)
+        if (pestana === PESTANA_GENERAL) nuevos.delete(PARAM_PESTANA)
+        else nuevos.set(PARAM_PESTANA, pestana)
+        return nuevos
+      })}
+    />
+  )
+}
+
+function ArcaConEstado(props: PropsDeArcaCard) {
+  const [pestana, setPestana] = useState<string | null>(null)
+  return <ArcaTarjeta {...props} pestanaPedida={pestana} onPestana={setPestana} />
+}
+
+function ArcaTarjeta({
+  producto, basePath = '/config/arca', empresa = 'default', razonSocial = '', pestanaPedida, onPestana,
+}: PropsDeArcaCard & {
+  /** La pestaña que pide quien monta la tarjeta (la URL o el estado local); si no existe, General. */
+  pestanaPedida: string | null
+  onPestana: (pestana: string) => void
 }) {
   const [cfg, setCfg] = useState<ConfigArca | null>(null)
   // 🔴 El punto de venta va como STRING mientras se edita, aunque el backend lo
@@ -526,6 +581,13 @@ export function ArcaCard({ producto, basePath = '/config/arca', empresa = 'defau
   const [predeterminado, setPredeterminado] = useState(0)
   const [fceTransmision, setFceTransmision] = useState('')
   const [admiteFce, setAdmiteFce] = useState(false)
+  // El editor de cuentas de la FCE arranca cerrado: encabezando la pestaña General va un resumen de una línea.
+  const [editandoFce, setEditandoFce] = useState(false)
+  // 🔑 El ambiente con que se factura HOY es el guardado, no el que se está eligiendo en el selector sin guardar: la
+  // pastilla del encabezado y los «En uso» de las pestañas no pueden afirmar un cambio que todavía no se hizo.
+  const [ambienteGuardado, setAmbienteGuardado] = useState('homologacion')
+  // El resultado de «Probar» de cada servicio, que vive acá y no en su pestaña (ver `BloqueDeServicio`).
+  const [pruebas, setPruebas] = useState<Record<string, PruebasDelServicio>>({})
   const [estado, setEstado] = useState<EstadoArca | null>(null)
   // 🔑 Los demás servicios de ARCA (libracore ADR-032). Vacío —y la tarjeta es la de
   // siempre— mientras el backend no liste más que la facturación o no tenga la ruta.
@@ -535,6 +597,16 @@ export function ArcaCard({ producto, basePath = '/config/arca', empresa = 'defau
   const [probando, setProbando] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
+  // En qué pestaña se hizo la acción que dejó `error`/`aviso`: el mensaje se muestra ahí y no en las demás, donde
+  // diría «Guardado.» sobre algo que no se tocó. `'todas'` es para lo que no es de ninguna (la carga inicial).
+  const [origen, setOrigen] = useState<string>('todas')
+
+  const cambiarPrueba = useCallback((servicio: string, ambiente: AmbienteArca, prueba: PruebaVista | null) => {
+    setPruebas((todas) => {
+      const { [ambiente]: _anterior, ...resto } = todas[servicio] ?? {}
+      return { ...todas, [servicio]: prueba ? { ...resto, [ambiente]: prueba } : resto }
+    })
+  }, [])
 
   /** `GET /servicios`, aparte y sin spinner: lo vuelve a pedir un bloque después de subir,
    *  y desmontar la tarjeta entera le borraría su propio mensaje. Un backend sin la ruta
@@ -554,6 +626,7 @@ export function ArcaCard({ producto, basePath = '/config/arca', empresa = 'defau
     try {
       const actual = await api.get<ConfigArca | null>(basePath)
       setCfg(actual ?? vacia(empresa))
+      setAmbienteGuardado((actual ?? vacia(empresa)).ambiente)
       setPuntoVenta(String((actual ?? vacia(empresa)).punto_venta))
       // Sin fila todavía no se sabe qué conoce el motor: se muestran igual, y uno que no los conoce los ignora.
       setAdmiteFce(actual === null || 'fce_cbus' in actual)
@@ -563,6 +636,7 @@ export function ArcaCard({ producto, basePath = '/config/arca', empresa = 'defau
       setPredeterminado(Math.max(0, lista.findIndex((c) => c.cbu === actual?.fce_cbu)))
       setFceTransmision((actual?.fce_transmision ?? '').toUpperCase())
     } catch (err) {
+      setOrigen('todas')
       setError(describirError(err))
       setCfg(vacia(empresa))
     } finally {
@@ -584,11 +658,15 @@ export function ArcaCard({ producto, basePath = '/config/arca', empresa = 'defau
     if (!cfg) return
     const problema = admiteFce ? problemaDeLosCbus(cbus) : null
     if (problema) {
+      // El editor puede estar cerrado: el mensaje habla de «CBU 2» y hay que poder verlo.
+      setEditandoFce(true)
+      setOrigen('general')
       setError(problema)
       return
     }
     const lista = cbus.map((c) => ({ cbu: cbuLimpio(c.cbu), alias: aliasLimpio(c.alias), etiqueta: c.etiqueta.trim() }))
     setOcupado(true)
+    setOrigen('general')
     setError(null)
     setAviso(null)
     try {
@@ -619,6 +697,7 @@ export function ArcaCard({ producto, basePath = '/config/arca', empresa = 'defau
   async function subir(ambiente: AmbienteArca, tramo: 'certificado' | 'clave', archivo: File) {
     if (!cfg) return
     setOcupado(true)
+    setOrigen(ambiente)
     setError(null)
     setAviso(null)
     try {
@@ -640,6 +719,7 @@ export function ArcaCard({ producto, basePath = '/config/arca', empresa = 'defau
   async function quitarCredenciales(ambiente: AmbienteArca) {
     if (!cfg) return
     setOcupado(true)
+    setOrigen(ambiente)
     setError(null)
     setAviso(null)
     try {
@@ -659,6 +739,7 @@ export function ArcaCard({ producto, basePath = '/config/arca', empresa = 'defau
   async function probar() {
     if (!cfg) return
     setProbando(true)
+    setOrigen('general')
     setError(null)
     setAviso(null)
     try {
@@ -677,7 +758,7 @@ export function ArcaCard({ producto, basePath = '/config/arca', empresa = 'defau
     return <p className="py-6 text-center text-sm text-muted-foreground">Cargando…</p>
   }
 
-  // Los demás servicios, sin la facturación (que es el formulario de arriba).
+  // Los demás servicios, sin la facturación (que es la pestaña General y las dos de ambiente).
   const otros = servicios.filter((x) => x.servicio !== SERVICIO_FACTURACION)
   const variosServicios = otros.length > 0
   const etiquetaDeFacturacion = servicios.find((x) => x.servicio === SERVICIO_FACTURACION)?.etiqueta
@@ -688,134 +769,138 @@ export function ArcaCard({ producto, basePath = '/config/arca', empresa = 'defau
   // 🔑 El botón del pedido sólo con un motor que lo declara (`admite_pedido`): uno anterior contestaría 404.
   const admitePedido = servicios.find((x) => x.servicio === SERVICIO_FACTURACION)?.admite_pedido === true
 
-  const facturacion = (
-    <>
-      <div className="col-span-full">
-        <TutorialArcaCertificado conPedido={admitePedido} />
-        <TutorialArcaPadron producto={producto} />
+  const pestana = pestanaActual(pestanaPedida, otros)
+  // Los pares se leen con el ambiente GUARDADO: con un motor sin `pares`, `parDe` reparte los campos planos según el
+  // ambiente de `cfg`, y el que se está eligiendo sin guardar movería el par de una pestaña a la otra.
+  const cfgGuardada = { ...cfg, ambiente: ambienteGuardado }
+  const facturando = parDe(cfgGuardada, ambienteGuardado).completo
+
+  /** El error o el aviso de la última acción, sólo en la pestaña donde se hizo (ver `origen`). */
+  const mensajes = (donde: string) => (
+    (origen === 'todas' || origen === donde) && (error || aviso) ? (
+      <>
+        {error && <span className="text-sm text-destructive">{error}</span>}
+        {aviso && <span className="text-sm text-muted-foreground">{aviso}</span>}
+      </>
+    ) : null
+  )
+
+  const general = (
+    <div className="grid gap-3">
+      {estado && <AvisoDeVencimiento estado={estado} />}
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Campo id="arca-cuit" label="CUIT" value={cfg.cuit} onChange={(v) => setCfg({ ...cfg, cuit: v })} />
+        <Campo
+          id="arca-punto-venta" label="Punto de venta" value={puntoVenta}
+          onChange={setPuntoVenta}
+        />
+        <div className="grid gap-2">
+          <Label htmlFor="arca-ambiente">Ambiente para facturar</Label>
+          <Select value={cfg.ambiente} onValueChange={(v) => setCfg({ ...cfg, ambiente: v })}>
+            <SelectTrigger id="arca-ambiente"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="homologacion">Homologación (pruebas)</SelectItem>
+              <SelectItem value="produccion">Producción</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <Campo id="arca-alias" label="Alias" value={cfg.alias} onChange={(v) => setCfg({ ...cfg, alias: v })} />
       </div>
 
-      {estado && (
-        <div className="col-span-full"><AvisoDeVencimiento estado={estado} /></div>
-      )}
-
-      <Campo id="arca-cuit" label="CUIT" value={cfg.cuit} onChange={(v) => setCfg({ ...cfg, cuit: v })} />
-      <Campo
-        id="arca-punto-venta" label="Punto de venta" value={puntoVenta}
-        onChange={setPuntoVenta}
-      />
-      <div className="grid gap-2">
-        <Label>Ambiente</Label>
-        <Select value={cfg.ambiente} onValueChange={(v) => setCfg({ ...cfg, ambiente: v })}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="homologacion">Homologación (pruebas)</SelectItem>
-            <SelectItem value="produccion">Producción</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <Campo id="arca-alias" label="Alias" value={cfg.alias} onChange={(v) => setCfg({ ...cfg, alias: v })} />
+      {/* 🔑 El aviso del selector queda junto al selector: habla del ambiente que se ELIGE (aunque no se haya guardado),
+          y es la pregunta «¿puedo facturar?» que se contesta mirando esta pestaña. La pestaña del ambiente en uso lo
+          repite con su propio texto (`avisoDelAmbiente`). */}
+      <AvisoDelSelector cfg={cfg} />
 
       {admiteFce && (
         <fieldset aria-label="Factura de crédito electrónica MiPyME"
-                  className="col-span-full grid gap-3 rounded-md border p-4">
+                  className="grid gap-3 rounded-md border p-4">
           <legend className="px-1 text-sm font-medium">Factura de crédito electrónica MiPyME</legend>
-          <p className="text-xs text-muted-foreground">
-            Sólo si la empresa emite facturas de crédito. Cargá las cuentas donde puede cobrarlas (cada una tiene que
-            estar informada en ARCA), con su alias si lo tiene, y marcá la predeterminada: al facturar se puede elegir
-            otra, por alias o por CBU. Sin cuentas o sin modalidad no se ofrece la factura de crédito.
-          </p>
-          {cbus.length > 0 && (
-            <ul aria-label="Cuentas para cobrar" className="grid gap-3">
-              {cbus.map((c, i) => {
-                const problema = c.cbu ? problemaDelCbu(c.cbu) : null
-                const problemaAlias = problemaDelAlias(c.alias)
-                return (
-                  <li key={i} className="grid gap-2 rounded-md border p-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto] lg:items-end">
-                    <Campo
-                      id={`arca-fce-cbu-${i}`} label={`CBU ${i + 1}`} value={c.cbu} placeholder="22 dígitos"
-                      ayuda={problema ?? undefined}
-                      onChange={(v) => setCbus(cbus.map((x, k) => (k === i ? { ...x, cbu: v } : x)))}
-                    />
-                    <Campo
-                      id={`arca-fce-alias-${i}`} label={`Alias ${i + 1}`} value={c.alias}
-                      placeholder="Ej.: suitrans.cobros" ayuda={problemaAlias ?? undefined}
-                      onChange={(v) => setCbus(cbus.map((x, k) => (k === i ? { ...x, alias: v } : x)))}
-                    />
-                    <Campo
-                      id={`arca-fce-etiqueta-${i}`} label={`Nombre de la cuenta ${i + 1}`} value={c.etiqueta}
-                      placeholder="Ej.: Banco Nación cuenta corriente"
-                      onChange={(v) => setCbus(cbus.map((x, k) => (k === i ? { ...x, etiqueta: v } : x)))}
-                    />
-                    <div className="flex flex-wrap items-center gap-3 pb-1">
-                      <label className="flex items-center gap-2 text-sm">
-                        <input type="radio" name="arca-fce-predeterminado" checked={predeterminado === i}
-                               onChange={() => setPredeterminado(i)} aria-label={`CBU ${i + 1} predeterminado`} />
-                        Predeterminado
-                      </label>
-                      <Button type="button" variant="ghost" size="sm" aria-label={`Quitar CBU ${i + 1}`}
-                              onClick={() => {
-                                setCbus(cbus.filter((_, k) => k !== i))
-                                setPredeterminado(predeterminado === i ? 0
-                                  : predeterminado > i ? predeterminado - 1 : predeterminado)
-                              }}>
-                        <Trash2 />Quitar
-                      </Button>
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-          <div>
-            <Button type="button" variant="outline" size="sm"
-                    onClick={() => setCbus([...cbus, { cbu: '', alias: '', etiqueta: '' }])}>
-              <Plus />Agregar CBU
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">
+              {resumenDeLaFce(cbus, predeterminado, fceTransmision)}
+            </p>
+            <Button type="button" variant="outline" size="sm" aria-expanded={editandoFce}
+                    onClick={() => setEditandoFce(!editandoFce)}>
+              <Pencil />{editandoFce ? 'Cerrar cuentas' : 'Editar cuentas'}
             </Button>
           </div>
-          <div className="grid gap-2 sm:max-w-md">
-            <Label htmlFor="arca-fce-transmision">Modalidad de transmisión</Label>
-            {/* select-cerrado: las dos modalidades de transmisión de una FCE que acepta ARCA, fijas en el código (`MODALIDADES_FCE`) */}
-            <Select value={fceTransmision || SIN_MODALIDAD}
-                    onValueChange={(v) => setFceTransmision(v === SIN_MODALIDAD ? '' : v)}>
-              <SelectTrigger id="arca-fce-transmision"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={SIN_MODALIDAD}>Sin cargar</SelectItem>
-                {MODALIDADES_FCE.map((m) => <SelectItem key={m.valor} value={m.valor}>{m.etiqueta}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <ul aria-label="Cuál elegir" className="grid gap-1 text-xs text-muted-foreground">
-              <li>{AYUDA_MODALIDAD_FCE.SCA}</li>
-              <li>{AYUDA_MODALIDAD_FCE.ADC}</li>
-            </ul>
-          </div>
+          {editandoFce && (
+            <>
+              <p className="text-xs text-muted-foreground">
+                Sólo si la empresa emite facturas de crédito. Cargá las cuentas donde puede cobrarlas (cada una tiene que
+                estar informada en ARCA), con su alias si lo tiene, y marcá la predeterminada: al facturar se puede elegir
+                otra, por alias o por CBU. Sin cuentas o sin modalidad no se ofrece la factura de crédito.
+              </p>
+              {cbus.length > 0 && (
+                <ul aria-label="Cuentas para cobrar" className="grid gap-3">
+                  {cbus.map((c, i) => {
+                    const problema = c.cbu ? problemaDelCbu(c.cbu) : null
+                    const problemaAlias = problemaDelAlias(c.alias)
+                    return (
+                      <li key={i} className="grid gap-2 rounded-md border p-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto] lg:items-end">
+                        <Campo
+                          id={`arca-fce-cbu-${i}`} label={`CBU ${i + 1}`} value={c.cbu} placeholder="22 dígitos"
+                          ayuda={problema ?? undefined}
+                          onChange={(v) => setCbus(cbus.map((x, k) => (k === i ? { ...x, cbu: v } : x)))}
+                        />
+                        <Campo
+                          id={`arca-fce-alias-${i}`} label={`Alias ${i + 1}`} value={c.alias}
+                          placeholder="Ej.: suitrans.cobros" ayuda={problemaAlias ?? undefined}
+                          onChange={(v) => setCbus(cbus.map((x, k) => (k === i ? { ...x, alias: v } : x)))}
+                        />
+                        <Campo
+                          id={`arca-fce-etiqueta-${i}`} label={`Nombre de la cuenta ${i + 1}`} value={c.etiqueta}
+                          placeholder="Ej.: Banco Nación cuenta corriente"
+                          onChange={(v) => setCbus(cbus.map((x, k) => (k === i ? { ...x, etiqueta: v } : x)))}
+                        />
+                        <div className="flex flex-wrap items-center gap-3 pb-1">
+                          <label className="flex items-center gap-2 text-sm">
+                            <input type="radio" name="arca-fce-predeterminado" checked={predeterminado === i}
+                                   onChange={() => setPredeterminado(i)} aria-label={`CBU ${i + 1} predeterminado`} />
+                            Predeterminado
+                          </label>
+                          <Button type="button" variant="ghost" size="sm" aria-label={`Quitar CBU ${i + 1}`}
+                                  onClick={() => {
+                                    setCbus(cbus.filter((_, k) => k !== i))
+                                    setPredeterminado(predeterminado === i ? 0
+                                      : predeterminado > i ? predeterminado - 1 : predeterminado)
+                                  }}>
+                            <Trash2 />Quitar
+                          </Button>
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+              <div>
+                <Button type="button" variant="outline" size="sm"
+                        onClick={() => setCbus([...cbus, { cbu: '', alias: '', etiqueta: '' }])}>
+                  <Plus />Agregar CBU
+                </Button>
+              </div>
+              <div className="grid gap-2 sm:max-w-md">
+                <Label htmlFor="arca-fce-transmision">Modalidad de transmisión</Label>
+                {/* select-cerrado: las dos modalidades de transmisión de una FCE que acepta ARCA, fijas en el código (`MODALIDADES_FCE`) */}
+                <Select value={fceTransmision || SIN_MODALIDAD}
+                        onValueChange={(v) => setFceTransmision(v === SIN_MODALIDAD ? '' : v)}>
+                  <SelectTrigger id="arca-fce-transmision"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={SIN_MODALIDAD}>Sin cargar</SelectItem>
+                    {MODALIDADES_FCE.map((m) => <SelectItem key={m.valor} value={m.valor}>{m.etiqueta}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <ul aria-label="Cuál elegir" className="grid gap-1 text-xs text-muted-foreground">
+                  <li>{AYUDA_MODALIDAD_FCE.SCA}</li>
+                  <li>{AYUDA_MODALIDAD_FCE.ADC}</li>
+                </ul>
+              </div>
+            </>
+          )}
         </fieldset>
       )}
-
-      <div className="col-span-full grid gap-3">
-        {/* 🔑 El aviso va ANTES de los dos bloques: es la respuesta a "¿puedo
-            facturar?", y responderla después de dos formularios de subida la
-            deja abajo del pliegue justo cuando dice que no. */}
-        <AvisoDelSelector cfg={cfg} />
-        {AMBIENTES_ARCA.map((amb) => (
-          <ParDeCredenciales
-            key={amb}
-            ambiente={amb}
-            par={parDe(cfg, amb)}
-            enUso={cfg.ambiente === amb}
-            disabled={ocupado}
-            contexto={contextoDeFacturacion}
-            onArchivo={(tramo, f) => void subir(amb, tramo, f)}
-            onQuitar={() => void quitarCredenciales(amb)}
-            pedido={admitePedido ? {
-              servicio: SERVICIO_FACTURACION, etiqueta: etiquetaDeFacturacion, producto,
-              ruta: (tramo) => `${basePath}/${tramo}?empresa=${encodeURIComponent(cfg.empresa)}`
-                + `&ambiente=${encodeURIComponent(amb)}`,
-              cuit: cfg.cuit, razonSocial, onCambio: () => cargar(true),
-            } : undefined}
-          />
-        ))}
-      </div>
 
       <AccionesDeSeccion>
         <Button disabled={ocupado} onClick={() => void guardar()}>
@@ -826,41 +911,135 @@ export function ArcaCard({ producto, basePath = '/config/arca', empresa = 'defau
             <Send />{probando ? 'Probando…' : 'Probar conexión'}
           </Button>
         )}
-        {error && <span className="text-sm text-destructive">{error}</span>}
-        {aviso && <span className="text-sm text-muted-foreground">{aviso}</span>}
+        {mensajes(PESTANA_GENERAL)}
       </AccionesDeSeccion>
-    </>
+
+      <TutorialArcaPadron producto={producto} />
+    </div>
+  )
+
+  /** Lo que la pestaña de un ambiente de la facturación dice arriba: si con ese par se factura hoy o no. */
+  function avisoDelAmbiente(amb: AmbienteArca) {
+    const par = parDe(cfgGuardada, amb)
+    if (amb === ambienteGuardado) {
+      return par.completo ? (
+        <AvisoEstado tono="ok">Con este certificado se factura hoy.</AvisoEstado>
+      ) : (
+        <AvisoEstado tono="negativo">
+          Es el ambiente con que se factura y todavía no tiene el par completo: la facturación no va a funcionar hasta
+          que se cargue el certificado y la clave.
+        </AvisoEstado>
+      )
+    }
+    const enUso = AMBIENTES_ARCA.find((a) => a === ambienteGuardado)
+    return (
+      <AvisoEstado tono="neutro">
+        No es el ambiente con que se factura{enUso ? ` (hoy se factura en ${nombreCortoDelAmbiente(enUso)})` : ''}. Lo que
+        se cargue acá queda guardado, pero no se usa hasta elegir este ambiente en General.
+      </AvisoEstado>
+    )
+  }
+
+  const deAmbiente = (amb: AmbienteArca) => (
+    <div className="grid gap-3">
+      {variosServicios && (
+        <h3 className="flex items-center gap-2 text-sm font-medium">
+          <ShieldCheck className="size-4" />{etiquetaDeFacturacion} — {nombreCortoDelAmbiente(amb)}
+        </h3>
+      )}
+      {avisoDelAmbiente(amb)}
+      <TutorialArcaCertificado conPedido={admitePedido} />
+      <ParDeCredenciales
+        ambiente={amb}
+        par={parDe(cfgGuardada, amb)}
+        enUso={ambienteGuardado === amb}
+        disabled={ocupado}
+        contexto={contextoDeFacturacion}
+        onArchivo={(tramo, f) => void subir(amb, tramo, f)}
+        onQuitar={() => void quitarCredenciales(amb)}
+        pedido={admitePedido ? {
+          servicio: SERVICIO_FACTURACION, etiqueta: etiquetaDeFacturacion, producto,
+          ruta: (tramo) => `${basePath}/${tramo}?empresa=${encodeURIComponent(cfg.empresa)}`
+            + `&ambiente=${encodeURIComponent(amb)}`,
+          cuit: cfg.cuit, razonSocial, onCambio: () => cargar(true),
+        } : undefined}
+      />
+      {(origen === 'todas' || origen === amb) && (error || aviso) && (
+        <div className="flex flex-wrap items-center gap-3">{mensajes(amb)}</div>
+      )}
+    </div>
   )
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <ShieldCheck className="size-4" />
-          {variosServicios ? 'ARCA' : 'ARCA (facturación electrónica)'}
-        </CardTitle>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <ShieldCheck className="size-4" />
+            {variosServicios ? 'ARCA' : 'ARCA (facturación electrónica)'}
+          </CardTitle>
+          {/* Sólo con un par completo en el ambiente guardado: decir «Facturando» de una instancia que no puede sería
+              la mentira que esta pantalla evita. Con producción el verde; con homologación el azul de «en curso»,
+              porque son pruebas. */}
+          {facturando && (
+            <BadgeEstado tono={ambienteGuardado === 'produccion' ? 'ok' : 'curso'}>
+              Facturando en {nombreCortoDelAmbiente(ambienteGuardado)}
+            </BadgeEstado>
+          )}
+        </div>
       </CardHeader>
-      <CardContent className="grid gap-3 sm:grid-cols-2">
-        {variosServicios ? (
-          <>
-            <section
-              aria-label={etiquetaDeFacturacion}
-              className="col-span-full grid gap-3 sm:grid-cols-2"
-            >
-              <h3 className="col-span-full flex items-center gap-2 text-sm font-medium">
-                <ShieldCheck className="size-4" />{etiquetaDeFacturacion}
-              </h3>
-              {facturacion}
-            </section>
-            {otros.map((x) => (
-              <BloqueDeServicio
-                key={x.servicio} servicio={x} basePath={basePath} empresa={cfg.empresa}
-                onCambio={cargarServicios} producto={producto} cuit={cfg.cuit} razonSocial={razonSocial}
-              />
+      <CardContent>
+        {/* Las pestañas se desmontan al cambiar (Radix): el estado de la tarjeta (campos, FCE, resultado de «Probar»)
+            vive arriba, en `ArcaTarjeta`, y no se pierde. */}
+        <Tabs value={pestana} onValueChange={onPestana} className="gap-4">
+          <TabsList className="h-auto flex-wrap justify-start" aria-label="Secciones de ARCA">
+            <Disparador valor={PESTANA_GENERAL}>General</Disparador>
+            {AMBIENTES_ARCA.map((amb) => (
+              <Disparador
+                key={amb} valor={amb}
+                estado={estadoDelAmbiente(parDe(cfgGuardada, amb), ambienteGuardado === amb)}
+              >
+                {nombreCortoDelAmbiente(amb)}
+              </Disparador>
             ))}
-          </>
-        ) : facturacion}
+            {otros.map((x) => (
+              <Disparador key={x.servicio} valor={x.servicio} estado={estadoDelServicio(x.pares)}>
+                {x.etiqueta}
+              </Disparador>
+            ))}
+          </TabsList>
+
+          <TabsContent value={PESTANA_GENERAL}>{general}</TabsContent>
+          {AMBIENTES_ARCA.map((amb) => (
+            <TabsContent key={amb} value={amb}>{deAmbiente(amb)}</TabsContent>
+          ))}
+          {otros.map((x) => (
+            <TabsContent key={x.servicio} value={x.servicio}>
+              <BloqueDeServicio
+                servicio={x} basePath={basePath} empresa={cfg.empresa}
+                onCambio={cargarServicios} producto={producto} cuit={cfg.cuit} razonSocial={razonSocial}
+                pruebas={pruebas[x.servicio] ?? {}}
+                onPrueba={(ambiente, prueba) => cambiarPrueba(x.servicio, ambiente, prueba)}
+              />
+            </TabsContent>
+          ))}
+        </Tabs>
       </CardContent>
     </Card>
+  )
+}
+
+/** Una pestaña de la tarjeta: su nombre y, si tiene, su etiqueta de estado. La etiqueta siempre dice con palabras lo
+ *  que el color sólo refuerza. */
+function Disparador({ valor, estado, children }: {
+  valor: string
+  estado?: EtiquetaDeEstado
+  children: ReactNode
+}) {
+  return (
+    <TabsTrigger value={valor} className="gap-2">
+      {children}
+      {estado && <BadgeEstado tono={estado.tono}>{estado.texto}</BadgeEstado>}
+    </TabsTrigger>
   )
 }
