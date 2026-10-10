@@ -57,6 +57,9 @@ function cuerpoDelPut(): Record<string, unknown> {
 const montar = (ui: ReactElement) => render(<MemoryRouter>{ui}</MemoryRouter>)
 const modalidad = () => screen.getByLabelText('Modalidad de transmisión')
 const guardar = (u: ReturnType<typeof userEvent.setup>) => u.click(screen.getByRole('button', { name: /Guardar ARCA/ }))
+/** Desde 0.135.0 (ADR-047) las cuentas se muestran como un resumen de una línea y se editan tras «Editar cuentas». */
+const editar = async (u: ReturnType<typeof userEvent.setup>) =>
+  u.click(await screen.findByRole('button', { name: 'Editar cuentas' }))
 
 beforeEach(() => {
   escrituras = []
@@ -69,6 +72,7 @@ describe('ARCA — factura de crédito: varias cuentas, con alias', () => {
     montar(<ArcaCard producto="LibraCargo" />)
     const u = userEvent.setup()
 
+    await editar(u)
     await u.click(await screen.findByRole('button', { name: /Agregar CBU/ }))
     await u.type(screen.getByLabelText('CBU 1'), '2850590-9 40090418135201')
     await u.type(screen.getByLabelText('Alias 1'), 'Suitrans.Nacion')
@@ -99,6 +103,10 @@ describe('ARCA — factura de crédito: varias cuentas, con alias', () => {
     montar(<ArcaCard producto="LibraCargo" />)
     const u = userEvent.setup()
 
+    // Cerrado, el editor es un resumen de una línea: cuántas cuentas, cuál es la predeterminada y la modalidad.
+    expect(await screen.findByText('2 cuentas · predeterminada: CBU …4567 · ADC')).toBeInTheDocument()
+    expect(screen.queryByLabelText('CBU 1')).toBeNull()
+    await editar(u)
     expect(await screen.findByLabelText('CBU 1')).toHaveValue(CBU_1)
     expect(screen.getByLabelText('Alias 1')).toHaveValue('suitrans.nacion')
     expect(screen.getByLabelText('CBU 2 predeterminado')).toBeChecked()
@@ -116,6 +124,7 @@ describe('ARCA — factura de crédito: varias cuentas, con alias', () => {
     montar(<ArcaCard producto="LibraCargo" />)
     const u = userEvent.setup()
 
+    await editar(u)
     await u.click(await screen.findByRole('button', { name: 'Quitar CBU 1' }))
     await u.selectOptions(modalidad(), 'Sin cargar')
     await guardar(u)
@@ -131,6 +140,7 @@ describe('ARCA — factura de crédito: varias cuentas, con alias', () => {
     montar(<ArcaCard producto="LibraCargo" />)
     const u = userEvent.setup()
 
+    await editar(u)
     await u.click(await screen.findByRole('button', { name: /Agregar CBU/ }))
     await u.type(screen.getByLabelText('CBU 1'), cbu)
     if (alias) await u.type(screen.getByLabelText('Alias 1'), alias)
@@ -143,6 +153,7 @@ describe('ARCA — factura de crédito: varias cuentas, con alias', () => {
   it('la leyenda de cuándo elegir SCA o ADC está junto a la modalidad', async () => {
     responder(CON_FCE)
     montar(<ArcaCard producto="LibraCargo" />)
+    await editar(userEvent.setup())
     const ayuda = await screen.findByRole('list', { name: 'Cuál elegir' })
     expect(within(ayuda).getByText(AYUDA_MODALIDAD_FCE.SCA)).toBeInTheDocument()
     expect(within(ayuda).getByText(AYUDA_MODALIDAD_FCE.ADC)).toBeInTheDocument()
@@ -157,6 +168,7 @@ describe('ARCA — factura de crédito: varias cuentas, con alias', () => {
 
     await screen.findByLabelText(/^CUIT$/)
     expect(screen.queryByRole('group', { name: 'Factura de crédito electrónica MiPyME' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Editar cuentas' })).toBeNull()
     await guardar(u)
     for (const clave of ['fce_cbus', 'fce_cbu', 'fce_transmision']) expect(cuerpoDelPut()).not.toHaveProperty(clave)
   })

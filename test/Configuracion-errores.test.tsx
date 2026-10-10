@@ -22,6 +22,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ArcaCard, DatosBackupCard, EmpresaCard, MercadoPagoCard,
 } from '../src/Configuracion'
+import { abrirPestana } from './helpers-arca'
 
 const ARCA = {
   empresa: 'default', cuit: '20111111119', punto_venta: 3,
@@ -94,6 +95,7 @@ describe('ARCA — cuando el backend dice que no', () => {
     // portal de ARCA entrega el CSR y el certificado con la misma extensión
     // `.pem`, y lo que distingue uno de otro es el contenido — que es lo que
     // el backend mira.
+    await abrirPestana(usuario, /^Homologación/)
     await usuario.upload(
       await screen.findByLabelText(/Certificado.*Homologaci/),
       new File(['-----BEGIN CERTIFICATE REQUEST-----'], 'pedido.pem', { type: 'text/plain' }),
@@ -107,6 +109,7 @@ describe('ARCA — cuando el backend dice que no', () => {
     montar(<ArcaCard producto="Contalibra" />)
     const usuario = userEvent.setup()
 
+    await abrirPestana(usuario, /^Homologación/)
     await usuario.upload(
       await screen.findByLabelText(/Clave privada.*Homologaci/),
       new File(['x'], 'otra.key', { type: 'text/plain' }),
@@ -155,6 +158,7 @@ describe('ARCA — cuando el backend dice que no', () => {
     montar(<ArcaCard producto="Contalibra" />)
     const usuario = userEvent.setup()
 
+    await abrirPestana(usuario, /^Homologación/)
     await usuario.click(await screen.findByRole('button', { name: /Quitar el par de homologaci/i }))
 
     expect(await screen.findByText(/no tiene configuración de ARCA/)).toBeInTheDocument()
@@ -170,12 +174,18 @@ describe('ARCA — cuando el backend dice que no', () => {
         : json(null),
     )))
     montar(<ArcaCard producto="Contalibra" />)
+    const usuario = userEvent.setup()
 
     expect(await screen.findByLabelText(/^CUIT$/)).toHaveValue('')
     // Sin certificado no ofrece probar ni quitar: son acciones sobre algo que
-    // no está.
+    // no está. «Quitar» vive en la pestaña de cada ambiente, así que se miran las dos
+    // (en General no existe, y sin abrirlas esto pasaría por no haber mirado).
     expect(screen.queryByRole('button', { name: /Probar conexión/ })).toBeNull()
-    expect(screen.queryByRole('button', { name: /Quitar el par/i })).toBeNull()
+    for (const ambiente of [/^Homologación/, /^Producción/]) {
+      await abrirPestana(usuario, ambiente)
+      await screen.findByRole('region', { name: /Credenciales de/ })
+      expect(screen.queryByRole('button', { name: /Quitar el par/i })).toBeNull()
+    }
   })
 
   it('un LibraCore viejo sin `/estado` no rompe la pantalla, sólo no avisa el vencimiento', async () => {

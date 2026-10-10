@@ -42,8 +42,13 @@ export function Tabs({ defaultValue = '', value, onValueChange, children }: {
   )
 }
 
-export function TabsList({ className, children }: { className?: string; children?: ReactNode }) {
-  return <div role="tablist" className={className}>{children}</div>
+// `aria-label` se reenvía como en Radix: ARCA rotula su barra de pestañas y los tests la buscan por nombre.
+export function TabsList({ className, children, 'aria-label': ariaLabel }: {
+  className?: string
+  children?: ReactNode
+  'aria-label'?: string
+}) {
+  return <div role="tablist" className={className} aria-label={ariaLabel}>{children}</div>
 }
 
 export function TabsTrigger({ value, children }: {

@@ -17,6 +17,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ArcaCard } from '../src/configuracion/arca'
 import { parDe } from '../src/configuracion/arca-pares'
+import { abrirPestana } from './helpers-arca'
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -87,6 +88,7 @@ describe('ARCA — los dos pares', () => {
     render(<ArcaCard producto="Contalibra" />)
     const usuario = userEvent.setup()
 
+    await abrirPestana(usuario, /^Producción/)
     await usuario.upload(
       await screen.findByLabelText(/Certificado.*Producci/),
       new File(['x'], 'real.crt', { type: 'application/x-x509-ca-cert' }),
@@ -103,6 +105,7 @@ describe('ARCA — los dos pares', () => {
     render(<ArcaCard producto="Contalibra" />)
     const usuario = userEvent.setup()
 
+    await abrirPestana(usuario, /^Homologación/)
     await usuario.upload(
       await screen.findByLabelText(/Clave privada.*Homologaci/),
       new File(['x'], 'prueba.key', { type: 'text/plain' }),
@@ -124,7 +127,12 @@ describe('ARCA — los dos pares', () => {
       },
     }))
     render(<ArcaCard producto="Contalibra" />)
+    const usuario = userEvent.setup()
 
+    // Y sin abrir nada: la pestaña ya dice que el par de producción está cargado.
+    const pestana = await screen.findByRole('tab', { name: /^Producción/ })
+    expect(pestana).toHaveTextContent('Cargado')
+    await usuario.click(pestana)
     const bloque = await screen.findByRole('region', { name: /Producción/ })
     expect(bloque).toHaveTextContent(/Válido hasta el 01-08-2028/)
   })
@@ -176,7 +184,9 @@ describe('ARCA — los dos pares', () => {
       },
     }))
     render(<ArcaCard producto="Contalibra" />)
+    const usuario = userEvent.setup()
 
+    await abrirPestana(usuario, /^Homologación/)
     const aviso = await screen.findByText(/no parece un certificado PEM/)
     expect(aviso.className.split(/\s+/)).toContain('w-full')
   })
@@ -201,7 +211,9 @@ describe('ARCA — los dos pares', () => {
       },
     }))
     render(<ArcaCard producto="Contalibra" />)
+    const usuario = userEvent.setup()
 
+    await abrirPestana(usuario, /^Homologación/)
     const bloque = await screen.findByRole('region', { name: /Homologación/ })
     expect(bloque).toHaveTextContent(/Falta la clave privada/)
   })
@@ -216,6 +228,7 @@ describe('ARCA — los dos pares', () => {
     render(<ArcaCard producto="Contalibra" />)
     const usuario = userEvent.setup()
 
+    await abrirPestana(usuario, /^Homologación/)
     await usuario.click(
       await screen.findByRole('button', { name: /Quitar el par de homologaci/i }),
     )

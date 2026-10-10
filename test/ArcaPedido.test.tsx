@@ -15,6 +15,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ArcaCard } from '../src/configuracion/arca'
+import { abrirPestana } from './helpers-arca'
 import {
   aliasSugerido, pasosParaArca, puedePedirCertificado, type ParDeArca,
 } from '../src/configuracion/arca-pares'
@@ -131,6 +132,7 @@ describe('ARCA — el pedido sólo se ofrece si el motor lo admite', () => {
     servidor({ admitePedido: false })
     render(<ArcaCard producto="Contalibra" />)
     await screen.findByLabelText(/^CUIT$/)
+    await abrirPestana(userEvent.setup(), /^Producción/)
     await waitFor(() => expect(screen.getByLabelText('Clave privada (.key) — Producción')).toBeInTheDocument())
 
     expect(screen.queryByRole('button', { name: BOTON })).toBeNull()
@@ -153,11 +155,15 @@ describe('ARCA — el pedido sólo se ofrece si el motor lo admite', () => {
   it('con `admite_pedido`: un botón por ambiente sin par, y la clave pasa a «avanzado»', async () => {
     servidor()
     render(<ArcaCard producto="Contalibra" />)
+    const usuario = userEvent.setup()
 
     // Homologación tiene el par completo y vigente: no se ofrece. Producción está vacía: sí.
+    await abrirPestana(usuario, /^Homologación/)
+    await screen.findByRole('region', { name: /Credenciales de Homologación/ })
+    expect(screen.queryByRole('button', { name: /Generar pedido de certificado/ })).toBeNull()
+    await abrirPestana(usuario, /^Producción/)
     expect(await screen.findByRole('button', { name: 'Generar pedido de certificado — Producción' }))
       .toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Generar pedido de certificado — Homologación/ })).toBeNull()
 
     const clave = screen.getByLabelText('Clave privada (.key) — Producción')
     const avanzado = clave.closest('details')
@@ -173,8 +179,11 @@ describe('ARCA — el pedido sólo se ofrece si el motor lo admite', () => {
       produccion: { ambiente: 'produccion', ...PAR_LLENO, vencido: true, dias_para_vencer: -3, vence: '01-10-2026' },
     } })
     render(<ArcaCard producto="Contalibra" />)
+    const usuario = userEvent.setup()
+    await abrirPestana(usuario, /^Producción/)
     expect(await screen.findByRole('button', { name: 'Generar pedido de certificado — Producción' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Generar pedido de certificado — Homologación (pruebas)' })).toBeInTheDocument()
+    await abrirPestana(usuario, /^Homologación/)
+    expect(await screen.findByRole('button', { name: 'Generar pedido de certificado — Homologación (pruebas)' })).toBeInTheDocument()
   })
 
   it('un par completo y lejos de vencer no lo ofrece', async () => {
@@ -183,9 +192,14 @@ describe('ARCA — el pedido sólo se ofrece si el motor lo admite', () => {
       produccion: { ambiente: 'produccion', ...PAR_LLENO },
     } })
     render(<ArcaCard producto="Contalibra" />)
+    const usuario = userEvent.setup()
     await screen.findByLabelText(/^CUIT$/)
+    for (const ambiente of [/^Homologación/, /^Producción/]) {
+      await abrirPestana(usuario, ambiente)
+      await screen.findByRole('region', { name: /Credenciales de/ })
+      expect(screen.queryByRole('button', { name: BOTON })).toBeNull()
+    }
     await screen.findByLabelText('Clave privada (.key) — Producción')
-    expect(screen.queryByRole('button', { name: BOTON })).toBeNull()
   })
 })
 
@@ -194,7 +208,7 @@ describe('ARCA — generar el pedido', () => {
     servidor()
     render(<ArcaCard producto="Contalibra" razonSocial="Empresa Ficticia S.A." />)
     const usuario = userEvent.setup()
-
+    await abrirPestana(usuario, /^Producción/)
     await usuario.click(await screen.findByRole('button', { name: 'Generar pedido de certificado — Producción' }))
 
     const dialogo = await screen.findByRole('dialog')
@@ -209,7 +223,7 @@ describe('ARCA — generar el pedido', () => {
     const { pedidos } = servidor()
     render(<ArcaCard producto="Contalibra" razonSocial="Empresa Ficticia S.A." />)
     const usuario = userEvent.setup()
-
+    await abrirPestana(usuario, /^Producción/)
     await usuario.click(await screen.findByRole('button', { name: 'Generar pedido de certificado — Producción' }))
     const dialogo = await screen.findByRole('dialog')
     const alias = within(dialogo).getByLabelText('Alias')
@@ -247,6 +261,7 @@ describe('ARCA — generar el pedido', () => {
     servidor()
     const { container } = render(<ArcaCard producto="Contalibra" razonSocial="Empresa Ficticia S.A." />)
     const usuario = userEvent.setup()
+    await abrirPestana(usuario, /^Producción/)
     await usuario.click(await screen.findByRole('button', { name: 'Generar pedido de certificado — Producción' }))
     await usuario.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Generar pedido' }))
     await screen.findByText('Pedido generado')
@@ -261,6 +276,7 @@ describe('ARCA — generar el pedido', () => {
     } })
     render(<ArcaCard producto="Contalibra" />)
     const usuario = userEvent.setup()
+    await abrirPestana(usuario, /^Producción/)
     await usuario.click(await screen.findByRole('button', { name: 'Generar pedido de certificado — Producción' }))
     const dialogo = await screen.findByRole('dialog')
     await usuario.click(within(dialogo).getByRole('button', { name: 'Generar pedido' }))
@@ -274,6 +290,7 @@ describe('ARCA — generar el pedido', () => {
     const { pedidos } = servidor()
     render(<ArcaCard producto="Contalibra" />)
     const usuario = userEvent.setup()
+    await abrirPestana(usuario, /^Producción/)
     await usuario.click(await screen.findByRole('button', { name: 'Generar pedido de certificado — Producción' }))
     await usuario.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancelar' }))
 
@@ -288,6 +305,7 @@ describe('ARCA — generar el pedido', () => {
     } })
     render(<ArcaCard producto="Contalibra" razonSocial="Empresa Ficticia S.A." />)
     const usuario = userEvent.setup()
+    await abrirPestana(usuario, /^Homologación/)
     await usuario.click(await screen.findByRole('button', { name: 'Generar pedido de certificado — Homologación (pruebas)' }))
     await usuario.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Generar pedido' }))
 
@@ -308,6 +326,7 @@ describe('ARCA — con un pedido esperando el certificado', () => {
   it('dice desde cuándo espera y no ofrece generar otro', async () => {
     conPedido()
     render(<ArcaCard producto="Contalibra" />)
+    await abrirPestana(userEvent.setup(), /^Producción/)
     const grupo = await screen.findByRole('group', { name: 'Pedido de certificado — Producción' })
 
     expect(grupo).toHaveTextContent('Esperando el certificado de ARCA (pedido del 08-10-2026)')
@@ -319,6 +338,7 @@ describe('ARCA — con un pedido esperando el certificado', () => {
   it('permite bajar de nuevo el .csr', async () => {
     conPedido()
     render(<ArcaCard producto="Contalibra" />)
+    await abrirPestana(userEvent.setup(), /^Producción/)
     const grupo = await screen.findByRole('group', { name: 'Pedido de certificado — Producción' })
     const enlace = within(grupo).getByRole('link', { name: /Descargar el \.csr/ })
     expect(enlace).toHaveAttribute('href', '/config/arca/pedido.csr?empresa=default&ambiente=produccion')
@@ -328,10 +348,11 @@ describe('ARCA — con un pedido esperando el certificado', () => {
   it('🔴 no hay campo de clave: sólo se sube el .crt', async () => {
     const { pedidos } = conPedido()
     render(<ArcaCard producto="Contalibra" />)
+    const usuario = userEvent.setup()
+    await abrirPestana(usuario, /^Producción/)
     await screen.findByRole('group', { name: 'Pedido de certificado — Producción' })
 
     expect(screen.queryByLabelText('Clave privada (.key) — Producción')).toBeNull()
-    const usuario = userEvent.setup()
     await usuario.upload(screen.getByLabelText('Certificado (.crt) — Producción'), new File(['x'], 'real.crt'))
     await waitFor(() => expect(pedidos.some((p) => p.metodo === 'POST' && p.url.includes('/config/arca/certificado'))).toBe(true))
     expect(pedidos.some((p) => p.url.includes('/config/arca/clave'))).toBe(false)
@@ -341,6 +362,7 @@ describe('ARCA — con un pedido esperando el certificado', () => {
     conPedido()
     render(<ArcaCard producto="Contalibra" />)
     const usuario = userEvent.setup()
+    await abrirPestana(usuario, /^Producción/)
     await usuario.click(await screen.findByRole('button', { name: 'Ver los pasos para ARCA — Producción' }))
     const dialogo = await screen.findByRole('dialog')
     expect(dialogo).toHaveTextContent('Pasos para ARCA')
@@ -353,6 +375,7 @@ describe('ARCA — con un pedido esperando el certificado', () => {
     render(<ArcaCard producto="Contalibra" />)
     const usuario = userEvent.setup()
 
+    await abrirPestana(usuario, /^Producción/)
     await usuario.click(await screen.findByRole('button', { name: 'Descartar el pedido — Producción' }))
     const dialogo = await screen.findByRole('dialog')
     expect(dialogo).toHaveTextContent('su clave privada')
@@ -373,6 +396,7 @@ describe('ARCA — con un pedido esperando el certificado', () => {
     const { pedidos } = conPedido()
     render(<ArcaCard producto="Contalibra" />)
     const usuario = userEvent.setup()
+    await abrirPestana(usuario, /^Producción/)
     await usuario.click(await screen.findByRole('button', { name: 'Descartar el pedido — Producción' }))
     await usuario.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancelar' }))
     expect(pedidos.filter((p) => p.metodo === 'DELETE')).toEqual([])
@@ -389,6 +413,7 @@ describe('ARCA — con un pedido esperando el certificado', () => {
     })
     render(<ArcaCard producto="Contalibra" />)
     const usuario = userEvent.setup()
+    await abrirPestana(usuario, /^Producción/)
     await usuario.click(await screen.findByRole('button', { name: 'Descartar el pedido — Producción' }))
     const dialogo = await screen.findByRole('dialog')
     await usuario.click(within(dialogo).getByRole('button', { name: 'Descartar el pedido' }))
@@ -402,6 +427,7 @@ describe('ARCA — el pedido de un servicio que no es la facturación', () => {
     render(<ArcaCard producto="LibraCargo" razonSocial="Empresa Ficticia S.A." />)
     const usuario = userEvent.setup()
 
+    await abrirPestana(usuario, /^CTG y Carta de Porte/)
     const boton = await screen.findByRole('button', {
       name: 'Generar pedido de certificado — CTG y Carta de Porte — Producción',
     })
@@ -432,12 +458,16 @@ describe('ARCA — el pedido de un servicio que no es la facturación', () => {
       },
     })
     render(<ArcaCard producto="LibraCargo" />)
+    const usuario = userEvent.setup()
+    await abrirPestana(usuario, /^CTG y Carta de Porte/)
     const grupo = await screen.findByRole('group', { name: 'Pedido de certificado — CTG y Carta de Porte — Producción' })
     expect(grupo).toHaveTextContent('libracargowscpeprod')
     expect(screen.queryByRole('group', { name: /Facturación electrónica/ })).toBeNull()
     expect(screen.queryByLabelText(/Clave privada.*CTG y Carta de Porte.*Producción/)).toBeNull()
-    // El campo de clave de la otra tarjeta no se vio afectado.
-    expect(screen.getByLabelText(/Clave privada.*Facturación electrónica.*Producción/)).toBeInTheDocument()
+    // Y la pestaña de la facturación no se entera: su campo de clave sigue ahí.
+    await abrirPestana(usuario, /^Producción/)
+    expect(await screen.findByLabelText(/Clave privada.*Facturación electrónica.*Producción/)).toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: /Pedido de certificado/ })).toBeNull()
   })
 })
 
@@ -445,6 +475,7 @@ describe('ARCA — el tutorial acompaña al botón', () => {
   it('con el pedido disponible, lo primero que cuenta es el botón; sin él, es el de siempre', async () => {
     servidor()
     const con = render(<ArcaCard producto="Contalibra" />)
+    await abrirPestana(userEvent.setup(), /^Producción/)
     await screen.findByRole('button', { name: 'Generar pedido de certificado — Producción' })
     expect(con.container.textContent).toContain('Generar el pedido desde esta pantalla')
     expect(con.container.textContent).toContain('Alternativa — Generar la clave privada y el CSR a mano')
@@ -453,6 +484,7 @@ describe('ARCA — el tutorial acompaña al botón', () => {
     servidor({ admitePedido: false })
     const sin = render(<ArcaCard producto="Contalibra" />)
     await sin.findByLabelText(/^CUIT$/)
+    await abrirPestana(userEvent.setup(), /^Producción/)
     await waitFor(() => expect(sin.container.textContent).toContain('1 — Generar la clave privada y el CSR (en tu PC)'))
     expect(sin.container.textContent).not.toContain('Generar el pedido desde esta pantalla')
   })

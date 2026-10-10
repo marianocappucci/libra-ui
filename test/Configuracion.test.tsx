@@ -29,6 +29,7 @@ import {
   ArcaCard, DatosBackupCard, EmailCard, EmpresaCard, MercadoPagoCard,
   createConfiguracion,
 } from '../src/Configuracion'
+import { abrirPestana } from './helpers-arca'
 
 function IconoFalso({ className }: { className?: string }) {
   return <svg data-testid="icono" className={className} />
@@ -576,6 +577,7 @@ describe('ARCA', () => {
     montar(<ArcaCard producto="Contalibra" />)
     const usuario = userEvent.setup()
 
+    await abrirPestana(usuario, /^Homologación/)
     await usuario.upload(
       await screen.findByLabelText(/Certificado.*Homologaci/),
       new File(['x'], 'mi.crt', { type: 'application/x-x509-ca-cert' }),
@@ -592,6 +594,7 @@ describe('ARCA', () => {
     montar(<ArcaCard producto="Contalibra" />)
     const usuario = userEvent.setup()
 
+    await abrirPestana(usuario, /^Homologación/)
     await usuario.upload(
       await screen.findByLabelText(/Clave privada.*Homologaci/),
       new File(['x'], 'mi.key', { type: 'application/octet-stream' }),
@@ -638,6 +641,7 @@ describe('ARCA', () => {
     montar(<ArcaCard producto="Contalibra" />)
     const usuario = userEvent.setup()
 
+    await abrirPestana(usuario, /^Homologación/)
     await usuario.click(await screen.findByRole('button', { name: /Quitar el par de homologaci/i }))
 
     await esperarPedido('/config/arca/credenciales', 'DELETE')
