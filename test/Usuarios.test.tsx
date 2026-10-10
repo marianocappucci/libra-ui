@@ -587,3 +587,28 @@ describe('🔴 la contraseña tiene que tener al menos 6 caracteres', () => {
     expect(pedidos.filter((p) => p.url.endsWith('/password'))).toHaveLength(0)
   })
 })
+
+describe('🔴 un alta sin permiso se explica en castellano (ADR-046)', () => {
+  it('el 403 «forbidden» del backend se lee «No tenés permiso para hacer esto.», no «forbidden»', async () => {
+    // Medido en la demo de VentaLibra (2026-10-10): el visitante (Encargado) ve la pantalla con lectura de todo, intenta crear un
+    // usuario y el backend contesta 403 `forbidden`, que el diálogo mostraba tal cual.
+    const user = userEvent.setup({ delay: null })
+    vi.stubGlobal('fetch', vi.fn((_url: string, opciones?: RequestInit) => {
+      if ((opciones?.method ?? 'GET') === 'GET') return Promise.resolve(json(USUARIOS))
+      return Promise.resolve(new Response(JSON.stringify({ detail: 'forbidden' }), {
+        status: 403, headers: { 'content-type': 'application/json' },
+      }))
+    }))
+    render(<Usuarios icono={IconoFalso} />)
+    await screen.findByText('Mariano')
+    await user.click(screen.getByRole('button', { name: /Nuevo usuario/ }))
+    const dialogo = await screen.findByRole('dialog')
+    await user.type(within(dialogo).getByLabelText('Usuario'), 'nuevo')
+    await user.type(within(dialogo).getByLabelText('Nombre'), 'Persona Nueva')
+    await user.type(within(dialogo).getByLabelText('Contraseña'), 'secreta123')
+    await user.click(within(dialogo).getByRole('button', { name: 'Crear' }))
+
+    expect(await within(dialogo).findByText('No tenés permiso para hacer esto.')).toBeInTheDocument()
+    expect(within(dialogo).queryByText(/forbidden/i)).toBeNull()
+  })
+})

@@ -864,3 +864,27 @@ El humano, el 2026-10-09: *«quiero que haya una pantalla en configuración dond
 **Cómo se adopta en un producto.** Subir el pin a 0.133.0 y reemplazar la función copiada por `import { nuevaClaveDeOperacion } from 'libra-ui/comercio/clave-de-operacion'`.
 
 **Lo que no cubre.** No cambia cómo cada pantalla decide cuándo renovar la clave (por intento, atada a la firma de los datos): eso sigue siendo de la pantalla.
+
+## ADR-046 — El 401/403 genérico del backend llega en castellano en el `ApiError` (0.134.0)
+
+**Problema.** El backend (`libraauth.session_auth` y FastAPI por defecto) contesta un 403 con `detail: "forbidden"` y un 401 con
+`"not authenticated"`: en inglés y sin decir qué hacer. `comercio/errores-http.ts` (ADR-013) ya lo traducía, pero sólo lo usaban tres
+pantallas; otras 62 del kit, y las de los productos, muestran `err.detail` tal cual. Medido en la demo de VentaLibra el 2026-10-10: el
+visitante (Encargado, con lectura de todo) intenta crear un usuario en Usuarios y el diálogo muestra «forbidden».
+
+**Qué ya existe.** La lista cerrada de `detail` genéricos y la traducción de `errores-http.ts`, que se mudan a `api-client.ts` sin cambios.
+
+**Decisión.**
+1. `ApiError` traduce el 401/403 genérico al construirse: «No tenés permiso para hacer esto.» y «Tu sesión venció. Volvé a iniciar
+   sesión.». Esos textos quedan en `detail` y en `message`, y el original, en `detailOriginal`. Con eso se arreglan todas las pantallas
+   de una vez, incluidas las de los productos que usan el cliente del kit.
+2. Sólo se traduce un texto de la lista cerrada, y sólo con status 401 o 403. Un texto propio del backend («No tenés permiso para marcar
+   productos que vencen.»), un `detail` objeto (los Términos pendientes) y cualquier otro status quedan como vinieron.
+3. `describeErrorHttp` queda como envoltorio (agrega «Error de conexión.» para lo que no es un `ApiError`), y `esDetalleGenerico` se
+   reexporta desde `comercio/errores-http` para no romper importaciones.
+
+**Tests.** `test/api-client.test.ts`: 403 y 401 genéricos, un 403 sin cuerpo, el upload, un texto propio, un 404 «forbidden» y los
+Términos. `test/Usuarios.test.tsx`: el alta rechazada se lee en castellano. Los de la traducción fallan sin el cambio.
+
+**Lo que no cubre.** El backend sigue mandando «forbidden»: un cliente que no sea el kit (curl, otra integración) lo ve igual. En la
+demo, el visitante sigue viendo los botones de Usuarios porque tiene lectura de todo; ahora el rechazo se explica.
