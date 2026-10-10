@@ -139,6 +139,46 @@ describe('errores', () => {
     expect(error.status).toBe(500)
   })
 
+  // ADR-046: el 401/403 GENÉRICO del backend («forbidden», «not authenticated») llega en inglés y sin decir qué hacer; 62 pantallas
+  // muestran `err.detail` tal cual. Se traduce en el `ApiError` y el original queda en `detailOriginal`.
+  it.each([
+    [403, { detail: 'forbidden' }, 'No tenés permiso para hacer esto.', 'forbidden'],
+    [403, { detail: 'Not enough permissions.' }, 'No tenés permiso para hacer esto.', 'Not enough permissions.'],
+    [401, { detail: 'not authenticated' }, 'Tu sesión venció. Volvé a iniciar sesión.', 'not authenticated'],
+  ])('🔴 un %i genérico llega traducido: %j', async (status, cuerpo, texto, original) => {
+    responde(cuerpo, { status })
+    const error = await api.post('/api/users', {}).catch((e) => e) as ApiError
+    expect(error.status).toBe(status)
+    expect(error.detail).toBe(texto)
+    expect(error.message).toBe(texto)
+    expect(error.detailOriginal).toBe(original)
+  })
+
+  it('un 403 sin cuerpo (statusText «Forbidden») también se traduce', async () => {
+    fetchMock.mockImplementation(() => Promise.resolve(new Response(null, { status: 403, statusText: 'Forbidden' })))
+    const error = await api.get('/api/x').catch((e) => e) as ApiError
+    expect(error.detail).toBe('No tenés permiso para hacer esto.')
+  })
+
+  it('un 403 con un texto propio del backend, o un 404 «forbidden», quedan como vinieron', async () => {
+    responde({ detail: 'No tenés permiso para marcar productos que vencen.' }, { status: 403 })
+    expect((await api.get('/api/x').catch((e) => e) as ApiError).detail).toBe('No tenés permiso para marcar productos que vencen.')
+    responde({ detail: 'forbidden' }, { status: 404 })
+    expect((await api.get('/api/x').catch((e) => e) as ApiError).detail).toBe('forbidden')
+  })
+
+  it('un 403 con `detail` objeto (Términos pendientes) no se toca', async () => {
+    responde({ detail: { code: 'terminos_pendientes', version: '3', mensaje: 'Falta aceptar los Términos' } }, { status: 403 })
+    const error = await api.get('/api/x').catch((e) => e) as ApiError
+    expect(error.detail).toBe('Falta aceptar los Términos')
+  })
+
+  it('el upload traduce igual', async () => {
+    responde({ detail: 'forbidden' }, { status: 403 })
+    const error = await api.postForm('/api/logo', new FormData()).catch((e) => e) as ApiError
+    expect(error.detail).toBe('No tenés permiso para hacer esto.')
+  })
+
   it('el 503 del corte de servicio llega como ApiError', async () => {
     // Contalibra/Restolibra cortan la API con 503 cuando el servicio esta
     // suspendido -- ver el middleware de web/app.py.

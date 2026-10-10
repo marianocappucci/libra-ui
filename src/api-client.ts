@@ -22,13 +22,52 @@ export class ApiError extends Error {
    *  `{code, version, mensaje}`, y es lo que distingue "faltan permisos" de
    *  "falta aceptar el contrato" — dos 403 que se ven iguales desde afuera. */
   detailData?: unknown
+  /** El `detail` tal cual lo mandó el backend, cuando `detail` es la traducción de un 401/403 genérico
+   *  («forbidden», «not authenticated»; ver `textoDeError`). En cualquier otro caso es igual a `detail`. */
+  detailOriginal: string
 
   constructor(status: number, detail: string, detailData?: unknown) {
-    super(detail)
+    const texto = textoDeError(status, detail, detailData)
+    super(texto)
     this.status = status
-    this.detail = detail
+    this.detail = texto
     this.detailData = detailData
+    this.detailOriginal = detail
   }
+}
+
+// ── 401/403 genéricos, en castellano (ADR-046) ────────────────────────────
+//
+// 🔑 **Se traduce acá, en el `ApiError`, y no pantalla por pantalla.** El backend (`libraauth.session_auth`, y FastAPI
+// por defecto) contesta un 403 con `detail: "forbidden"` y un 401 con `"not authenticated"`: en inglés y sin decir qué
+// hacer. 62 pantallas del kit (y las de los productos) muestran `err.detail` tal cual, así que la que no lo traducía
+// mostraba «forbidden» en rojo (medido en la demo de VentaLibra, Usuarios, 2026-10-10). Sólo se traduce un texto de la
+// lista cerrada: lo que el backend dice a propósito («No tenés permiso para marcar productos que vencen.») queda igual.
+
+/** Los `detail` GENÉRICOS que el backend manda en un 401/403 (en minúsculas, sin puntuación final): `forbidden` (403) y `not authenticated` (401) son los de `libraauth`
+ *  (`session_auth.py`) y los de FastAPI por defecto; el resto, los de uso común que una dependencia de seguridad puede soltar. **Lista explícita y cerrada**: cualquier otro
+ *  texto (en castellano o no) lo dijo el backend a propósito y se muestra tal cual. «No permissions» no está: no es un genérico conocido de la familia. */
+const DETALLES_GENERICOS = new Set([
+  'forbidden', 'not authenticated', 'unauthorized', 'not enough permissions', 'could not validate credentials',
+  'operation not permitted', 'permission denied', 'access denied',
+])
+
+/** ¿Es un `detail` genérico (o vacío: un 401/403 sin cuerpo no dice nada)? Se compara normalizado: minúsculas, sin espacios de más y sin punto final. */
+export const esDetalleGenerico = (texto: string) => {
+  const n = texto.toLowerCase().replace(/\s+/g, ' ').trim().replace(/[.!\s]+$/, '')
+  return n === '' || DETALLES_GENERICOS.has(n)
+}
+
+export const SIN_PERMISO = 'No tenés permiso para hacer esto.'
+export const SESION_VENCIDA = 'Tu sesión venció. Volvé a iniciar sesión.'
+
+/** El texto para mostrar de un error: el genérico de un 401/403 se reemplaza; todo lo demás (otro status, un texto
+ *  propio del backend, un `detail` objeto como el de los Términos pendientes) queda como vino. */
+function textoDeError(status: number, detail: string, detailData?: unknown): string {
+  const generico = (detailData === undefined || typeof detailData === 'string') && esDetalleGenerico(detail)
+  if (status === 403 && generico) return SIN_PERMISO
+  if (status === 401 && generico) return SESION_VENCIDA
+  return detail
 }
 
 // ── Sesión vencida ────────────────────────────────────────────────────────
