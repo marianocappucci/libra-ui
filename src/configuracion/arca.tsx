@@ -1026,7 +1026,7 @@ function ArcaTarjeta({
                 onPrueba={(ambiente, prueba) => cambiarPrueba(x.servicio, ambiente, prueba)}
               />
               {alPieDeServicio?.[x.servicio] && (
-                <div data-al-pie-de={x.servicio} className="mt-4 border-t pt-4">{alPieDeServicio[x.servicio]}</div>
+                <div data-al-pie-de={x.servicio} className="mt-4">{alPieDeServicio[x.servicio]}</div>
               )}
             </TabsContent>
           ))}

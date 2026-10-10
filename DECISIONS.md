@@ -918,7 +918,7 @@ El dueño, el 2026-10-10, mirando Configuración → Integraciones → ARCA / AF
 **Tests.** Nuevo `test/ArcaPestanas.test.tsx`: las pestañas con uno y con dos servicios, la URL (abrir, conservar el query, limpiar, valor inválido, «atrás», sin router), las etiquetas (tabla de ambientes y de servicios, y en pantalla), la pastilla y el ambiente guardado vs. el elegido, los avisos de cada pestaña, el resumen de la FCE y «Editar cuentas», los dos ambientes de un servicio y su grilla, y que «Probar» sobrevive al cambio de pestaña. Los existentes (`ArcaDosPares`, `ArcaFce`, `ArcaPedido`, `ArcaServicios`, `Configuracion`, `Configuracion-errores`) abren la pestaña antes de buscar un campo (`abrirPestana`, `test/helpers-arca.ts`) sin cambiar lo que verifican; «sin certificado no ofrece quitar» ahora mira las dos pestañas, porque en General no existe el botón y pasaría de rebote. El stub de `Tabs` reenvía `aria-label` de `TabsList`.
 
 **Contenido del producto al pie de un servicio.** `ArcaCard` acepta `alPieDeServicio` (`{ [servicio]: ReactNode }`, opcional): lo que el
-producto pone al pie de la pestaña de ese servicio, separado por una línea. Pedido del dueño: en LibraCargo, «Emitir Cartas de Porte
+producto pone al pie de la pestaña de ese servicio (sin marco propio: el producto trae el suyo). Pedido del dueño: en LibraCargo, «Emitir Cartas de Porte
 reales» va dentro de la pestaña «CTG y Carta de Porte», junto a los certificados que habilita, y no debajo de la tarjeta en todas las
 pestañas. Sin la prop no cambia nada; un servicio que el producto no tiene no muestra su pie.
 
