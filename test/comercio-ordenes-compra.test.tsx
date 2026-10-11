@@ -2,10 +2,11 @@
 // producto de la familia con este módulo, ver el docstring de `tipos.ts`.
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { Compras } from '../src/comercio/Compras'
 import { CompraDetalle } from '../src/comercio/CompraDetalle'
+import { _reiniciarRecepcionesEnMemoria } from '../src/comercio/recepcion-pendiente'
 import type { Deposito, Producto, Proveedor, PurchaseOrder, PurchaseReceipt } from '../src/comercio/tipos'
 import { cuerpoDe, elegirEnBuscable, fetchMock, montar, pedidas, prepararFetch, responder } from './helpers-pantallas'
 
@@ -21,9 +22,13 @@ const LINEA = { item_id: 1, quantity_ordered: '10', quantity_received: '0', pend
 const ORDEN_CON_LINEA: PurchaseOrder = { ...ORDEN_VACIA, status: 'sent', items: [LINEA] }
 const ORDEN_RECIBIDA: PurchaseOrder = { ...ORDEN_CON_LINEA, status: 'received', items: [{ ...LINEA, quantity_received: '10', pending_quantity: '0' }], is_fully_received: true }
 
+const RECIBIR = 'POST /api/purchase-receipts/recibir'
+
 beforeEach(() => {
   cleanup()
   prepararFetch()
+  _reiniciarRecepcionesEnMemoria()
+  sessionStorage.clear()
 })
 
 describe('Compras', () => {
@@ -62,10 +67,10 @@ describe('CompraDetalle', () => {
       items: [{ item_id: 1, quantity: '3', unit_cost: '900', lot_code: null, expires_at: null }],
       received_at: null, document_reference: null,
     }
-    const recepcionCreada: PurchaseReceipt = {
-      id: 50, proveedor_id: 1, purchase_order_id: 10, status: 'draft', items: [], received_at: null, document_reference: null,
+    const recepcionConfirmada: PurchaseReceipt = {
+      id: 50, proveedor_id: 1, purchase_order_id: 10, status: 'confirmed',
+      items: [{ item_id: 1, quantity: '10', unit_cost: '900', lot_code: null, expires_at: null }], received_at: '2026-09-27T12:00:00', document_reference: null,
     }
-    const recepcionConfirmada: PurchaseReceipt = { ...recepcionCreada, status: 'confirmed', received_at: '2026-09-27T12:00:00' }
 
     let orden = ORDEN_VACIA
     let recepciones = [recepcionSuelta]
@@ -76,9 +81,7 @@ describe('CompraDetalle', () => {
       '/api/depositos': [DEPOSITO],
       '/api/purchase-receipts?purchase_order_id=10': () => recepciones,
       'POST /api/purchase-orders/10/items': () => { orden = ORDEN_CON_LINEA; return orden },
-      'POST /api/purchase-receipts': recepcionCreada,
-      'POST /api/purchase-receipts/50/items': { ...recepcionCreada, items: [{ item_id: 1, quantity: '10', unit_cost: '900', lot_code: null, expires_at: null }] },
-      'POST /api/purchase-receipts/50/confirm': () => { recepciones = [recepcionSuelta, recepcionConfirmada]; return recepcionConfirmada },
+      [RECIBIR]: () => { recepciones = [recepcionSuelta, recepcionConfirmada]; return { ...recepcionConfirmada, repetida: false } },
       'POST /api/purchase-receipts/40/confirm': () => { recepciones = [{ ...recepcionSuelta, status: 'confirmed' }]; return { ...recepcionSuelta, status: 'confirmed' } },
     })
     const user = userEvent.setup()
@@ -96,10 +99,13 @@ describe('CompraDetalle', () => {
     await user.click(screen.getByRole('button', { name: /Recibir mercadería/ }))
     const recibir = screen.getByRole('dialog')
     await user.click(within(recibir).getByRole('button', { name: 'Recibir' }))
-    await waitFor(() => expect(pedidas()).toContain('POST /api/purchase-receipts/50/confirm'))
-    expect(cuerpoDe('POST /api/purchase-receipts')).toEqual({ proveedor_id: 1, purchase_order_id: 10, document_reference: null })
-    expect(cuerpoDe('POST /api/purchase-receipts/50/items')).toEqual({ item_id: 1, quantity: '10', unit_cost: '900' })
-    expect(cuerpoDe('POST /api/purchase-receipts/50/confirm')).toEqual({ deposito_id: 1 })
+    await waitFor(() => expect(pedidas()).toContain(RECIBIR))
+    // Una sola llamada con la recepción entera y la clave del intento (no las tres de antes: crear, cargar líneas, confirmar).
+    expect(cuerpoDe(RECIBIR)).toEqual({
+      proveedor_id: 1, purchase_order_id: 10, document_reference: null, deposito_id: 1,
+      clave_operacion: expect.stringMatching(/^[0-9a-f-]{36}$/), items: [{ item_id: 1, quantity: '10', unit_cost: '900' }],
+    })
+    expect(pedidas().filter((p) => p.startsWith('POST /api/purchase-receipts'))).toEqual([RECIBIR])
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
 
     // La recepción suelta (ajena a esta orden) ofrece su propio "Confirmar".
@@ -138,8 +144,7 @@ describe('CompraDetalle: recibir mercadería con lote y vencimiento', () => {
   const linea = (item_id: number, pendiente = '10') => ({ ...LINEA, item_id, quantity_ordered: pendiente, pending_quantity: pendiente })
   // Yerba (sin `vence` en la respuesta: un producto que no usa vencimientos), Leche (vence) y Sal (vence: false).
   const ORDEN_TRES: PurchaseOrder = { ...ORDEN_CON_LINEA, items: [linea(1), linea(2, '6'), linea(3, '4')] }
-  const RECEPCION: PurchaseReceipt = { id: 50, proveedor_id: 1, purchase_order_id: 10, status: 'draft', items: [], received_at: null, document_reference: null }
-  const RUTAS_ITEMS = '/api/purchase-receipts/50/items'
+  const RECEPCION: PurchaseReceipt = { id: 50, proveedor_id: 1, purchase_order_id: 10, status: 'confirmed', items: [], received_at: '2026-09-27T12:00:00', document_reference: null }
 
   function base(extra: Record<string, unknown> = {}, productos: Producto[] = [PRODUCTO, LECHE, SAL]) {
     responder({
@@ -148,9 +153,7 @@ describe('CompraDetalle: recibir mercadería con lote y vencimiento', () => {
       '/api/proveedores': [PROVEEDOR],
       '/api/depositos': [DEPOSITO],
       '/api/purchase-receipts?purchase_order_id=10': [],
-      'POST /api/purchase-receipts': RECEPCION,
-      [`POST ${RUTAS_ITEMS}`]: RECEPCION,
-      'POST /api/purchase-receipts/50/confirm': { ...RECEPCION, status: 'confirmed' },
+      [RECIBIR]: { ...RECEPCION, repetida: false },
       ...extra,
     })
   }
@@ -159,8 +162,8 @@ describe('CompraDetalle: recibir mercadería con lote y vencimiento', () => {
     await user.click(await screen.findByRole('button', { name: /Recibir mercadería/ }))
     return screen.getByRole('dialog')
   }
-  const enviosDeLineas = () => pedidas().map((p, i) => ({ p, i })).filter(({ p }) => p === `POST ${RUTAS_ITEMS}`)
-    .map(({ i }) => JSON.parse(String((fetchMock.mock.calls[i][1] as RequestInit).body)) as Record<string, unknown>)
+  /** Las líneas de la (única) recepción que se mandó. */
+  const enviosDeLineas = () => (cuerpoDe(RECIBIR).items as Record<string, unknown>[])
 
   it('los campos «Lote» y «Vencimiento» aparecen sólo en las líneas de productos que vencen (vence === true): ni sin `vence` ni con vence: false', async () => {
     base()
@@ -180,16 +183,15 @@ describe('CompraDetalle: recibir mercadería con lote y vencimiento', () => {
   it('un producto que no vence no cambia nada: el modal y el cuerpo de la línea son los de siempre (sin lot_code ni expires_at)', async () => {
     responder({
       '/api/purchase-orders/10': ORDEN_CON_LINEA, '/api/productos?solo_activos=true': [PRODUCTO], '/api/proveedores': [PROVEEDOR],
-      '/api/depositos': [DEPOSITO], '/api/purchase-receipts?purchase_order_id=10': [], 'POST /api/purchase-receipts': RECEPCION,
-      [`POST ${RUTAS_ITEMS}`]: RECEPCION, 'POST /api/purchase-receipts/50/confirm': { ...RECEPCION, status: 'confirmed' },
+      '/api/depositos': [DEPOSITO], '/api/purchase-receipts?purchase_order_id=10': [], [RECIBIR]: { ...RECEPCION, repetida: false },
     })
     const user = userEvent.setup()
     const recibir = await abrirRecibir(user)
     expect(within(recibir).queryByText('Lote')).toBeNull()
     expect(within(recibir).queryByText('Vencimiento')).toBeNull()
     await user.click(within(recibir).getByRole('button', { name: 'Recibir' }))
-    await waitFor(() => expect(pedidas()).toContain('POST /api/purchase-receipts/50/confirm'))
-    expect(cuerpoDe(`POST ${RUTAS_ITEMS}`)).toEqual({ item_id: 1, quantity: '10', unit_cost: '900' })
+    await waitFor(() => expect(pedidas()).toContain(RECIBIR))
+    expect(enviosDeLineas()).toEqual([{ item_id: 1, quantity: '10', unit_cost: '900' }])
   })
 
   it('un producto que vence con los dos campos vacíos también se recibe como hoy (sin lot_code ni expires_at)', async () => {
@@ -197,7 +199,7 @@ describe('CompraDetalle: recibir mercadería con lote y vencimiento', () => {
     const user = userEvent.setup()
     const recibir = await abrirRecibir(user)
     await user.click(within(recibir).getByRole('button', { name: 'Recibir' }))
-    await waitFor(() => expect(pedidas()).toContain('POST /api/purchase-receipts/50/confirm'))
+    await waitFor(() => expect(pedidas()).toContain(RECIBIR))
     expect(enviosDeLineas()).toEqual([
       { item_id: 1, quantity: '10', unit_cost: '900' },
       { item_id: 2, quantity: '6', unit_cost: '900' },
@@ -215,13 +217,13 @@ describe('CompraDetalle: recibir mercadería con lote y vencimiento', () => {
     fireEvent.change(within(recibir).getByLabelText('Cantidad a recibir de Leche'), { target: { value: '5' } })
     fireEvent.change(within(recibir).getByLabelText('Costo unitario de Leche'), { target: { value: '120.5' } })
     await user.click(within(recibir).getByRole('button', { name: 'Recibir' }))
-    await waitFor(() => expect(pedidas()).toContain('POST /api/purchase-receipts/50/confirm'))
+    await waitFor(() => expect(pedidas()).toContain(RECIBIR))
     expect(enviosDeLineas()).toEqual([
       { item_id: 1, quantity: '10', unit_cost: '900' },
       { item_id: 2, quantity: '5', unit_cost: '120.5', lot_code: 'L-0930', expires_at: '2026-12-31' },
       { item_id: 3, quantity: '4', unit_cost: '900' },
     ])
-    expect(cuerpoDe('POST /api/purchase-receipts/50/confirm')).toEqual({ deposito_id: 1 })
+    expect(cuerpoDe(RECIBIR)).toMatchObject({ deposito_id: 1 })
   })
 
   it('o los dos o ninguno: un lote sin fecha o una fecha sin lote avisa, deshabilita «Recibir» y no manda nada', async () => {
@@ -236,7 +238,7 @@ describe('CompraDetalle: recibir mercadería con lote y vencimiento', () => {
     expect((await within(recibir).findByRole('alert')).textContent).toBe(AVISO)
     expect(recibirBtn().disabled).toBe(true)
     await user.click(recibirBtn())
-    expect(pedidas()).not.toContain('POST /api/purchase-receipts')
+    expect(pedidas()).not.toContain(RECIBIR)
 
     fireEvent.change(within(recibir).getByLabelText('Lote de Leche'), { target: { value: '   ' } })
     expect(within(recibir).queryByRole('alert')).toBeNull()
@@ -250,7 +252,7 @@ describe('CompraDetalle: recibir mercadería con lote y vencimiento', () => {
     fireEvent.change(within(recibir).getByLabelText('Lote de Leche'), { target: { value: 'L-1' } })
     expect(within(recibir).queryByRole('alert')).toBeNull()
     expect(recibirBtn().disabled).toBe(false)
-    expect(pedidas()).not.toContain('POST /api/purchase-receipts')
+    expect(pedidas()).not.toContain(RECIBIR)
   })
 
   it('una fecha imposible o a medio escribir (el input nativo entrega vacío con badInput) se avisa aparte y bloquea', async () => {
@@ -268,7 +270,7 @@ describe('CompraDetalle: recibir mercadería con lote y vencimiento', () => {
     fireEvent.change(fecha, { target: { value: '2026-12-30' } })
     expect(within(recibir).queryByRole('alert')).toBeNull()
     await user.click(within(recibir).getByRole('button', { name: 'Recibir' }))
-    await waitFor(() => expect(pedidas()).toContain('POST /api/purchase-receipts/50/confirm'))
+    await waitFor(() => expect(pedidas()).toContain(RECIBIR))
     expect(enviosDeLineas()[1]).toEqual({ item_id: 2, quantity: '6', unit_cost: '900', lot_code: 'L-1', expires_at: '2026-12-30' })
   })
 
@@ -281,7 +283,7 @@ describe('CompraDetalle: recibir mercadería con lote y vencimiento', () => {
     fireEvent.change(within(recibir).getByLabelText('Cantidad a recibir de Leche'), { target: { value: '0' } })
     expect(within(recibir).queryByRole('alert')).toBeNull()
     await user.click(within(recibir).getByRole('button', { name: 'Recibir' }))
-    await waitFor(() => expect(pedidas()).toContain('POST /api/purchase-receipts/50/confirm'))
+    await waitFor(() => expect(pedidas()).toContain(RECIBIR))
     expect(enviosDeLineas().map((l) => l.item_id)).toEqual([1, 3])
   })
 
@@ -300,23 +302,23 @@ describe('CompraDetalle: recibir mercadería con lote y vencimiento', () => {
     expect(pedidas().filter((p) => p.includes('/api/productos'))).toHaveLength(1)
   })
 
-  it('una recepción cortada a mitad sigue igual: el error se ve, la recepción queda en borrador, sin confirmar, y las líneas ya enviadas llevaron su lote', async () => {
-    let n = 0
+  it('un rechazo del motor se ve, no queda nada pendiente y el diálogo sigue abierto con lo tipeado (ya no hay recepción a medias: es una sola transacción)', async () => {
     base({
-      [`POST ${RUTAS_ITEMS}`]: () => { n += 1; return n === 3 ? { status: 409, detail: 'la recepción ya no admite líneas' } : RECEPCION },
-      '/api/purchase-receipts?purchase_order_id=10': [{ ...RECEPCION, items: [{ item_id: 1, quantity: '10', unit_cost: '900', lot_code: null, expires_at: null }] }],
+      [RECIBIR]: { status: 422, detail: 'el producto 2 no existe' },
+      '/api/purchase-receipts?purchase_order_id=10': [],
     })
     const user = userEvent.setup()
     const recibir = await abrirRecibir(user)
     fireEvent.change(within(recibir).getByLabelText('Lote de Leche'), { target: { value: 'L-1' } })
     fireEvent.change(within(recibir).getByLabelText('Vencimiento de Leche'), { target: { value: '2026-12-31' } })
     await user.click(within(recibir).getByRole('button', { name: 'Recibir' }))
-    expect(await within(recibir).findByText('la recepción ya no admite líneas')).toBeTruthy()
-    expect(pedidas()).not.toContain('POST /api/purchase-receipts/50/confirm')
+    expect(await within(recibir).findByText('el producto 2 no existe')).toBeTruthy()
     expect(enviosDeLineas()[1]).toMatchObject({ item_id: 2, lot_code: 'L-1', expires_at: '2026-12-31' })
-    // El diálogo sigue abierto con lo tipeado y la recepción en borrador aparece en «Recepciones de esta orden».
+    expect(pedidas().filter((p) => p.startsWith('POST /api/purchase-receipts'))).toEqual([RECIBIR])
+    // El diálogo sigue abierto con lo tipeado, sin ofrecer reenviar nada: el 422 dice que no se escribió.
     expect((within(recibir).getByLabelText('Lote de Leche') as HTMLInputElement).value).toBe('L-1')
-    expect(await screen.findByText('Borrador')).toBeTruthy()
+    expect(within(recibir).queryByRole('button', { name: 'Reenviar el intento anterior' })).toBeNull()
+    expect(sessionStorage.getItem('libra-ui:compras:recepciones-pendientes')).toBe('{}')
   })
 
   describe('un producto de la orden que no está en la lista de activos (vencimiento desconocido)', () => {
@@ -338,7 +340,7 @@ describe('CompraDetalle: recibir mercadería con lote y vencimiento', () => {
       expect(within(recibir).queryByLabelText('Lote de Yerba 1kg')).toBeNull()
       // Vacíos: se recibe como hoy.
       await user.click(within(recibir).getByRole('button', { name: 'Recibir' }))
-      await waitFor(() => expect(pedidas()).toContain('POST /api/purchase-receipts/50/confirm'))
+      await waitFor(() => expect(pedidas()).toContain(RECIBIR))
       expect(enviosDeLineas()).toEqual([
         { item_id: 1, quantity: '10', unit_cost: '900' },
         { item_id: 4, quantity: '5', unit_cost: '900' },
@@ -354,7 +356,7 @@ describe('CompraDetalle: recibir mercadería con lote y vencimiento', () => {
       expect((within(recibir).getByRole('button', { name: 'Recibir' }) as HTMLButtonElement).disabled).toBe(true)
       fireEvent.change(within(recibir).getByLabelText('Lote de #4'), { target: { value: 'D-9' } })
       await user.click(within(recibir).getByRole('button', { name: 'Recibir' }))
-      await waitFor(() => expect(pedidas()).toContain('POST /api/purchase-receipts/50/confirm'))
+      await waitFor(() => expect(pedidas()).toContain(RECIBIR))
       expect(enviosDeLineas()[1]).toEqual({ item_id: 4, quantity: '5', unit_cost: '900', lot_code: 'D-9', expires_at: '2026-11-30' })
     })
 
@@ -365,7 +367,7 @@ describe('CompraDetalle: recibir mercadería con lote y vencimiento', () => {
       expect(within(recibir).queryByLabelText(/^Lote de /)).toBeNull()
       expect(within(recibir).queryByText(AYUDA)).toBeNull()
       await user.click(within(recibir).getByRole('button', { name: 'Recibir' }))
-      await waitFor(() => expect(pedidas()).toContain('POST /api/purchase-receipts/50/confirm'))
+      await waitFor(() => expect(pedidas()).toContain(RECIBIR))
       expect(enviosDeLineas()).toEqual([
         { item_id: 1, quantity: '10', unit_cost: '900' },
         { item_id: 4, quantity: '5', unit_cost: '900' },
@@ -390,3 +392,182 @@ describe('CompraDetalle: recibir mercadería con lote y vencimiento', () => {
   })
 })
 
+
+// ── Idempotencia de «Recibir mercadería» (ADR-045): una clave por intento, y el intento incierto guardado ─────────────────
+describe('CompraDetalle: recibir mercadería no se duplica en un reintento (clave_operacion)', () => {
+  const RECEPCION: PurchaseReceipt = {
+    id: 50, proveedor_id: 1, purchase_order_id: 10, status: 'confirmed',
+    items: [{ item_id: 1, quantity: '10', unit_cost: '900', lot_code: null, expires_at: null }], received_at: '2026-09-27T12:00:00', document_reference: null,
+  }
+  const BOTON_REENVIAR = { name: 'Reenviar el intento anterior' }
+  const claveDe = (i: number) => (JSON.parse(String((fetchMock.mock.calls.filter((c) => (c[1] as RequestInit | undefined)?.method === 'POST')[i][1] as RequestInit).body)) as { clave_operacion: string }).clave_operacion
+  const intentos = () => pedidas().filter((p) => p === RECIBIR).length
+
+  function base(extra: Record<string, unknown> = {}) {
+    responder({
+      '/api/purchase-orders/10': ORDEN_CON_LINEA,
+      '/api/productos?solo_activos=true': [PRODUCTO],
+      '/api/proveedores': [PROVEEDOR],
+      '/api/depositos': [DEPOSITO],
+      '/api/purchase-receipts?purchase_order_id=10': [],
+      [RECIBIR]: { ...RECEPCION, repetida: false },
+      ...extra,
+    })
+  }
+  async function abrir(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(await screen.findByRole('button', { name: /Recibir mercadería/ }))
+    return screen.getByRole('dialog')
+  }
+  /** Un envío que se corta sin respuesta la primera vez y después contesta lo que se le diga. */
+  function cortaUnaVez(despues: unknown) {
+    let n = 0
+    return () => { n += 1; return n === 1 ? '!caida' : despues }
+  }
+
+  it('cada intento manda una clave nueva (un UUID): dos recepciones legítimas seguidas no comparten clave', async () => {
+    base()
+    const user = userEvent.setup()
+    montar('/compras/10', <CompraDetalle />)
+    const dialogo = await abrir(user)
+    await user.click(within(dialogo).getByRole('button', { name: 'Recibir' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    const primera = claveDe(0)
+    expect(primera).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+
+    const otro = await abrir(user)
+    await user.click(within(otro).getByRole('button', { name: 'Recibir' }))
+    await waitFor(() => expect(intentos()).toBe(2))
+    expect(claveDe(1)).not.toBe(primera)
+  })
+
+  it('si se corta sin respuesta NO se sabe si llegó: avisa, guarda el intento y ofrece reenviarlo; al reenviar va la MISMA clave y el MISMO cuerpo', async () => {
+    base({ [RECIBIR]: cortaUnaVez({ ...RECEPCION, repetida: true }) })
+    const user = userEvent.setup()
+    montar('/compras/10', <CompraDetalle />)
+    const dialogo = await abrir(user)
+    fireEvent.change(within(dialogo).getByLabelText('Cantidad a recibir de Yerba 1kg'), { target: { value: '7' } })
+    await user.click(within(dialogo).getByRole('button', { name: 'Recibir' }))
+
+    expect(await within(dialogo).findByText(/No se sabe si se llegó a registrar/)).toBeTruthy()
+    expect(within(dialogo).getByRole('status').textContent).toMatch(/intento anterior de recibir esta orden sin confirmar/)
+    expect(within(dialogo).getByText(/Yerba 1kg: 7/)).toBeTruthy()
+    // El formulario no se puede tocar mientras haya un intento incierto: sólo reenviar o descartar.
+    expect(within(dialogo).queryByLabelText('Cantidad a recibir de Yerba 1kg')).toBeNull()
+    expect(within(dialogo).queryByRole('button', { name: 'Recibir' })).toBeNull()
+
+    await user.click(within(dialogo).getByRole('button', BOTON_REENVIAR))
+    await waitFor(() => expect(intentos()).toBe(2))
+    expect(claveDe(1)).toBe(claveDe(0))
+    const cuerpos = fetchMock.mock.calls.filter((c) => (c[1] as RequestInit | undefined)?.method === 'POST').map((c) => JSON.parse(String((c[1] as RequestInit).body)))
+    expect(cuerpos[1]).toEqual(cuerpos[0])
+    expect(cuerpos[1].items).toEqual([{ item_id: 1, quantity: '7', unit_cost: '900' }])
+
+    // El motor contestó `repetida`: el diálogo se cierra, se le dice a la persona que no se cargó dos veces y no queda nada pendiente.
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect((await screen.findByText(/ya estaba registrada/)).getAttribute('role')).toBe('status')
+    expect(sessionStorage.getItem('libra-ui:compras:recepciones-pendientes')).toBe('{}')
+  })
+
+  it('un 5xx también es incierto (puede haber escrito antes de fallar): queda guardado para reenviar', async () => {
+    base({ [RECIBIR]: { status: 502, detail: 'Bad Gateway' } })
+    const user = userEvent.setup()
+    montar('/compras/10', <CompraDetalle />)
+    const dialogo = await abrir(user)
+    await user.click(within(dialogo).getByRole('button', { name: 'Recibir' }))
+    expect(await within(dialogo).findByText(/Bad Gateway.*No se sabe si se llegó a registrar/)).toBeTruthy()
+    expect(within(dialogo).getByRole('button', BOTON_REENVIAR)).toBeTruthy()
+  })
+
+  it('un 4xx es definitivo (no se escribió): no queda pendiente y volver a apretar con los mismos datos REUSA la clave; si se cambia algo, es otra recepción y la clave cambia', async () => {
+    let n = 0
+    base({ [RECIBIR]: () => { n += 1; return n <= 2 ? { status: 409, detail: 'la orden ya no admite recepciones' } : { ...RECEPCION, repetida: false } } })
+    const user = userEvent.setup()
+    montar('/compras/10', <CompraDetalle />)
+    const dialogo = await abrir(user)
+    await user.click(within(dialogo).getByRole('button', { name: 'Recibir' }))
+    expect(await within(dialogo).findByText('la orden ya no admite recepciones')).toBeTruthy()
+    expect(within(dialogo).queryByRole('button', BOTON_REENVIAR)).toBeNull()
+
+    await user.click(within(dialogo).getByRole('button', { name: 'Recibir' }))    // mismos datos
+    await waitFor(() => expect(intentos()).toBe(2))
+    expect(claveDe(1)).toBe(claveDe(0))
+
+    fireEvent.change(within(dialogo).getByLabelText('Cantidad a recibir de Yerba 1kg'), { target: { value: '4' } })   // otros datos
+    await user.click(within(dialogo).getByRole('button', { name: 'Recibir' }))
+    await waitFor(() => expect(intentos()).toBe(3))
+    expect(claveDe(2)).not.toBe(claveDe(0))
+  })
+
+  it('el intento incierto sobrevive a cerrar el diálogo y a recargar la pestaña: al reabrir se ofrece reenviarlo, con su clave', async () => {
+    base({ [RECIBIR]: cortaUnaVez({ ...RECEPCION, repetida: true }) })
+    const user = userEvent.setup()
+    montar('/compras/10', <CompraDetalle />)
+    const dialogo = await abrir(user)
+    await user.click(within(dialogo).getByRole('button', { name: 'Recibir' }))
+    await within(dialogo).findByRole('button', BOTON_REENVIAR)
+    const clave = claveDe(0)
+    await user.click(within(dialogo).getByRole('button', { name: 'Cancelar' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+
+    // «Recargar la pestaña»: se pierde la memoria, queda lo de `sessionStorage`.
+    cleanup()
+    _reiniciarRecepcionesEnMemoria()
+    montar('/compras/10', <CompraDetalle />)
+    const reabierto = await abrir(user)
+    expect(within(reabierto).getByRole('status').textContent).toMatch(/intento anterior de recibir esta orden sin confirmar/)
+    await user.click(within(reabierto).getByRole('button', BOTON_REENVIAR))
+    await waitFor(() => expect(intentos()).toBe(2))
+    expect(claveDe(1)).toBe(clave)
+  })
+
+  it('descartar el intento anterior pide confirmación con la advertencia; después se puede recibir de nuevo y es OTRA clave', async () => {
+    base({ [RECIBIR]: cortaUnaVez({ ...RECEPCION, repetida: false }) })
+    const user = userEvent.setup()
+    montar('/compras/10', <CompraDetalle />)
+    const dialogo = await abrir(user)
+    await user.click(within(dialogo).getByRole('button', { name: 'Recibir' }))
+    await within(dialogo).findByRole('button', BOTON_REENVIAR)
+
+    await user.click(within(dialogo).getByRole('button', { name: 'Descartar el intento anterior…' }))
+    expect(within(dialogo).getByRole('alert').textContent).toMatch(/podrías duplicar el ingreso de stock/)
+    await user.click(within(dialogo).getByRole('button', { name: 'No, volver' }))
+    expect(within(dialogo).getByRole('button', BOTON_REENVIAR)).toBeTruthy()   // volver no descarta
+
+    await user.click(within(dialogo).getByRole('button', { name: 'Descartar el intento anterior…' }))
+    await user.click(within(dialogo).getByRole('button', { name: 'Sí, descartar el intento anterior' }))
+    expect(sessionStorage.getItem('libra-ui:compras:recepciones-pendientes')).toBe('{}')
+
+    await user.click(within(dialogo).getByRole('button', { name: 'Recibir' }))
+    await waitFor(() => expect(intentos()).toBe(2))
+    expect(claveDe(1)).not.toBe(claveDe(0))
+  })
+
+  it('sin dónde guardar el intento (sessionStorage falla) NO se envía: con la respuesta perdida un reintento sería otra recepción', async () => {
+    base()
+    const user = userEvent.setup()
+    montar('/compras/10', <CompraDetalle />)
+    const dialogo = await abrir(user)
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('cuota', 'QuotaExceededError') })
+    try {
+      await user.click(within(dialogo).getByRole('button', { name: 'Recibir' }))
+      expect(await within(dialogo).findByText(/No se pudo guardar el intento en este navegador/)).toBeTruthy()
+      expect(intentos()).toBe(0)
+      expect((within(dialogo).getByRole('button', { name: 'Recibir' }) as HTMLButtonElement).disabled).toBe(false)
+    } finally {
+      setItem.mockRestore()
+    }
+    // Con el storage de vuelta, el mismo botón envía.
+    await user.click(within(dialogo).getByRole('button', { name: 'Recibir' }))
+    await waitFor(() => expect(intentos()).toBe(1))
+  })
+
+  it('la recepción de siempre sigue siendo una sola llamada y una respuesta sin `repetida` (un motor viejo) no rompe el cierre', async () => {
+    base({ [RECIBIR]: RECEPCION })
+    const user = userEvent.setup()
+    montar('/compras/10', <CompraDetalle />)
+    const dialogo = await abrir(user)
+    await user.click(within(dialogo).getByRole('button', { name: 'Recibir' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(screen.queryByText(/ya estaba registrada/)).toBeNull()
+  })
+})

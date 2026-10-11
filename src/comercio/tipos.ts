@@ -541,6 +541,9 @@ export type PurchaseReceipt = {
   document_reference: string | null
 }
 
+/** La respuesta de `POST /api/purchase-receipts/recibir`: la recepción confirmada y, si la `clave_operacion` ya la había registrado (un reintento), `repetida: true` y nada se movió. */
+export type RecepcionRecibida = PurchaseReceipt & { repetida: boolean }
+
 export type ClienteConSaldoCC = { id: number; name: string; cuit_dni: string; saldo: number }
 
 export type MovimientoCC = {
