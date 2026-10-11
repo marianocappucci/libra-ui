@@ -932,3 +932,38 @@ guardar (confirmado por el dueño: lo más seguro). Así la pantalla nunca anunc
 - El pedido de certificado, «Probar» y la subida no cambian de lugar lógico, sólo de pestaña.
 
 **Cómo se adopta.** Subir el pin a 0.135.0; no hay nada que tocar en los productos.
+
+## ADR-048 — `Sucursales` muestra las sucursales contratadas y frena el alta al llegar al tope (`rutaDelLimite`, 0.136.0)
+
+El motor (`libracore.limites`, ADR-041) guarda cuántas sucursales contrató la instancia y el abono se cobra por ellas: al pasar el tope el alta
+(y la reactivación) dan 409 con «Tu plan incluye N sucursales. Para sumar otra, comunicate con nosotros.». Hasta acá el cliente se enteraba recién
+al intentar el alta. VentaLibra monta `GET /api/limites/sucursales` → `{contratadas: int | null, activas: int}` (lectura de admin o del token
+de servicio; ADR-073 del producto).
+
+**Qué ya existe** (se miró antes, `reglas/producto.md`): ninguna pantalla del kit lee ese endpoint (`git grep` de «limite», «contratad», «sinAlta»
+sólo da el estado de la subida del resguardo, que no tiene que ver). `Sucursales` ya muestra el `detail` de un 409 del alta en el formulario
+(`formError`), y `soloLectura` ya esconde el alta.
+
+**Decisión.**
+1. `Sucursales` recibe `rutaDelLimite?: string`. **Es opt-in**: sin ella no se pide nada (otros productos que usan la pantalla y no montan el router
+   no hacen un pedido que daría 404). El kit hace la lectura y no el producto porque tiene que releerla tras un alta o un 409.
+2. Con tope, una línea sobria bajo el título: «N de M sucursales contratadas» (en singular con M = 1: «1 de 1 sucursal contratada», como el
+   mensaje del motor). Es texto `muted`, sin tono de alerta: es información, no un error.
+3. Con `activas >= contratadas` y el alta disponible: «Nueva sucursal» queda deshabilitada y debajo va el motivo con el mismo texto que
+   `mensaje_de_limite` (`mensajeDeLimite`, exportada, copia del motor; si cambia allá, cambia acá). El botón apunta al texto con `aria-describedby`.
+   Editar, predeterminar y «Ver depósitos» siguen andando: el tope sólo frena sumar otra.
+4. **Un error de lectura nunca bloquea.** 403 (quien no administra), 500, red caída, `contratadas: null` o una forma inesperada: la pantalla queda
+   exactamente como antes, sin aviso ni error. El backend sigue siendo la guarda real.
+5. Se relee el límite después de un alta o edición exitosa y después de un 409 (alguien pudo usar el cupo). Si el alta igual da 409, se muestra el
+   `detail` del backend en el formulario, como antes.
+6. En `soloLectura` no hay botón que deshabilitar: se ve el cupo (si la lectura anduvo) pero no el motivo.
+
+**Tests.** `test/comercio-sucursales.test.tsx` (`Sucursales contratadas`, 9): sin la prop no pide nada; sin tope igual a hoy; con cupo; en el tope
+(botón deshabilitado, texto, `aria-describedby`, el diálogo no abre); pasado del tope y singular; lectura caída (403, 500, red, forma rara) igual a hoy;
+409 con `detail` y relectura; relectura tras un alta; sólo lectura; paridad del texto. Los de comportamiento fallan sin el cambio.
+
+**Lo que no cubre.** El texto de `mensajeDeLimite` está duplicado a mano con el del motor (el endpoint no lo devuelve). No se probó en un navegador
+real. `SucursalDetalle` (alta de depósitos) no tiene tope y no cambia.
+
+**Cómo se adopta.** Subir el pin a 0.136.0 y pasar `rutaDelLimite="/api/limites/sucursales"` en la página de Sucursales de VentaLibra. Los demás
+productos no tocan nada.

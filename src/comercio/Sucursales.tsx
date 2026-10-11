@@ -2,6 +2,10 @@
 // predeterminar. Una sucursal nace con su primer depósito y NO se elimina, sólo se da de baja (el backend impide
 // bajar la última, la predeterminada, una con turno abierto o una con existencias). El stock vive en los depósitos:
 // «Ver depósitos» lleva al detalle. `Depositos` sigue siendo la pantalla plana de Contalibra.
+//
+// **Sucursales contratadas (ADR-048, 0.136.0).** Con `rutaDelLimite` la pantalla lee «activas vs contratadas»
+// (`libracore.limites`, ADR-041 del motor) y, si hay tope, lo muestra; al llegar al tope deshabilita el alta y dice por qué. Es una ayuda:
+// el que corta es el backend (409), cuyo mensaje se muestra en el formulario. Sin la prop, sin tope o con la lectura caída no cambia nada.
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeftRight, Check, Eye, MapPin, Pencil, Plus, Star } from 'lucide-react'
@@ -20,6 +24,23 @@ import {
   Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog'
 
+/** Lo que contesta `GET /api/limites/sucursales` del motor: `contratadas` es `null` cuando la instancia no tiene tope. */
+export type LimiteDeSucursales = { contratadas: number | null; activas: number }
+
+/** El mismo texto que `libracore.limites.mensaje_de_limite` (el que da el 409 del alta): si cambia allá, cambia acá. */
+export function mensajeDeLimite(contratadas: number): string {
+  const plural = contratadas === 1 ? 'sucursal' : 'sucursales'
+  return `Tu plan incluye ${contratadas} ${plural}. Para sumar otra, comunicate con nosotros.`
+}
+
+/** La lectura del límite, o `null` si no hay tope o la respuesta no es lo que se espera. Nunca lanza. */
+function limiteLeido(dato: unknown): LimiteDeSucursales | null {
+  const d = dato as Partial<LimiteDeSucursales> | null
+  if (!d || typeof d.contratadas !== 'number' || !Number.isInteger(d.contratadas) || d.contratadas < 1) return null
+  if (typeof d.activas !== 'number' || !Number.isFinite(d.activas)) return null
+  return { contratadas: d.contratadas, activas: d.activas }
+}
+
 export type SucursalesProps = {
   /** A dónde lleva «Ver depósitos» de cada sucursal. */
   rutaDelDetalle?: (id: number) => string
@@ -31,6 +52,10 @@ export type SucursalesProps = {
   titulo?: string
   /** El texto del botón de alta. */
   etiquetaNuevo?: string
+  /** Dónde leer las sucursales contratadas (`GET`, en el motor `/api/limites/sucursales`). Sin ella la pantalla no pide nada: los productos
+   *  que no montan ese router no hacen un pedido de más. Si la lectura falla (403 de quien no administra, red caída) o no hay tope, la
+   *  pantalla queda como siempre: un error de lectura no bloquea nada. */
+  rutaDelLimite?: string
 }
 
 export function Sucursales({
@@ -39,10 +64,12 @@ export function Sucursales({
   soloLectura = false,
   titulo = 'Sucursales',
   etiquetaNuevo = 'Nueva sucursal',
+  rutaDelLimite,
 }: SucursalesProps) {
   const [sucursales, setSucursales] = useState<Sucursal[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [limite, setLimite] = useState<LimiteDeSucursales | null>(null)
 
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -56,6 +83,7 @@ export function Sucursales({
 
   useEffect(() => {
     load()
+    cargarLimite()
   }, [])
 
   function describeError(err: unknown): string {
@@ -73,6 +101,15 @@ export function Sucursales({
       setError(describeError(err))
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function cargarLimite() {
+    if (!rutaDelLimite) return
+    try {
+      setLimite(limiteLeido(await api.get<unknown>(rutaDelLimite)))
+    } catch {
+      // Sin permiso o sin red: se queda como estaba (sin aviso). El backend sigue siendo la guarda.
     }
   }
 
@@ -122,12 +159,16 @@ export function Sucursales({
       }
       setFormOpen(false)
       await load()
+      await cargarLimite() // dar de alta (o reactivar) mueve las activas
     } catch (err) {
       setFormError(describeError(err))
+      if (err instanceof ApiError && err.status === 409) await cargarLimite() // alguien más pudo haber usado el cupo
     } finally {
       setSaving(false)
     }
   }
+
+  const alLimite = !soloLectura && limite !== null && limite.contratadas !== null && limite.activas >= limite.contratadas
 
   return (
     <Dialog open={formOpen} onOpenChange={setFormOpen}>
@@ -139,11 +180,20 @@ export function Sucursales({
             <Button asChild variant="outline"><Link to={rutaDeTransferencia}><ArrowLeftRight />Transferir stock</Link></Button>
             {!soloLectura && (
               <DialogTrigger asChild>
-                <Button onClick={abrirNueva}><Plus />{etiquetaNuevo}</Button>
+                <Button onClick={abrirNueva} disabled={alLimite} aria-describedby={alLimite ? 'sucursales-limite' : undefined}>
+                  <Plus />{etiquetaNuevo}
+                </Button>
               </DialogTrigger>
             )}
           </div>
         </div>
+
+        {limite?.contratadas != null && (
+          <div id="sucursales-limite" className="grid gap-1 text-sm text-muted-foreground">
+            <p>{limite.activas} de {limite.contratadas} {limite.contratadas === 1 ? 'sucursal contratada' : 'sucursales contratadas'}</p>
+            {alLimite && <p>{mensajeDeLimite(limite.contratadas)}</p>}
+          </div>
+        )}
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 
