@@ -135,6 +135,28 @@ describe('CompraDetalle', () => {
     montar('/compras/10', <CompraDetalle />)
     expect(await screen.findByText('Error de conexión.')).toBeTruthy()
   })
+
+  it('las cantidades se leen como cantidades: el «6.0» del motor sale «6», y una fracción con coma', async () => {
+    const decimales = { ...LINEA, quantity_ordered: '6.0', quantity_received: '1.5', pending_quantity: '4.5' }
+    responder({
+      '/api/purchase-orders/10': { ...ORDEN_CON_LINEA, items: [decimales] },
+      '/api/productos?solo_activos=true': [PRODUCTO],
+      '/api/proveedores': [PROVEEDOR],
+      '/api/depositos': [DEPOSITO],
+      '/api/purchase-receipts?purchase_order_id=10': [],
+    })
+    montar('/compras/10', <CompraDetalle />)
+    const fila = (await screen.findAllByText('Yerba 1kg'))[0].closest('tr') as HTMLElement
+    const celdas = within(fila).getAllByRole('cell').map((c) => c.textContent)
+    expect(celdas.slice(1, 4)).toEqual(['6', '1,5', '4,5'])
+    expect(fila.textContent).not.toContain('6.0')
+
+    await userEvent.click(screen.getByRole('button', { name: /Recibir mercadería/ }))
+    const dialogo = await screen.findByRole('dialog')
+    expect(within(dialogo).getByText('4,5')).toBeTruthy()
+    // El campo editable arranca con lo pendiente, con punto decimal (es lo que se parsea), sin el «.0» sobrante.
+    expect((within(dialogo).getByLabelText(/Cantidad a recibir de Yerba 1kg/) as HTMLInputElement).value).toBe('4.5')
+  })
 })
 
 // ── Carga de vencimientos (0.92.0, K-1): lote y vencimiento por línea al recibir ────────────────────────────────────────────
