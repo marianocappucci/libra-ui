@@ -26,10 +26,7 @@ import { SelectBuscable } from './SelectBuscable'
 import { TituloPantalla } from './titulo-pantalla'
 import { ICONOS } from './iconos-identidad'
 import { enDiasISO, hoyISO } from './fechas'
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
-}
+import { formatoMoneda } from './formatos'
 
 // `producto_id` se guarda sólo en el front (el presupuesto no lo persiste): lo
 // necesita el re-precio por cantidad del add-on mayorista.
@@ -301,7 +298,7 @@ export function PresupuestoForm({ conSelectorDeLista = false, conQuiebres = fals
                                 className="block w-full px-3 py-1.5 text-left text-sm hover:bg-accent"
                                 onClick={() => elegirProducto(i, p)}
                               >
-                                {p.nombre} — {formatCurrency(p.precio_venta)}
+                                {p.nombre} — {formatoMoneda(p.precio_venta)}
                               </button>
                             ))}
                           </div>
@@ -309,7 +306,7 @@ export function PresupuestoForm({ conSelectorDeLista = false, conQuiebres = fals
                       </td>
                       <td className="p-2 align-top"><Input type="number" step="0.01" value={row.qty} onChange={(e) => cambiarCantidad(i, e.target.value, row.producto_id)} /></td>
                       <td className="p-2 align-top"><Input type="number" step="0.01" value={row.unit_price} onChange={(e) => updateItem(i, 'unit_price', e.target.value)} /></td>
-                      <td className="p-2 pt-4 text-right align-top font-medium">{formatCurrency((Number(row.qty) || 0) * (Number(row.unit_price) || 0))}</td>
+                      <td className="p-2 pt-4 text-right align-top font-medium">{formatoMoneda((Number(row.qty) || 0) * (Number(row.unit_price) || 0))}</td>
                       <td className="p-2 text-right align-top">
                         <Button size="icon" variant="ghost" onClick={() => removeItem(i)}><Trash2 /></Button>
                       </td>
@@ -319,17 +316,17 @@ export function PresupuestoForm({ conSelectorDeLista = false, conQuiebres = fals
                 <tfoot>
                   <tr>
                     <td colSpan={3} className="p-2 text-right font-medium text-muted-foreground">Subtotal</td>
-                    <td className="p-2 text-right font-medium">{formatCurrency(subtotalCalc)}</td>
+                    <td className="p-2 text-right font-medium">{formatoMoneda(subtotalCalc)}</td>
                     <td></td>
                   </tr>
                   <tr>
                     <td colSpan={3} className="p-2 text-right font-medium text-muted-foreground">IVA ({Math.round((Number(taxRate) || 0) * 100)}%)</td>
-                    <td className="p-2 text-right font-medium">{formatCurrency(ivaCalc)}</td>
+                    <td className="p-2 text-right font-medium">{formatoMoneda(ivaCalc)}</td>
                     <td></td>
                   </tr>
                   <tr>
                     <td colSpan={3} className="p-2 text-right text-base font-bold">TOTAL</td>
-                    <td className="p-2 text-right text-base font-bold text-primary">{formatCurrency(subtotalCalc + ivaCalc)}</td>
+                    <td className="p-2 text-right text-base font-bold text-primary">{formatoMoneda(subtotalCalc + ivaCalc)}</td>
                     <td></td>
                   </tr>
                 </tfoot>

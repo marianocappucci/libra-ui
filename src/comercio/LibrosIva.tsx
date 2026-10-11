@@ -20,10 +20,8 @@ import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
 import { fecha } from '@/lib/fechas'
 import { hoyISO, primerDiaDelMesISO } from '../fechas'
+import { formatoMoneda } from '../formatos'
 
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
-}
 /** Alícuota de una compra, en puntos (21, no 0.21).
  *
  * Se deriva del importe en vez de leer `iva_pct`, que en egresos guarda una
@@ -73,16 +71,16 @@ function ResumenPorTasa({ resumen, ivaColorClass }: { resumen: ResumenIva; ivaCo
               <tr key={tasa} className="border-b last:border-0">
                 <td className="p-3"><Badge variant="outline">{Number(tasa)}%</Badge></td>
                 <td className="p-3 text-center">{datos.cbtes}</td>
-                <td className="p-3 text-right">{formatCurrency(datos.neto)}</td>
-                <td className={`p-3 text-right font-semibold ${ivaColorClass}`}>{formatCurrency(datos.iva)}</td>
+                <td className="p-3 text-right">{formatoMoneda(datos.neto)}</td>
+                <td className={`p-3 text-right font-semibold ${ivaColorClass}`}>{formatoMoneda(datos.iva)}</td>
               </tr>
             ))}
           </tbody>
           <tfoot className="font-semibold">
             <tr>
               <td colSpan={2} className="p-3 text-right text-muted-foreground">Total</td>
-              <td className="p-3 text-right">{formatCurrency(resumen.neto)}</td>
-              <td className={`p-3 text-right ${ivaColorClass}`}>{formatCurrency(resumen.iva)}</td>
+              <td className="p-3 text-right">{formatoMoneda(resumen.neto)}</td>
+              <td className={`p-3 text-right ${ivaColorClass}`}>{formatoMoneda(resumen.iva)}</td>
             </tr>
           </tfoot>
         </table>
@@ -139,14 +137,14 @@ export function LibrosIva() {
     },
     { accessorKey: 'cliente_razon', header: 'Cliente', size: 150, minSize: 90, meta: { stretch: true }, cell: ({ row }) => <span className="block truncate" title={row.original.cliente_razon ?? undefined}>{row.original.cliente_razon}</span> },
     { accessorKey: 'cliente_cuit', header: 'CUIT', size: 110, minSize: 95, cell: ({ row }) => <span className="block truncate font-mono text-xs text-muted-foreground">{formatCuit(row.original.cliente_cuit)}</span> },
-    { accessorKey: 'subtotal', header: () => <div className="text-right">Neto</div>, size: 100, minSize: 85, cell: ({ row }) => <div className="truncate text-right">{formatCurrency(row.original.subtotal)}</div> },
+    { accessorKey: 'subtotal', header: () => <div className="text-right">Neto</div>, size: 100, minSize: 85, cell: ({ row }) => <div className="truncate text-right">{formatoMoneda(row.original.subtotal)}</div> },
     {
       accessorKey: 'iva_amount', header: () => <div className="text-right">IVA</div>,
       size: 100,
       minSize: 85,
-      cell: ({ row }) => <div className={`truncate text-right ${row.original.iva_amount > 0 ? 'text-primary' : 'text-muted-foreground'}`}>{formatCurrency(row.original.iva_amount)}</div>,
+      cell: ({ row }) => <div className={`truncate text-right ${row.original.iva_amount > 0 ? 'text-primary' : 'text-muted-foreground'}`}>{formatoMoneda(row.original.iva_amount)}</div>,
     },
-    { accessorKey: 'total', header: () => <div className="text-right">Total</div>, size: 110, minSize: 90, cell: ({ row }) => <div className="truncate text-right font-semibold">{formatCurrency(row.original.total)}</div> },
+    { accessorKey: 'total', header: () => <div className="text-right">Total</div>, size: 110, minSize: 90, cell: ({ row }) => <div className="truncate text-right font-semibold">{formatoMoneda(row.original.total)}</div> },
   ], [])
 
   const columnasCompras = useMemo<ColumnDef<LibroIvaEgreso>[]>(() => [
@@ -154,15 +152,15 @@ export function LibrosIva() {
     { accessorKey: 'numero', header: 'Número', size: 110, minSize: 95, cell: ({ row }) => <span className="block truncate font-mono text-xs">{row.original.numero || '—'}</span> },
     { accessorKey: 'proveedor_nombre', header: 'Proveedor', size: 150, minSize: 90, meta: { stretch: true }, cell: ({ row }) => <span className="block truncate" title={row.original.proveedor_nombre ?? undefined}>{row.original.proveedor_nombre || '—'}</span> },
     { accessorKey: 'proveedor_cuit', header: 'CUIT', size: 110, minSize: 95, cell: ({ row }) => <span className="block truncate font-mono text-xs text-muted-foreground">{formatCuit(row.original.proveedor_cuit)}</span> },
-    { accessorKey: 'monto_neto', header: () => <div className="text-right">Neto</div>, size: 100, minSize: 85, cell: ({ row }) => <div className="truncate text-right">{formatCurrency(row.original.monto_neto)}</div> },
+    { accessorKey: 'monto_neto', header: () => <div className="text-right">Neto</div>, size: 100, minSize: 85, cell: ({ row }) => <div className="truncate text-right">{formatoMoneda(row.original.monto_neto)}</div> },
     {
       // `iva_pct` de un egreso es una FRACCIÓN (0.21), no puntos: mostrarlo
       // crudo ponía "0.21%" en la columna.
       accessorKey: 'iva_pct', header: () => <div className="text-right">IVA %</div>, size: 80, minSize: 70,
       cell: ({ row }) => <div className="truncate text-right text-muted-foreground">{alicuota(row.original)}%</div>,
     },
-    { accessorKey: 'iva_monto', header: () => <div className="text-right">IVA $</div>, size: 100, minSize: 85, cell: ({ row }) => <div className="truncate text-right font-semibold text-exito">{formatCurrency(row.original.iva_monto)}</div> },
-    { accessorKey: 'total', header: () => <div className="text-right">Total</div>, size: 110, minSize: 90, cell: ({ row }) => <div className="truncate text-right font-semibold">{formatCurrency(row.original.total)}</div> },
+    { accessorKey: 'iva_monto', header: () => <div className="text-right">IVA $</div>, size: 100, minSize: 85, cell: ({ row }) => <div className="truncate text-right font-semibold text-exito">{formatoMoneda(row.original.iva_monto)}</div> },
+    { accessorKey: 'total', header: () => <div className="text-right">Total</div>, size: 110, minSize: 90, cell: ({ row }) => <div className="truncate text-right font-semibold">{formatoMoneda(row.original.total)}</div> },
   ], [])
 
   return (
@@ -205,9 +203,9 @@ export function LibrosIva() {
           <TabsContent value="ventas" className="grid gap-4">
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <Card><CardHeader><CardDescription>Comprobantes</CardDescription><CardTitle className="text-2xl">{data.resumen_v.cbtes}</CardTitle></CardHeader></Card>
-              <Card><CardHeader><CardDescription>Neto gravado</CardDescription><CardTitle className="text-2xl">{formatCurrency(data.resumen_v.neto)}</CardTitle></CardHeader></Card>
-              <Card><CardHeader><CardDescription>IVA</CardDescription><CardTitle className="text-2xl text-primary">{formatCurrency(data.resumen_v.iva)}</CardTitle></CardHeader></Card>
-              <Card><CardHeader><CardDescription>Total facturado</CardDescription><CardTitle className="text-2xl">{formatCurrency(data.resumen_v.total)}</CardTitle></CardHeader></Card>
+              <Card><CardHeader><CardDescription>Neto gravado</CardDescription><CardTitle className="text-2xl">{formatoMoneda(data.resumen_v.neto)}</CardTitle></CardHeader></Card>
+              <Card><CardHeader><CardDescription>IVA</CardDescription><CardTitle className="text-2xl text-primary">{formatoMoneda(data.resumen_v.iva)}</CardTitle></CardHeader></Card>
+              <Card><CardHeader><CardDescription>Total facturado</CardDescription><CardTitle className="text-2xl">{formatoMoneda(data.resumen_v.total)}</CardTitle></CardHeader></Card>
             </div>
 
             <ResumenPorTasa resumen={data.resumen_v} ivaColorClass="text-primary" />
@@ -239,9 +237,9 @@ export function LibrosIva() {
           <TabsContent value="compras" className="grid gap-4">
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <Card><CardHeader><CardDescription>Comprobantes</CardDescription><CardTitle className="text-2xl">{data.resumen_c.cbtes}</CardTitle></CardHeader></Card>
-              <Card><CardHeader><CardDescription>Neto gravado</CardDescription><CardTitle className="text-2xl">{formatCurrency(data.resumen_c.neto)}</CardTitle></CardHeader></Card>
-              <Card><CardHeader><CardDescription>IVA crédito fiscal</CardDescription><CardTitle className="text-2xl text-exito">{formatCurrency(data.resumen_c.iva)}</CardTitle></CardHeader></Card>
-              <Card><CardHeader><CardDescription>Total</CardDescription><CardTitle className="text-2xl">{formatCurrency(data.resumen_c.total)}</CardTitle></CardHeader></Card>
+              <Card><CardHeader><CardDescription>Neto gravado</CardDescription><CardTitle className="text-2xl">{formatoMoneda(data.resumen_c.neto)}</CardTitle></CardHeader></Card>
+              <Card><CardHeader><CardDescription>IVA crédito fiscal</CardDescription><CardTitle className="text-2xl text-exito">{formatoMoneda(data.resumen_c.iva)}</CardTitle></CardHeader></Card>
+              <Card><CardHeader><CardDescription>Total</CardDescription><CardTitle className="text-2xl">{formatoMoneda(data.resumen_c.total)}</CardTitle></CardHeader></Card>
             </div>
 
             <ResumenPorTasa resumen={data.resumen_c} ivaColorClass="text-exito" />

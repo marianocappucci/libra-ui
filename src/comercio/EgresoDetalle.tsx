@@ -29,10 +29,7 @@ import { ICONOS } from '../iconos-identidad'
 import { fecha } from '@/lib/fechas'
 import { hoyISO } from '../fechas'
 import { SelectBuscable } from '../SelectBuscable'
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
-}
+import { formatoMoneda } from '../formatos'
 
 const pagoSchema = z.object({
   monto: z.coerce.number().min(0.01, 'El monto debe ser mayor a cero'),
@@ -185,21 +182,21 @@ export function EgresoDetalle() {
         <>
           {egreso.estado === 'pagado' && (
             <p className="flex items-center gap-2 rounded-md border border-exito/40 bg-exito/10 p-3 text-sm text-exito">
-              <CheckCircle2 className="size-4 shrink-0" /><strong>Pagado completo</strong> — {formatCurrency(totalPagado)}
+              <CheckCircle2 className="size-4 shrink-0" /><strong>Pagado completo</strong> — {formatoMoneda(totalPagado)}
             </p>
           )}
           {egreso.estado === 'parcial' && (
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
               <span className="flex items-center gap-2">
-                <CreditCard className="size-4 shrink-0" /><strong>Pago parcial</strong> — Pagado: {formatCurrency(totalPagado)}{' '}
-                <span className="font-semibold text-destructive">Pendiente: {formatCurrency(pendiente)}</span>
+                <CreditCard className="size-4 shrink-0" /><strong>Pago parcial</strong> — Pagado: {formatoMoneda(totalPagado)}{' '}
+                <span className="font-semibold text-destructive">Pendiente: {formatoMoneda(pendiente)}</span>
               </span>
               <Button size="sm" onClick={abrirPago}><CreditCard />Registrar pago</Button>
             </div>
           )}
           {egreso.estado === 'pendiente' && (
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/50 p-3 text-sm text-muted-foreground">
-              <span className="flex items-center gap-2"><Hourglass className="size-4 shrink-0" /><strong>Pendiente de pago</strong> — {formatCurrency(egreso.total)}</span>
+              <span className="flex items-center gap-2"><Hourglass className="size-4 shrink-0" /><strong>Pendiente de pago</strong> — {formatoMoneda(egreso.total)}</span>
               <Button size="sm" onClick={abrirPago}><CreditCard />Registrar pago</Button>
             </div>
           )}
@@ -218,7 +215,7 @@ export function EgresoDetalle() {
                         {p.medio_pago && <Badge variant="outline" className="ml-1.5">{etiquetaDeMedio(p.medio_pago)}</Badge>}
                         {p.referencia && <span className="ml-1.5">({p.referencia})</span>}
                       </span>
-                      <span className="font-semibold text-destructive">- {formatCurrency(p.monto)}</span>
+                      <span className="font-semibold text-destructive">- {formatoMoneda(p.monto)}</span>
                     </div>
                   ))}
                 </div>
@@ -245,15 +242,15 @@ export function EgresoDetalle() {
               <CardContent className="grid gap-2 text-sm">
                 {egreso.monto_neto > 0 && egreso.monto_neto !== egreso.total && (
                   <>
-                    <p><span className="text-muted-foreground">Neto:</span> {formatCurrency(egreso.monto_neto)}</p>
-                    <p><span className="text-muted-foreground">IVA ({Math.round(egreso.iva_pct * 100)}%):</span> {formatCurrency(egreso.iva_monto)}</p>
+                    <p><span className="text-muted-foreground">Neto:</span> {formatoMoneda(egreso.monto_neto)}</p>
+                    <p><span className="text-muted-foreground">IVA ({Math.round(egreso.iva_pct * 100)}%):</span> {formatoMoneda(egreso.iva_monto)}</p>
                   </>
                 )}
-                <p className="text-base"><span className="text-muted-foreground">Total:</span> <span className="font-bold text-destructive">{formatCurrency(egreso.total)}</span></p>
+                <p className="text-base"><span className="text-muted-foreground">Total:</span> <span className="font-bold text-destructive">{formatoMoneda(egreso.total)}</span></p>
                 {pagos.length > 0 && (
                   <>
-                    <p><span className="text-muted-foreground">Pagado:</span> <span className="text-exito">{formatCurrency(totalPagado)}</span></p>
-                    {pendiente > 0 && <p><span className="text-muted-foreground">Pendiente:</span> <span className="font-semibold text-destructive">{formatCurrency(pendiente)}</span></p>}
+                    <p><span className="text-muted-foreground">Pagado:</span> <span className="text-exito">{formatoMoneda(totalPagado)}</span></p>
+                    {pendiente > 0 && <p><span className="text-muted-foreground">Pendiente:</span> <span className="font-semibold text-destructive">{formatoMoneda(pendiente)}</span></p>}
                   </>
                 )}
               </CardContent>

@@ -358,17 +358,9 @@ export function opcionesCliente(clientes: ClienteDeVenta[]): OpcionSelect[] {
   }))
 }
 
-/** `$ 1.234,56`, como lo escribían las diez pantallas — cada una con su copia. */
-export function formatoMoneda(valor: number): string {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(valor)
-}
-
-/** Una cantidad como la lee una persona: `6`, `1,5`, `1.250`. El motor las manda como texto decimal (`"6.0"`) y
- *  ya redondeadas a la escala de la unidad, así que no se recortan decimales (una de 6 decimales no muestra 0,0004 como 0). */
-export function formatoCantidad(valor: string | number): string {
-  const n = Number(valor)
-  return Number.isFinite(n) ? new Intl.NumberFormat('es-AR', { maximumFractionDigits: 10 }).format(n) : String(valor)
-}
+// Los formateadores de plata y cantidades viven en el nivel general del kit (`libra-ui/formatos`, ADR-050). Se re-exportan
+// acá porque los productos los importan desde `comercio/tipos`.
+export { formatoCantidad, formatoMoneda } from '../formatos'
 
 export const ESTADO_VENTA_TONO: Record<string, TonoEstado> = {
   cobrada: 'ok', parcial: 'atencion', pendiente: 'neutro', anulada: 'negativo',

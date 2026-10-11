@@ -19,10 +19,7 @@ import { ICONOS } from '../iconos-identidad'
 import { iconoDe } from '../medios-pago'
 import { hoyISO, primerDiaDelMesISO } from '../fechas'
 import { SelectBuscable } from '../SelectBuscable'
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
-}
+import { formatoMoneda } from '../formatos'
 
 // 🔴 Acá había un `MEDIO_ICONS` propio, duplicado byte a byte en `Reportes.tsx`
 // y otras dos veces en Restolibra. Ahora sale de `libra-ui/medios-pago`, como
@@ -111,9 +108,9 @@ export function CajaMedios() {
         <>
           {/* ── Resumen total ── */}
           <div className="grid gap-4 sm:grid-cols-3">
-            <Card><CardHeader><CardDescription>Total Ingresos</CardDescription><CardTitle className="text-2xl text-exito">{formatCurrency(granTotalIng)}</CardTitle><CardDescription>en el período</CardDescription></CardHeader></Card>
-            <Card><CardHeader><CardDescription>Total Egresos</CardDescription><CardTitle className="text-2xl text-destructive">{formatCurrency(granTotalEgr)}</CardTitle><CardDescription>en el período</CardDescription></CardHeader></Card>
-            <Card><CardHeader><CardDescription>Saldo Neto</CardDescription><CardTitle className={`text-2xl ${granTotalIng >= granTotalEgr ? 'text-primary' : 'text-destructive'}`}>{formatCurrency(granTotalIng - granTotalEgr)}</CardTitle><CardDescription>ingresos − egresos</CardDescription></CardHeader></Card>
+            <Card><CardHeader><CardDescription>Total Ingresos</CardDescription><CardTitle className="text-2xl text-exito">{formatoMoneda(granTotalIng)}</CardTitle><CardDescription>en el período</CardDescription></CardHeader></Card>
+            <Card><CardHeader><CardDescription>Total Egresos</CardDescription><CardTitle className="text-2xl text-destructive">{formatoMoneda(granTotalEgr)}</CardTitle><CardDescription>en el período</CardDescription></CardHeader></Card>
+            <Card><CardHeader><CardDescription>Saldo Neto</CardDescription><CardTitle className={`text-2xl ${granTotalIng >= granTotalEgr ? 'text-primary' : 'text-destructive'}`}>{formatoMoneda(granTotalIng - granTotalEgr)}</CardTitle><CardDescription>ingresos − egresos</CardDescription></CardHeader></Card>
           </div>
 
           {/* ── Totales por medio (todas las cajas) ── */}
@@ -143,14 +140,14 @@ export function CajaMedios() {
                           <tr key={medio} className="border-b last:border-0">
                             <td className="p-3"><span className="flex items-center gap-2"><Icon className="size-4 text-muted-foreground" />{data.medio_label[medio] ?? medio}</span></td>
                             <td className="p-3 text-center text-muted-foreground">{vals.ingresos_ops}</td>
-                            <td className="p-3 text-right font-semibold text-exito">{formatCurrency(vals.ingresos)}</td>
+                            <td className="p-3 text-right font-semibold text-exito">{formatoMoneda(vals.ingresos)}</td>
                             <td className="p-3">
                               <div className="h-1.5 w-32 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-exito" style={{ width: `${p}%` }} /></div>
                               <span className="text-xs text-muted-foreground">{p}%</span>
                             </td>
                             <td className="p-3 text-center text-muted-foreground">{vals.egresos_ops || '—'}</td>
-                            <td className="p-3 text-right text-destructive">{vals.egresos > 0 ? formatCurrency(vals.egresos) : '—'}</td>
-                            <td className={`p-3 text-right font-semibold ${saldo >= 0 ? 'text-primary' : 'text-destructive'}`}>{formatCurrency(saldo)}</td>
+                            <td className="p-3 text-right text-destructive">{vals.egresos > 0 ? formatoMoneda(vals.egresos) : '—'}</td>
+                            <td className={`p-3 text-right font-semibold ${saldo >= 0 ? 'text-primary' : 'text-destructive'}`}>{formatoMoneda(saldo)}</td>
                           </tr>
                         )
                       })}
@@ -159,11 +156,11 @@ export function CajaMedios() {
                       <tr>
                         <td className="p-3">Total</td>
                         <td className="p-3 text-center">{Object.values(data.totales).reduce((s, v) => s + v.ingresos_ops, 0)}</td>
-                        <td className="p-3 text-right text-exito">{formatCurrency(granTotalIng)}</td>
+                        <td className="p-3 text-right text-exito">{formatoMoneda(granTotalIng)}</td>
                         <td className="p-3"></td>
                         <td className="p-3 text-center">{Object.values(data.totales).reduce((s, v) => s + v.egresos_ops, 0)}</td>
-                        <td className="p-3 text-right text-destructive">{formatCurrency(granTotalEgr)}</td>
-                        <td className={`p-3 text-right ${granTotalIng >= granTotalEgr ? 'text-primary' : 'text-destructive'}`}>{formatCurrency(granTotalIng - granTotalEgr)}</td>
+                        <td className="p-3 text-right text-destructive">{formatoMoneda(granTotalEgr)}</td>
+                        <td className={`p-3 text-right ${granTotalIng >= granTotalEgr ? 'text-primary' : 'text-destructive'}`}>{formatoMoneda(granTotalIng - granTotalEgr)}</td>
                       </tr>
                     </tfoot>
                   </table>
@@ -178,9 +175,9 @@ export function CajaMedios() {
               <CardHeader className="flex-row flex-wrap items-center justify-between gap-3 space-y-0">
                 <CardTitle className="flex items-center gap-2 text-base"><ICONOS.cajas className="size-4 text-primary" />{caja.nombre}</CardTitle>
                 <div className="flex flex-wrap gap-4 text-sm">
-                  <span className="flex items-center gap-1 font-semibold text-exito"><ArrowUp className="size-3.5" />{formatCurrency(caja.total_ingresos)}</span>
-                  <span className="flex items-center gap-1 font-semibold text-destructive"><ArrowDown className="size-3.5" />{formatCurrency(caja.total_egresos)}</span>
-                  <span className={`font-bold ${caja.saldo >= 0 ? 'text-primary' : 'text-destructive'}`}>Saldo: {formatCurrency(caja.saldo)}</span>
+                  <span className="flex items-center gap-1 font-semibold text-exito"><ArrowUp className="size-3.5" />{formatoMoneda(caja.total_ingresos)}</span>
+                  <span className="flex items-center gap-1 font-semibold text-destructive"><ArrowDown className="size-3.5" />{formatoMoneda(caja.total_egresos)}</span>
+                  <span className={`font-bold ${caja.saldo >= 0 ? 'text-primary' : 'text-destructive'}`}>Saldo: {formatoMoneda(caja.saldo)}</span>
                 </div>
               </CardHeader>
               <CardContent className="p-0">
@@ -204,10 +201,10 @@ export function CajaMedios() {
                           <tr key={medio} className="border-b last:border-0">
                             <td className="p-2 pl-3"><span className="flex items-center gap-2"><Icon className="size-4 text-muted-foreground" />{data.medio_label[medio] ?? medio}</span></td>
                             <td className="p-2 text-center text-muted-foreground">{vals.ingresos_ops || '—'}</td>
-                            <td className={`p-2 text-right ${vals.ingresos > 0 ? 'font-semibold text-exito' : 'text-muted-foreground'}`}>{vals.ingresos > 0 ? formatCurrency(vals.ingresos) : '—'}</td>
+                            <td className={`p-2 text-right ${vals.ingresos > 0 ? 'font-semibold text-exito' : 'text-muted-foreground'}`}>{vals.ingresos > 0 ? formatoMoneda(vals.ingresos) : '—'}</td>
                             <td className="p-2 text-center text-muted-foreground">{vals.egresos_ops || '—'}</td>
-                            <td className={`p-2 text-right ${vals.egresos > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>{vals.egresos > 0 ? formatCurrency(vals.egresos) : '—'}</td>
-                            <td className={`p-2 pr-3 text-right font-semibold ${saldoM >= 0 ? 'text-primary' : 'text-destructive'}`}>{formatCurrency(saldoM)}</td>
+                            <td className={`p-2 text-right ${vals.egresos > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>{vals.egresos > 0 ? formatoMoneda(vals.egresos) : '—'}</td>
+                            <td className={`p-2 pr-3 text-right font-semibold ${saldoM >= 0 ? 'text-primary' : 'text-destructive'}`}>{formatoMoneda(saldoM)}</td>
                           </tr>
                         )
                       })}
@@ -216,10 +213,10 @@ export function CajaMedios() {
                       <tr>
                         <td className="p-2 pl-3">Subtotal {caja.nombre}</td>
                         <td className="p-2 text-center">{Object.values(caja.medios).reduce((s, v) => s + v.ingresos_ops, 0)}</td>
-                        <td className="p-2 text-right text-exito">{formatCurrency(caja.total_ingresos)}</td>
+                        <td className="p-2 text-right text-exito">{formatoMoneda(caja.total_ingresos)}</td>
                         <td className="p-2 text-center">{Object.values(caja.medios).reduce((s, v) => s + v.egresos_ops, 0)}</td>
-                        <td className="p-2 text-right text-destructive">{formatCurrency(caja.total_egresos)}</td>
-                        <td className={`p-2 pr-3 text-right ${caja.saldo >= 0 ? 'text-primary' : 'text-destructive'}`}>{formatCurrency(caja.saldo)}</td>
+                        <td className="p-2 text-right text-destructive">{formatoMoneda(caja.total_egresos)}</td>
+                        <td className={`p-2 pr-3 text-right ${caja.saldo >= 0 ? 'text-primary' : 'text-destructive'}`}>{formatoMoneda(caja.saldo)}</td>
                       </tr>
                     </tfoot>
                   </table>

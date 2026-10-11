@@ -14,10 +14,7 @@ import { BadgeEstado } from '../badge-estado'
 import { DataTable } from '../data-table'
 import { FileSpreadsheet, Upload, CheckCircle2, TriangleAlert } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
-}
+import { formatoMoneda } from '../formatos'
 
 function plural(n: number, singular: string, pluralForm: string): string {
   return n === 1 ? singular : pluralForm
@@ -86,7 +83,7 @@ export function ActualizacionMasivaPrecios() {
       header: () => <div className="text-right">Costo</div>,
       cell: ({ row }) => (
         <div className="text-right">
-          {formatCurrency(row.original.costo_actual)} → <span className="font-semibold">{formatCurrency(row.original.costo_nuevo)}</span>
+          {formatoMoneda(row.original.costo_actual)} → <span className="font-semibold">{formatoMoneda(row.original.costo_nuevo)}</span>
         </div>
       ),
     },
@@ -96,11 +93,11 @@ export function ActualizacionMasivaPrecios() {
       cell: ({ row }) => {
         const l = row.original
         if (!l.margen_calculado) {
-          return <div className="text-right text-muted-foreground">{formatCurrency(l.venta_actual)} (sin cambios: no había costo previo)</div>
+          return <div className="text-right text-muted-foreground">{formatoMoneda(l.venta_actual)} (sin cambios: no había costo previo)</div>
         }
         return (
           <div className="text-right">
-            {formatCurrency(l.venta_actual)} → <span className="font-semibold text-exito">{formatCurrency(l.venta_nueva)}</span>
+            {formatoMoneda(l.venta_actual)} → <span className="font-semibold text-exito">{formatoMoneda(l.venta_nueva)}</span>
           </div>
         )
       },

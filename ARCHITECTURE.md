@@ -66,7 +66,7 @@ Tres capas, de más genérico a más específico:
     ADR-038 y ADR-042), `auditoria-de-barra-lateral` (el guard de que la barra lateral toma su fondo de `tema.css`, ADR-042), `badge-estado`, `titulo-pantalla` /
     `auditoria-de-titulos`, `auditoria-de-relleno` (el guard de que una pantalla
     no duplica el relleno del `Layout`, ADR-040), `medios-pago`, `mp`, `facturas`, `fechas` (formato
-    `dd-mm-aaaa` de familia), `branding`, `use-mobile`, `utils` (el `cn` de
+    `dd-mm-aaaa` de familia), `formatos` (plata y cantidades en es-AR, ADR-050), `branding`, `use-mobile`, `utils` (el `cn` de
     tailwind-merge).
 - **`src/agenda/` (10)** y **`src/configuracion/` (9) — bundles de feature**:
   agrupan las pantallas y piezas de agenda y de configuración que más de un

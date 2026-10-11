@@ -30,10 +30,7 @@ import { ICONOS } from '../iconos-identidad'
 import { fecha } from '@/lib/fechas'
 import { hoyISO } from '../fechas'
 import { SelectBuscable } from '../SelectBuscable'
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
-}
+import { formatoMoneda } from '../formatos'
 
 const EMPTY_CUENTA_FORM = { nombre: '', tipo: 'banco', banco: '', numero: '', descripcion: '', saldo_inicial: '0' }
 
@@ -215,7 +212,7 @@ export function TesoreriaDetalle() {
       header: () => <div className="text-right">Monto</div>,
       cell: ({ row }) => {
         const positivo = row.original.tipo === 'ingreso' || row.original.tipo === 'transferencia_entrada'
-        return <div className={`text-right font-semibold ${positivo ? 'text-exito' : 'text-destructive'}`}>{positivo ? '+' : '−'} {formatCurrency(row.original.monto)}</div>
+        return <div className={`text-right font-semibold ${positivo ? 'text-exito' : 'text-destructive'}`}>{positivo ? '+' : '−'} {formatoMoneda(row.original.monto)}</div>
       },
     },
     {
@@ -238,7 +235,7 @@ export function TesoreriaDetalle() {
         <TituloPantalla icono={ICONOS.tesoreria}>{cuenta ? cuenta.nombre : 'Cuenta'}
           {cuenta && (
             <BadgeEstado tono={cuenta.saldo >= 0 ? 'ok' : 'negativo'}>
-              {formatCurrency(cuenta.saldo)}
+              {formatoMoneda(cuenta.saldo)}
             </BadgeEstado>
           )}</TituloPantalla>
         {cuenta && (
@@ -258,7 +255,7 @@ export function TesoreriaDetalle() {
                       <SelectBuscable
                         value={tDestino}
                         onChange={setTDestino}
-                        opciones={todas.map((c) => ({ value: String(c.id), label: `${c.nombre} — ${formatCurrency(c.saldo)}` }))}
+                        opciones={todas.map((c) => ({ value: String(c.id), label: `${c.nombre} — ${formatoMoneda(c.saldo)}` }))}
                         placeholder="Cuenta…"
                         ariaLabel="Cuenta destino"
                       />
@@ -398,13 +395,13 @@ export function TesoreriaDetalle() {
             <Card>
               <CardContent className="py-3 text-center">
                 <p className="text-sm text-muted-foreground">Saldo inicial</p>
-                <p className="text-lg font-semibold">{formatCurrency(cuenta.saldo_inicial)}</p>
+                <p className="text-lg font-semibold">{formatoMoneda(cuenta.saldo_inicial)}</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="py-3 text-center">
                 <p className="text-sm text-muted-foreground">Saldo actual</p>
-                <p className={`text-xl font-bold ${cuenta.saldo >= 0 ? 'text-exito' : 'text-destructive'}`}>{formatCurrency(cuenta.saldo)}</p>
+                <p className={`text-xl font-bold ${cuenta.saldo >= 0 ? 'text-exito' : 'text-destructive'}`}>{formatoMoneda(cuenta.saldo)}</p>
               </CardContent>
             </Card>
           </div>

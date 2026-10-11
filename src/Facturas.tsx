@@ -42,10 +42,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
-}
+import { formatoMoneda } from './formatos'
 
 // Etiquetas cortas (FA/FB/FC, NCA…, NDA…) para que la columna Tipo ocupe lo
 // mínimo — el nombre completo queda en el `title` de cada badge.
@@ -259,7 +256,7 @@ export function Facturas({
       cell: ({ row }) => (
         <div className={`truncate text-right font-medium ${vista === 'nc' ? 'text-destructive' : vista === 'nd' ? 'text-primary' : ''}`}>
           {vista === 'nc' ? '- ' : vista === 'nd' ? '+ ' : ''}
-          {formatCurrency(row.original.total)}
+          {formatoMoneda(row.original.total)}
         </div>
       ),
     })

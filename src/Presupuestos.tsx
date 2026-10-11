@@ -22,10 +22,7 @@ import { Plus, Pencil, Search, X, Eye, FileDown } from 'lucide-react'
 import { TituloPantalla } from './titulo-pantalla'
 import { ICONOS } from './iconos-identidad'
 import { fecha } from '@/lib/fechas'
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
-}
+import { formatoMoneda } from './formatos'
 
 const ESTADO_TONO: Record<string, TonoEstado> = {
   aceptado: 'ok', enviado: 'curso', borrador: 'neutro', rechazado: 'negativo', vencido: 'negativo', facturado: 'ok',
@@ -88,7 +85,7 @@ export function Presupuestos({ urlDelPdf = (id: number) => `/presupuestos/${id}/
       cell: ({ row }) => <BadgeEstado tono={ESTADO_TONO[row.original.status] ?? 'neutro'}>{ESTADO_LABELS[row.original.status] ?? row.original.status}</BadgeEstado>,
     },
     { accessorKey: 'valid_until', header: 'Válido hasta', size: 115, minSize: 90, cell: ({ row }) => fecha(row.original.valid_until) || '—' },
-    { accessorKey: 'total', header: () => <div className="text-right">Total</div>, size: 130, minSize: 100, cell: ({ row }) => <div className="truncate text-right font-medium">{formatCurrency(row.original.total)}</div> },
+    { accessorKey: 'total', header: () => <div className="text-right">Total</div>, size: 130, minSize: 100, cell: ({ row }) => <div className="truncate text-right font-medium">{formatoMoneda(row.original.total)}</div> },
     {
       id: 'actions',
       header: () => <div className="text-right">Acciones</div>,

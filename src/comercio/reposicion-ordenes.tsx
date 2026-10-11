@@ -16,6 +16,7 @@ import { Link } from 'react-router-dom'
 import { api, ApiError } from '../api-client'
 import { guardarIntentoPendiente, type IntentoDeOrdenes } from './reposicion-ordenes-pendiente'
 import type { GenerarOrdenesResultado, ReposicionProducto } from './tipos'
+import { formatoCantidad, formatoMoneda } from '../formatos'
 import { Button } from '@/components/ui/button'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -23,14 +24,6 @@ import {
 import { AlertTriangle, FilePlus2 } from 'lucide-react'
 
 const RUTA_ORDENES = '/api/reportes/reposicion/ordenes'
-
-function numero(valor: number | string): string {
-  return new Intl.NumberFormat('es-AR', { maximumFractionDigits: 10 }).format(Number(valor))
-}
-
-function moneda(valor: string): string {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(Number(valor))
-}
 
 function mensajeDeError(err: unknown): string {
   if (!(err instanceof ApiError)) return 'Error de conexión. Podés reintentar: si la orden ya se había creado, no se duplica.'
@@ -127,7 +120,7 @@ export function DialogoGenerarOrdenes({ intento, reanudado, rutaDeOrden, onCerra
                 {grupos.map((g) => (
                   <li key={g.proveedor} className="rounded-md border p-3">
                     <p className="font-medium">{g.proveedor} <span className="font-normal text-muted-foreground">· {g.productos.length} producto{g.productos.length !== 1 ? 's' : ''}</span></p>
-                    <p className="text-xs text-muted-foreground">{g.productos.map((p) => `${p.nombre} (${numero(p.sugerido)})`).join(', ')}</p>
+                    <p className="text-xs text-muted-foreground">{g.productos.map((p) => `${p.nombre} (${formatoCantidad(p.sugerido)})`).join(', ')}</p>
                   </li>
                 ))}
               </ul>
@@ -157,7 +150,7 @@ export function DialogoGenerarOrdenes({ intento, reanudado, rutaDeOrden, onCerra
                   <li key={o.id} className="rounded-md border p-3">
                     <p className="font-medium">
                       {rutaDeOrden ? <Link className="underline" to={rutaDeOrden(o.id)} onClick={onCerrar}>{o.number}</Link> : o.number}
-                      <span className="font-normal text-muted-foreground"> · {o.proveedor ?? `Proveedor ${o.proveedor_id}`} · {o.lineas.length} línea{o.lineas.length !== 1 ? 's' : ''} · {moneda(o.total)}</span>
+                      <span className="font-normal text-muted-foreground"> · {o.proveedor ?? `Proveedor ${o.proveedor_id}`} · {o.lineas.length} línea{o.lineas.length !== 1 ? 's' : ''} · {formatoMoneda(Number(o.total))}</span>
                     </p>
                     {o.lineas.some((l) => l.costo_cero) && (
                       <p className="mt-1 flex gap-2 text-xs text-amber-600 dark:text-amber-400">

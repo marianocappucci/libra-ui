@@ -37,10 +37,7 @@ import { ICONOS } from '../iconos-identidad'
 import { fecha as formatearFecha } from '@/lib/fechas'
 import { hoyISO } from '../fechas'
 import { SelectBuscable } from '../SelectBuscable'
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
-}
+import { formatoMoneda } from '../formatos'
 
 export function CuentaCorrienteDetalle({ esAdmin = false, conRecibos = false }: { esAdmin?: boolean; conRecibos?: boolean } = {}) {
   const { medios, etiqueta: etiquetaDeMedio } = useMediosPago()
@@ -239,7 +236,7 @@ export function CuentaCorrienteDetalle({ esAdmin = false, conRecibos = false }: 
       header: () => <div className="text-right">Monto</div>,
       cell: ({ row }) => (
         <div className={`text-right font-semibold ${row.original.tipo === 'debito' ? 'text-destructive' : 'text-exito'}`}>
-          {row.original.tipo === 'debito' ? '+' : '−'} {formatCurrency(row.original.monto)}
+          {row.original.tipo === 'debito' ? '+' : '−'} {formatoMoneda(row.original.monto)}
         </div>
       ),
     },
@@ -274,9 +271,9 @@ export function CuentaCorrienteDetalle({ esAdmin = false, conRecibos = false }: 
         <TituloPantalla icono={ICONOS.cuentaCorriente}>{cliente ? cliente.name : 'Cuenta Corriente'}
           {cliente && (
             saldo > 0 ? (
-              <BadgeEstado tono="atencion">Debe {formatCurrency(saldo)}</BadgeEstado>
+              <BadgeEstado tono="atencion">Debe {formatoMoneda(saldo)}</BadgeEstado>
             ) : saldo < 0 ? (
-              <BadgeEstado tono="ok">A favor {formatCurrency(saldo * -1)}</BadgeEstado>
+              <BadgeEstado tono="ok">A favor {formatoMoneda(saldo * -1)}</BadgeEstado>
             ) : (
               <BadgeEstado tono="neutro">Saldo $0</BadgeEstado>
             )
@@ -296,7 +293,7 @@ export function CuentaCorrienteDetalle({ esAdmin = false, conRecibos = false }: 
                 <div className="grid gap-3">
                   {saldo > 0 && (
                     <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm dark:border-amber-900 dark:bg-amber-950/40">
-                      Saldo pendiente: <strong>{formatCurrency(saldo)}</strong>
+                      Saldo pendiente: <strong>{formatoMoneda(saldo)}</strong>
                     </p>
                   )}
                   <div className="grid grid-cols-2 gap-3">
@@ -314,7 +311,7 @@ export function CuentaCorrienteDetalle({ esAdmin = false, conRecibos = false }: 
                             onChange={(e) => setFacturasSel(e.target.checked ? [...facturasSel, f.id] : facturasSel.filter((x) => x !== f.id))}
                           />
                           <span className="flex-1">{f.concepto} <span className="text-muted-foreground">({formatearFecha(f.fecha)})</span></span>
-                          <span className="tabular-nums">{formatCurrency(f.pendiente)}</span>
+                          <span className="tabular-nums">{formatoMoneda(f.pendiente)}</span>
                         </label>
                       ))}
                       {facturasSel.length === 0 && (
@@ -377,9 +374,9 @@ export function CuentaCorrienteDetalle({ esAdmin = false, conRecibos = false }: 
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-3">
-            <Card><CardHeader><CardDescription>Total cargado</CardDescription><CardTitle className="text-xl text-destructive">{formatCurrency(totales.cargado)}</CardTitle></CardHeader></Card>
-            <Card><CardHeader><CardDescription>Total abonado</CardDescription><CardTitle className="text-xl text-exito">{formatCurrency(totales.abonado)}</CardTitle></CardHeader></Card>
-            <Card><CardHeader><CardDescription>Saldo actual</CardDescription><CardTitle className={saldo > 0 ? 'text-xl text-amber-600 dark:text-amber-400' : 'text-xl text-exito'}>{formatCurrency(saldo)}</CardTitle></CardHeader></Card>
+            <Card><CardHeader><CardDescription>Total cargado</CardDescription><CardTitle className="text-xl text-destructive">{formatoMoneda(totales.cargado)}</CardTitle></CardHeader></Card>
+            <Card><CardHeader><CardDescription>Total abonado</CardDescription><CardTitle className="text-xl text-exito">{formatoMoneda(totales.abonado)}</CardTitle></CardHeader></Card>
+            <Card><CardHeader><CardDescription>Saldo actual</CardDescription><CardTitle className={saldo > 0 ? 'text-xl text-amber-600 dark:text-amber-400' : 'text-xl text-exito'}>{formatoMoneda(saldo)}</CardTitle></CardHeader></Card>
           </div>
 
           <Card>

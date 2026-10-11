@@ -58,6 +58,7 @@ import { nuevaClaveDeOperacion } from './clave-de-operacion'
 import { DialogoGenerarOrdenes } from './reposicion-ordenes'
 import { borrarIntentoPendiente, leerIntentoPendiente, type IntentoDeOrdenes, type ParametrosDeOrdenes } from './reposicion-ordenes-pendiente'
 import { SelectBuscable } from '../SelectBuscable'
+import { formatoCantidad } from '../formatos'
 
 const RUTA = '/api/reportes/reposicion'
 /** El relleno de las celdas de la tabla (ADR-012): 6 px a los lados en vez de 12: con las 13 columnas (las dos opcionales, Estacional y Por vencer, prendidas) son unos 150 px menos de ancho y la tabla entra en 1440 px sin desplazarse. */
@@ -81,12 +82,6 @@ const ETIQUETA_DEL_MOTIVO: Record<ReposicionMotivo, string> = {
   ambos: 'Bajo el mínimo y por rotación',
 }
 const etiquetaDelMotivo = (m: ReposicionMotivo | null) => (m ? ETIQUETA_DEL_MOTIVO[m] : '—')
-
-/** Las cantidades se muestran como las manda el motor, que ya las redondeó a la escala de la unidad: sin un tope
- *  de decimales más bajo que el suyo (una unidad de 6 decimales no puede mostrar 0,0004 como 0). */
-function numero(valor: number): string {
-  return new Intl.NumberFormat('es-AR', { maximumFractionDigits: 10 }).format(valor)
-}
 
 /** Una nota corta a la vista y completa para todo lo demás: el texto largo en una celda angosta se apilaba en 4-7 líneas (ADR-012). A la vista va la forma corta, sin
  *  partirse (`whitespace-nowrap`); el texto completo queda en el `title` (al pasar el mouse) y para el lector de pantalla (`sr-only`), y en el `textContent`.
@@ -517,46 +512,46 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
                         <td className={`${PAD} whitespace-nowrap`}>{p.codigo || '—'}</td>
                         {conProveedor && <td className={PAD}>{p.proveedor || '—'}</td>}
                         <td className={`${PAD} text-right ${p.stock <= 0 ? 'text-destructive' : ''}`}>
-                          {numero(p.stock)}
+                          {formatoCantidad(p.stock)}
                           {(p.vencido ?? 0) > 0 && (
                             <Nota
                               className="block text-xs text-amber-600 dark:text-amber-400"
-                              corto={`incl. ${numero(p.vencido ?? 0)} vencido`} completo={`incluye ${numero(p.vencido ?? 0)} vencido, que no se cuenta para pedir`}
+                              corto={`incl. ${formatoCantidad(p.vencido ?? 0)} vencido`} completo={`incluye ${formatoCantidad(p.vencido ?? 0)} vencido, que no se cuenta para pedir`}
                             />
                           )}
                         </td>
                         {conColumnaPorVencer && (
                           <td className={`${PAD} text-right`} title={(p.por_vencer ?? 0) > 0 ? 'Vence dentro del horizonte y no se alcanza a vender: no cuenta como stock' : undefined}>
-                            {(p.por_vencer ?? 0) > 0 ? numero(p.por_vencer ?? 0) : '—'}
+                            {(p.por_vencer ?? 0) > 0 ? formatoCantidad(p.por_vencer ?? 0) : '—'}
                             {(p.por_vencer ?? 0) > 0 && <Nota className="block text-xs text-amber-600 dark:text-amber-400" corto="no cuenta" completo="no cuenta como stock" />}
                           </td>
                         )}
                         <td className={`${PAD} text-right`}>
-                          {numero(p.en_camino)}
+                          {formatoCantidad(p.en_camino)}
                           {data.sucursal_id !== null && p.en_camino_sin_sucursal > 0 && (
                             <Nota
                               className="block text-xs text-amber-600 dark:text-amber-400"
-                              corto={`incl. ${numero(p.en_camino_sin_sucursal)} sin sucursal`}
-                              completo={`incluye ${numero(p.en_camino_sin_sucursal)} de órdenes sin sucursal, contadas en esta sucursal`}
+                              corto={`incl. ${formatoCantidad(p.en_camino_sin_sucursal)} sin sucursal`}
+                              completo={`incluye ${formatoCantidad(p.en_camino_sin_sucursal)} de órdenes sin sucursal, contadas en esta sucursal`}
                             />
                           )}
                         </td>
                         <td className={`${PAD} text-right`}>
-                          {numero(p.stock_minimo)}
+                          {formatoCantidad(p.stock_minimo)}
                           {data.sucursal_id !== null && p.stock_minimo_propio === true && (
                             <Nota className="block text-xs text-muted-foreground" corto="propio" completo="propio de la sucursal" />
                           )}
                         </td>
-                        <td className={`${PAD} text-right`}>{numero(p.unidades_vendidas)}</td>
-                        <td className={`${PAD} text-right`}>{numero(p.rotacion_diaria)}</td>
-                        <td className={`${PAD} text-right`}>{p.cobertura_dias === null ? '—' : numero(p.cobertura_dias)}</td>
+                        <td className={`${PAD} text-right`}>{formatoCantidad(p.unidades_vendidas)}</td>
+                        <td className={`${PAD} text-right`}>{formatoCantidad(p.rotacion_diaria)}</td>
+                        <td className={`${PAD} text-right`}>{p.cobertura_dias === null ? '—' : formatoCantidad(p.cobertura_dias)}</td>
                         {conColumnaEstacional && (
                           <td className={`${PAD} text-right`} title={p.factor_estacional == null ? 'Sin historia de hace un año: no se ajustó' : undefined}>
-                            {p.factor_estacional == null ? '—' : `×${numero(p.factor_estacional)}`}
+                            {p.factor_estacional == null ? '—' : `×${formatoCantidad(p.factor_estacional)}`}
                           </td>
                         )}
                         <td className={`${PAD} text-right font-semibold ${FIJA}`}>
-                          {numero(p.sugerido)}{p.unidad && <> <span className="text-xs font-normal text-muted-foreground">{p.unidad}</span></>}
+                          {formatoCantidad(p.sugerido)}{p.unidad && <> <span className="text-xs font-normal text-muted-foreground">{p.unidad}</span></>}
                         </td>
                         <td className={PAD}>{etiquetaDelMotivo(p.motivo)}</td>
                       </tr>

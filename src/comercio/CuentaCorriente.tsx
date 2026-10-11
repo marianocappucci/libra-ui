@@ -15,10 +15,7 @@ import { DataTable, sortableHeader } from '../data-table'
 import { Eye } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
-}
+import { formatoMoneda } from '../formatos'
 
 export function CuentaCorriente() {
   const [clientes, setClientes] = useState<ClienteConSaldoCC[]>([])
@@ -58,11 +55,11 @@ export function CuentaCorriente() {
         return (
           <div className="text-right">
             {s > 0 ? (
-              <BadgeEstado tono="atencion">{formatCurrency(s)}</BadgeEstado>
+              <BadgeEstado tono="atencion">{formatoMoneda(s)}</BadgeEstado>
             ) : s < 0 ? (
-              <BadgeEstado tono="ok">A favor {formatCurrency(s * -1)}</BadgeEstado>
+              <BadgeEstado tono="ok">A favor {formatoMoneda(s * -1)}</BadgeEstado>
             ) : (
-              <BadgeEstado tono="neutro">{formatCurrency(0)}</BadgeEstado>
+              <BadgeEstado tono="neutro">{formatoMoneda(0)}</BadgeEstado>
             )}
           </div>
         )
@@ -91,7 +88,7 @@ export function CuentaCorriente() {
         <Card className="border-0 bg-amber-50 dark:bg-amber-950/40">
           <CardContent className="py-3 text-center">
             <p className="text-sm text-muted-foreground">Total deuda pendiente</p>
-            <p className="text-xl font-bold text-amber-600 dark:text-amber-400">{formatCurrency(totalDeuda)}</p>
+            <p className="text-xl font-bold text-amber-600 dark:text-amber-400">{formatoMoneda(totalDeuda)}</p>
           </CardContent>
         </Card>
       )}

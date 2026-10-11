@@ -37,10 +37,7 @@ import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
 import { fecha } from '@/lib/fechas'
 import { SelectBuscable } from '../SelectBuscable'
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
-}
+import { formatoMoneda } from '../formatos'
 
 const TIPO_LABELS: Record<number, string> = {
   1: 'Factura A', 6: 'Factura B', 11: 'Factura C',
@@ -522,7 +519,7 @@ export function ClienteDetalle(
                     <div className="border-t pt-3 text-center">
                       <p className="text-xs text-muted-foreground">Total facturado</p>
                       <p className="text-lg font-bold text-primary">
-                        {formatCurrency(cliente.facturas.reduce((sum, f) => sum + f.total, 0))}
+                        {formatoMoneda(cliente.facturas.reduce((sum, f) => sum + f.total, 0))}
                       </p>
                     </div>
                   )}
@@ -640,7 +637,7 @@ export function ClienteDetalle(
                             <td className="p-3"><Badge variant="secondary">{TIPO_LABELS[f.tipo] ?? 'Cbte.'}</Badge></td>
                             <td className="p-3 font-mono text-xs">{String(f.punto_venta).padStart(4, '0')}-{String(f.numero).padStart(8, '0')}</td>
                             <td className="p-3 text-muted-foreground">{fecha(f.fecha)}</td>
-                            <td className="p-3 text-right font-medium">{formatCurrency(f.total)}</td>
+                            <td className="p-3 text-right font-medium">{formatoMoneda(f.total)}</td>
                             <td className="p-3 text-center">
                               {f.cae && f.cae !== 'PENDIENTE' ? (
                                 <BadgeEstado tono="ok">Autorizada</BadgeEstado>
@@ -682,7 +679,7 @@ export function ClienteDetalle(
                             <td className="p-3 font-mono text-xs">{p.number}</td>
                             <td className="p-3 text-muted-foreground">{fecha(p.date)}</td>
                             <td className="p-3 text-muted-foreground">{fecha(p.valid_until) || '—'}</td>
-                            <td className="p-3 text-right font-medium">{formatCurrency(p.total)}</td>
+                            <td className="p-3 text-right font-medium">{formatoMoneda(p.total)}</td>
                             <td className="p-3 text-center">
                               <BadgeEstado tono={ESTADO_PRESUPUESTO_TONO[p.status] ?? 'neutro'}>
                                 {ESTADO_PRESUPUESTO_LABEL[p.status] ?? p.status ?? 'Borrador'}
@@ -719,7 +716,7 @@ export function ClienteDetalle(
                           <tr key={r.id} className="border-b last:border-0">
                             <td className="p-3 font-mono text-xs">{r.number}</td>
                             <td className="p-3 text-muted-foreground">{fecha(r.date)}</td>
-                            <td className="p-3 text-right font-medium">{formatCurrency(r.total)}</td>
+                            <td className="p-3 text-right font-medium">{formatoMoneda(r.total)}</td>
                             <td className="p-3 text-right">
                               <Button asChild size="icon" variant="outline"><Link to={`/remitos/${r.id}`}><Eye /></Link></Button>
                             </td>
