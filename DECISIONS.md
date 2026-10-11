@@ -967,3 +967,27 @@ real. `SucursalDetalle` (alta de depósitos) no tiene tope y no cambia.
 
 **Cómo se adopta.** Subir el pin a 0.136.0 y pasar `rutaDelLimite="/api/limites/sucursales"` en la página de Sucursales de VentaLibra. Los demás
 productos no tocan nada.
+
+## ADR-049 — «Recibir mercadería» es idempotente: una clave por intento y una sola llamada al motor (0.137.0)
+
+**Problema** (anotado el 2026-10-01 en los pendientes de VentaLibra). El diálogo hacía tres llamadas (`POST /api/purchase-receipts`, una por línea a `…/items`, y `…/confirm`): tres commits sin ninguna identidad de operación. Si el motor guardaba la recepción pero la respuesta se perdía y la persona reintentaba, el diálogo volvía a empezar desde la primera y el stock entraba dos veces (con lote o sin lote). Además un corte entre llamadas dejaba una recepción en borrador a mitad de camino.
+
+**Qué ya existe** (se miró antes de cambiar): `nuevaClaveDeOperacion()` (ADR-045), el patrón de `Vencimientos` (clave por intento, reusada mientras los datos no cambian, intento incierto guardado en `sessionStorage` con el cuerpo completo, guardar falla cerrado, «Reenviar / Descartar») y el de `reposicion-ordenes` (el pedido entero como intento). No se inventó otro mecanismo: se aplicó el mismo a esta pantalla.
+
+**Decisión.**
+1. `RecibirMercaderiaDialog` manda la recepción **entera** (proveedor, orden, remito, depósito, líneas con su lote y vencimiento) más `clave_operacion` a `POST /api/purchase-receipts/recibir` (ADR-045 de libracommerce, revisión `0006`): el motor la crea, la carga y la confirma en una transacción, y un reintento con la misma clave contesta la recepción original con `repetida: true` sin mover stock.
+2. **Una clave por intento, reusada mientras los datos no cambien.** Volver a apretar «Recibir» tras un rechazo del motor (no se escribió nada) reusa la clave; si la persona cambia algo (cantidad, costo, lote, depósito, remito) es otra recepción y la clave se regenera. Dos recepciones legítimas iguales seguidas llevan claves distintas.
+3. **Un intento incierto no se pierde ni se pisa** (`src/comercio/recepcion-pendiente.ts`, a lo sumo uno por orden). Incierto = sin respuesta (red, timeout), un 5xx, un 408 o un 503 que no sea el de la migración; definitivo = un 4xx (menos el 408) o el 503 que dice `libracommerce-migrar upgrade`. El intento se guarda **antes** de enviar con su cuerpo y su clave; mientras haya uno sobre la orden, el formulario se reemplaza por lo que se había mandado y sólo se ofrece «Reenviar el intento anterior» (mismo cuerpo, misma clave) o «Descartar el intento anterior…» (con la advertencia de que si se registró, descartarlo puede duplicar el ingreso). Se borra con un resultado definitivo, con `repetida` o al descartarlo. Sobrevive a cerrar el diálogo y a recargar la pestaña (`sessionStorage`; la memoria de la pestaña manda).
+4. **Guardar falla cerrado**, igual que en Vencimientos: si el intento no queda en el storage (cuota, modo privado), no se envía y se avisa. Sin el cuerpo y la clave guardados, un reintento tras una respuesta perdida sería otra recepción.
+5. Si el motor contesta `repetida: true`, la pantalla lo dice («Esa recepción ya estaba registrada (era un reintento): no se cargó dos veces.») y recarga la orden y las recepciones.
+6. `RecepcionRecibida` (`PurchaseReceipt & { repetida }`) en `tipos.ts`. Ya no existe la recepción a medias que dejaba este diálogo, así que `onRecargarRecepciones` desaparece de sus props; la sección «Recepciones de esta orden» (con «Confirmar») se queda para los borradores que ya existan o los armados por la API.
+
+**Tests.** `test/comercio-ordenes-compra.test.tsx`: el cuerpo (una sola llamada, con un UUID v4), el corte sin respuesta y el reenvío con la misma clave y el mismo cuerpo, el 5xx incierto, el 4xx definitivo (misma clave con los mismos datos, otra al cambiarlos), la persistencia tras cerrar y recargar, el descarte con confirmación, el storage que falla (no se envía) y un motor que no manda `repetida`. `test/recepcion-pendiente.test.ts`: el almacén y la clasificación definitivo/incierto. Fallan si el reenvío genera otra clave o si la clave se regenera en cada clic. Los tests de lote y vencimiento pasaron al cuerpo nuevo sin cambiar lo que afirman.
+
+**Lo que no cubre.**
+- **Otra pestaña u otro navegador** no ve el intento guardado; ahí lo único que protege es el motor (misma clave y mismo cuerpo, `repetida`).
+- **Kit nuevo con motor viejo**: `POST /api/purchase-receipts/recibir` no existe antes de libracommerce con la revisión `0006` (405/404, o 503 sin la revisión aplicada). Se suben juntos en el producto; no hay vuelta atrás al flujo de tres llamadas.
+- Un intento pendiente de una orden que ya no admite recibir (el botón desaparece) queda guardado e inofensivo hasta cerrar la pestaña.
+- No se probó en un navegador real ni contra el motor: los tests usan el `fetch` falso del kit. La prueba de punta a punta (el motor contestando `repetida` al reintento) está en libracommerce.
+
+**Cómo se adopta.** Subir el pin del kit a 0.137.0 **y** el del motor al tag con la revisión `0006` en el mismo cambio, y correr `libracommerce-migrar upgrade` antes de arrancar. El producto no tiene que tocar código: si filtra respuestas por prefijo de ruta (VentaLibra: costos y permisos de `/api/purchase-receipts`), `/recibir` queda cubierta.
