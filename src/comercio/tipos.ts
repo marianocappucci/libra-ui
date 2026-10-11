@@ -363,6 +363,13 @@ export function formatoMoneda(valor: number): string {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(valor)
 }
 
+/** Una cantidad como la lee una persona: `6`, `1,5`, `1.250`. El motor las manda como texto decimal (`"6.0"`) y
+ *  ya redondeadas a la escala de la unidad, así que no se recortan decimales (una de 6 decimales no muestra 0,0004 como 0). */
+export function formatoCantidad(valor: string | number): string {
+  const n = Number(valor)
+  return Number.isFinite(n) ? new Intl.NumberFormat('es-AR', { maximumFractionDigits: 10 }).format(n) : String(valor)
+}
+
 export const ESTADO_VENTA_TONO: Record<string, TonoEstado> = {
   cobrada: 'ok', parcial: 'atencion', pendiente: 'neutro', anulada: 'negativo',
   devuelta: 'atencion', devuelta_parcial: 'atencion', borrador_descartado: 'neutro',

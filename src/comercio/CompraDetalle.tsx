@@ -32,7 +32,7 @@ import {
   type CuerpoDeRecepcion, type LineaDeRecepcion, type RecepcionPendiente,
 } from './recepcion-pendiente'
 import {
-  opcionesProducto, PURCHASE_ORDER_STATUS_LABELS, PURCHASE_ORDER_STATUS_TONO,
+  formatoCantidad, opcionesProducto, PURCHASE_ORDER_STATUS_LABELS, PURCHASE_ORDER_STATUS_TONO,
   PURCHASE_RECEIPT_STATUS_LABELS, PURCHASE_RECEIPT_STATUS_TONO,
   type Producto, type Deposito, type PurchaseOrder, type PurchaseReceipt, type Proveedor, type RecepcionRecibida,
 } from './tipos'
@@ -244,9 +244,9 @@ export function CompraDetalle({ rutaDeCompras = '/compras' }: CompraDetalleProps
               {order.items.map((line, idx) => (
                 <TableRow key={idx}>
                   <TableCell>{itemName(line.item_id)}</TableCell>
-                  <TableCell>{line.quantity_ordered}</TableCell>
-                  <TableCell>{line.quantity_received}</TableCell>
-                  <TableCell>{line.pending_quantity}</TableCell>
+                  <TableCell className="tabular-nums">{formatoCantidad(line.quantity_ordered)}</TableCell>
+                  <TableCell className="tabular-nums">{formatoCantidad(line.quantity_received)}</TableCell>
+                  <TableCell className="tabular-nums">{formatoCantidad(line.pending_quantity)}</TableCell>
                   <TableCell>${money(line.unit_cost)}</TableCell>
                   <TableCell>${money(line.subtotal)}</TableCell>
                 </TableRow>
@@ -332,7 +332,7 @@ function RecibirMercaderiaDialog({
   const venceDe = (itemId: number) => vencimientoDe(itemId) !== 'no'
 
   const [cantidades, setCantidades] = useState<Record<number, string>>(
-    () => Object.fromEntries(pendientes.map((l) => [l.item_id, l.pending_quantity])),
+    () => Object.fromEntries(pendientes.map((l) => [l.item_id, String(Number(l.pending_quantity))])),
   )
   const [costos, setCostos] = useState<Record<number, string>>(
     () => Object.fromEntries(pendientes.map((l) => [l.item_id, l.unit_cost])),
@@ -362,7 +362,7 @@ function RecibirMercaderiaDialog({
     if (valor === '') return null
     const n = Number(valor)
     if (Number.isNaN(n) || n < 0) return 'Tiene que ser un número igual o mayor a 0.'
-    if (n > Number(pendiente)) return `No puede superar lo pendiente (${pendiente}).`
+    if (n > Number(pendiente)) return `No puede superar lo pendiente (${formatoCantidad(pendiente)}).`
     return null
   }
 
@@ -498,7 +498,7 @@ function RecibirMercaderiaDialog({
                   <Fragment key={linea.item_id}>
                     <TableRow className={vence ? 'border-b-0' : undefined}>
                       <TableCell>{itemName(linea.item_id)}</TableCell>
-                      <TableCell className="tabular-nums">{linea.pending_quantity}</TableCell>
+                      <TableCell className="tabular-nums">{formatoCantidad(linea.pending_quantity)}</TableCell>
                       <TableCell>
                         <Input
                           value={cantidades[linea.item_id] ?? ''}
@@ -622,7 +622,7 @@ function IntentoPendiente({ pendiente, itemName, depositoNombre, busy, confirman
       <ul className="list-disc pl-5">
         {cuerpo.items.map((l) => (
           <li key={l.item_id}>
-            {itemName(l.item_id)}: {l.quantity}{l.lot_code ? ` (lote ${l.lot_code}, vence ${l.expires_at})` : ''}
+            {itemName(l.item_id)}: {formatoCantidad(l.quantity)}{l.lot_code ? ` (lote ${l.lot_code}, vence ${l.expires_at})` : ''}
           </li>
         ))}
       </ul>
