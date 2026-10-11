@@ -32,10 +32,7 @@ import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
 import { fecha } from '@/lib/fechas'
 import { hoyISO } from '../fechas'
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
-}
+import { formatoMoneda } from '../formatos'
 
 const estadoTono: Record<Egreso['estado'], TonoEstado> = {
   pagado: 'ok', parcial: 'atencion', pendiente: 'neutro',
@@ -196,7 +193,7 @@ export function ProveedorDetalle({ conEgresos = true }: { conEgresos?: boolean }
         </BadgeEstado>
       ),
     },
-    { accessorKey: 'total', header: 'Total', cell: ({ row }) => <span className="font-medium text-destructive">{formatCurrency(row.original.total)}</span> },
+    { accessorKey: 'total', header: 'Total', cell: ({ row }) => <span className="font-medium text-destructive">{formatoMoneda(row.original.total)}</span> },
   ], [])
 
   const totalEgresos = egresos.reduce((sum, e) => sum + e.total, 0)
@@ -343,7 +340,7 @@ export function ProveedorDetalle({ conEgresos = true }: { conEgresos?: boolean }
                 <CardTitle className="text-base">Egresos registrados</CardTitle>
                 <div className="flex items-center gap-3">
                   {egresos.length > 0 && (
-                    <span className="text-sm text-muted-foreground">Total: <span className="font-semibold text-destructive">{formatCurrency(totalEgresos)}</span></span>
+                    <span className="text-sm text-muted-foreground">Total: <span className="font-semibold text-destructive">{formatoMoneda(totalEgresos)}</span></span>
                   )}
                   <Button asChild size="sm" variant="outline"><Link to="/egresos"><Plus />Nuevo egreso</Link></Button>
                 </div>

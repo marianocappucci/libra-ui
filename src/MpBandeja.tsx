@@ -43,10 +43,7 @@ import {
 import { TituloPantalla } from './titulo-pantalla'
 import { ICONOS } from './iconos-identidad'
 import { fecha } from '@/lib/fechas'
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
-}
+import { formatoMoneda } from './formatos'
 
 type Bandeja = {
   pendientes: MpPago[]
@@ -270,7 +267,7 @@ export function MpBandeja() {
     { id: 'tipo', header: 'Tipo', cell: ({ row }) => row.original.tipoNode, size: 170, minSize: 130 },
     { accessorKey: 'emisor', header: 'Emisor / Pagador', size: 150, minSize: 90, meta: { stretch: true }, cell: ({ row }) => <span className="block w-full truncate" title={row.original.emisor}>{row.original.emisor}</span> },
     { id: 'cliente', header: 'Cliente', size: 140, minSize: 90, cell: ({ row }) => row.original.cliente ? <span className="block w-full truncate" title={row.original.cliente.name}>{row.original.cliente.name}</span> : <span className="text-muted-foreground">—</span> },
-    { accessorKey: 'monto', header: 'Monto', size: 100, minSize: 80, cell: ({ row }) => <span className="font-medium">{formatCurrency(row.original.monto)}</span> },
+    { accessorKey: 'monto', header: 'Monto', size: 100, minSize: 80, cell: ({ row }) => <span className="font-medium">{formatoMoneda(row.original.monto)}</span> },
     { id: 'estado', header: 'Estado', size: 90, minSize: 80, cell: ({ row }) => <BadgeEstado tono={row.original.estado_factura === 'facturado' ? 'ok' : 'neutro'}>{row.original.estado_factura === 'facturado' ? 'Facturado' : 'Ignorado'}</BadgeEstado> },
     {
       id: 'factura',
@@ -354,7 +351,7 @@ export function MpBandeja() {
         )
       },
     },
-    { accessorKey: 'monto', header: 'Monto', size: 100, minSize: 80, cell: ({ row }) => <span className="font-medium">{formatCurrency(row.original.monto)}</span> },
+    { accessorKey: 'monto', header: 'Monto', size: 100, minSize: 80, cell: ({ row }) => <span className="font-medium">{formatoMoneda(row.original.monto)}</span> },
     {
       id: 'actions',
       header: () => <div className="text-right">Acciones</div>,
@@ -409,7 +406,7 @@ export function MpBandeja() {
         )
       },
     },
-    { accessorKey: 'monto', header: 'Monto', size: 100, minSize: 80, cell: ({ row }) => <span className="font-medium">{formatCurrency(row.original.monto)}</span> },
+    { accessorKey: 'monto', header: 'Monto', size: 100, minSize: 80, cell: ({ row }) => <span className="font-medium">{formatoMoneda(row.original.monto)}</span> },
     {
       id: 'actions',
       header: () => <div className="text-right">Acciones</div>,

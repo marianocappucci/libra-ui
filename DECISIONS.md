@@ -991,3 +991,22 @@ productos no tocan nada.
 - No se probó en un navegador real ni contra el motor: los tests usan el `fetch` falso del kit. La prueba de punta a punta (el motor contestando `repetida` al reintento) está en libracommerce.
 
 **Cómo se adopta.** Subir el pin del kit a 0.137.0 **y** el del motor al tag con la revisión `0006` en el mismo cambio, y correr `libracommerce-migrar upgrade` antes de arrancar. El producto no tiene que tocar código: si filtra respuestas por prefijo de ruta (VentaLibra: costos y permisos de `/api/purchase-receipts`), `/recibir` queda cubierta.
+
+## ADR-050 — Plata y cantidades tienen un solo formateador, en el nivel general del kit: `libra-ui/formatos` (0.138.0)
+
+**Problema.** Cada pantalla traía su copia: 25 `formatCurrency` (más `moneda` en Margen y en las órdenes de reposición) y cuatro `numero` para cantidades (`Reposicion`, `Vencimientos`, `reposicion-ordenes`, `Margen`). Idénticas hasta que una no lo es: las cantidades de Compras salían con el «.0» del motor («6.0») porque esa pantalla no tenía copia (0.137.1 la resolvió con `formatoCantidad` en `comercio/tipos`). Un formateador de números no es de comercio —lo necesita cualquier producto—, y en `comercio/tipos` no lo podían importar los que no usan ese subárbol.
+
+**Qué ya existe** (se miró antes de cambiar): `formatoMoneda` y `formatoCantidad` en `comercio/tipos.ts` (0.137.1) y `fechas` como módulo general de fechas, exportado como subpath. No había un módulo de números en el kit.
+
+**Decisión.**
+1. `src/formatos.ts`, exportado como `libra-ui/formatos` (junto a `libra-ui/fechas`), con `formatoMoneda(valor: number)` (`$ 1.234,56`) y `formatoCantidad(valor: string | number)` (`6`, `1,5`, `1.250`; `maximumFractionDigits: 10`; un valor no finito se devuelve como vino). Los `Intl.NumberFormat` se construyen una vez.
+2. `comercio/tipos` **sigue re-exportando** las dos: los productos las importan de ahí y no tienen que tocar nada para subir el pin.
+3. Se migraron las copias del kit: los 24 `formatCurrency` de pesos con dos decimales y las `numero`/`moneda` de `Reposicion`, `Vencimientos`, `reposicion-ordenes` y `Margen`. **`Dashboard` queda con el suyo**: muestra los pesos enteros (`maximumFractionDigits: 0`), que es otro formato y no una copia.
+4. **`Margen.numero` pasa de 3 a 10 decimales sin cambiar lo que se ve.** Es una cantidad (unidades vendidas) y el motor ya las redondea a 3 (`unidades`) y a 2 (`unidades_por_dia`) en `erp/margen.py`; `Intl` no agrega ceros, así que un tope mayor que el del motor no imprime nada más. Los porcentajes (`Margen.porcentaje`, `TarjetaIndicador`) y los tamaños de `CampoArchivo` tienen su tope a propósito y no se tocaron.
+5. Un guard (`test/formatos.test.ts`) falla si una pantalla vuelve a armar su `Intl.NumberFormat` de pesos (`style: 'currency'`) o de cantidades (`maximumFractionDigits: 10`) fuera de `formatos.ts`.
+
+**Tests.** `test/formatos.test.ts`: entero, fracción, miles, texto decimal del motor («6.0», «1.50»), 6 decimales sin recortar, negativo, valor no numérico, la plata, que `comercio/tipos` exporta las mismas funciones, y el guard contra copias nuevas. Las pantallas migradas conservan sus tests de siempre sin cambios: no cambia ningún texto visible.
+
+**Lo que no cubre.** `formatoCantidad('')` da «0» (`Number('')` es 0) y `formatoMoneda` sigue sin aceptar texto: quien reciba un importe como texto del motor hace `formatoMoneda(Number(x))`. `Compras`/`CompraDetalle` tienen helpers de monto sin símbolo (`toLocaleString` con 2 decimales fijos) que tampoco se movieron: no son copias de estos dos.
+
+**Cómo se adopta.** Subir el pin a 0.138.0. Cada producto puede cambiar sus copias locales de `Intl.NumberFormat('es-AR', …)` por `import { formatoMoneda, formatoCantidad } from 'libra-ui/formatos'`; no es obligatorio para subir el pin.

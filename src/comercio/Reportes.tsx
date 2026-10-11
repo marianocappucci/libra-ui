@@ -21,10 +21,7 @@ import { TarjetaIndicador } from '../TarjetaIndicador'
 import { iconoDe } from '../medios-pago'
 import { fecha } from '@/lib/fechas'
 import { hoyISO, primerDiaDelMesISO } from '../fechas'
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
-}
+import { formatoMoneda } from '../formatos'
 
 // 🔴 Acá había un `MEDIO_LABELS` y un `MEDIO_ICONS` propios: dos copias más del
 // vocabulario, y la de etiquetas ya divergía (decía "Billetera" donde el resto
@@ -92,9 +89,9 @@ export function Reportes() {
           {/* Los cuatro KPI toman su ícono del catálogo de indicadores (ADR-038): se pasa el concepto, no un ícono de lucide. */}
           <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
             <TarjetaIndicador concepto="ventas" etiqueta="Ventas en período" valor={data.resumen.ventas_cantidad} ayuda="operaciones" />
-            <TarjetaIndicador concepto="montoVendido" etiqueta="Total vendido" valor={formatCurrency(data.resumen.ventas_total)} tono="exito" />
+            <TarjetaIndicador concepto="montoVendido" etiqueta="Total vendido" valor={formatoMoneda(data.resumen.ventas_total)} tono="exito" />
             <TarjetaIndicador concepto="comprobantes" etiqueta="Facturas emitidas" valor={data.resumen.facturas_cantidad} />
-            <TarjetaIndicador concepto="caja" etiqueta="Movimientos de caja" valor={formatCurrency(data.resumen.caja_saldo)} />
+            <TarjetaIndicador concepto="caja" etiqueta="Movimientos de caja" valor={formatoMoneda(data.resumen.caja_saldo)} />
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
@@ -121,7 +118,7 @@ export function Reportes() {
                           <tr key={v.periodo} className="border-b last:border-0">
                             <td className="p-3">{fecha(v.periodo)}</td>
                             <td className="p-3 text-right">{v.cantidad}</td>
-                            <td className="p-3 text-right font-semibold">{formatCurrency(v.total)}</td>
+                            <td className="p-3 text-right font-semibold">{formatoMoneda(v.total)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -129,7 +126,7 @@ export function Reportes() {
                         <tr>
                           <td className="p-3">Total</td>
                           <td className="p-3 text-right">{data.ventas_ts.reduce((s, v) => s + v.cantidad, 0)}</td>
-                          <td className="p-3 text-right">{formatCurrency(data.ventas_ts.reduce((s, v) => s + v.total, 0))}</td>
+                          <td className="p-3 text-right">{formatoMoneda(data.ventas_ts.reduce((s, v) => s + v.total, 0))}</td>
                         </tr>
                       </tfoot>
                     </table>
@@ -157,7 +154,7 @@ export function Reportes() {
                           <li key={m.medio} className="grid gap-1 text-sm">
                             <div className="flex items-center justify-between">
                               <span className="flex items-center gap-2"><Icon className="size-4 text-muted-foreground" />{data.medio_label[m.medio] ?? m.medio}</span>
-                              <span className="font-semibold">{formatCurrency(m.total)}</span>
+                              <span className="font-semibold">{formatoMoneda(m.total)}</span>
                             </div>
                             <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
                               <div className="h-full rounded-full bg-exito" style={{ width: `${p}%` }} />
@@ -197,7 +194,7 @@ export function Reportes() {
                             <td className="p-3 text-muted-foreground">{i + 1}</td>
                             <td className="p-3">{p.nombre || '(sin nombre)'}</td>
                             <td className="p-3 text-right">{p.cantidad}</td>
-                            <td className="p-3 text-right font-semibold">{formatCurrency(p.total)}</td>
+                            <td className="p-3 text-right font-semibold">{formatoMoneda(p.total)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -227,7 +224,7 @@ export function Reportes() {
                           <tr key={c.tipo} className="border-b last:border-0">
                             <td className="p-3 capitalize">{c.tipo}</td>
                             <td className="p-3 text-right">{c.cantidad}</td>
-                            <td className={`p-3 text-right font-semibold ${c.tipo === 'ingreso' ? 'text-exito' : 'text-destructive'}`}>{formatCurrency(c.total)}</td>
+                            <td className={`p-3 text-right font-semibold ${c.tipo === 'ingreso' ? 'text-exito' : 'text-destructive'}`}>{formatoMoneda(c.total)}</td>
                           </tr>
                         ))}
                       </tbody>

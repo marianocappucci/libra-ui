@@ -59,6 +59,7 @@ import type {
   VencimientoEntradaPayload, VencimientoEntradaRespuesta, VencimientoLote, VencimientoMarca, VencimientoMermaPayload, VencimientoMermaRespuesta, VencimientoProductoLotes, VencimientoSinLote,
   VencimientosData, VencimientoSituacion,
 } from './tipos'
+import { formatoCantidad } from '../formatos'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -91,11 +92,6 @@ const SIN_REVISION =
  *  que no se escribió. */
 const FALTA_REVISION = /Falta la revisión 0002_vencimientos_lotes.*libracommerce-migrar upgrade/s
 
-/** Las cantidades se muestran como las manda el motor, sin un tope de decimales más bajo que el suyo. */
-function numero(valor: number): string {
-  return new Intl.NumberFormat('es-AR', { maximumFractionDigits: 10 }).format(valor)
-}
-
 /** El motivo del rechazo de un parámetro, o `null` si vale: un entero de 1 hasta su tope, como en el motor. */
 function errorDeDias(valor: string): string | null {
   const n = Number(valor)
@@ -106,7 +102,7 @@ function errorDeDias(valor: string): string | null {
 function errorDeCantidad(valor: string, saldo: number): string | null {
   const n = Number(valor)
   if (valor.trim() === '' || !Number.isFinite(n) || n <= 0) return 'Tiene que ser un número mayor a 0.'
-  return n > saldo ? `No puede pasar del saldo (${numero(saldo)}).` : null
+  return n > saldo ? `No puede pasar del saldo (${formatoCantidad(saldo)}).` : null
 }
 
 /** El mensaje de un error del motor o de la red. 503 es la base sin la revisión `0002`; 409 (regla de negocio o clave
@@ -384,14 +380,14 @@ function DialogoMerma({ fila, alCambiarPendientes, onCerrar, onListo }: {
           <DialogTitle className="flex items-center gap-2"><Trash2 className="size-4" />Dar de baja (merma)</DialogTitle>
           <DialogDescription>
             {fila.nombre}{fila.variante ? ` (${fila.variante})` : ''} · lote {fila.lote ?? '(sin código)'} · vence {fecha(fila.vence)} ·
-            {' '}{ubicacion(fila)} · saldo {numero(fila.saldo)} {fila.unidad}
+            {' '}{ubicacion(fila)} · saldo {formatoCantidad(fila.saldo)} {fila.unidad}
           </DialogDescription>
         </DialogHeader>
         <AvisoSaldoSobreestimado />
         {pendiente && cuerpoPendiente && !enVuelo && (
           <PanelIntentoPendiente
             pendiente={pendiente} deshabilitado={enVuelo} onDescartar={() => descartar(firma)}
-            resumen={`dar de baja ${numero(cuerpoPendiente.cantidad)} ${fila.unidad}`}
+            resumen={`dar de baja ${formatoCantidad(cuerpoPendiente.cantidad)} ${fila.unidad}`}
           />
         )}
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
@@ -468,7 +464,7 @@ function DialogoAsignar({ fila, alCambiarPendientes, onCerrar, onListo }: {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><CalendarPlus className="size-4" />Asignar vencimiento</DialogTitle>
           <DialogDescription>
-            {fila.nombre}{fila.variante ? ` (${fila.variante})` : ''} · {ubicacion(fila)} · saldo sin lote {numero(fila.saldo)} {fila.unidad}.
+            {fila.nombre}{fila.variante ? ` (${fila.variante})` : ''} · {ubicacion(fila)} · saldo sin lote {formatoCantidad(fila.saldo)} {fila.unidad}.
             {' '}El stock total no cambia: una parte pasa de “sin lote” al lote y la fecha que elijas.
           </DialogDescription>
         </DialogHeader>
@@ -476,7 +472,7 @@ function DialogoAsignar({ fila, alCambiarPendientes, onCerrar, onListo }: {
         {pendiente && cuerpoPendiente && !enVuelo && (
           <PanelIntentoPendiente
             pendiente={pendiente} deshabilitado={enVuelo} onDescartar={() => descartar(firma)}
-            resumen={`asignar ${numero(cuerpoPendiente.cantidad)} ${fila.unidad} al lote ${cuerpoPendiente.lote} (vence ${fecha(cuerpoPendiente.vence)})`}
+            resumen={`asignar ${formatoCantidad(cuerpoPendiente.cantidad)} ${fila.unidad} al lote ${cuerpoPendiente.lote} (vence ${fecha(cuerpoPendiente.vence)})`}
           />
         )}
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
@@ -710,7 +706,7 @@ function DialogoEntrada({ productos, errorDeProductos, sucursales, puedeMarcar, 
         {pendiente && cuerpoPendiente && !enVuelo && (
           <PanelIntentoPendiente
             pendiente={pendiente} deshabilitado={enVuelo} onDescartar={() => descartar(pendiente.firma)}
-            resumen={`cargar ${numero(cuerpoPendiente.cantidad)} ${unidad ?? ''} al lote ${cuerpoPendiente.lote} (vence ${fecha(cuerpoPendiente.vence)})`.replace(/\s+/g, ' ')}
+            resumen={`cargar ${formatoCantidad(cuerpoPendiente.cantidad)} ${unidad ?? ''} al lote ${cuerpoPendiente.lote} (vence ${fecha(cuerpoPendiente.vence)})`.replace(/\s+/g, ' ')}
           />
         )}
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
@@ -967,21 +963,21 @@ export function Vencimientos({ puedeMover = true, puedeMarcar = true }: { puedeM
 
   function mermaHecha(f: VencimientoLote, r: VencimientoMermaRespuesta) {
     listo(r.repetida
-      ? `Ya estaba registrado: esta baja se había guardado antes, no se volvió a descontar. Saldo del lote: ${numero(r.saldo_restante)} ${f.unidad}.`
-      : `Se dieron de baja ${numero(r.cantidad)} ${f.unidad} de ${f.nombre}, lote ${r.lote ?? '(sin código)'}. Saldo del lote: ${numero(r.saldo_restante)} ${f.unidad}.`)
+      ? `Ya estaba registrado: esta baja se había guardado antes, no se volvió a descontar. Saldo del lote: ${formatoCantidad(r.saldo_restante)} ${f.unidad}.`
+      : `Se dieron de baja ${formatoCantidad(r.cantidad)} ${f.unidad} de ${f.nombre}, lote ${r.lote ?? '(sin código)'}. Saldo del lote: ${formatoCantidad(r.saldo_restante)} ${f.unidad}.`)
   }
 
   function asignacionHecha(f: VencimientoSinLote, r: VencimientoAsignarRespuesta) {
     listo(r.repetida
-      ? `Ya estaba registrado: este vencimiento se había asignado antes, no se volvió a mover stock. Sin lote quedan ${numero(r.saldo_sin_lote)} ${f.unidad}.`
-      : `Se asignó el lote ${r.lote} (vence ${fecha(r.vence)}) a ${numero(r.cantidad)} ${f.unidad} de ${f.nombre}. Sin lote quedan ${numero(r.saldo_sin_lote)} ${f.unidad}.`)
+      ? `Ya estaba registrado: este vencimiento se había asignado antes, no se volvió a mover stock. Sin lote quedan ${formatoCantidad(r.saldo_sin_lote)} ${f.unidad}.`
+      : `Se asignó el lote ${r.lote} (vence ${fecha(r.vence)}) a ${formatoCantidad(r.cantidad)} ${f.unidad} de ${f.nombre}. Sin lote quedan ${formatoCantidad(r.saldo_sin_lote)} ${f.unidad}.`)
   }
 
   function entradaHecha(r: VencimientoEntradaRespuesta, unidad: string | null) {
     const u = unidad ? ` ${unidad}` : ''
     listo(r.repetida
-      ? `Ya estaba registrado: esta carga se había guardado antes, no se sumó de nuevo. Saldo del lote: ${numero(r.saldo_lote)}${u}.`
-      : `Se cargaron ${numero(r.cantidad)}${u} de ${productos.find((p) => p.id === r.producto_id)?.nombre ?? `#${r.producto_id}`} al lote ${r.lote} (vence ${fecha(r.vence)}). Saldo del lote: ${numero(r.saldo_lote)}${u}.`)
+      ? `Ya estaba registrado: esta carga se había guardado antes, no se sumó de nuevo. Saldo del lote: ${formatoCantidad(r.saldo_lote)}${u}.`
+      : `Se cargaron ${formatoCantidad(r.cantidad)}${u} de ${productos.find((p) => p.id === r.producto_id)?.nombre ?? `#${r.producto_id}`} al lote ${r.lote} (vence ${fecha(r.vence)}). Saldo del lote: ${formatoCantidad(r.saldo_lote)}${u}.`)
   }
 
   // Las cargas de stock sin confirmar: no tienen fila en el reporte (el stock todavía puede no estar), así que se listan acá.
@@ -1015,7 +1011,7 @@ export function Vencimientos({ puedeMover = true, puedeMarcar = true }: { puedeM
               return (
                 <li key={p.firma} className="flex flex-wrap items-center gap-2">
                   <span>
-                    {productos.find((x) => x.id === c.producto_id)?.nombre ?? `Producto #${c.producto_id}`} · lote {c.lote} · vence {fecha(c.vence)} · {numero(c.cantidad)}
+                    {productos.find((x) => x.id === c.producto_id)?.nombre ?? `Producto #${c.producto_id}`} · lote {c.lote} · vence {fecha(c.vence)} · {formatoCantidad(c.cantidad)}
                   </span>
                   <Button type="button" size="sm" variant="outline" onClick={() => { setAviso(null); setEntrada({ inicial: c }) }}>
                     Revisar la carga sin confirmar
@@ -1102,8 +1098,8 @@ export function Vencimientos({ puedeMover = true, puedeMarcar = true }: { puedeM
                 <CalendarClock className="size-4 text-primary" />
                 {data.lotes.length} lote{data.lotes.length !== 1 ? 's' : ''}
                 <span className="text-sm font-normal text-muted-foreground">
-                  {' · '}{data.resumen.lotes_por_vencer} por vencer ({numero(data.resumen.unidades_por_vencer)} unid.)
-                  {' · '}{data.resumen.lotes_vencidos} vencidos ({numero(data.resumen.unidades_vencidas)} unid.)
+                  {' · '}{data.resumen.lotes_por_vencer} por vencer ({formatoCantidad(data.resumen.unidades_por_vencer)} unid.)
+                  {' · '}{data.resumen.lotes_vencidos} vencidos ({formatoCantidad(data.resumen.unidades_vencidas)} unid.)
                   {' · '}{data.resumen.productos} producto{data.resumen.productos !== 1 ? 's' : ''}
                 </span>
               </CardTitle>
@@ -1168,7 +1164,7 @@ export function Vencimientos({ puedeMover = true, puedeMarcar = true }: { puedeM
                           <td className="p-3">{fecha(l.vence)}</td>
                           <td className="p-3"><BadgeDeDias dias={l.dias_para_vencer} /></td>
                           <td className="p-3 text-right">
-                            {numero(l.saldo)}{l.unidad && <> <span className="text-xs text-muted-foreground">{l.unidad}</span></>}
+                            {formatoCantidad(l.saldo)}{l.unidad && <> <span className="text-xs text-muted-foreground">{l.unidad}</span></>}
                           </td>
                           {puedeMover && (
                             <td className="p-3 text-right">
@@ -1234,7 +1230,7 @@ export function Vencimientos({ puedeMover = true, puedeMarcar = true }: { puedeM
                             {!s.deposito_activo && <Badge variant="outline" className="ml-2">Depósito inactivo</Badge>}
                           </td>
                           <td className={`p-3 text-right ${s.saldo < 0 ? 'text-destructive' : ''}`}>
-                            {numero(s.saldo)}{s.unidad && <> <span className="text-xs text-muted-foreground">{s.unidad}</span></>}
+                            {formatoCantidad(s.saldo)}{s.unidad && <> <span className="text-xs text-muted-foreground">{s.unidad}</span></>}
                           </td>
                           <td className="p-3">
                             <Badge

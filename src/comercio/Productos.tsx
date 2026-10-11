@@ -53,10 +53,7 @@ import {
 } from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { SelectBuscable } from '../SelectBuscable'
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
-}
+import { formatoMoneda } from '../formatos'
 
 const productoSchema = z.object({
   nombre: z.string().trim().min(1, 'El nombre es obligatorio'),
@@ -760,9 +757,9 @@ export function Productos({
     }
     cols.push(
       { accessorKey: 'unidad', header: 'Unidad', size: 70, minSize: 64, cell: ({ row }) => <span className="block truncate">{row.original.unidad}</span> },
-      { accessorKey: 'precio_venta', header: () => <div className="text-right">Precio venta</div>, size: 114, minSize: 100, cell: ({ row }) => <div className="truncate text-right">{formatCurrency(row.original.precio_venta)}</div> },
+      { accessorKey: 'precio_venta', header: () => <div className="text-right">Precio venta</div>, size: 114, minSize: 100, cell: ({ row }) => <div className="truncate text-right">{formatoMoneda(row.original.precio_venta)}</div> },
       // Sin `precio_costo` en ninguno de los productos (el rol no tiene `costos.ver`) no hay columna: no se muestra un «NaN».
-      ...(sinCosto ? [] : [{ accessorKey: 'precio_costo', header: () => <div className="text-right">Precio costo</div>, size: 114, minSize: 100, cell: ({ row }) => <div className="truncate text-right text-muted-foreground">{formatCurrency(row.original.precio_costo)}</div> } as ColumnDef<Producto>]),
+      ...(sinCosto ? [] : [{ accessorKey: 'precio_costo', header: () => <div className="text-right">Precio costo</div>, size: 114, minSize: 100, cell: ({ row }) => <div className="truncate text-right text-muted-foreground">{formatoMoneda(row.original.precio_costo)}</div> } as ColumnDef<Producto>]),
       ...(conStockTotal ? [{
         // 🔑 «Stock total» y no «Stock»: es la suma de TODOS los depósitos; con varias sucursales un «Stock: 10» se lee
         // como «hay 10 acá». El reparto está en la pantalla de Stock.

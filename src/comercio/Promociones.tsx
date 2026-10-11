@@ -24,10 +24,7 @@ import {
   Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/confirm-dialog'
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
-}
+import { formatoMoneda } from '../formatos'
 
 function formatFechaHora(iso: string): string {
   return new Date(iso).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })
@@ -40,7 +37,7 @@ function describirRegla(p: Promocion): string {
     return `Llevá ${it?.cantidad} pagá ${p.paga}${it?.nombre ? ` · ${it.nombre}` : ''}`
   }
   const partes = p.items.map((i) => (i.cantidad === 1 ? i.nombre : `${i.cantidad} × ${i.nombre}`))
-  return `${partes.join(' + ')} = ${formatCurrency(p.precio ?? 0)}`
+  return `${partes.join(' + ')} = ${formatoMoneda(p.precio ?? 0)}`
 }
 
 function describirVigencia(p: Promocion): string {

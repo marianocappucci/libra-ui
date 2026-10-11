@@ -33,10 +33,7 @@ import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
 import { fecha } from '@/lib/fechas'
 import { hoyISO, primerDiaDelMesISO } from '../fechas'
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
-}
+import { formatoMoneda } from '../formatos'
 
 const egresoSchema = z.object({
   fecha: z.string(),
@@ -177,7 +174,7 @@ export function Egresos() {
         </BadgeEstado>
       ),
     },
-    { accessorKey: 'total', header: () => <div className="text-right">Total</div>, size: 114, minSize: 100, cell: ({ row }) => <div className="truncate text-right font-medium text-destructive">{formatCurrency(row.original.total)}</div> },
+    { accessorKey: 'total', header: () => <div className="text-right">Total</div>, size: 114, minSize: 100, cell: ({ row }) => <div className="truncate text-right font-medium text-destructive">{formatoMoneda(row.original.total)}</div> },
     {
       id: 'actions',
       header: () => <div className="text-right">Acciones</div>,
@@ -209,15 +206,15 @@ export function Egresos() {
         {resumen && (
           <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
             <Card><CardContent className="flex items-start justify-between gap-3">
-              <div className="min-w-0 [&_p]:truncate"><CardDescription>Total del período</CardDescription><p className="text-2xl font-bold">{formatCurrency(resumen.total_periodo)}</p></div>
+              <div className="min-w-0 [&_p]:truncate"><CardDescription>Total del período</CardDescription><p className="text-2xl font-bold">{formatoMoneda(resumen.total_periodo)}</p></div>
               <span className="shrink-0 rounded-lg bg-muted p-2 text-muted-foreground"><ArrowUpCircle /></span>
             </CardContent></Card>
             <Card><CardContent className="flex items-start justify-between gap-3">
-              <div className="min-w-0 [&_p]:truncate"><CardDescription>Pagado</CardDescription><p className="text-2xl font-bold text-exito">{formatCurrency(resumen.pagado)}</p></div>
+              <div className="min-w-0 [&_p]:truncate"><CardDescription>Pagado</CardDescription><p className="text-2xl font-bold text-exito">{formatoMoneda(resumen.pagado)}</p></div>
               <span className="shrink-0 rounded-lg bg-exito/10 p-2 text-exito"><CheckCircle2 /></span>
             </CardContent></Card>
             <Card><CardContent className="flex items-start justify-between gap-3">
-              <div className="min-w-0 [&_p]:truncate"><CardDescription>Pendiente / Parcial</CardDescription><p className="text-2xl font-bold text-destructive">{formatCurrency(resumen.pendiente)}</p></div>
+              <div className="min-w-0 [&_p]:truncate"><CardDescription>Pendiente / Parcial</CardDescription><p className="text-2xl font-bold text-destructive">{formatoMoneda(resumen.pendiente)}</p></div>
               <span className="shrink-0 rounded-lg bg-destructive/10 p-2 text-destructive"><Hourglass /></span>
             </CardContent></Card>
           </div>
@@ -363,8 +360,8 @@ export function Egresos() {
                 </FormItem>
               )} />
               <div className="rounded-md bg-muted p-2 text-sm">
-                <p className="flex justify-between gap-4 text-muted-foreground"><span>IVA</span><span>{formatCurrency((Number(form.watch('monto_neto')) || 0) * (Number(form.watch('iva_pct')) || 0))}</span></p>
-                <p className="flex justify-between gap-4 font-bold"><span>Total</span><span className="text-destructive">{formatCurrency((Number(form.watch('monto_neto')) || 0) * (1 + (Number(form.watch('iva_pct')) || 0)))}</span></p>
+                <p className="flex justify-between gap-4 text-muted-foreground"><span>IVA</span><span>{formatoMoneda((Number(form.watch('monto_neto')) || 0) * (Number(form.watch('iva_pct')) || 0))}</span></p>
+                <p className="flex justify-between gap-4 font-bold"><span>Total</span><span className="text-destructive">{formatoMoneda((Number(form.watch('monto_neto')) || 0) * (1 + (Number(form.watch('iva_pct')) || 0)))}</span></p>
               </div>
             </div>
             <FormField control={form.control} name="observaciones" render={({ field }) => (

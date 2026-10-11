@@ -40,16 +40,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { SelectBuscable } from '../SelectBuscable'
+import { formatoMoneda } from '../formatos'
 
 // Radix Select no admite value="" (reservado): «todas» y «sin lista» viajan como un sentinel, mismo patrón que
 // Egresos ("__sin__") y Productos ("__ninguna__").
 const TODAS = '__todas__'
 const SIN_LISTA = '__catalogo__'
 const COLUMNAS = ['2', '3', '4']
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
-}
 
 function plural(n: number, singular: string, pluralForm: string): string {
   return n === 1 ? singular : pluralForm
@@ -128,7 +125,7 @@ function VistaDeImpresion({ filas, onCerrar }: { filas: Fila[]; onCerrar: () => 
             >
               <p className="line-clamp-2 text-[11pt] font-semibold leading-tight">{producto.nombre}</p>
               <p className="text-[22pt] font-bold leading-none">
-                {formatCurrency(precio)}
+                {formatoMoneda(precio)}
                 {producto.unidad && producto.unidad !== 'u' && <span className="ml-1 text-[9pt] font-normal">/ {producto.unidad}</span>}
               </p>
               {producto.codigo && (
@@ -265,7 +262,7 @@ export function EtiquetasGondola() {
     {
       id: 'precio',
       header: () => <div className="text-right">Precio</div>,
-      cell: ({ row }) => <div className="text-right">{formatCurrency(precioDe(row.original))}</div>,
+      cell: ({ row }) => <div className="text-right">{formatoMoneda(precioDe(row.original))}</div>,
     },
   ]
 

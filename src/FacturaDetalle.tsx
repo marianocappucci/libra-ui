@@ -33,10 +33,7 @@ import {
 
 import { hoyISO } from './fechas'
 import { SelectBuscable } from './SelectBuscable'
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
-}
+import { formatoMoneda } from './formatos'
 
 function labelComprobante(f: Factura): string {
   const letra = ({ 1: 'A', 6: 'B', 11: 'C', 3: 'NC-A', 8: 'NC-B', 13: 'NC-C', 2: 'ND-A', 7: 'ND-B', 12: 'ND-C' } as Record<number, string>)[f.tipo] ?? '?'
@@ -439,9 +436,9 @@ export function FacturaDetalle({
                 <span className="flex items-center gap-2">
                   {detalle.pendiente <= 0 ? <CheckCircle2 className="size-4 shrink-0 text-exito" /> : <CircleDollarSign className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />}
                   {detalle.pendiente <= 0 ? (
-                    <span><strong>Cobrado completo</strong> — {formatCurrency(detalle.total_cobrado)}{detalle.cobros.length > 1 && <span className="text-muted-foreground"> ({detalle.cobros.length} pagos)</span>}</span>
+                    <span><strong>Cobrado completo</strong> — {formatoMoneda(detalle.total_cobrado)}{detalle.cobros.length > 1 && <span className="text-muted-foreground"> ({detalle.cobros.length} pagos)</span>}</span>
                   ) : (
-                    <span><strong>Pago parcial</strong> — Cobrado: {formatCurrency(detalle.total_cobrado)} <span className="font-medium text-destructive">Pendiente: {formatCurrency(detalle.pendiente)}</span></span>
+                    <span><strong>Pago parcial</strong> — Cobrado: {formatoMoneda(detalle.total_cobrado)} <span className="font-medium text-destructive">Pendiente: {formatoMoneda(detalle.pendiente)}</span></span>
                   )}
                 </span>
                 {detalle.pendiente > 0 && muestraCobros && <Button size="sm" onClick={() => setCobroOpen(true)}><CircleDollarSign />Registrar cobro</Button>}
@@ -450,7 +447,7 @@ export function FacturaDetalle({
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm">
                 <span className="flex items-center gap-2">
                   <Hourglass className="size-4 shrink-0 text-muted-foreground" />
-                  <strong>Pendiente de cobro</strong> — {formatCurrency(detalle.factura.total)}
+                  <strong>Pendiente de cobro</strong> — {formatoMoneda(detalle.factura.total)}
                 </span>
                 <Button size="sm" onClick={() => setCobroOpen(true)}><CircleDollarSign />Registrar cobro</Button>
               </div>
@@ -468,7 +465,7 @@ export function FacturaDetalle({
                       {c.medio_pago && <Badge variant="outline" className="ml-2">{medioLabel(c.medio_pago)}</Badge>}
                       {c.referencia && <span className="ml-1">({c.referencia})</span>}
                     </span>
-                    <span className="font-medium text-exito">+ {formatCurrency(c.monto)}</span>
+                    <span className="font-medium text-exito">+ {formatoMoneda(c.monto)}</span>
                   </div>
                 ))}
               </CardContent>
@@ -547,19 +544,19 @@ export function FacturaDetalle({
                     <tr key={i} className="border-b last:border-0">
                       <td className="whitespace-pre-line p-3">{it.description}</td>
                       <td className="p-3 text-right">{it.qty}</td>
-                      <td className="p-3 text-right">{formatCurrency(it.unit_price)}</td>
-                      <td className="p-3 text-right">{formatCurrency(it.subtotal)}</td>
+                      <td className="p-3 text-right">{formatoMoneda(it.unit_price)}</td>
+                      <td className="p-3 text-right">{formatoMoneda(it.subtotal)}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot className="font-medium">
                   {detalle.factura.tipo !== 11 && detalle.factura.iva_amount > 0 && (
                     <>
-                      <tr><td colSpan={3} className="p-3 text-right text-muted-foreground">Subtotal</td><td className="p-3 text-right">{formatCurrency(detalle.factura.subtotal)}</td></tr>
-                      <tr><td colSpan={3} className="p-3 text-right text-muted-foreground">IVA {detalle.factura.subtotal > 0 ? Math.round((detalle.factura.iva_amount / detalle.factura.subtotal) * 100) : 21}%</td><td className="p-3 text-right">{formatCurrency(detalle.factura.iva_amount)}</td></tr>
+                      <tr><td colSpan={3} className="p-3 text-right text-muted-foreground">Subtotal</td><td className="p-3 text-right">{formatoMoneda(detalle.factura.subtotal)}</td></tr>
+                      <tr><td colSpan={3} className="p-3 text-right text-muted-foreground">IVA {detalle.factura.subtotal > 0 ? Math.round((detalle.factura.iva_amount / detalle.factura.subtotal) * 100) : 21}%</td><td className="p-3 text-right">{formatoMoneda(detalle.factura.iva_amount)}</td></tr>
                     </>
                   )}
-                  <tr className="text-base"><td colSpan={3} className="p-3 text-right font-semibold">TOTAL</td><td className="p-3 text-right font-semibold text-primary">{formatCurrency(detalle.factura.total)}</td></tr>
+                  <tr className="text-base"><td colSpan={3} className="p-3 text-right font-semibold">TOTAL</td><td className="p-3 text-right font-semibold text-primary">{formatoMoneda(detalle.factura.total)}</td></tr>
                 </tfoot>
               </table>
             </CardContent>
@@ -626,7 +623,7 @@ export function FacturaDetalle({
             title={`¿Generar ${confirmNota ? notaLabel(confirmNota) : ''}?`}
             description={confirmNota ? (
               `Estás por generar una ${notaLabel(confirmNota)} que ${notaRelacion(confirmNota)} el comprobante `
-              + `${labelComprobante(detalle.factura)} (${detalle.factura.cliente_razon}) por ${formatCurrency(detalle.factura.total)}. `
+              + `${labelComprobante(detalle.factura)} (${detalle.factura.cliente_razon}) por ${formatoMoneda(detalle.factura.total)}. `
               + 'Esta acción no se puede deshacer y enviará el comprobante a ARCA para su autorización.'
             ) : undefined}
             confirmLabel="Generar"

@@ -23,6 +23,7 @@ import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
 import { fecha, fechaHora, horaConSegundos } from '@/lib/fechas'
 import { SelectBuscable } from '../SelectBuscable'
+import { formatoMoneda } from '../formatos'
 
 // Orden y set canonico de tipos -- coincide con TIPO_META de
 // web/api/logs.py (que a su vez preserva el dict del router Jinja2 viejo,
@@ -53,10 +54,6 @@ const EVENTO_META: Record<string, { label: string; icon: typeof LogIn; className
   login: { label: 'Login', icon: LogIn, className: 'bg-emerald-600 text-white hover:bg-emerald-600' },
   logout: { label: 'Logout', icon: LogOut, className: 'bg-muted-foreground text-white hover:bg-muted-foreground' },
   login_fallido: { label: 'Intento fallido', icon: XCircle, className: 'bg-destructive text-white hover:bg-destructive' },
-}
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
 }
 
 // La version Jinja2 vieja mostraba la hora (HH:MM:SS) de cada evento en la
@@ -288,7 +285,7 @@ export function Logs() {
                                     </td>
                                     <td className="p-3">{r.descripcion}</td>
                                     <td className={`p-3 text-right ${r.tipo === 'stock' ? 'text-muted-foreground' : 'font-medium'}`}>
-                                      {r.monto ? (r.tipo === 'stock' ? r.monto : formatCurrency(r.monto)) : '—'}
+                                      {r.monto ? (r.tipo === 'stock' ? r.monto : formatoMoneda(r.monto)) : '—'}
                                     </td>
                                     <td className="p-3 text-muted-foreground">
                                       {r.usuario ? <span className="flex items-center gap-1"><UserIcon className="size-3.5" />{r.usuario}</span> : '—'}

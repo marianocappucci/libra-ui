@@ -16,6 +16,7 @@ import { hoyISO, primerDiaDelMesISO } from '../fechas'
 import type {
   MargenAgrupacion, MargenCifras, MargenData, MargenOrden, MargenPeriodo, MargenProducto, MargenSentido,
 } from './tipos'
+import { formatoCantidad, formatoMoneda } from '../formatos'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -26,12 +27,6 @@ import { AlertTriangle, Boxes, CalendarRange, DollarSign, Download, Package, Tre
 
 const RUTA = '/api/reportes/margen'
 
-function moneda(valor: number): string {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(valor)
-}
-function numero(valor: number): string {
-  return new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 }).format(valor)
-}
 function porcentaje(valor: number | null): string {
   return valor === null ? '—' : `${new Intl.NumberFormat('es-AR', { maximumFractionDigits: 1 }).format(valor)} %`
 }
@@ -164,7 +159,7 @@ export function Margen() {
               <CardContent className="flex items-start justify-between gap-3">
                 <div className="min-w-0 [&_p]:truncate">
                   <CardDescription>Ingreso</CardDescription>
-                  <p className="text-2xl font-bold">{moneda(data.resumen.ingreso)}</p>
+                  <p className="text-2xl font-bold">{formatoMoneda(data.resumen.ingreso)}</p>
                   <CardDescription>lo cobrado, con descuentos</CardDescription>
                 </div>
                 <span className="shrink-0 rounded-lg bg-primary/10 p-2 text-primary"><DollarSign /></span>
@@ -174,7 +169,7 @@ export function Margen() {
               <CardContent className="flex items-start justify-between gap-3">
                 <div className="min-w-0 [&_p]:truncate">
                   <CardDescription>Costo</CardDescription>
-                  <p className="text-2xl font-bold">{moneda(data.resumen.costo)}</p>
+                  <p className="text-2xl font-bold">{formatoMoneda(data.resumen.costo)}</p>
                   <CardDescription>de lo vendido</CardDescription>
                 </div>
                 <span className="shrink-0 rounded-lg bg-amber-500/10 p-2 text-amber-600 dark:text-amber-400"><Package /></span>
@@ -184,7 +179,7 @@ export function Margen() {
               <CardContent className="flex items-start justify-between gap-3">
                 <div className="min-w-0 [&_p]:truncate">
                   <CardDescription>Margen</CardDescription>
-                  <p className={`text-2xl font-bold ${colorDelMargen(data.resumen)}`}>{moneda(data.resumen.margen)}</p>
+                  <p className={`text-2xl font-bold ${colorDelMargen(data.resumen)}`}>{formatoMoneda(data.resumen.margen)}</p>
                   <CardDescription>{porcentaje(data.resumen.margen_pct)} sobre el ingreso</CardDescription>
                 </div>
                 <span className="shrink-0 rounded-lg bg-exito/10 p-2 text-exito"><TrendingUp /></span>
@@ -194,7 +189,7 @@ export function Margen() {
               <CardContent className="flex items-start justify-between gap-3">
                 <div className="min-w-0 [&_p]:truncate">
                   <CardDescription>Unidades vendidas</CardDescription>
-                  <p className="text-2xl font-bold">{numero(data.resumen.unidades)}</p>
+                  <p className="text-2xl font-bold">{formatoCantidad(data.resumen.unidades)}</p>
                   <CardDescription>{data.resumen.productos} producto{data.resumen.productos !== 1 ? 's' : ''}</CardDescription>
                 </div>
                 <span className="shrink-0 rounded-lg bg-violet-500/10 p-2 text-violet-600 dark:text-violet-400"><Boxes /></span>
@@ -247,11 +242,11 @@ export function Margen() {
                             </button>
                             {notaDelCosto(p) && <span className="ml-2 text-xs text-amber-600 dark:text-amber-400">({notaDelCosto(p)})</span>}
                           </td>
-                          <td className="p-3 text-right">{numero(p.unidades)}</td>
-                          <td className="p-3 text-right">{p.unidades_por_dia === null ? '—' : numero(p.unidades_por_dia)}</td>
-                          <td className="p-3 text-right">{moneda(p.ingreso)}</td>
-                          <td className="p-3 text-right">{moneda(p.costo)}</td>
-                          <td className={`p-3 text-right font-semibold ${colorDelMargen(p)}`}>{moneda(p.margen)}</td>
+                          <td className="p-3 text-right">{formatoCantidad(p.unidades)}</td>
+                          <td className="p-3 text-right">{p.unidades_por_dia === null ? '—' : formatoCantidad(p.unidades_por_dia)}</td>
+                          <td className="p-3 text-right">{formatoMoneda(p.ingreso)}</td>
+                          <td className="p-3 text-right">{formatoMoneda(p.costo)}</td>
+                          <td className={`p-3 text-right font-semibold ${colorDelMargen(p)}`}>{formatoMoneda(p.margen)}</td>
                           <td className="p-3 text-right">{porcentaje(p.margen_pct)}</td>
                         </tr>
                       ))}
@@ -289,10 +284,10 @@ export function Margen() {
                       {data.periodos.map((p: MargenPeriodo) => (
                         <tr key={p.periodo} className="border-b last:border-0">
                           <td className="p-3">{etiquetaDePeriodo(p.periodo, data.agrupacion)}</td>
-                          <td className="p-3 text-right">{numero(p.unidades)}</td>
-                          <td className="p-3 text-right">{moneda(p.ingreso)}</td>
-                          <td className="p-3 text-right">{moneda(p.costo)}</td>
-                          <td className={`p-3 text-right font-semibold ${colorDelMargen(p)}`}>{moneda(p.margen)}</td>
+                          <td className="p-3 text-right">{formatoCantidad(p.unidades)}</td>
+                          <td className="p-3 text-right">{formatoMoneda(p.ingreso)}</td>
+                          <td className="p-3 text-right">{formatoMoneda(p.costo)}</td>
+                          <td className={`p-3 text-right font-semibold ${colorDelMargen(p)}`}>{formatoMoneda(p.margen)}</td>
                           <td className="p-3 text-right">{porcentaje(p.margen_pct)}</td>
                         </tr>
                       ))}

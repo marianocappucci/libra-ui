@@ -32,10 +32,7 @@ import {
 } from '@/components/ui/sheet'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { SelectBuscable } from '../SelectBuscable'
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
-}
+import { formatoMoneda } from '../formatos'
 
 function margenPct(precio: number, costo: number): string {
   if (!precio || !costo) return '—'
@@ -376,8 +373,8 @@ export function ListaPrecioDetalle({ conQuiebres = false, conVigencias = false, 
     { accessorKey: 'codigo', header: 'Código', size: 90, minSize: 78, cell: ({ row }) => <span className="block truncate font-mono text-xs" title={row.original.codigo ?? undefined}>{row.original.codigo || '—'}</span> },
     { accessorKey: 'nombre', header: 'Producto', size: 160, minSize: 100, meta: { stretch: true }, cell: ({ row }) => <span className="block truncate font-medium" title={row.original.nombre}>{row.original.nombre}</span> },
     { accessorKey: 'categoria', header: 'Categoría', size: 100, minSize: 85, cell: ({ row }) => <span className="block truncate" title={row.original.categoria ?? undefined}>{row.original.categoria || '—'}</span> },
-    { accessorKey: 'precio_costo', header: () => <div className="text-right">P. Costo</div>, size: 100, minSize: 85, cell: ({ row }) => <div className="truncate text-right text-muted-foreground">{formatCurrency(row.original.precio_costo)}</div> },
-    { accessorKey: 'precio_venta', header: () => <div className="text-right">P. Venta</div>, size: 100, minSize: 85, cell: ({ row }) => <div className="truncate text-right text-muted-foreground">{formatCurrency(row.original.precio_venta)}</div> },
+    { accessorKey: 'precio_costo', header: () => <div className="text-right">P. Costo</div>, size: 100, minSize: 85, cell: ({ row }) => <div className="truncate text-right text-muted-foreground">{formatoMoneda(row.original.precio_costo)}</div> },
+    { accessorKey: 'precio_venta', header: () => <div className="text-right">P. Venta</div>, size: 100, minSize: 85, cell: ({ row }) => <div className="truncate text-right text-muted-foreground">{formatoMoneda(row.original.precio_venta)}</div> },
     {
       id: 'precio_lista',
       header: 'Precio lista',
@@ -387,7 +384,7 @@ export function ListaPrecioDetalle({ conQuiebres = false, conVigencias = false, 
         <Input
           type="number" step="0.01" className="w-full"
           aria-label={`Precio de ${row.original.nombre}`}
-          placeholder={formatCurrency(row.original.precio_venta)}
+          placeholder={formatoMoneda(row.original.precio_venta)}
           value={precios[row.original.id] ?? ''}
           onChange={(e) => setPrecios((p) => ({ ...p, [row.original.id]: e.target.value }))}
         />
@@ -669,7 +666,7 @@ export function ListaPrecioDetalle({ conQuiebres = false, conVigencias = false, 
               )}
               {vigencias.map((v) => (
                 <div key={v.id} className="flex flex-wrap items-center gap-2 rounded-md border p-2 text-sm">
-                  <span className="font-semibold">{formatCurrency(v.monto)}</span>
+                  <span className="font-semibold">{formatoMoneda(v.monto)}</span>
                   <span className="text-muted-foreground">
                     {formatFechaHora(v.desde)} → {v.hasta ? formatFechaHora(v.hasta) : 'sin fin'}
                     {v.cantidad_minima ? ` · desde ${v.cantidad_minima} u.` : ''}

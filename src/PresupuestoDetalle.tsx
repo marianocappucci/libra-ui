@@ -22,10 +22,7 @@ import { ArrowLeft, CheckCheck, CheckCircle2, FileDown, Mail, Pencil, Receipt, R
 import { TituloPantalla } from './titulo-pantalla'
 import { ICONOS } from './iconos-identidad'
 import { fecha } from '@/lib/fechas'
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
-}
+import { formatoMoneda } from './formatos'
 
 const ESTADO_TONO: Record<string, TonoEstado> = {
   aceptado: 'ok', enviado: 'curso', borrador: 'neutro', rechazado: 'negativo', vencido: 'negativo', facturado: 'ok',
@@ -226,15 +223,15 @@ export function PresupuestoDetalle({
                             )}
                           </td>
                           <td className="p-3 text-right">{it.qty}</td>
-                          <td className="p-3 text-right">{formatCurrency(it.unit_price)}</td>
-                          <td className="p-3 text-right">{formatCurrency(it.subtotal)}</td>
+                          <td className="p-3 text-right">{formatoMoneda(it.unit_price)}</td>
+                          <td className="p-3 text-right">{formatoMoneda(it.subtotal)}</td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot className="font-medium">
-                      <tr><td colSpan={3} className="p-3 text-right text-muted-foreground">Subtotal</td><td className="p-3 text-right">{formatCurrency(p.subtotal)}</td></tr>
-                      <tr><td colSpan={3} className="p-3 text-right text-muted-foreground">IVA {Math.round(p.tax_rate * 100)}%</td><td className="p-3 text-right">{formatCurrency(p.tax_amount)}</td></tr>
-                      <tr className="text-base"><td colSpan={3} className="p-3 text-right font-semibold">TOTAL</td><td className="p-3 text-right font-semibold text-primary">{formatCurrency(p.total)}</td></tr>
+                      <tr><td colSpan={3} className="p-3 text-right text-muted-foreground">Subtotal</td><td className="p-3 text-right">{formatoMoneda(p.subtotal)}</td></tr>
+                      <tr><td colSpan={3} className="p-3 text-right text-muted-foreground">IVA {Math.round(p.tax_rate * 100)}%</td><td className="p-3 text-right">{formatoMoneda(p.tax_amount)}</td></tr>
+                      <tr className="text-base"><td colSpan={3} className="p-3 text-right font-semibold">TOTAL</td><td className="p-3 text-right font-semibold text-primary">{formatoMoneda(p.total)}</td></tr>
                     </tfoot>
                   </table>
                 </CardContent>

@@ -27,10 +27,7 @@ import { ICONOS } from '../iconos-identidad'
 import { fecha } from '@/lib/fechas'
 import { hoyISO } from '../fechas'
 import { SelectBuscable } from '../SelectBuscable'
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
-}
+import { formatoMoneda } from '../formatos'
 
 const EMPTY_CUENTA_FORM = { nombre: '', tipo: 'banco', banco: '', numero: '', descripcion: '', saldo_inicial: '0' }
 
@@ -147,7 +144,7 @@ export function Tesoreria() {
       header: () => <div className="text-right">Monto</div>,
       cell: ({ row }) => {
         const positivo = row.original.tipo === 'ingreso' || row.original.tipo === 'transferencia_entrada'
-        return <div className={`text-right font-semibold ${positivo ? 'text-exito' : 'text-destructive'}`}>{positivo ? '+' : '−'} {formatCurrency(row.original.monto)}</div>
+        return <div className={`text-right font-semibold ${positivo ? 'text-exito' : 'text-destructive'}`}>{positivo ? '+' : '−'} {formatoMoneda(row.original.monto)}</div>
       },
     },
   ], [])
@@ -175,7 +172,7 @@ export function Tesoreria() {
                     <SelectBuscable
                       value={tOrigen}
                       onChange={setTOrigen}
-                      opciones={cuentas.map((c) => ({ value: String(c.id), label: `${c.nombre} — ${formatCurrency(c.saldo)}` }))}
+                      opciones={cuentas.map((c) => ({ value: String(c.id), label: `${c.nombre} — ${formatoMoneda(c.saldo)}` }))}
                       placeholder="Cuenta…"
                       ariaLabel="Cuenta origen"
                     />
@@ -269,7 +266,7 @@ export function Tesoreria() {
       <Card className="border-l-4 border-l-primary">
         <CardContent className="py-3 text-center">
           <p className="text-sm text-muted-foreground">Saldo total</p>
-          <p className="text-xl font-bold text-primary">{formatCurrency(totalGeneral)}</p>
+          <p className="text-xl font-bold text-primary">{formatoMoneda(totalGeneral)}</p>
         </CardContent>
       </Card>
 
@@ -290,7 +287,7 @@ export function Tesoreria() {
                     </p>
                   </div>
                   <BadgeEstado tono={c.saldo >= 0 ? 'ok' : 'negativo'}>
-                    {formatCurrency(c.saldo)}
+                    {formatoMoneda(c.saldo)}
                   </BadgeEstado>
                 </div>
                 {c.descripcion && <p className="text-sm text-muted-foreground">{c.descripcion}</p>}
