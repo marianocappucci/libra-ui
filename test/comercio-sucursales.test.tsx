@@ -5,7 +5,7 @@ import { cleanup, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { Sucursales } from '../src/comercio/Sucursales'
+import { Sucursales, mensajeDeLimite } from '../src/comercio/Sucursales'
 import { SucursalDetalle } from '../src/comercio/SucursalDetalle'
 import type { Deposito, Sucursal } from '../src/comercio/tipos'
 import { cuerpoDe, montar, pedidas, prepararFetch, responder } from './helpers-pantallas'
@@ -212,6 +212,136 @@ describe('Sucursales', () => {
     responder({ '/api/sucursales': '!caida' })
     montar('/sucursales', <Sucursales />)
     expect(await screen.findByText('Error de conexión.')).toBeTruthy()
+  })
+})
+
+// Las sucursales contratadas (ADR-048, 0.136.0): el tope lo corta el backend; la pantalla lo anticipa. Lo que más importa acá es que NUNCA
+// bloquee por una lectura que no anda.
+describe('Sucursales contratadas', () => {
+  const RUTA = '/api/limites/sucursales'
+  const base = {
+    '/api/sucursales': [CENTRO, NORTE, SUR],
+    'POST /api/sucursales': NORTE,
+  }
+  const nueva = () => screen.getByRole('button', { name: /Nueva sucursal/ })
+  const sinAvisos = () => {
+    expect(screen.queryByText(/contratadas?$/)).toBeNull()
+    expect(screen.queryByText(/comunicate con nosotros/)).toBeNull()
+  }
+
+  it('sin la prop no pide el límite: los productos que no montan el router no hacen un pedido de más', async () => {
+    responder({ ...base, [RUTA]: { contratadas: 2, activas: 2 } })
+    montar('/sucursales', <Sucursales />)
+    await screen.findByText('Centro')
+    expect(pedidas().some((p) => p.includes('/api/limites'))).toBe(false)
+    expect(nueva()).toBeEnabled()
+    sinAvisos()
+  })
+
+  it('sin tope (contratadas null) queda exactamente como hoy', async () => {
+    responder({ ...base, [RUTA]: { contratadas: null, activas: 2 } })
+    montar('/sucursales', <Sucursales rutaDelLimite={RUTA} />)
+    await screen.findByText('Centro')
+    await waitFor(() => expect(pedidas()).toContain(`GET ${RUTA}`))
+    expect(nueva()).toBeEnabled()
+    sinAvisos()
+  })
+
+  it('con cupo muestra «N de M sucursales contratadas» y deja el alta habilitada', async () => {
+    responder({ ...base, [RUTA]: { contratadas: 3, activas: 2 } })
+    montar('/sucursales', <Sucursales rutaDelLimite={RUTA} />)
+    expect(await screen.findByText('2 de 3 sucursales contratadas')).toBeTruthy()
+    expect(nueva()).toBeEnabled()
+    expect(screen.queryByText(/comunicate con nosotros/)).toBeNull()
+  })
+
+  it('en el tope deshabilita «Nueva sucursal» y dice por qué con el texto del backend', async () => {
+    responder({ ...base, [RUTA]: { contratadas: 2, activas: 2 } })
+    const user = userEvent.setup()
+    montar('/sucursales', <Sucursales rutaDelLimite={RUTA} />)
+    expect(await screen.findByText('2 de 2 sucursales contratadas')).toBeTruthy()
+    expect(await screen.findByText('Tu plan incluye 2 sucursales. Para sumar otra, comunicate con nosotros.')).toBeTruthy()
+    expect(nueva()).toBeDisabled()
+    expect(nueva()).toHaveAttribute('aria-describedby', 'sucursales-limite')
+    await user.click(nueva())
+    expect(screen.queryByRole('dialog')).toBeNull()
+    // Editar y «Ver depósitos» siguen andando: el tope sólo frena sumar otra.
+    expect(screen.getAllByRole('button', { name: /Editar/ })[0]).toBeEnabled()
+  })
+
+  it('pasado del tope (se bajó lo contratado) también deshabilita, y con una sola contratada habla en singular', async () => {
+    responder({ ...base, [RUTA]: { contratadas: 1, activas: 3 } })
+    montar('/sucursales', <Sucursales rutaDelLimite={RUTA} />)
+    expect(await screen.findByText('3 de 1 sucursal contratada')).toBeTruthy()
+    expect(screen.getByText('Tu plan incluye 1 sucursal. Para sumar otra, comunicate con nosotros.')).toBeTruthy()
+    expect(nueva()).toBeDisabled()
+  })
+
+  it('🔴 una lectura que falla (403, 500, red caída o forma rara) deja la pantalla como hoy: nunca bloquea', async () => {
+    for (const lectura of [
+      { status: 403, detail: 'forbidden' }, { status: 500, detail: 'Falla interna.' }, '!caida',
+      { contratadas: 'dos', activas: 2 }, { contratadas: 0, activas: 0 }, null,
+    ]) {
+      cleanup()
+      prepararFetch()
+      responder({ ...base, [RUTA]: lectura })
+      montar('/sucursales', <Sucursales rutaDelLimite={RUTA} />)
+      await screen.findByText('Centro')
+      await waitFor(() => expect(pedidas()).toContain(`GET ${RUTA}`))
+      expect(nueva()).toBeEnabled()
+      sinAvisos()
+      expect(screen.queryByText('Error de conexión.')).toBeNull() // el fallo de la lectura no se muestra como error de la pantalla
+      expect(screen.queryByText('Falla interna.')).toBeNull()
+    }
+  })
+
+  it('si el alta igual da 409 muestra el detail del backend en el formulario y relee el límite', async () => {
+    let lecturas = 0
+    const MENSAJE = mensajeDeLimite(3)
+    responder({
+      ...base,
+      [RUTA]: () => (++lecturas === 1 ? { contratadas: 3, activas: 2 } : { contratadas: 3, activas: 3 }),
+      'POST /api/sucursales': { status: 409, detail: MENSAJE },
+    })
+    const user = userEvent.setup()
+    montar('/sucursales', <Sucursales rutaDelLimite={RUTA} />)
+    expect(await screen.findByText('2 de 3 sucursales contratadas')).toBeTruthy()
+    await user.click(nueva())
+    const dialogo = await screen.findByRole('dialog')
+    await user.type(within(dialogo).getByLabelText('Nombre *'), 'Oeste')
+    await user.click(within(dialogo).getByRole('button', { name: /Guardar/ }))
+    expect(await within(dialogo).findByText(MENSAJE)).toBeTruthy()
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    // Alguien más usó el cupo: la pantalla se entera.
+    expect(await screen.findByText('3 de 3 sucursales contratadas')).toBeTruthy()
+  })
+
+  it('tras un alta exitosa relee el límite y, si llegó al tope, deshabilita el botón', async () => {
+    let lecturas = 0
+    responder({ ...base, [RUTA]: () => (++lecturas === 1 ? { contratadas: 3, activas: 2 } : { contratadas: 3, activas: 3 }) })
+    const user = userEvent.setup()
+    montar('/sucursales', <Sucursales rutaDelLimite={RUTA} />)
+    await screen.findByText('2 de 3 sucursales contratadas')
+    await user.click(nueva())
+    const dialogo = await screen.findByRole('dialog')
+    await user.type(within(dialogo).getByLabelText('Nombre *'), 'Oeste')
+    await user.click(within(dialogo).getByRole('button', { name: /Guardar/ }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(await screen.findByText('3 de 3 sucursales contratadas')).toBeTruthy()
+    await waitFor(() => expect(nueva()).toBeDisabled())
+  })
+
+  it('en sólo lectura no hay botón que deshabilitar: se ve el cupo pero no el motivo', async () => {
+    responder({ ...base, [RUTA]: { contratadas: 2, activas: 2 } })
+    montar('/sucursales', <Sucursales soloLectura rutaDelLimite={RUTA} />)
+    expect(await screen.findByText('2 de 2 sucursales contratadas')).toBeTruthy()
+    expect(screen.queryByText(/comunicate con nosotros/)).toBeNull()
+    expect(screen.queryByRole('button', { name: /Nueva/ })).toBeNull()
+  })
+
+  it('el texto del tope es el de libracore.limites.mensaje_de_limite', () => {
+    expect(mensajeDeLimite(1)).toBe('Tu plan incluye 1 sucursal. Para sumar otra, comunicate con nosotros.')
+    expect(mensajeDeLimite(4)).toBe('Tu plan incluye 4 sucursales. Para sumar otra, comunicate con nosotros.')
   })
 })
 
