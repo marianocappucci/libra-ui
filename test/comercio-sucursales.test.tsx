@@ -345,6 +345,73 @@ describe('Sucursales contratadas', () => {
   })
 })
 
+// El alta que la instancia no tiene habilitada (ADR-052): el producto sabe qué módulo falta y lo dice con `motivoSinAlta`; el kit
+// deshabilita el alta y muestra ese motivo, sin repetir el del tope. Sólo oculta/anticipa: el que corta es el backend (403).
+describe('Sucursales sin alta (motivoSinAlta)', () => {
+  const RUTA = '/api/limites/sucursales'
+  const MOTIVO = 'Esta instancia es de un solo local. Para sumar otra sucursal, escribinos para activarlo.'
+  const base = {
+    '/api/sucursales': [CENTRO, NORTE, SUR],
+    'POST /api/sucursales': NORTE,
+  }
+  const nueva = () => screen.getByRole('button', { name: /Nueva sucursal/ })
+
+  it('deshabilita «Nueva sucursal», dice por qué y apunta el botón al motivo', async () => {
+    responder(base)
+    const user = userEvent.setup()
+    montar('/sucursales', <Sucursales motivoSinAlta={MOTIVO} />)
+    expect(await screen.findByText(MOTIVO)).toBeTruthy()
+    expect(nueva()).toBeDisabled()
+    expect(nueva()).toHaveAttribute('aria-describedby', 'sucursales-limite')
+    expect(document.getElementById('sucursales-limite')).toHaveTextContent(MOTIVO)
+    await user.click(nueva())
+    expect(screen.queryByRole('dialog')).toBeNull()
+    // Sólo frena sumar otra: editar, predeterminar y «Ver depósitos» siguen andando.
+    expect(screen.getAllByRole('button', { name: /Editar/ })[0]).toBeEnabled()
+    expect(screen.getAllByRole('link', { name: /Ver depósitos/ })).toHaveLength(3)
+  })
+
+  it('sin la prop (o vacía) queda exactamente como hoy: alta habilitada y sin aviso', async () => {
+    responder(base)
+    const { unmount } = montar('/sucursales', <Sucursales />)
+    await screen.findByText('Centro')
+    expect(nueva()).toBeEnabled()
+    expect(nueva()).not.toHaveAttribute('aria-describedby')
+    expect(document.getElementById('sucursales-limite')).toBeNull()
+    unmount()
+    montar('/sucursales', <Sucursales motivoSinAlta="" />)
+    await screen.findByText('Centro')
+    expect(nueva()).toBeEnabled()
+    expect(document.getElementById('sucursales-limite')).toBeNull()
+  })
+
+  it('con el tope alcanzado el motivo va una sola vez: no se suma el «Tu plan incluye…»; el «N de M» se conserva', async () => {
+    responder({ ...base, [RUTA]: { contratadas: 1, activas: 1 } })
+    montar('/sucursales', <Sucursales motivoSinAlta={MOTIVO} rutaDelLimite={RUTA} />)
+    expect(await screen.findByText('1 de 1 sucursal contratada')).toBeTruthy()
+    expect(screen.getByText(MOTIVO)).toBeTruthy()
+    expect(screen.queryByText(/Tu plan incluye/)).toBeNull()
+    expect(nueva()).toBeDisabled()
+    expect(document.querySelectorAll('#sucursales-limite')).toHaveLength(1)
+  })
+
+  it('con cupo y sin módulo el alta sigue deshabilitada por el motivo (el módulo manda sobre el cupo)', async () => {
+    responder({ ...base, [RUTA]: { contratadas: 3, activas: 1 } })
+    montar('/sucursales', <Sucursales motivoSinAlta={MOTIVO} rutaDelLimite={RUTA} />)
+    expect(await screen.findByText('1 de 3 sucursales contratadas')).toBeTruthy()
+    expect(screen.getByText(MOTIVO)).toBeTruthy()
+    expect(nueva()).toBeDisabled()
+  })
+
+  it('en sólo lectura no hay botón ni motivo que mostrar', async () => {
+    responder(base)
+    montar('/sucursales', <Sucursales soloLectura motivoSinAlta={MOTIVO} />)
+    await screen.findByText('Centro')
+    expect(screen.queryByText(MOTIVO)).toBeNull()
+    expect(screen.queryByRole('button', { name: /Nueva/ })).toBeNull()
+  })
+})
+
 describe('SucursalDetalle', () => {
   const base = {
     '/api/sucursales/1': CENTRO,

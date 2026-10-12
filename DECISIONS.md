@@ -1027,3 +1027,36 @@ productos no tocan nada.
 **Tests** (`test/comercio-vencimientos.test.tsx`): `puedeMermar=false` con `puedeMover` por default oculta la baja y su columna pero deja asignar y cargar; `puedeMermar=true` con `puedeMover=false` muestra la baja y esconde asignar y cargar; sin `puedeMermar` la baja sigue a `puedeMover`; un 409 «salidas sin lote sin conciliar» se muestra con su texto. Los dos primeros se ponen rojos sin el cambio.
 
 **Cómo se adopta.** Subir el pin. Nadie está obligado a pasar la prop. Un producto con una capacidad propia para la baja pasa `puedeMermar={puede(user, '…')}`.
+
+## ADR-052 — `Sucursales` deshabilita el alta con un motivo del producto (`motivoSinAlta`)
+
+**Problema** (pendiente de VentaLibra §3.4). Cuando la instancia no puede dar de alta otra sucursal por un motivo que no es el tope de contratadas
+(en VentaLibra, el módulo `multisucursal` apagado: el backend contesta 403), el botón «Nueva sucursal» seguía habilitado; el producto lo
+rotulaba «(sin activar)», avisaba aparte en una caja y el cliente se enteraba del rechazo recién al guardar el formulario. `soloLectura` no sirve:
+esconde también la edición, y renombrar o dar de baja la sucursal que ya existe tiene que seguir andando. El ADR-048 resolvió lo mismo para el tope
+de contratadas, pero sólo con ese motivo.
+
+**Qué ya existe** (se miró antes de cambiar): `soloLectura` (esconde el alta y la edición), `rutaDelLimite` y el lugar donde el kit escribe el motivo
+del tope (`#sucursales-limite`, apuntado por `aria-describedby`; ADR-048). No hay otra prop que apague sólo el alta (`git grep` de «sinAlta»,
+«motivoSinAlta», «altaDeshabilitada» no da nada).
+
+**Decisión.**
+1. `Sucursales` recibe `motivoSinAlta?: string`. **Es opt-in**: sin ella, o vacía, no cambia nada. Con texto, «Nueva sucursal» queda deshabilitada
+   (el diálogo no abre) y el texto se muestra en el mismo lugar y con el mismo estilo que el motivo del tope (`muted`, sobrio, sin tono de alerta),
+   apuntado por `aria-describedby`.
+2. **El motivo lo pone el producto**, que es el que sabe qué falta (un módulo, un contrato, una suspensión); el kit no lo interpreta.
+3. **Un solo aviso.** Si además se llegó al tope de contratadas, se muestra el motivo del producto y no el «Tu plan incluye N…» (dos razones para
+   lo mismo serían dos avisos). La línea «N de M sucursales contratadas» se conserva: es información, no una razón.
+4. Editar, predeterminar y «Ver depósitos» siguen andando: sólo se frena sumar otra. En `soloLectura` no hay botón y no se muestra el motivo.
+5. Es una ayuda y no una guarda: el backend sigue cortando (403 o 409). Si el producto no pasa la prop o el estado cambia del lado del servidor, el
+   formulario muestra el `detail` del rechazo, como antes.
+
+**Tests.** `test/comercio-sucursales.test.tsx` (`Sucursales sin alta (motivoSinAlta)`, 5): deshabilita, muestra el motivo, apunta el botón a él y el
+diálogo no abre, con editar y «Ver depósitos» andando; sin la prop o vacía queda igual que hoy; con el tope alcanzado el motivo va una sola vez y se
+conserva el «N de M»; con cupo y sin módulo sigue deshabilitada; sólo lectura no muestra nada. Los tres de comportamiento fallan sin el cambio.
+
+**Lo que no cubre.** No se probó en un navegador real. La prop no mira el estado del módulo: si el administrador lo prende con la pantalla abierta, el
+botón sigue deshabilitado hasta recargar.
+
+**Cómo se adopta.** Subir el pin del kit a la versión que incluya este ADR. Nadie está obligado a pasar la prop. VentaLibra la pasa cuando el módulo
+`multisucursal` está apagado y retira la caja de aviso de esa pantalla.
