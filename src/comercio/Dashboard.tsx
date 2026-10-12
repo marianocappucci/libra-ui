@@ -22,10 +22,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { fecha } from '@/lib/fechas'
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value)
-}
+import { formatoMonedaEntera } from '../formatos'
 
 const ACCIONES_DEFAULT = [
   { label: '+ Nueva Factura', to: '/facturas/nueva' },
@@ -100,14 +97,14 @@ export function Dashboard({
           {/* Los cuatro KPI toman su ícono del catálogo de indicadores (ADR-038): se pasa el concepto, no un ícono de lucide. */}
           <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
             <TarjetaIndicador
-              concepto="facturado" etiqueta="Facturado este mes" tono="primario" valor={formatCurrency(data.facturado_mes)}
+              concepto="facturado" etiqueta="Facturado este mes" tono="primario" valor={formatoMonedaEntera(data.facturado_mes)}
               ayuda={<>{data.cant_facturas_mes} factura{data.cant_facturas_mes !== 1 ? 's' : ''}</>}
             />
-            <TarjetaIndicador concepto="cobros" etiqueta="Cobrado este mes" tono="exito" valor={formatCurrency(data.cobrado_mes)} ayuda="Ingresos en caja" />
-            <TarjetaIndicador concepto="egresos" etiqueta="Egresos este mes" tono="peligro" valor={formatCurrency(data.egresos_mes)} ayuda="Gastos en caja" />
+            <TarjetaIndicador concepto="cobros" etiqueta="Cobrado este mes" tono="exito" valor={formatoMonedaEntera(data.cobrado_mes)} ayuda="Ingresos en caja" />
+            <TarjetaIndicador concepto="egresos" etiqueta="Egresos este mes" tono="peligro" valor={formatoMonedaEntera(data.egresos_mes)} ayuda="Gastos en caja" />
             <TarjetaIndicador
               concepto="caja" etiqueta="Saldo total en caja" tono={data.saldo_total >= 0 ? 'exito' : 'peligro'}
-              valor={formatCurrency(data.saldo_total)} ayuda="Histórico acumulado"
+              valor={formatoMonedaEntera(data.saldo_total)} ayuda="Histórico acumulado"
             />
           </div>
 
@@ -143,7 +140,7 @@ export function Dashboard({
                           <p className="truncate text-muted-foreground">{f.cliente_razon} — {fecha(f.fecha)}</p>
                         </div>
                         <div className="flex shrink-0 items-center gap-3">
-                          <span className="font-medium">{formatCurrency(f.total)}</span>
+                          <span className="font-medium">{formatoMonedaEntera(f.total)}</span>
                           {rutaDeFactura && <Button asChild size="sm" variant="outline"><Link to={rutaDeFactura(f.id)}>Ver</Link></Button>}
                         </div>
                       </li>
@@ -173,7 +170,7 @@ export function Dashboard({
                             <p className="truncate text-muted-foreground">{p.client_name}</p>
                           </div>
                           <div className="flex shrink-0 items-center gap-3">
-                            <span className="font-medium">{formatCurrency(p.total)}</span>
+                            <span className="font-medium">{formatoMonedaEntera(p.total)}</span>
                             <Button asChild size="sm" variant="outline"><Link to={`/presupuestos/${p.id}`}>Ver</Link></Button>
                           </div>
                         </li>
@@ -204,7 +201,7 @@ export function Dashboard({
                         <p className="truncate text-muted-foreground">{fecha(m.fecha)}{m.referencia ? ` — ${m.referencia}` : ''}</p>
                       </div>
                       <span className={`shrink-0 font-medium ${m.tipo === 'ingreso' ? 'text-exito' : 'text-destructive'}`}>
-                        {m.tipo === 'ingreso' ? '+' : '−'} {formatCurrency(m.monto)}
+                        {m.tipo === 'ingreso' ? '+' : '−'} {formatoMonedaEntera(m.monto)}
                       </span>
                     </li>
                   ))}

@@ -1,6 +1,6 @@
 /**
  * Cómo se escriben los **números** en pantalla, **para toda la familia Libra**:
- * la plata y las cantidades, siempre en es-AR (`1.234,56`).
+ * la plata (con centavos o en pesos enteros) y las cantidades, siempre en es-AR (`1.234,56`).
  *
  * Vive en el nivel general del kit, al lado de `fechas`, y no dentro de
  * `comercio/`: una cantidad o un importe lo muestra cualquier producto, no sólo
@@ -30,6 +30,15 @@
 
 const MONEDA = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' })
 
+// `minimumFractionDigits: 0` explícito: con el mínimo por defecto de la moneda (2) y un máximo de 0, los motores más
+// viejos tiran RangeError; los nuevos lo bajan solos. Escrito, el resultado es el mismo en todos.
+const MONEDA_ENTERA = new Intl.NumberFormat('es-AR', {
+  style: 'currency',
+  currency: 'ARS',
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+})
+
 // Se construyen una sola vez: `Intl.NumberFormat` es caro de instanciar y estas
 // funciones se llaman por cada celda de cada tabla.
 const CANTIDAD = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 10 })
@@ -37,6 +46,12 @@ const CANTIDAD = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 10 })
 /** `$ 1.234,56`, como lo escribían las pantallas — cada una con su copia. */
 export function formatoMoneda(valor: number): string {
   return MONEDA.format(valor)
+}
+
+/** `$ 1.235`: los pesos sin centavos, para los tableros y totales que se leen de un vistazo. Redondea (no trunca):
+ *  1234,5 es `$ 1.235`. Para un importe que se factura o se cobra usar `formatoMoneda`, que muestra los centavos. */
+export function formatoMonedaEntera(valor: number): string {
+  return MONEDA_ENTERA.format(valor)
 }
 
 /** Una cantidad como la lee una persona: `6`, `1,5`, `1.250`. El motor las manda como texto decimal (`"6.0"`) y
