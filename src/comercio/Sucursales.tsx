@@ -6,6 +6,10 @@
 // **Sucursales contratadas (ADR-048, 0.136.0).** Con `rutaDelLimite` la pantalla lee «activas vs contratadas»
 // (`libracore.limites`, ADR-041 del motor) y, si hay tope, lo muestra; al llegar al tope deshabilita el alta y dice por qué. Es una ayuda:
 // el que corta es el backend (409), cuyo mensaje se muestra en el formulario. Sin la prop, sin tope o con la lectura caída no cambia nada.
+//
+// **Alta no habilitada (ADR-052).** Con `motivoSinAlta` el producto avisa que esta instancia no puede sumar otra sucursal (le falta
+// un módulo, por ejemplo): «Nueva sucursal» queda deshabilitada y el motivo ocupa el lugar del mensaje del tope, sin repetirlo. También es una
+// ayuda: el que corta es el backend (403). Editar, predeterminar y «Ver depósitos» siguen andando.
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeftRight, Check, Eye, MapPin, Pencil, Plus, Star } from 'lucide-react'
@@ -56,6 +60,10 @@ export type SucursalesProps = {
    *  que no montan ese router no hacen un pedido de más. Si la lectura falla (403 de quien no administra, red caída) o no hay tope, la
    *  pantalla queda como siempre: un error de lectura no bloquea nada. */
   rutaDelLimite?: string
+  /** Por qué esta instancia no puede dar de alta otra sucursal (un módulo sin activar, por ejemplo). Si viene con texto, «Nueva sucursal» queda
+   *  deshabilitada y se muestra este motivo —una sola vez, aun si además se llegó al tope de contratadas—. Sin ella (o vacía) no cambia nada.
+   *  Sin efecto en `soloLectura`, que no tiene alta. El texto lo pone el producto: es el que sabe qué falta. */
+  motivoSinAlta?: string
 }
 
 export function Sucursales({
@@ -65,6 +73,7 @@ export function Sucursales({
   titulo = 'Sucursales',
   etiquetaNuevo = 'Nueva sucursal',
   rutaDelLimite,
+  motivoSinAlta,
 }: SucursalesProps) {
   const [sucursales, setSucursales] = useState<Sucursal[]>([])
   const [loading, setLoading] = useState(true)
@@ -169,6 +178,10 @@ export function Sucursales({
   }
 
   const alLimite = !soloLectura && limite !== null && limite.contratadas !== null && limite.activas >= limite.contratadas
+  // El motivo del producto manda sobre el del tope: dos razones para lo mismo serían dos avisos.
+  const sinAlta = !soloLectura && !!motivoSinAlta
+  const altaDeshabilitada = sinAlta || alLimite
+  const hayAviso = limite?.contratadas != null || sinAlta
 
   return (
     <Dialog open={formOpen} onOpenChange={setFormOpen}>
@@ -180,7 +193,7 @@ export function Sucursales({
             <Button asChild variant="outline"><Link to={rutaDeTransferencia}><ArrowLeftRight />Transferir stock</Link></Button>
             {!soloLectura && (
               <DialogTrigger asChild>
-                <Button onClick={abrirNueva} disabled={alLimite} aria-describedby={alLimite ? 'sucursales-limite' : undefined}>
+                <Button onClick={abrirNueva} disabled={altaDeshabilitada} aria-describedby={altaDeshabilitada ? 'sucursales-limite' : undefined}>
                   <Plus />{etiquetaNuevo}
                 </Button>
               </DialogTrigger>
@@ -188,10 +201,12 @@ export function Sucursales({
           </div>
         </div>
 
-        {limite?.contratadas != null && (
+        {hayAviso && (
           <div id="sucursales-limite" className="grid gap-1 text-sm text-muted-foreground">
-            <p>{limite.activas} de {limite.contratadas} {limite.contratadas === 1 ? 'sucursal contratada' : 'sucursales contratadas'}</p>
-            {alLimite && <p>{mensajeDeLimite(limite.contratadas)}</p>}
+            {limite?.contratadas != null && (
+              <p>{limite.activas} de {limite.contratadas} {limite.contratadas === 1 ? 'sucursal contratada' : 'sucursales contratadas'}</p>
+            )}
+            {sinAlta ? <p>{motivoSinAlta}</p> : alLimite && limite?.contratadas != null && <p>{mensajeDeLimite(limite.contratadas)}</p>}
           </div>
         )}
 
