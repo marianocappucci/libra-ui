@@ -1012,3 +1012,18 @@ productos no tocan nada.
 **Cómo se adopta.** Subir el pin a 0.138.0. Cada producto puede cambiar sus copias locales de `Intl.NumberFormat('es-AR', …)` por `import { formatoMoneda, formatoCantidad } from 'libra-ui/formatos'`; no es obligatorio para subir el pin.
 
 **Nota (pesos enteros): `formatoMonedaEntera`.** «Otro formato» no era razón para dejarlo afuera: los pesos sin centavos también se repiten en los productos (contalibra, libradesk, libra-panel), cada uno con su `Intl`. `formatos.ts` suma `formatoMonedaEntera(valor: number)` (`$ 1.235`; ARS con `minimumFractionDigits: 0` y `maximumFractionDigits: 0`, redondea sin truncar), el `Dashboard` del kit la usa en lugar de su `formatCurrency` local —mismo texto, medido contra la función anterior— y el guard ya no exceptúa ningún archivo: también falla ante `maximumFractionDigits: 0` fuera de `formatos.ts`. El mínimo en 0 se escribe aunque Node 22 lo deduzca solo: con el mínimo por defecto de la moneda (2) y un máximo de 0, los motores más viejos tiran `RangeError`. Quien necesite los centavos usa `formatoMoneda`; un importe que se factura o se cobra no va en pesos enteros.
+
+## ADR-051 — `Vencimientos` separa `puedeMermar` de `puedeMover` (0.140.0)
+
+**Problema.** `Vencimientos` tenía una sola prop, `puedeMover`, para tres cosas: asignar un vencimiento, cargar stock con lote y dar de baja un lote (merma). Un producto cuya matriz de roles distingue la baja de un lote del resto (la merma descuenta stock y no se deshace) no podía ocultar «Dar de baja (merma)» sin ocultar también «Asignar vencimiento» y «Cargar stock con lote». El pedido está en el wiki desde el 2026-09-30 (pendientes de VentaLibra).
+
+**Qué ya existe** (se miró antes de cambiar): `puedeMover` y `puedeMarcar` (ADR de la pantalla, 0.91.0 y 0.92.0); el 409 del motor al dar de baja ya se mostraba con su `detail` (`mensajeDeError` → `role="alert"` del diálogo) y ya estaba cubierto por tests de `clave_operacion` y de saldo insuficiente.
+
+**Decisión.**
+1. Prop nueva `puedeMermar?: boolean`. **Si no se pasa, vale lo que `puedeMover`** (`puedeMermar = puedeMover` como default del parámetro): quien no la pasa se comporta exactamente como antes, con `puedeMover` verdadero o falso.
+2. El botón «Dar de baja (merma)» y la columna «Acciones» de la tabla de lotes dependen sólo de `puedeMermar`. «Asignar vencimiento» (tabla «sin lote»), «Cargar stock con lote» y la revisión de cargas sin confirmar siguen dependiendo de `puedeMover`.
+3. Las props sólo ocultan botones: el backend sigue siendo quien autoriza (403) y quien aplica las reglas de negocio. Un 409 del motor al dar de baja (saldo insuficiente, saldo «sin lote» negativo sin conciliar, clave reusada con otros datos) se muestra con su `detail`, sin traducir, y deja el diálogo abierto.
+
+**Tests** (`test/comercio-vencimientos.test.tsx`): `puedeMermar=false` con `puedeMover` por default oculta la baja y su columna pero deja asignar y cargar; `puedeMermar=true` con `puedeMover=false` muestra la baja y esconde asignar y cargar; sin `puedeMermar` la baja sigue a `puedeMover`; un 409 «salidas sin lote sin conciliar» se muestra con su texto. Los dos primeros se ponen rojos sin el cambio.
+
+**Cómo se adopta.** Subir el pin. Nadie está obligado a pasar la prop. Un producto con una capacidad propia para la baja pasa `puedeMermar={puede(user, '…')}`.

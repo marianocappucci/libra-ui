@@ -114,7 +114,7 @@ function secuencia(ruta: string, respuestas: (() => Response | Promise<Response>
   })
 }
 
-async function abrir(tabla: Record<string, unknown> = TODO, props: { puedeMover?: boolean; puedeMarcar?: boolean } = {}) {
+async function abrir(tabla: Record<string, unknown> = TODO, props: { puedeMover?: boolean; puedeMermar?: boolean; puedeMarcar?: boolean } = {}) {
   responder(tabla)
   montar('/vencimientos', <Vencimientos {...props} />)
   await screen.findByText('5 lotes')
@@ -721,6 +721,41 @@ describe('Vencimientos: dar de baja (merma)', () => {
     expect(screen.queryByRole('button', { name: /Dar de baja/ })).toBeNull()
     expect(screen.queryByRole('columnheader', { name: 'Acciones' })).toBeNull()
     expect(nombresEnTabla()).toHaveLength(5)
+  })
+
+  it('puedeMermar=false con puedeMover (el default) oculta «Dar de baja» y su columna, pero deja asignar y cargar stock con lote', async () => {
+    await abrir(TODO, { puedeMermar: false })
+    expect(screen.queryByRole('button', { name: /Dar de baja/ })).toBeNull()
+    expect(within(screen.getAllByRole('table')[0]).queryByRole('columnheader', { name: 'Acciones' })).toBeNull()
+    expect(nombresEnTabla()).toHaveLength(5)
+    // La tabla de «sin lote» y la carga siguen siendo de quien puede mover.
+    expect(screen.getAllByRole('button', { name: /Asignar vencimiento/ }).length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: /Cargar stock con lote/ })).toBeTruthy()
+  })
+
+  it('puedeMermar=true con puedeMover=false muestra «Dar de baja» y esconde asignar y cargar stock con lote', async () => {
+    await abrir(TODO, { puedeMover: false, puedeMermar: true })
+    expect(screen.getAllByRole('button', { name: /Dar de baja/ }).length).toBeGreaterThan(0)
+    expect(within(screen.getAllByRole('table')[0]).getByRole('columnheader', { name: 'Acciones' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Asignar vencimiento/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Cargar stock con lote/ })).toBeNull()
+    expect(within(screen.getAllByRole('table')[1]).queryByRole('columnheader', { name: 'Acciones' })).toBeNull()
+  })
+
+  it('retrocompatible: sin puedeMermar vale lo que puedeMover (true por default, false oculta la baja)', async () => {
+    await abrir()
+    expect(screen.getAllByRole('button', { name: /Dar de baja/ })).toHaveLength(5)
+  })
+
+  it('un 409 del motor al dar de baja (saldo «sin lote» negativo sin conciliar) se muestra con su detail', async () => {
+    const user = userEvent.setup()
+    await abrir(TODO, { puedeMermar: true })
+    const detail = 'hay salidas sin lote sin conciliar en este depósito: el saldo del lote puede estar sobreestimado; conciliá con el conteo físico antes de dar de baja'
+    secuencia(MERMA, [() => json({ detail }, 409)])
+    await abrirMerma(user)
+    await user.click(confirmar())
+    expect((await within(dialogo()).findByRole('alert')).textContent).toBe(detail)
+    expect(screen.queryByText(/Se dieron de baja/)).toBeNull()
   })
 })
 
