@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 
 import * as formatos from '../src/formatos'
 import * as tipos from '../src/comercio/tipos'
-import { formatoCantidad, formatoMoneda } from '../src/formatos'
+import { formatoCantidad, formatoMoneda, formatoMonedaEntera } from '../src/formatos'
 
 describe('formatoCantidad', () => {
   it('un entero se muestra sin decimales', () => {
@@ -61,6 +61,38 @@ describe('formatoMoneda', () => {
   })
 })
 
+describe('formatoMonedaEntera', () => {
+  it('pesos con punto de miles y sin centavos', () => {
+    expect(formatoMonedaEntera(1234)).toMatch(/^\$\s1\.234$/)
+    expect(formatoMonedaEntera(0)).toMatch(/^\$\s0$/)
+    expect(formatoMonedaEntera(1234567)).toMatch(/^\$\s1\.234\.567$/)
+  })
+
+  it('redondea los centavos, no los trunca', () => {
+    expect(formatoMonedaEntera(1234.49)).toMatch(/^\$\s1\.234$/)
+    expect(formatoMonedaEntera(1234.5)).toMatch(/^\$\s1\.235$/)
+    expect(formatoMonedaEntera(0.4)).toMatch(/^\$\s0$/)
+  })
+
+  it('un importe negativo conserva el signo', () => {
+    expect(formatoMonedaEntera(-1500)).toMatch(/^-\$\s1\.500$/)
+  })
+
+  it('🔴 es lo que mostraba el Dashboard: ARS con maximumFractionDigits 0, mismo texto exacto', () => {
+    // La función local que reemplaza. Si alguien toca las opciones de `formatos.ts`, esto avisa que el Dashboard cambió.
+    const anterior = (v: number) =>
+      new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(v)
+    for (const v of [0, 1, 999, 1234, 1234.49, 1234.5, -1500, 1234567.89, 0.4]) {
+      expect(formatoMonedaEntera(v)).toBe(anterior(v))
+    }
+  })
+
+  it('no muestra centavos aunque formatoMoneda sí', () => {
+    expect(formatoMoneda(1234.5)).toMatch(/,50$/)
+    expect(formatoMonedaEntera(1234.5)).not.toMatch(/,/)
+  })
+})
+
 describe('compatibilidad con comercio/tipos', () => {
   it('🔴 comercio/tipos sigue exportando las dos funciones: los productos las importan de ahí', () => {
     expect(tipos.formatoMoneda).toBe(formatos.formatoMoneda)
@@ -80,18 +112,20 @@ describe('no quedan copias locales', () => {
     )
   }
 
-  // Dashboard muestra los pesos enteros (`maximumFractionDigits: 0`): no es una copia sino otro formato, y no pasa por acá.
-  const CON_FORMATO_PROPIO = new Set(['comercio/Dashboard.tsx'])
-
   function dondeAparece(patron: RegExp): string[] {
     return fuentes(SRC)
       .map((f) => relative(SRC, f))
-      .filter((f) => f !== 'formatos.ts' && !CON_FORMATO_PROPIO.has(f))
+      .filter((f) => f !== 'formatos.ts')
       .filter((f) => patron.test(readFileSync(join(SRC, f), 'utf8')))
   }
 
   it('🔴 ninguna pantalla arma su propio formateador de pesos', () => {
     expect(dondeAparece(/style:\s*'currency'/)).toEqual([])
+  })
+
+  it('🔴 ninguna pantalla arma su propio formateador de pesos enteros', () => {
+    // Cubre también el que no pone `style: 'currency'` en el mismo literal (`toLocaleString`, o las opciones en una constante).
+    expect(dondeAparece(/maximumFractionDigits:\s*0\b/)).toEqual([])
   })
 
   it('🔴 ninguna pantalla arma su propio formateador de cantidades con 10 decimales', () => {
@@ -101,6 +135,8 @@ describe('no quedan copias locales', () => {
   it('el control — el guard sabe encontrar una copia', () => {
     // Si `fuentes` devolviera una lista vacía, los dos casos de arriba pasarían igual.
     expect(fuentes(SRC).length).toBeGreaterThan(50)
-    expect(readFileSync(join(SRC, 'formatos.ts'), 'utf8')).toMatch(/style:\s*'currency'/)
+    const propio = readFileSync(join(SRC, 'formatos.ts'), 'utf8')
+    expect(propio).toMatch(/style:\s*'currency'/)
+    expect(propio).toMatch(/maximumFractionDigits:\s*0\b/)
   })
 })
