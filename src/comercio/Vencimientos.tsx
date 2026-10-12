@@ -9,8 +9,10 @@
 //
 // Pantalla nueva (0.91.0, roadmap de producto de VentaLibra, A-2); todo lo que se cuenta es del motor
 // (`/api/vencimientos`, `libracommerce.erp.vencimientos`, ADR-018) y acá sólo se muestra y se pide. Props opcionales
-// `puedeMover` (asignar y dar de baja) y `puedeMarcar` (marcar «vence»): ocultan los botones; el backend igual contesta
-// 403 a quien no tiene el permiso.
+// `puedeMover` (asignar y cargar stock con lote), `puedeMermar` (dar de baja un lote; si no se pasa, vale lo que `puedeMover`, que
+// es como era antes de separarla) y `puedeMarcar` (marcar «vence»): ocultan los botones; el backend igual contesta 403 a quien no
+// tiene el permiso. Un 409 del motor al dar de baja (saldo insuficiente, saldo «sin lote» negativo sin conciliar) se muestra con
+// su `detail`, tal cual, en el diálogo.
 //
 // Decisiones que no son casualidad:
 // - **El estado de la respuesta va ligado a la consulta a la que contestó** (como `Reposicion`, por el hallazgo de
@@ -873,7 +875,13 @@ const claveDeFila = (f: VencimientoLote | VencimientoSinLote) =>
 
 type Aviso = { texto: string }
 
-export function Vencimientos({ puedeMover = true, puedeMarcar = true }: { puedeMover?: boolean; puedeMarcar?: boolean } = {}) {
+export function Vencimientos({ puedeMover = true, puedeMermar = puedeMover, puedeMarcar = true }: {
+  puedeMover?: boolean
+  /** Dar de baja un lote (merma). Sin pasarla vale lo que `puedeMover`: el producto que las separa (la baja es una decisión
+   *  distinta de mover stock) pasa las dos. */
+  puedeMermar?: boolean
+  puedeMarcar?: boolean
+} = {}) {
   const [dias, setDias] = useState(DIAS_POR_DEFECTO)
   const [sucursal, setSucursal] = useState(TODAS)
   const [categoria, setCategoria] = useState(TODAS)
@@ -1143,7 +1151,7 @@ export function Vencimientos({ puedeMover = true, puedeMarcar = true }: { puedeM
                             </button>
                           </th>
                         ))}
-                        {puedeMover && <th scope="col" className="p-3 text-right font-medium">Acciones</th>}
+                        {puedeMermar && <th scope="col" className="p-3 text-right font-medium">Acciones</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -1166,7 +1174,7 @@ export function Vencimientos({ puedeMover = true, puedeMarcar = true }: { puedeM
                           <td className="p-3 text-right">
                             {formatoCantidad(l.saldo)}{l.unidad && <> <span className="text-xs text-muted-foreground">{l.unidad}</span></>}
                           </td>
-                          {puedeMover && (
+                          {puedeMermar && (
                             <td className="p-3 text-right">
                               <Button size="sm" variant="outline" aria-label={`Dar de baja (merma) ${l.nombre}, lote ${l.lote ?? 'sin código'}`} onClick={() => { setAviso(null); setAMermar(l) }}>
                                 <Trash2 />Dar de baja (merma)
