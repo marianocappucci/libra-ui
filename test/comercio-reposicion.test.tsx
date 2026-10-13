@@ -1030,3 +1030,125 @@ describe('Reposición: filtros plegables en el celular (ADR-056)', () => {
     }
   })
 })
+
+// Borradores (0.147.0, motor >= 0.59.0, ADR-056 del motor; ADR-059 de libra-ui): la columna «En borrador» y el interruptor «Contar borradores como pedidos».
+describe('Reposición: contar borradores como pedidos (motor >= 0.59.0, ADR-056; ADR-059 de libra-ui)', () => {
+  const ROTULO = 'Contar borradores como pedidos'
+  /** Lo pendiente de las órdenes en borrador por producto: Yerba 10 (de los 10 «en camino»), Harina 0,5, Sal nada. */
+  const EN_BORRADOR = { [YERBA.producto_id]: 10, [HARINA.producto_id]: 0.5, [SAL.producto_id]: 0 }
+  const conBorrador = (contar: boolean): ReposicionData => ({
+    ...DATA, contar_borradores: contar, productos: [YERBA, HARINA, SAL].map((p) => ({ ...p, en_borrador: EN_BORRADOR[p.producto_id as 1 | 2 | 3] })),
+  })
+  const tabla = (data: ReposicionData) => ({ ...TODO, [RUTA]: data })
+  const columna = () => screen.queryByRole('button', { name: /^En borrador/ })
+  const titulos = () => within(screen.getByRole('table')).getAllByRole('columnheader').map((th) => th.textContent)
+
+  it('con un motor que no lo maneja (sin el eco) no hay interruptor ni columna, y la consulta es la de siempre', async () => {
+    await abrir()
+    expect(screen.queryByLabelText(ROTULO)).toBeNull()
+    expect(columna()).toBeNull()
+    expect(ultimaConsulta()).toBe(pide())
+  })
+
+  it('un motor que contesta el eco pero no manda `en_borrador` en las filas: el interruptor sí, la columna no, y la pantalla no se rompe', async () => {
+    await abrir(tabla({ ...DATA, contar_borradores: true }))
+    expect(await screen.findByLabelText(ROTULO)).toBeTruthy()
+    expect(columna()).toBeNull()
+    expect(nombresEnTabla()).toEqual(['Yerba', 'Harina', 'Sal'])
+  })
+
+  it('con el eco aparece el interruptor PRENDIDO (lo de siempre), con su ayuda, y la columna «En borrador» pegada a «En camino»; la consulta no cambia', async () => {
+    await abrir(tabla(conBorrador(true)))
+    const interruptor = await screen.findByLabelText(ROTULO)
+    expect(interruptor).toHaveAttribute('type', 'checkbox')
+    expect(interruptor).toBeChecked()
+    expect(interruptor).toHaveAccessibleDescription('Una orden en borrador todavía no se mandó al proveedor. Apagado, no resta de lo sugerido.')
+    expect(ultimaConsulta()).toBe(pide())                                       // prendido = el default del motor: no viaja nada
+    expect(ultimaConsulta()).not.toContain('contar_borradores')
+    expect(titulos().slice(2, 5)).toEqual(['Stock', 'En camino', 'En borrador'])
+    // Cada título está sobre su dato (no se corre una columna).
+    const yerba = within(fila('Yerba')).getAllByRole('cell')
+    expect(titulos()).toHaveLength(yerba.length)
+    expect(yerba[3].textContent).toBe('10')                                    // En camino
+    // Con la opción prendida el borrador ya está dentro de «En camino»: la celda lo dice con texto, no sólo con el color.
+    expect(yerba[4].textContent).toBe('10ya contado en «En camino»: resta de lo sugerido')   // la forma corta a la vista, la completa para el lector
+    expect(within(fila('Yerba')).getByTitle('ya contado en «En camino»: resta de lo sugerido')).toBeTruthy()
+    expect(within(fila('Harina')).getAllByRole('cell')[4].textContent).toMatch(/^0,5ya contado/)
+    expect(within(fila('Sal')).getAllByRole('cell')[4].textContent).toBe('—')  // sin borradores, un guion
+  })
+
+  it('apagarlo manda contar_borradores=false (consulta y CSV), la columna se queda y dice que no resta; volver a prenderlo deja la consulta de siempre', async () => {
+    const user = userEvent.setup()
+    await abrir(tabla(conBorrador(true)))
+    expect(screen.getByRole('link', { name: /CSV/ }).getAttribute('href')).toBe(`${RUTA}/export?${consulta()}`)
+    responder(tabla(conBorrador(false)))
+    await user.click(await screen.findByLabelText(ROTULO))
+    await waitFor(() => expect(ultimaConsulta()).toBe(pide('&contar_borradores=false')))
+    await waitFor(() => expect(screen.getByRole('link', { name: /CSV/ }).getAttribute('href')).toBe(`${RUTA}/export?${consulta('&contar_borradores=false')}`))
+    expect(screen.getByLabelText(ROTULO)).not.toBeChecked()
+    expect(await screen.findByRole('button', { name: /^En borrador/ })).toBeTruthy()
+    expect(within(fila('Yerba')).getAllByRole('cell')[4].textContent).toBe('10no resta de lo sugerido: todavía no se mandó al proveedor')
+    expect(within(fila('Yerba')).getByTitle('no resta de lo sugerido: todavía no se mandó al proveedor')).toBeTruthy()
+    // La explicación suma que los borradores no se cuentan, con prendido no dice nada.
+    expect(texto(screen.getByText(/proyecta a los días de cobertura/))).toContain('Las órdenes en borrador no se cuentan como pedidas: se ven aparte, en «En borrador».')
+    responder(tabla(conBorrador(true)))
+    await user.click(screen.getByLabelText(ROTULO))
+    await waitFor(() => expect(ultimaConsulta()).toBe(pide()))
+    await waitFor(() => expect(texto(screen.getByText(/proyecta a los días de cobertura/))).not.toContain('Las órdenes en borrador no se cuentan'))
+  })
+
+  it('la columna ordena por lo que hay en borrador (de mayor a menor la primera vez) y no pide de nuevo', async () => {
+    const user = userEvent.setup()
+    await abrir(tabla(conBorrador(true)))
+    const antes = pedidasAlReporte().length
+    await user.click(await screen.findByRole('button', { name: /^En borrador/ }))
+    expect(nombresEnTabla()).toEqual(['Yerba', 'Harina', 'Sal'])                // 10, 0,5, 0
+    expect(screen.getByRole('button', { name: /^En borrador/ }).closest('th')).toHaveAttribute('aria-sort', 'descending')
+    await user.click(screen.getByRole('button', { name: /^En borrador/ }))
+    expect(nombresEnTabla()).toEqual(['Sal', 'Harina', 'Yerba'])                // 0, 0,5, 10
+    expect(pedidasAlReporte()).toHaveLength(antes)
+  })
+
+  it('una fila sin `en_borrador` (clave ausente) va al final al ordenar, sin romper', async () => {
+    const user = userEvent.setup()
+    const { en_borrador: _quitada, ...sinClave } = { ...SAL, en_borrador: 0 }
+    await abrir(tabla({ ...conBorrador(true), productos: [YERBA, HARINA, sinClave].map((p, i) => (i < 2 ? { ...p, en_borrador: [10, 0.5][i] } : p)) }))
+    await user.click(await screen.findByRole('button', { name: /^En borrador/ }))
+    expect(nombresEnTabla()).toEqual(['Yerba', 'Harina', 'Sal'])
+    await user.click(screen.getByRole('button', { name: /^En borrador/ }))
+    expect(nombresEnTabla()).toEqual(['Harina', 'Yerba', 'Sal'])                // lo que no tiene valor va siempre al final
+    expect(within(fila('Sal')).getAllByRole('cell')[4].textContent).toBe('—')
+  })
+
+  it('el interruptor está en el bloque plegable de filtros y el resumen lo nombra sólo cuando está apagado', async () => {
+    const user = userEvent.setup()
+    await abrir(tabla(conBorrador(true)))
+    const interruptor = await screen.findByLabelText(ROTULO)
+    expect(document.getElementById('reposicion-filtros')!.contains(interruptor)).toBe(true)
+    // Misma altura táctil que las otras casillas.
+    expect(interruptor.closest('label')!.className).toContain('max-sm:min-h-11')
+    const resumen = () => texto(screen.getByRole('button', { name: /^Filtros y parámetros/ })).replace('Filtros y parámetros', '').trim()
+    expect(resumen()).toBe('Toda la instancia · 15 + 3 días · Sólo lo que hay que pedir')
+    responder(tabla(conBorrador(false)))
+    await user.click(interruptor)
+    expect(resumen()).toBe('Toda la instancia · 15 + 3 días · Sólo lo que hay que pedir · Sin contar borradores')
+  })
+
+  it('convive con los otros dos interruptores del motor: viajan juntos y apagar uno no toca a los demás', async () => {
+    const user = userEvent.setup()
+    const TODOS = (contar: boolean, estacional: boolean, vencer: boolean): ReposicionData => ({
+      ...conBorrador(contar), estacionalidad: estacional, descontar_por_vencer: vencer,
+      productos: conBorrador(contar).productos.map((p) => ({ ...p, por_vencer: 0, factor_estacional: null })),
+    })
+    await abrir(tabla(TODOS(true, false, false)))
+    responder(tabla(TODOS(true, true, true)))
+    await user.click(await screen.findByLabelText('Ajustar por estacionalidad'))
+    await user.click(screen.getByLabelText('Descontar lo que vence en el horizonte'))
+    responder(tabla(TODOS(false, true, true)))
+    await user.click(screen.getByLabelText(ROTULO))
+    await waitFor(() => expect(ultimaConsulta()).toBe(pide('&estacionalidad=true&descontar_por_vencer=true&contar_borradores=false')))
+    expect(titulos()).toContain('En borrador')
+    expect(titulos()).toContain('Por vencer')
+    expect(titulos()).toContain('Estacional')
+  })
+})

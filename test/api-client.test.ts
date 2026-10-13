@@ -179,6 +179,19 @@ describe('errores', () => {
     expect(error.detail).toBe('No tenés permiso para hacer esto.')
   })
 
+  // 0.147.0 (ADR-054 del motor): devolver un servicio con la base sin la revisión 0007 contesta 503 con el comando a correr. El kit no tiene la pantalla de devolución (es de VentaLibra, por
+  // `VentaDetalle.accionesExtra`): lo que le toca es entregar ese texto TAL CUAL en `detail`, sin traducirlo ni cambiarlo por uno genérico. Esto fija el contrato con el texto real del motor.
+  it('🔑 el 503 «Falta la revisión 0007…» de devolver un servicio llega entero en `detail` (no se pierde, no se traduce)', async () => {
+    const DETALLE = 'Falta la revisión 0007_devoluciones_de_servicio del motor: corré `libracommerce-migrar upgrade` (--prefijo del producto) antes de devolver un servicio.'
+    responde({ detail: DETALLE }, { status: 503 })
+    const error = await api.post('/api/ventas/12/devolver', { lineas: [] }).catch((e) => e) as ApiError
+    expect(error).toBeInstanceOf(ApiError)
+    expect(error.status).toBe(503)
+    expect(error.detail).toBe(DETALLE)
+    expect(error.message).toBe(DETALLE)
+    expect(error.detailOriginal).toBe(DETALLE)
+  })
+
   it('el 503 del corte de servicio llega como ApiError', async () => {
     // Contalibra/Restolibra cortan la API con 503 cuando el servicio esta
     // suspendido -- ver el middleware de web/app.py.

@@ -593,3 +593,201 @@ describe('CompraDetalle: recibir mercadería no se duplica en un reintento (clav
     expect(screen.queryByText(/ya estaba registrada/)).toBeNull()
   })
 })
+
+// ── Enviar y cancelar la orden (0.147.0, motor >= 0.59.0, ADR-055 del motor; ADR-059 de libra-ui) ──────────────────────────
+describe('CompraDetalle: enviar al proveedor y cancelar la orden', () => {
+  const BORRADOR: PurchaseOrder = { ...ORDEN_VACIA, status: 'draft', items: [LINEA] }
+  const ENVIADA: PurchaseOrder = { ...BORRADOR, status: 'sent' }
+  const CANCELADA: PurchaseOrder = { ...BORRADOR, status: 'cancelled' }
+  const PARCIAL: PurchaseOrder = { ...BORRADOR, status: 'partial', items: [{ ...LINEA, quantity_received: '4', pending_quantity: '6' }] }
+  const ENVIAR = 'POST /api/purchase-orders/10/enviar'
+  const CANCELAR = 'POST /api/purchase-orders/10/cancelar'
+  const RECEPCION_EN_BORRADOR: PurchaseReceipt = {
+    id: 40, proveedor_id: 1, purchase_order_id: 10, status: 'draft',
+    items: [{ item_id: 1, quantity: '3', unit_cost: '900', lot_code: null, expires_at: null }], received_at: null, document_reference: null,
+  }
+
+  /** El motor de mentira: la orden que sirve cambia con cada transición, como la real. */
+  function motor(inicial: PurchaseOrder, extra: Record<string, unknown> = {}, recepciones: PurchaseReceipt[] = []) {
+    let orden = inicial
+    responder({
+      '/api/purchase-orders/10': () => orden,
+      '/api/productos?solo_activos=true': [PRODUCTO],
+      '/api/proveedores': [PROVEEDOR],
+      '/api/depositos': [DEPOSITO],
+      '/api/purchase-receipts?purchase_order_id=10': recepciones,
+      [ENVIAR]: () => { orden = { ...orden, status: 'sent' }; return orden },
+      [CANCELAR]: () => { orden = { ...orden, status: 'cancelled' }; return orden },
+      ...extra,
+    })
+  }
+  const boton = (nombre: string) => screen.queryByRole('button', { name: nombre })
+  const lecturasDeLaOrden = () => pedidas().filter((p) => p === 'GET /api/purchase-orders/10')
+
+  it('un borrador ofrece «Enviar al proveedor», «Cancelar orden» y «Recibir mercadería»; una enviada, sólo cancelar y recibir', async () => {
+    motor(BORRADOR)
+    montar('/compras/10', <CompraDetalle />)
+    await screen.findByText('Borrador')
+    expect(boton('Enviar al proveedor')).toBeTruthy()
+    expect(boton('Cancelar orden')).toBeTruthy()
+    expect(boton('Recibir mercadería')).toBeTruthy()
+    cleanup()
+    motor(ENVIADA)
+    montar('/compras/10', <CompraDetalle />)
+    await screen.findByText('Enviada')
+    expect(boton('Enviar al proveedor')).toBeNull()
+    expect(boton('Cancelar orden')).toBeTruthy()
+    expect(boton('Recibir mercadería')).toBeTruthy()
+  })
+
+  it('«Enviar al proveedor» llama a /enviar, vuelve a mostrar la orden como «Enviada», lo avisa y ya no ofrece enviar', async () => {
+    motor(BORRADOR)
+    const user = userEvent.setup()
+    montar('/compras/10', <CompraDetalle />)
+    await user.click(await screen.findByRole('button', { name: 'Enviar al proveedor' }))
+    await waitFor(() => expect(pedidas()).toContain(ENVIAR))
+    expect(await screen.findByText('Enviada')).toBeTruthy()
+    expect(screen.queryByText('Borrador')).toBeNull()
+    expect(screen.getByRole('status').textContent).toBe('La orden se marcó como enviada al proveedor.')
+    expect(boton('Enviar al proveedor')).toBeNull()
+    expect(boton('Cancelar orden')).toBeTruthy()
+    expect(cuerpoDe(ENVIAR)).toEqual({})                                          // sin cuerpo: el id va en la ruta
+  })
+
+  it('un segundo clic mientras envía no manda dos veces', async () => {
+    motor(BORRADOR)
+    const user = userEvent.setup()
+    montar('/compras/10', <CompraDetalle />)
+    await user.dblClick(await screen.findByRole('button', { name: 'Enviar al proveedor' }))
+    await screen.findByText('Enviada')
+    expect(pedidas().filter((p) => p === ENVIAR)).toHaveLength(1)
+  })
+
+  it('«Cancelar orden» pide confirmación: «Cancelar» (me arrepentí) no escribe nada; confirmar llama a /cancelar y la orden queda «Cancelada»', async () => {
+    motor(ENVIADA)
+    const user = userEvent.setup()
+    montar('/compras/10', <CompraDetalle />)
+    await user.click(await screen.findByRole('button', { name: 'Cancelar orden' }))
+    const confirmacion = screen.getByRole('alertdialog')
+    expect(within(confirmacion).getByText('¿Cancelar la orden OC-000001?')).toBeTruthy()
+    expect(within(confirmacion).getByText(/ya no se le puede recibir mercadería/)).toBeTruthy()
+    await user.click(within(confirmacion).getByRole('button', { name: 'Cancelar' }))
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(pedidas()).not.toContain(CANCELAR)
+    expect(screen.getByText('Enviada')).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: 'Cancelar orden' }))
+    await user.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Sí, cancelar la orden' }))
+    await waitFor(() => expect(pedidas()).toContain(CANCELAR))
+    expect(await screen.findByText('Cancelada')).toBeTruthy()
+    expect(screen.getByRole('status').textContent).toBe('La orden se canceló.')
+  })
+
+  it('🔴 una orden cancelada no ofrece recibir mercadería, enviar, cancelar, agregar líneas ni confirmar una recepción que había quedado en borrador', async () => {
+    motor(CANCELADA, {}, [RECEPCION_EN_BORRADOR])
+    montar('/compras/10', <CompraDetalle />)
+    await screen.findByText('Cancelada')
+    expect(boton('Recibir mercadería')).toBeNull()
+    expect(boton('Enviar al proveedor')).toBeNull()
+    expect(boton('Cancelar orden')).toBeNull()
+    expect(boton('Agregar línea')).toBeNull()
+    expect(boton('Confirmar recepción')).toBeNull()
+    expect(screen.getByText('#40')).toBeTruthy()                                   // la recepción se sigue LEYENDO
+  })
+
+  it('cancelar una orden recibida o parcial no se ofrece (el motor contesta 409); enviar tampoco', async () => {
+    for (const orden of [PARCIAL, { ...ORDEN_RECIBIDA, status: 'received' as const }]) {
+      cleanup()
+      prepararFetch()
+      motor(orden)
+      montar('/compras/10', <CompraDetalle />)
+      await screen.findByText(orden.status === 'partial' ? 'Recibida parcial' : 'Recibida')
+      expect(boton('Cancelar orden')).toBeNull()
+      expect(boton('Enviar al proveedor')).toBeNull()
+    }
+  })
+
+  it('🔴 con puedeEscribir={false} no se envía ni se cancela (sí se recibe: es otra capacidad)', async () => {
+    motor(BORRADOR)
+    montar('/compras/10', <CompraDetalle puedeEscribir={false} />)
+    await screen.findByText('Borrador')
+    expect(boton('Enviar al proveedor')).toBeNull()
+    expect(boton('Cancelar orden')).toBeNull()
+    expect(boton('Recibir mercadería')).toBeTruthy()
+    cleanup()
+    motor(ENVIADA)
+    montar('/compras/10', <CompraDetalle puedeEscribir={false} />)
+    await screen.findByText('Enviada')
+    expect(boton('Cancelar orden')).toBeNull()
+  })
+
+  it('un 409 muestra el mensaje del servidor, no cambia nada por su cuenta y vuelve a leer la orden: ahora está recibida y ya no ofrece enviar ni cancelar', async () => {
+    const MENSAJE = "la orden 10 está en estado 'received': no se puede cancelar una orden que ya recibió mercadería"
+    let orden = ENVIADA
+    motor(ENVIADA, { '/api/purchase-orders/10': () => orden, [CANCELAR]: () => { orden = { ...ORDEN_RECIBIDA, status: 'received' }; return { status: 409, detail: MENSAJE } } })
+    const user = userEvent.setup()
+    montar('/compras/10', <CompraDetalle />)
+    await user.click(await screen.findByRole('button', { name: 'Cancelar orden' }))
+    const lecturasAntes = lecturasDeLaOrden().length
+    await user.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Sí, cancelar la orden' }))
+    expect((await screen.findByRole('alert')).textContent).toBe(MENSAJE)
+    await waitFor(() => expect(lecturasDeLaOrden().length).toBe(lecturasAntes + 1))
+    expect(await screen.findByText('Recibida')).toBeTruthy()
+    expect(boton('Cancelar orden')).toBeNull()
+    expect(screen.queryByRole('status')).toBeNull()                                // no hay aviso de éxito
+  })
+
+  it('🔑 un motor anterior (405, o el 404 genérico «Not Found» de una ruta que no existe) dice claro que falta actualizar y la pantalla sigue entera', async () => {
+    const SIN_RUTA = 'Este servidor todavía no permite enviar ni cancelar órdenes de compra: hace falta actualizar el motor (libracommerce 0.59.0 o posterior).'
+    const user = userEvent.setup()
+    for (const falla of [{ status: 404, detail: 'Not Found' }, { status: 405, detail: 'Method Not Allowed' }]) {
+      cleanup()
+      prepararFetch()
+      motor(BORRADOR, { [ENVIAR]: falla, [CANCELAR]: falla })
+      montar('/compras/10', <CompraDetalle />)
+      await user.click(await screen.findByRole('button', { name: 'Enviar al proveedor' }))
+      expect((await screen.findByRole('alert')).textContent).toBe(SIN_RUTA)
+      expect(screen.getByText('Borrador')).toBeTruthy()                            // la orden sigue como estaba
+      expect(boton('Enviar al proveedor')).toBeTruthy()                            // y se puede reintentar
+      expect(boton('Enviar al proveedor')).not.toBeDisabled()
+      await user.click(screen.getByRole('button', { name: 'Cancelar orden' }))
+      await user.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Sí, cancelar la orden' }))
+      await waitFor(() => expect(pedidas().filter((p) => p === CANCELAR)).toHaveLength(1))
+      expect((await screen.findByRole('alert')).textContent).toBe(SIN_RUTA)
+      expect(screen.getByText('Borrador')).toBeTruthy()
+    }
+  })
+
+  it('el 404 de una orden que no existe NO se confunde con un motor viejo: se muestra lo que dice el servidor', async () => {
+    motor(BORRADOR, { [ENVIAR]: { status: 404, detail: 'purchase order not found' } })
+    const user = userEvent.setup()
+    montar('/compras/10', <CompraDetalle />)
+    await user.click(await screen.findByRole('button', { name: 'Enviar al proveedor' }))
+    expect((await screen.findByRole('alert')).textContent).toBe('purchase order not found')
+  })
+
+  it('un 403 (sin permiso) y la caída de red se avisan en castellano y no tocan la orden', async () => {
+    const user = userEvent.setup()
+    motor(BORRADOR, { [ENVIAR]: { status: 403, detail: 'forbidden' } })
+    montar('/compras/10', <CompraDetalle />)
+    await user.click(await screen.findByRole('button', { name: 'Enviar al proveedor' }))
+    expect((await screen.findByRole('alert')).textContent).toBe('No tenés permiso para hacer esto.')
+    cleanup()
+    prepararFetch()
+    motor(BORRADOR, { [ENVIAR]: '!caida' })
+    montar('/compras/10', <CompraDetalle />)
+    await user.click(await screen.findByRole('button', { name: 'Enviar al proveedor' }))
+    expect((await screen.findByRole('alert')).textContent).toBe('Error de conexión.')
+    expect(screen.getByText('Borrador')).toBeTruthy()
+  })
+
+  it('los botones de la cabecera miden 44 px bajo `lg` (objetivo táctil), todos parejos', async () => {
+    motor(BORRADOR)
+    montar('/compras/10', <CompraDetalle />)
+    await screen.findByText('Borrador')
+    for (const nombre of ['Enviar al proveedor', 'Cancelar orden', 'Recibir mercadería']) {
+      expect(screen.getByRole('button', { name: nombre }).className, nombre).toContain('max-lg:h-11')
+    }
+    expect(screen.getByRole('link', { name: 'Volver' }).className).toContain('max-lg:h-11')
+  })
+})

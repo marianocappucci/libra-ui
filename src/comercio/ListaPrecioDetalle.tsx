@@ -3,6 +3,11 @@
 // (P9-M2, 2026-09-06). `conVigencias` (roadmap de producto, 2026-09-28) suma
 // promociones con ventana de fecha/hora y opcionalmente por sucursal.
 //
+// **Sucursal en «Nueva promoción» (0.147.0, motor >= 0.59.0, ADR-058 del motor; ADR-059 de libra-ui):** con `conSucursal` el alta de una promoción ofrece un select «Sucursal» (opcional;
+// vacío = todas) y manda `sucursal_id`; el motor ya aceptaba el campo en `POST …/precio-vigente` (ADR-048) y desde 0.59.0 la validación de la venta lo usa. Las sucursales salen de
+// `GET /api/sucursales` (como en `Reposicion` y `Productos`); sólo se ofrece con dos o más activas (con una, un precio «de la sucursal» es el general) y con la lectura caída la
+// pantalla sigue como siempre. Donde la lista decía «sucursal #3» dice el nombre si se conoce. Sin la prop, la pantalla es la de siempre.
+//
 // Estaba escrita dos veces y las copias diferían en 163 líneas, casi todas de
 // una sola cosa de dominio: los quiebres por cantidad, que sólo Contalibra tiene
 // (add-on mayorista). Entra como `conQuiebres`; el producto lo decide leyendo
@@ -18,7 +23,7 @@ import { DataTable } from '../data-table'
 import { BadgeEstado } from '../badge-estado'
 import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
-import { llegoElCosto, type CategoriaProducto, type ItemListaPrecio, type ListaPrecio, type PrecioVigente, type Quiebre } from './tipos'
+import { llegoElCosto, type CategoriaProducto, type ItemListaPrecio, type ListaPrecio, type PrecioVigente, type Quiebre, type Sucursal } from './tipos'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -48,6 +53,10 @@ export type ListaPrecioDetalleProps = {
    *  mínima y sucursal opcionales). El backend correspondiente
    *  (`build_precios_vigentes_router`) tiene que estar montado. */
   conVigencias?: boolean
+  /** Con `conVigencias`: el alta de una promoción ofrece elegir una sucursal (opcional) y manda `sucursal_id`; la lista dice el nombre de la sucursal en vez de «#id». Las sucursales
+   *  se leen de `GET /api/sucursales`, y el select sólo aparece con dos o más activas. Es del motor >= 0.59.0 (ADR-058): un motor anterior acepta el campo y lo ignora al validar la
+   *  venta, así que el producto la enciende cuando su motor ya es 0.59.0. Sin la prop, la pantalla es la de siempre. */
+  conSucursal?: boolean
   /** A dónde vuelve «Volver» y a dónde va después de borrar la lista. */
   rutaDeListas?: string
 }
@@ -58,6 +67,9 @@ export type ListaPrecioDetalleProps = {
 //: `sucursal_id`, es el flat o un quiebre, no una promoción con vigencia real.
 const _SIN_VIGENCIA = '2000-01-01T00:00:00'
 
+/** El formulario de «Nueva promoción» vacío. `sucursal_id` es el `value` del select (`''` = todas las sucursales). */
+const VIGENCIA_VACIA = { monto: '', desde: '', hasta: '', cantidad_minima: '', sucursal_id: '' }
+
 function esVigenciaReal(v: PrecioVigente): boolean {
   return v.desde !== _SIN_VIGENCIA || !!v.hasta || v.sucursal_id !== null
 }
@@ -66,7 +78,7 @@ function formatFechaHora(iso: string): string {
   return new Date(iso).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })
 }
 
-export function ListaPrecioDetalle({ conQuiebres = false, conVigencias = false, rutaDeListas = '/listas-precio' }: ListaPrecioDetalleProps) {
+export function ListaPrecioDetalle({ conQuiebres = false, conVigencias = false, conSucursal = false, rutaDeListas = '/listas-precio' }: ListaPrecioDetalleProps) {
   const { id } = useParams<{ id: string }>()
   const listaId = Number(id)
   const navigate = useNavigate()
@@ -109,8 +121,17 @@ export function ListaPrecioDetalle({ conQuiebres = false, conVigencias = false, 
   const [vigenciasProducto, setVigenciasProducto] = useState<ItemListaPrecio | null>(null)
   const [vigencias, setVigencias] = useState<PrecioVigente[]>([])
   const [vigenciasError, setVigenciasError] = useState<string | null>(null)
-  const [nuevaVigencia, setNuevaVigencia] = useState({ monto: '', desde: '', hasta: '', cantidad_minima: '' })
+  const [nuevaVigencia, setNuevaVigencia] = useState(VIGENCIA_VACIA)
   const [vigenciaSaving, setVigenciaSaving] = useState(false)
+  const [sucursales, setSucursales] = useState<Sucursal[]>([])
+
+  // Sin sucursales (la lectura falla, o el usuario no tiene permiso) el alta sigue siendo la de siempre: sólo pierde el select y el nombre.
+  useEffect(() => {
+    if (!conVigencias || !conSucursal) return
+    let vigente = true
+    api.get<Sucursal[]>('/api/sucursales').then((s) => { if (vigente && Array.isArray(s)) setSucursales(s) }).catch(() => {})
+    return () => { vigente = false }
+  }, [conVigencias, conSucursal])
 
   useEffect(() => {
     cargarLista()
@@ -320,7 +341,7 @@ export function ListaPrecioDetalle({ conQuiebres = false, conVigencias = false, 
   async function abrirVigencias(producto: ItemListaPrecio) {
     setVigenciasProducto(producto)
     setVigenciasError(null)
-    setNuevaVigencia({ monto: '', desde: '', hasta: '', cantidad_minima: '' })
+    setNuevaVigencia(VIGENCIA_VACIA)
     await cargarVigencias(producto.id)
   }
 
@@ -348,8 +369,9 @@ export function ListaPrecioDetalle({ conQuiebres = false, conVigencias = false, 
         desde: nuevaVigencia.desde || undefined,
         hasta: nuevaVigencia.hasta || undefined,
         cantidad_minima: nuevaVigencia.cantidad_minima ? Number(nuevaVigencia.cantidad_minima) : undefined,
+        sucursal_id: conSucursal && nuevaVigencia.sucursal_id ? Number(nuevaVigencia.sucursal_id) : undefined,
       })
-      setNuevaVigencia({ monto: '', desde: '', hasta: '', cantidad_minima: '' })
+      setNuevaVigencia(VIGENCIA_VACIA)
       await cargarVigencias(vigenciasProducto.id)
     } catch (err) {
       setVigenciasError(describeError(err))
@@ -368,6 +390,11 @@ export function ListaPrecioDetalle({ conQuiebres = false, conVigencias = false, 
       setVigenciasError(describeError(err))
     }
   }
+
+  // El nombre de la sucursal de una promoción, si se conoce (una dada de baja también está en la lectura); si no, el número de siempre.
+  const sucursalesActivas = sucursales.filter((x) => !!x.activa)
+  const conSelectDeSucursal = conSucursal && sucursalesActivas.length >= 2
+  const nombreDeSucursal = (id: number) => sucursales.find((x) => x.id === id)?.nombre ?? `#${id}`
 
   // Ningún producto de la lista trae `precio_costo`: el rol no ve costos (`costos.ver`) y «P. Costo» y «Margen» (que sale del costo) sólo mostrarían «$NaN». Mismo
   // criterio que `Productos.sinCosto`.
@@ -674,7 +701,7 @@ export function ListaPrecioDetalle({ conQuiebres = false, conVigencias = false, 
                   <span className="text-muted-foreground">
                     {formatFechaHora(v.desde)} → {v.hasta ? formatFechaHora(v.hasta) : 'sin fin'}
                     {v.cantidad_minima ? ` · desde ${v.cantidad_minima} u.` : ''}
-                    {v.sucursal_id ? ` · sucursal #${v.sucursal_id}` : ''}
+                    {v.sucursal_id ? ` · sucursal ${nombreDeSucursal(v.sucursal_id)}` : ''}
                   </span>
                   <Button size="icon" variant="ghost" className="ml-auto" aria-label="Quitar promoción" onClick={() => quitarVigencia(v)}><Trash2 /></Button>
                 </div>
@@ -703,6 +730,19 @@ export function ListaPrecioDetalle({ conQuiebres = false, conVigencias = false, 
                   <Input type="datetime-local" aria-label="Vigente hasta"
                     value={nuevaVigencia.hasta} onChange={(e) => setNuevaVigencia((v) => ({ ...v, hasta: e.target.value }))} />
                 </div>
+                {conSelectDeSucursal && (
+                  <div className="col-span-2 grid gap-1">
+                    <Label htmlFor="vigencia-sucursal">Sucursal <span className="font-normal text-muted-foreground">(opcional)</span></Label>
+                    <SelectBuscable
+                      id="vigencia-sucursal"
+                      value={nuevaVigencia.sucursal_id}
+                      onChange={(valor) => setNuevaVigencia((v) => ({ ...v, sucursal_id: valor }))}
+                      opciones={[{ value: '', label: 'Todas las sucursales' }, ...sucursalesActivas.map((x) => ({ value: String(x.id), label: x.nombre }))]}
+                      limpiable={false}
+                      className="w-full"
+                    />
+                  </div>
+                )}
               </div>
               <div><Button size="sm" variant="outline" disabled={vigenciaSaving} onClick={agregarVigencia}>+ Agregar promoción</Button></div>
             </div>
