@@ -15,7 +15,15 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const raiz = resolve(__dirname, '..')
-const exports = JSON.parse(readFileSync(resolve(raiz, 'package.json'), 'utf8')).exports as Record<string, string>
+// Un export es una ruta o, desde `./e2e` (v0.142.0, publicado compilado), un objeto de condiciones
+// (`{ types, default }`): se aplana a pares clave -> destino para que los dos guards miren cada archivo.
+type Destino = string | Record<string, string>
+const mapa = JSON.parse(readFileSync(resolve(raiz, 'package.json'), 'utf8')).exports as Record<string, Destino>
+const exports: [string, string][] = Object.entries(mapa).flatMap(([clave, destino]) =>
+  typeof destino === 'string'
+    ? [[clave, destino] as [string, string]]
+    : Object.entries(destino).map(([condicion, ruta]) => [`${clave} (${condicion})`, ruta] as [string, string]),
+)
 
 // Modulos internos: los usa el propio paquete y no tienen por que ser
 // importables desde un producto. Si alguno pasa a ser publico, se saca de aca
@@ -35,7 +43,7 @@ const INTERNOS = new Set<string>(['CaptchaAltcha.tsx'])
 
 describe('el mapa de exports de package.json', () => {
   it('🔴 cada destino existe en disco', () => {
-    const rotos = Object.entries(exports)
+    const rotos = exports
       .filter(([, destino]) => !existsSync(resolve(raiz, destino)))
       .map(([clave, destino]) => `${clave} -> ${destino}`)
     expect(rotos).toEqual([])
@@ -43,7 +51,7 @@ describe('el mapa de exports de package.json', () => {
 
   it('🔴 cada modulo de src/ esta exportado', () => {
     const modulos = readdirSync(resolve(raiz, 'src')).filter((f) => /\.tsx?$/.test(f))
-    const exportados = new Set(Object.values(exports).map((d) => d.replace('./src/', '')))
+    const exportados = new Set(exports.map(([, d]) => d.replace('./src/', '')))
     const huerfanos = modulos.filter((m) => !exportados.has(m) && !INTERNOS.has(m))
     expect(huerfanos).toEqual([])
   })
