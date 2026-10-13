@@ -13,11 +13,18 @@
 // exactamente ese intento, con su clave, o descartarlo de forma explícita.** Incierto es no saber si el motor escribió (error de red, timeout, 5xx); sólo son definitivos los 4xx
 // (menos el 408) y el 503 de la migración. El intento se guarda ANTES de enviar (`recepcion-pendiente.ts`, `sessionStorage`) y falla cerrado: si no queda guardado, no se envía.
 //
+// **Enviar y cancelar la orden (0.147.0, motor >= 0.59.0, ADR-055 del motor; ADR-059 de libra-ui):** «Enviar al proveedor» (`draft` -> `sent`) y «Cancelar orden» (`draft` o `sent` ->
+// `cancelled`, con confirmación: no hay «reabrir») contra `POST /api/purchase-orders/{id}/enviar` y `/cancelar`, con la guarda de `puedeEscribir`. 🔑 **Se ofrecen siempre que el estado
+// lo admite, y el motor viejo se detecta por la respuesta:** la orden no trae ningún campo que distinga a un motor con las rutas de uno sin ellas (`_orden_dict` no cambió en 0.59.0), así
+// que un 405, o un 404 con el `detail` de FastAPI «Not Found» (la ruta no existe; el 404 de una orden que no existe dice «purchase order not found»), se muestra como «este servidor todavía
+// no permite…» y la pantalla sigue como estaba. Un 409 (la orden ya recibió mercadería, o ya está cancelada) muestra el mensaje del servidor y vuelve a leer la orden, para que los botones
+// digan la verdad. Una orden cancelada no ofrece recibir mercadería ni confirmar una recepción que había quedado en borrador (el motor contesta 409).
+//
 // Extraída de `pages/CompraDetalle.tsx` de VentaLibra (F9, 2026-09-27): el
 // único producto de la familia con este módulo (ver el docstring de `tipos.ts`).
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Check, PackageCheck } from 'lucide-react'
+import { ArrowLeft, Ban, Check, PackageCheck, Send } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
 import { formatoMonto } from '../formatos'
@@ -26,6 +33,7 @@ import { BadgeEstado } from '../badge-estado'
 import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
 import { SelectBuscable } from '../SelectBuscable'
+import { ConfirmDialog } from '@/components/confirm-dialog'
 import { nuevaClaveDeOperacion } from './clave-de-operacion'
 import { esFechaISOValida } from './fecha-iso'
 import {
@@ -52,6 +60,15 @@ function describeError(err: unknown): string {
 }
 
 const RUTA_RECIBIR = '/api/purchase-receipts/recibir'
+const SIN_TRANSICIONES = 'Este servidor todavía no permite enviar ni cancelar órdenes de compra: hace falta actualizar el motor (libracommerce 0.59.0 o posterior).'
+type Transicion = 'enviar' | 'cancelar'
+const AVISO_DE_TRANSICION: Record<Transicion, string> = { enviar: 'La orden se marcó como enviada al proveedor.', cancelar: 'La orden se canceló.' }
+
+/** ¿La ruta no existe? Un 405, o el 404 genérico de FastAPI (`{"detail": "Not Found"}`): un motor anterior a 0.59.0 no tiene `/enviar` ni `/cancelar`. El 404 de una orden que no existe
+ *  trae otro texto («purchase order not found») y se muestra tal cual. */
+function esRutaInexistente(err: unknown): boolean {
+  return err instanceof ApiError && (err.status === 405 || (err.status === 404 && err.detail.trim().toLowerCase() === 'not found'))
+}
 const AVISO_INCIERTO = 'No se sabe si se llegó a registrar: reenviá el intento anterior y, si ya estaba registrado, no se duplica.'
 const SIN_ALMACEN =
   'No se pudo guardar el intento en este navegador (¿modo privado o almacenamiento lleno?). No se envía para no arriesgar una recepción ' +
@@ -62,6 +79,9 @@ const FORMATO_DE_HORA = new Intl.DateTimeFormat('es-AR', { hour: '2-digit', minu
 const MAX_LARGO_LOTE = 64
 const LOTE_Y_FECHA = 'Completá el lote y el vencimiento, o dejá los dos vacíos.'
 const FECHA_INVALIDA = 'La fecha de vencimiento no es válida.'
+
+/** Bajo `lg` los botones de la cabecera miden 44 px de alto, el objetivo táctil de WCAG 2.5.5 (la misma frontera y la misma clase que `VentaDetalle`, ADR-022). */
+const BOTON_TACTIL = 'max-lg:h-11'
 
 /** `$1.234,50`, o «—» si el importe no llegó (el rol no tiene `costos.ver`). Nunca «$NaN». */
 function importe(valor: string | undefined): string {
@@ -98,6 +118,10 @@ export function CompraDetalle({ rutaDeCompras = '/compras', puedeEscribir = true
 
   const [recibirOpen, setRecibirOpen] = useState(false)
   const [aviso, setAviso] = useState<string | null>(null)
+  // Enviar o cancelar en curso, y el diálogo de «Cancelar orden». La guarda síncrona frena un segundo clic que entre antes de que el estado deshabilite el botón.
+  const [transicion, setTransicion] = useState<Transicion | null>(null)
+  const [confirmandoCancelar, setConfirmandoCancelar] = useState(false)
+  const guardaTransicion = useRef(false)
 
   useEffect(() => {
     cargarTodo()
@@ -175,6 +199,25 @@ export function CompraDetalle({ rutaDeCompras = '/compras', puedeEscribir = true
     }
   }
 
+  async function pasarA(que: Transicion) {
+    if (!order || guardaTransicion.current) return
+    guardaTransicion.current = true
+    setTransicion(que)
+    setError(null)
+    setAviso(null)
+    try {
+      setOrder(await api.post<PurchaseOrder>(`/api/purchase-orders/${order.id}/${que}`))
+      setAviso(AVISO_DE_TRANSICION[que])
+    } catch (err) {
+      setError(esRutaInexistente(err) ? SIN_TRANSICIONES : describeError(err))
+      // Un 409 dice que la orden ya no está como se la veía (alguien la recibió o la canceló): se vuelve a leer para que los botones digan la verdad.
+      if (err instanceof ApiError && err.status === 409) await cargarOrden().catch(() => {})
+    } finally {
+      guardaTransicion.current = false
+      setTransicion(null)
+    }
+  }
+
   const pendientes = order?.items.filter((l) => Number(l.pending_quantity) > 0) ?? []
   const hayQueRecibir = !!order
     && pendientes.length > 0
@@ -184,6 +227,9 @@ export function CompraDetalle({ rutaDeCompras = '/compras', puedeEscribir = true
   // agregando líneas" es el status, mismo criterio que valida
   // `erp.compras.agregar_linea_orden` del lado del motor.
   const puedeAgregarLinea = puedeEscribir && (order?.status === 'draft' || order?.status === 'sent')
+  // Enviar sólo desde borrador; cancelar mientras no entró mercadería (el motor contesta 409 desde `partial` y `received`).
+  const puedeEnviar = puedeEscribir && order?.status === 'draft'
+  const puedeCancelar = puedeEscribir && (order?.status === 'draft' || order?.status === 'sent')
 
   // Ninguna línea trae el costo ni el subtotal: el rol no ve costos (`costos.ver`) y las columnas sólo mostrarían «—» (o «$NaN»). Sin líneas no hay con qué decidir.
   const sinUnitario = !!order && order.items.length > 0 && order.items.every((l) => !llegoElCosto(l.unit_cost))
@@ -210,18 +256,28 @@ export function CompraDetalle({ rutaDeCompras = '/compras', puedeEscribir = true
           </BadgeEstado>
         </TituloPantalla>
         <div className="flex flex-wrap gap-2">
+          {puedeEnviar && (
+            <Button size="sm" variant="outline" className={BOTON_TACTIL} disabled={transicion !== null} onClick={() => pasarA('enviar')}>
+              <Send />{transicion === 'enviar' ? 'Enviando…' : 'Enviar al proveedor'}
+            </Button>
+          )}
           {puedeRecibir && hayQueRecibir && (
-            <Button size="sm" onClick={() => { setAviso(null); setRecibirOpen(true) }}>
+            <Button size="sm" className={BOTON_TACTIL} onClick={() => { setAviso(null); setRecibirOpen(true) }}>
               <PackageCheck />Recibir mercadería
             </Button>
           )}
-          <Button asChild size="sm" variant="outline">
+          {puedeCancelar && (
+            <Button size="sm" variant="outline" className={`${BOTON_TACTIL} text-destructive`} disabled={transicion !== null} onClick={() => setConfirmandoCancelar(true)}>
+              <Ban />{transicion === 'cancelar' ? 'Cancelando…' : 'Cancelar orden'}
+            </Button>
+          )}
+          <Button asChild size="sm" variant="outline" className={BOTON_TACTIL}>
             <Link to={rutaDeCompras}><ArrowLeft />Volver</Link>
           </Button>
         </div>
       </div>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       {aviso && <p role="status" className="text-sm text-muted-foreground">{aviso}</p>}
 
       <Card>
@@ -296,8 +352,17 @@ export function CompraDetalle({ rutaDeCompras = '/compras', puedeEscribir = true
       <RecepcionesDeLaOrden
         receipts={receipts}
         locations={locations}
-        puedeConfirmar={puedeRecibir}
+        puedeConfirmar={puedeRecibir && order.status !== 'cancelled'}
         onConfirmada={async () => { await Promise.all([cargarOrden(), cargarRecepciones()]) }}
+      />
+
+      <ConfirmDialog
+        open={confirmandoCancelar}
+        onOpenChange={setConfirmandoCancelar}
+        title={`¿Cancelar la orden ${order.number}?`}
+        description="La orden deja de contar como pedida en la reposición y ya no se le puede recibir mercadería. No se puede reabrir."
+        confirmLabel="Sí, cancelar la orden"
+        onConfirm={() => { setConfirmandoCancelar(false); void pasarA('cancelar') }}
       />
 
       {recibirOpen && order && (

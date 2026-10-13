@@ -48,7 +48,7 @@ function cuerpoDe(clave: string): Record<string, unknown> {
   return JSON.parse(String((fetchMock.mock.calls[i][1] as RequestInit).body))
 }
 
-function montarDetalle(props: { conQuiebres?: boolean; conVigencias?: boolean } = {}) {
+function montarDetalle(props: { conQuiebres?: boolean; conVigencias?: boolean; conSucursal?: boolean } = {}) {
   return render(
     <MemoryRouter initialEntries={['/listas-precio/1']}>
       <Routes><Route path="/listas-precio/:id" element={<ListaPrecioDetalle {...props} />} /></Routes>
@@ -249,5 +249,135 @@ describe('ListaPrecioDetalle', () => {
     responder({ ...base, '/api/listas-precio/1/items': { status: 500, detail: 'se rompió' } })
     montarDetalle()
     expect(await screen.findByText('se rompió')).toBeTruthy()
+  })
+})
+
+// «Nueva promoción» por sucursal (0.147.0, motor >= 0.59.0, ADR-058 del motor; ADR-059 de libra-ui): el select de sucursal del alta de un precio vigente y el nombre en la lista.
+describe('ListaPrecioDetalle: promociones por sucursal (conSucursal)', () => {
+  const CENTRO = { id: 1, nombre: 'Centro', codigo: null, direccion: null, activa: 1, es_default: 1, deposito_predeterminado_id: 1, depositos: 1 }
+  const NORTE = { id: 2, nombre: 'Norte', codigo: null, direccion: null, activa: 1, es_default: 0, deposito_predeterminado_id: 2, depositos: 1 }
+  const CERRADA = { id: 3, nombre: 'Sur (cerrada)', codigo: null, direccion: null, activa: 0, es_default: 0, deposito_predeterminado_id: null, depositos: 0 }
+  const PROMO = { id: 102, producto_id: 9, lista_id: 1, monto: 70, moneda: 'ARS', desde: '2026-10-01T18:00:00', hasta: '2026-10-01T19:00:00', cantidad_minima: null, sucursal_id: null }
+  const base = {
+    '/api/listas-precio': [MAYORISTA, MINORISTA],
+    '/api/productos/categorias': [{ id: 1, nombre: 'Almacén' }],
+    '/api/listas-precio/1/items': [FIDEOS, ARROZ],
+    '/api/sucursales': [CENTRO, NORTE, CERRADA],
+    '/api/listas-precio/items/9/vigencias': [PROMO],
+    'POST /api/listas-precio/1/items/9/precio-vigente': PROMO,
+  }
+  const ALTA = 'POST /api/listas-precio/1/items/9/precio-vigente'
+
+  async function abrirPromociones(props: { conVigencias?: boolean; conSucursal?: boolean } = { conVigencias: true, conSucursal: true }, tabla: Record<string, unknown> = base) {
+    responder(tabla)
+    montarDetalle(props)
+    await screen.findByText('Fideos')
+    await userEvent.click(screen.getAllByRole('button', { name: /Promociones/ })[0])
+    return await screen.findByRole('dialog')
+  }
+  const selector = (dialogo: HTMLElement) => within(dialogo).queryByRole('combobox', { name: /Sucursal/ })
+
+  it('con conSucursal el alta ofrece «Sucursal (opcional)» con «Todas las sucursales» y las activas (no la cerrada), y manda sucursal_id con la elegida', async () => {
+    const user = userEvent.setup()
+    const dialogo = await abrirPromociones()
+    const combo = selector(dialogo)!
+    expect(combo).toBeTruthy()
+    expect(combo).toHaveValue('Todas las sucursales')                                 // el default: sin sucursal
+    expect(within(dialogo).getByRole('combobox', { name: 'Sucursal (opcional)' })).toBe(combo)
+    await user.click(combo)
+    const lista = within(await screen.findByRole('listbox'))
+    expect(lista.getAllByRole('option').map((o) => o.textContent)).toEqual(['Todas las sucursales', 'Centro', 'Norte'])
+    await user.keyboard('{Escape}')
+    await elegirEnBuscable(user, combo, 'Norte')
+    await user.type(within(dialogo).getByLabelText('Precio promocional'), '65')
+    await user.click(within(dialogo).getByRole('button', { name: /Agregar promoción/ }))
+    await waitFor(() => expect(pedidas()).toContain(ALTA))
+    expect(cuerpoDe(ALTA)).toEqual({ monto: 65, sucursal_id: 2 })
+    // Tras agregar, el formulario vuelve a «todas».
+    await waitFor(() => expect(selector(dialogo)).toHaveValue('Todas las sucursales'))
+  })
+
+  it('sin elegir sucursal el cuerpo es el de siempre (sin sucursal_id): una promoción para todas', async () => {
+    const user = userEvent.setup()
+    const dialogo = await abrirPromociones()
+    await user.type(within(dialogo).getByLabelText('Precio promocional'), '65')
+    await user.click(within(dialogo).getByRole('button', { name: /Agregar promoción/ }))
+    await waitFor(() => expect(pedidas()).toContain(ALTA))
+    expect(cuerpoDe(ALTA)).toEqual({ monto: 65 })
+    expect(cuerpoDe(ALTA)).not.toHaveProperty('sucursal_id')
+  })
+
+  it('volver a «Todas las sucursales» después de elegir una también saca el sucursal_id', async () => {
+    const user = userEvent.setup()
+    const dialogo = await abrirPromociones()
+    await elegirEnBuscable(user, selector(dialogo)!, 'Centro')
+    await elegirEnBuscable(user, selector(dialogo)!, 'Todas las sucursales')
+    await user.type(within(dialogo).getByLabelText('Precio promocional'), '65')
+    await user.click(within(dialogo).getByRole('button', { name: /Agregar promoción/ }))
+    await waitFor(() => expect(pedidas()).toContain(ALTA))
+    expect(cuerpoDe(ALTA)).toEqual({ monto: 65 })
+  })
+
+  it('la lista de promociones dice el nombre de la sucursal (también el de una cerrada); si no se conoce, el número de siempre', async () => {
+    const dialogo = await abrirPromociones({ conVigencias: true, conSucursal: true }, {
+      ...base,
+      '/api/listas-precio/items/9/vigencias': [{ ...PROMO, id: 1, sucursal_id: 2 }, { ...PROMO, id: 2, sucursal_id: 3 }, { ...PROMO, id: 3, sucursal_id: 99 }, { ...PROMO, id: 4, sucursal_id: null }],
+    })
+    await waitFor(() => expect(dialogo.textContent).toContain('sucursal Norte'))
+    expect(dialogo.textContent).toContain('sucursal Sur (cerrada)')
+    expect(dialogo.textContent).toContain('sucursal #99')
+    expect(dialogo.textContent).not.toContain('sucursal #2')
+    expect(dialogo.textContent).not.toContain('sucursal #3')
+    expect(dialogo.textContent?.match(/sucursal /g)).toHaveLength(3)                  // la de «todas» no dice sucursal
+  })
+
+  it('sin conSucursal la pantalla es la de siempre: ni select, ni lectura de sucursales, y la lista dice «sucursal #id»', async () => {
+    const dialogo = await abrirPromociones({ conVigencias: true }, { ...base, '/api/listas-precio/items/9/vigencias': [{ ...PROMO, sucursal_id: 2 }] })
+    expect(dialogo.textContent).toContain('sucursal #2')
+    expect(selector(dialogo)).toBeNull()
+    expect(pedidas().some((p) => p.includes('/api/sucursales'))).toBe(false)
+    const user = userEvent.setup()
+    await user.type(within(dialogo).getByLabelText('Precio promocional'), '65')
+    await user.click(within(dialogo).getByRole('button', { name: /Agregar promoción/ }))
+    await waitFor(() => expect(pedidas()).toContain(ALTA))
+    expect(cuerpoDe(ALTA)).toEqual({ monto: 65 })
+  })
+
+  it('conSucursal sin conVigencias no lee sucursales (no hay promociones que cargar)', async () => {
+    responder(base)
+    montarDetalle({ conSucursal: true })
+    await screen.findByText('Fideos')
+    expect(pedidas().some((p) => p.includes('/api/sucursales'))).toBe(false)
+  })
+
+  it('con una sola sucursal activa no hay select (un precio «de la sucursal» sería el general), pero el nombre se muestra', async () => {
+    const dialogo = await abrirPromociones({ conVigencias: true, conSucursal: true }, {
+      ...base, '/api/sucursales': [CENTRO, CERRADA], '/api/listas-precio/items/9/vigencias': [{ ...PROMO, sucursal_id: 1 }],
+    })
+    await waitFor(() => expect(dialogo.textContent).toContain('sucursal Centro'))
+    expect(selector(dialogo)).toBeNull()
+  })
+
+  it('con la lectura de sucursales caída (o sin permiso) la pantalla sigue: sin select, con «#id», y el alta anda', async () => {
+    const user = userEvent.setup()
+    const dialogo = await abrirPromociones({ conVigencias: true, conSucursal: true }, {
+      ...base, '/api/sucursales': { status: 403, detail: 'forbidden' }, '/api/listas-precio/items/9/vigencias': [{ ...PROMO, sucursal_id: 2 }],
+    })
+    expect(dialogo.textContent).toContain('sucursal #2')
+    expect(selector(dialogo)).toBeNull()
+    await user.type(within(dialogo).getByLabelText('Precio promocional'), '65')
+    await user.click(within(dialogo).getByRole('button', { name: /Agregar promoción/ }))
+    await waitFor(() => expect(pedidas()).toContain(ALTA))
+    expect(cuerpoDe(ALTA)).toEqual({ monto: 65 })
+  })
+
+  it('reabrir el diálogo para otro producto limpia la sucursal elegida', async () => {
+    const user = userEvent.setup()
+    const dialogo = await abrirPromociones()
+    await elegirEnBuscable(user, selector(dialogo)!, 'Norte')
+    await user.click(within(dialogo).getByRole('button', { name: 'Cerrar' }))
+    await user.click(screen.getAllByRole('button', { name: /Promociones/ })[1])
+    const otro = await screen.findByRole('dialog')
+    await waitFor(() => expect(selector(otro)).toHaveValue('Todas las sucursales'))
   })
 })

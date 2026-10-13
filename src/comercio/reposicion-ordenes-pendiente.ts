@@ -15,6 +15,8 @@ export type ParametrosDeOrdenes = {
   estacionalidad?: boolean
   /** Descontar lo que vence dentro del horizonte (motor >= 0.37.0): las órdenes se calculan con la misma opción que se ve. */
   descontar_por_vencer?: boolean
+  /** Sólo viaja apagado (`false`; motor >= 0.59.0): el default del motor es contarlos y las órdenes se calculan con la misma opción que se ve. */
+  contar_borradores?: boolean
 }
 
 /** El pedido entero de un intento: lo que se vio, con qué parámetros y con qué clave. */

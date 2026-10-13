@@ -67,6 +67,26 @@ describe('Reposición: generar órdenes en borrador', () => {
     expect(boton()!.parentElement!.className).toContain('flex-wrap')
   })
 
+  it('las órdenes se calculan con la misma opción de borradores que se ve: apagada viaja contar_borradores=false, prendida (el default del motor) no viaja nada (motor >= 0.59.0)', async () => {
+    const user = userEvent.setup()
+    const conEco = (contar: boolean) => ({ ...TODO, [RUTA]: { ...DATA, contar_borradores: contar } })
+    await abrir({ conGenerarOrdenes: true }, conEco(true))
+    await user.click(boton()!)
+    await user.click(within(dialogo()).getByRole('button', { name: 'Crear 2 órdenes' }))
+    await waitFor(() => expect(escrituras()).toEqual([`POST ${ORDENES}`]))
+    expect(cuerpoDe(`POST ${ORDENES}`)).not.toHaveProperty('contar_borradores')
+    cleanup()
+    prepararFetch()
+    await abrir({ conGenerarOrdenes: true }, conEco(false))
+    responder(conEco(false))
+    await user.click(await screen.findByLabelText('Contar borradores como pedidos'))
+    await waitFor(() => expect(pedidas().some((p) => p.includes('contar_borradores=false'))).toBe(true))
+    await user.click(await screen.findByRole('button', { name: /Generar órdenes en borrador/ }))
+    await user.click(within(dialogo()).getByRole('button', { name: 'Crear 2 órdenes' }))
+    await waitFor(() => expect(escrituras()).toEqual([`POST ${ORDENES}`]))
+    expect(cuerpoDe(`POST ${ORDENES}`)).toMatchObject({ contar_borradores: false })
+  })
+
   it('el resumen agrupa por proveedor con los productos y sus cantidades, y avisa lo que no tiene proveedor', async () => {
     const user = userEvent.setup()
     await abrir()

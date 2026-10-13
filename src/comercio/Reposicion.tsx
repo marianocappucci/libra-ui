@@ -40,6 +40,11 @@
 // encabezado resume lo que está activo; desde `sm` se ve el bloque entero, sin botón. Se abre solo si un parámetro tiene error. Y el valor elegido de los tres selects ocupa hasta
 // 2 líneas en el celular (`lineasEnMovil`, de `SelectBuscable`).
 //
+// **Borradores (0.147.0, motor >= 0.59.0, ADR-056 del motor; ADR-059 de libra-ui):** una columna «En borrador» (lo pendiente de las órdenes en borrador, ordenable) y el interruptor
+// «Contar borradores como pedidos» (prendido por defecto = lo de siempre: el borrador resta de lo sugerido), ambos sólo si el motor lo maneja (la respuesta trae la clave
+// `contar_borradores`). Apagado viaja `contar_borradores=false` en la consulta, el CSV y las órdenes en borrador; prendido no viaja nada (es el default del motor, la consulta no cambia).
+// La columna queda en las dos posiciones del interruptor: con él prendido el borrador ya está dentro de «En camino», apagado no.
+//
 // 🔴 **Los avisos por fila no son adorno.** `posible_quiebre` dice que la rotación de ese producto se estimó con
 // pocos días con stock y puede estar subestimada (se sugiere de menos); `sin_ventas` que no hay rotación, y por eso
 // la cobertura es un guion y el producto sólo aparece si está bajo el mínimo; `en_camino_sin_sucursal`, que con una
@@ -111,7 +116,7 @@ function errorDelParametro(valor: string, max: number): string | null {
 
 type ClaveOrden =
   | 'nombre' | 'codigo' | 'stock' | 'en_camino' | 'stock_minimo' | 'unidades_vendidas' | 'rotacion_diaria'
-  | 'cobertura_dias' | 'sugerido' | 'motivo' | 'proveedor' | 'factor_estacional' | 'por_vencer'
+  | 'cobertura_dias' | 'sugerido' | 'motivo' | 'proveedor' | 'factor_estacional' | 'por_vencer' | 'en_borrador'
 
 const COLUMNAS: { orden: ClaveOrden; titulo: string; alinea: 'left' | 'right' }[] = [
   { orden: 'nombre', titulo: 'Producto', alinea: 'left' },
@@ -128,6 +133,7 @@ const COLUMNAS: { orden: ClaveOrden; titulo: string; alinea: 'left' | 'right' }[
 
 const COLUMNA_ESTACIONAL: { orden: ClaveOrden; titulo: string; alinea: 'left' | 'right' } = { orden: 'factor_estacional', titulo: 'Estacional', alinea: 'right' }
 const COLUMNA_POR_VENCER: { orden: ClaveOrden; titulo: string; alinea: 'left' | 'right' } = { orden: 'por_vencer', titulo: 'Por vencer', alinea: 'right' }
+const COLUMNA_EN_BORRADOR: { orden: ClaveOrden; titulo: string; alinea: 'left' | 'right' } = { orden: 'en_borrador', titulo: 'En borrador', alinea: 'right' }
 const COLUMNA_PROVEEDOR: { orden: ClaveOrden; titulo: string; alinea: 'left' | 'right' } = { orden: 'proveedor', titulo: 'Proveedor', alinea: 'left' }
 
 /** Lo que se ordena de cada fila; `null` (sin código, sin cobertura, sin motivo) va siempre al final. */
@@ -137,6 +143,7 @@ function valorDeOrden(p: ReposicionProducto, clave: ClaveOrden): number | string
   if (clave === 'proveedor') return p.proveedor || null
   if (clave === 'factor_estacional') return p.factor_estacional ?? null
   if (clave === 'por_vencer') return p.por_vencer ?? null
+  if (clave === 'en_borrador') return p.en_borrador ?? null
   return p[clave]
 }
 
@@ -191,6 +198,10 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
   const [descontarPorVencer, setDescontarPorVencer] = useState(false)
   // Igual que `conEstacionalidad`: una vez que el motor contestó con la clave `descontar_por_vencer` la maneja.
   const [conDescontarPorVencer, setConDescontarPorVencer] = useState(false)
+  // Prendido por defecto = el comportamiento de siempre del motor (los borradores restan). Sólo se ofrece, y sólo viaja apagado, si el motor lo maneja.
+  const [contarBorradores, setContarBorradores] = useState(true)
+  // Igual que `conEstacionalidad`: una vez que el motor contestó con la clave `contar_borradores` la maneja.
+  const [conContarBorradores, setConContarBorradores] = useState(false)
   const [orden, setOrden] = useState<{ clave: ClaveOrden; sentido: 1 | -1 } | null>(null)
   const [sucursales, setSucursales] = useState<Sucursal[]>([])
   const [categorias, setCategorias] = useState<CategoriaProducto[]>([])
@@ -250,12 +261,13 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
       solo_a_pedir: String(soloAPedir),
       ...(estacionalidad ? { estacionalidad: 'true' } : {}),
       ...(descontarPorVencer ? { descontar_por_vencer: 'true' } : {}),
+      ...(contarBorradores ? {} : { contar_borradores: 'false' }),
     })
     if (sucursal !== TODAS) q.set('sucursal_id', sucursal)
     if (categoria !== TODAS) q.set('categoria', categoria)
     if (proveedor !== TODAS) q.set('proveedor_id', proveedor)
     return q.toString()
-  }, [validoPedido, demorando, valoresPedidos, soloAPedir, estacionalidad, descontarPorVencer, sucursal, categoria, proveedor])
+  }, [validoPedido, demorando, valoresPedidos, soloAPedir, estacionalidad, descontarPorVencer, contarBorradores, sucursal, categoria, proveedor])
 
   // Sin sucursales o sin categorías (un producto sin sucursales, o un usuario sin permiso) la pantalla sigue: sólo
   // pierde ese filtro.
@@ -284,6 +296,7 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
         if (data && typeof data === 'object' && 'proveedor_id' in data) setConProveedor(true)
         if (data && typeof data === 'object' && 'estacionalidad' in data) setConEstacionalidad(true)
         if (data && typeof data === 'object' && 'descontar_por_vencer' in data) setConDescontarPorVencer(true)
+        if (data && typeof data === 'object' && 'contar_borradores' in data) setConContarBorradores(true)
       })
       .catch((err) => {
         if (vigente) setRespuesta({ consulta, recarga, data: null, error: err instanceof ApiError ? err.detail : 'Error de conexión.' })
@@ -313,12 +326,16 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
     ...(proveedor !== TODAS ? { proveedor_id: Number(proveedor) } : {}),
     ...(estacionalidad ? { estacionalidad: true } : {}),
     ...(descontarPorVencer ? { descontar_por_vencer: true } : {}),
+    ...(contarBorradores ? {} : { contar_borradores: false }),
   }
   const conColumnaEstacional = data?.estacionalidad === true
   // Un motor que contesta el eco pero no manda `por_vencer` en las filas no tiene qué mostrar: sin columna (y sin romper).
   const conColumnaPorVencer = data?.descontar_por_vencer === true && data.productos.some((p) => typeof p.por_vencer === 'number')
+  // Un motor que contesta el eco pero no manda `en_borrador` en las filas no tiene qué mostrar: sin columna (y sin romper).
+  const conColumnaEnBorrador = typeof data?.contar_borradores === 'boolean' && data.productos.some((p) => typeof p.en_borrador === 'number')
   const conProveedorEnBase = conProveedor ? [...COLUMNAS.slice(0, 2), COLUMNA_PROVEEDOR, ...COLUMNAS.slice(2)] : COLUMNAS
-  const base = conColumnaPorVencer ? conProveedorEnBase.flatMap((c) => (c.orden === 'stock' ? [c, COLUMNA_POR_VENCER] : [c])) : conProveedorEnBase
+  const conPorVencerEnBase = conColumnaPorVencer ? conProveedorEnBase.flatMap((c) => (c.orden === 'stock' ? [c, COLUMNA_POR_VENCER] : [c])) : conProveedorEnBase
+  const base = conColumnaEnBorrador ? conPorVencerEnBase.flatMap((c) => (c.orden === 'en_camino' ? [c, COLUMNA_EN_BORRADOR] : [c])) : conPorVencerEnBase
   const columnas = conColumnaEstacional ? [...base.slice(0, base.findIndex((c) => c.orden === 'sugerido')), COLUMNA_ESTACIONAL, ...base.slice(base.findIndex((c) => c.orden === 'sugerido'))] : base
   // Lo que dice la ayuda son los controles, que son también lo que muestra la tabla (sólo se muestra la de esta consulta).
   const horizonte = valido ? Number(valores.dias_cobertura) + Number(valores.plazo_entrega_dias) : null
@@ -335,6 +352,7 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
     ...(soloAPedir ? ['Sólo lo que hay que pedir'] : []),
     ...(conEstacionalidad && estacionalidad ? ['Ajustar por estacionalidad'] : []),
     ...(conDescontarPorVencer && descontarPorVencer ? ['Descontar lo que vence en el horizonte'] : []),
+    ...(conContarBorradores && !contarBorradores ? ['Sin contar borradores'] : []),
   ].join(' · ')
 
   return (
@@ -454,6 +472,15 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
                 <p id="reposicion-por-vencer-ayuda" className="text-xs text-muted-foreground">Lo que no se alcanza a vender antes de vencer no cuenta como stock.</p>
               </div>
             )}
+            {conContarBorradores && (
+              <div className="grid max-w-xs">
+                <label className="flex min-h-9 items-center gap-2 text-sm max-sm:min-h-11 sm:whitespace-nowrap">
+                  <input type="checkbox" checked={contarBorradores} aria-describedby="reposicion-borradores-ayuda" onChange={(e) => setContarBorradores(e.target.checked)} className="size-4 shrink-0" />
+                  Contar borradores como pedidos
+                </label>
+                <p id="reposicion-borradores-ayuda" className="text-xs text-muted-foreground">Una orden en borrador todavía no se mandó al proveedor. Apagado, no resta de lo sugerido.</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -472,7 +499,9 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
         tiempo, menos lo que hay y lo que ya viene en camino. Si con eso no se llega al stock mínimo, se pide lo que falta
         para llegar. Lo que está en lotes vencidos no cuenta como stock{descontarPorVencer && data?.descontar_por_vencer === true
           ? `, ni lo que vence dentro del horizonte${horizonte !== null ? ` (${horizonte} días)` : ''} y no se alcanza a vender antes de vencer`
-          : ''}. Sólo sugiere: no genera ninguna orden de compra.
+          : ''}.{!contarBorradores && data?.contar_borradores === false
+          ? ' Las órdenes en borrador no se cuentan como pedidas: se ven aparte, en «En borrador».'
+          : ''} Sólo sugiere: no genera ninguna orden de compra.
       </p>
 
       {valido && error && <p role="alert" className="text-sm text-destructive">{error}</p>}
@@ -580,6 +609,14 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
                             />
                           )}
                         </td>
+                        {conColumnaEnBorrador && (
+                          <td className={`${PAD} text-right`}>
+                            {(p.en_borrador ?? 0) > 0 ? formatoCantidad(p.en_borrador ?? 0) : '—'}
+                            {(p.en_borrador ?? 0) > 0 && (data.contar_borradores
+                              ? <Nota className="block text-xs text-muted-foreground" corto="ya contado" completo="ya contado en «En camino»: resta de lo sugerido" />
+                              : <Nota className="block text-xs text-amber-600 dark:text-amber-400" corto="no resta" completo="no resta de lo sugerido: todavía no se mandó al proveedor" />)}
+                          </td>
+                        )}
                         <td className={`${PAD} text-right`}>
                           {formatoCantidad(p.stock_minimo)}
                           {data.sucursal_id !== null && p.stock_minimo_propio === true && (

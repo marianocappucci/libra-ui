@@ -705,8 +705,11 @@ export type ReposicionProducto = {
   /** Lo de los lotes que vencen dentro del horizonte (cobertura + plazo) y no alcanza a venderse antes de vencer (motor >= 0.37.0, ADR-025; ADR-011 de libra-ui). El motor ya
    *  lo resta del stock que usa para sugerir; `stock` sigue siendo el real y `vencido` lo ya vencido: es aparte. 0 con la opción apagada. Falta con un motor anterior. */
   por_vencer?: number
-  /** Lo pedido a proveedores que todavía no llegó (órdenes abiertas, `draft` incluido). */
+  /** Lo pedido a proveedores que todavía no llegó (órdenes abiertas). Con `contar_borradores` prendido (el default del motor) incluye las órdenes en borrador; apagado, no. */
   en_camino: number
+  /** Lo pendiente (pedido menos recibido) de las órdenes en borrador, aparte de `en_camino` (motor >= 0.59.0, ADR-056 del motor; ADR-059 de libra-ui). Viene siempre, con cualquiera de
+   *  las dos opciones. Falta con un motor anterior. */
+  en_borrador?: number
   /** La parte de `en_camino` que sale de órdenes sin sucursal: con una sucursal elegida se cuenta igual. */
   en_camino_sin_sucursal: number
   stock_minimo: number
@@ -751,6 +754,8 @@ export type ReposicionData = {
   estacionalidad?: boolean
   /** Si la consulta pidió descontar lo que vence dentro del horizonte (motor >= 0.37.0). La clave misma dice que el motor la maneja: falta con uno anterior. */
   descontar_por_vencer?: boolean
+  /** Si la consulta contó las órdenes en borrador como pedidas (`true`, el default del motor) o no (motor >= 0.59.0, ADR-056). La clave misma dice que el motor la maneja: falta con uno anterior. */
+  contar_borradores?: boolean
   resumen: ReposicionResumen
   /** En orden de urgencia: menor cobertura primero, después mayor `sugerido`; sin rotación al final. */
   productos: ReposicionProducto[]

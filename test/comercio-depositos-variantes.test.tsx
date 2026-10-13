@@ -205,6 +205,50 @@ describe('Stock por depósito', () => {
     expect(cuerpoDe('POST /api/stock/1/ajuste')).not.toHaveProperty('deposito_id')
   })
 
+  // ADR-057 del motor (0.59.0): «Fijar en…» sin `deposito_id` con más de un depósito activo es un 422 («Indicá el depósito»). El kit ya mandaba el depósito en el ajuste de cada modo,
+  // pero sólo había un test del modo `salida`: éste fija el `absoluto` (el modo con el que arranca el diálogo) y los otros dos, para que el campo no se pierda en una refactorización.
+  it('🔑 con depósitos, «Fijar en…» manda SIEMPRE deposito_id: el predeterminado por defecto (sin tocar nada), el elegido si se cambia, y también entrada y merma', async () => {
+    responder({ ...con, '/api/stock/motivos-merma': ['Rotura'], 'POST /api/stock/1/ajuste': { producto: {}, stock_actual: 13, stock_deposito: 8 } })
+    const user = userEvent.setup()
+    render(<MemoryRouter><Stock /></MemoryRouter>)
+    await screen.findByText('Yerba')
+    const ajustes = () => pedidas().filter((p) => p === 'POST /api/stock/1/ajuste')
+
+    // 1. Sin tocar el modo ni el depósito: «Fijar en…» sobre el predeterminado (Salón, id 1).
+    await user.click(screen.getByLabelText('Ajustar stock'))
+    let dialogo = await screen.findByRole('dialog')
+    await user.click(within(dialogo).getByRole('button', { name: 'Guardar movimiento' }))
+    await waitFor(() => expect(ajustes()).toHaveLength(1))
+    expect(cuerpoDe('POST /api/stock/1/ajuste')).toMatchObject({ modo: 'absoluto', cantidad: 10, deposito_id: 1 })
+
+    // 2. Cambiando el depósito en «Fijar en…»: el elegido (Bodega, id 2), con su stock como cantidad.
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await user.click(screen.getByLabelText('Ajustar stock'))
+    dialogo = await screen.findByRole('dialog')
+    await elegirEnBuscable(user, within(dialogo).getByRole('combobox', { name: 'Depósito' }), 'Bodega')
+    await user.click(within(dialogo).getByRole('button', { name: 'Guardar movimiento' }))
+    await waitFor(() => expect(ajustes()).toHaveLength(2))
+    const segundo = JSON.parse(String((fetchMock.mock.calls.filter((c) => (c[1] as RequestInit | undefined)?.method === 'POST')[1][1] as RequestInit).body))
+    expect(segundo).toMatchObject({ modo: 'absoluto', cantidad: 3, deposito_id: 2 })
+
+    // 3. Entrada y merma (los modos relativos) también.
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    for (const [modo, cuantos] of [['Entrada', 3], ['Merma', 4]] as const) {
+      await user.click(screen.getByLabelText('Ajustar stock'))
+      dialogo = await screen.findByRole('dialog')
+      await user.click(within(dialogo).getByRole('button', { name: modo }))
+      await user.type(within(dialogo).getByRole('spinbutton', { name: /Cantidad/ }), '1')
+      await user.click(within(dialogo).getByRole('button', { name: 'Guardar movimiento' }))
+      await waitFor(() => expect(ajustes()).toHaveLength(cuantos))
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    }
+    const cuerpos = fetchMock.mock.calls.filter((c) => (c[1] as RequestInit | undefined)?.method === 'POST').map((c) => JSON.parse(String((c[1] as RequestInit).body)))
+    expect(cuerpos).toHaveLength(4)
+    expect(cuerpos.map((c) => c.modo)).toEqual(['absoluto', 'absoluto', 'entrada', 'merma'])
+    for (const c of cuerpos) expect(typeof c.deposito_id, JSON.stringify(c)).toBe('number')
+    expect(cuerpos.map((c) => c.deposito_id)).toEqual([1, 2, 1, 1])
+  })
+
   it('conFiltros busca por nombre y deja sólo los que tienen stock; sin la prop no hay filtros', async () => {
     const CERO: StockItem = { ...YERBA, id: 2, nombre: 'Azúcar', stock_actual: 0, por_deposito: {} }
     responder({ ...con, '/api/stock': { productos: [YERBA, CERO], alertas: [], depositos: DEPOSITOS } })
