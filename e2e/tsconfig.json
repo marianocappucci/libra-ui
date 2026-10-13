@@ -1,0 +1,24 @@
+{
+  // Build de `libra-ui/e2e`. A diferencia del resto del paquete (fuentes .tsx que compila cada consumidor con su
+  // Vite), esto se publica COMPILADO: Playwright carga su config y sus specs con su propio transpilador, que NO
+  // transforma lo que vive en `node_modules`, y un `.ts` crudo ahí rompe con `Unknown file extension ".ts"`.
+  // La salida (`e2e/dist/`) se versiona: el consumidor instala el tag desde git y no corre ningún build.
+  // `npm run build:e2e` la regenera y el CI verifica que lo commiteado coincide con el fuente.
+  "compilerOptions": {
+    "target": "es2023",
+    "lib": ["ES2023", "DOM"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "declaration": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "skipLibCheck": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "types": ["node"]
+  },
+  "include": ["src"]
+}

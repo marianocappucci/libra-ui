@@ -1,0 +1,4 @@
+# Salida de los tests de las ayudas (`npm run test:e2e`, que corre desde esta carpeta).
+.auth/
+test-results/
+playwright-report/
