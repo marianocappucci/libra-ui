@@ -13,7 +13,7 @@ import { BadgeEstado, type TonoEstado } from '../badge-estado'
 import { ArrowDownCircle, ArrowLeft, ArrowUpCircle, CheckCircle2, Receipt, StopCircle } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
-import { fechaHora } from '@/lib/fechas'
+import { fechaHora } from '../fechas'
 
 function DiferenciaBadge({ esperado, declarado }: { esperado: number | null; declarado: number | null }) {
   if (esperado === null || declarado === null) return <span className="text-muted-foreground">—</span>

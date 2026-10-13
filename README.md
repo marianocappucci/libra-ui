@@ -60,6 +60,9 @@ fuente que no se desactualiza: `avatar`, `badge`, `button`, `card`,
 `table` y `tabs` (mismo stack normalizado, ver
 `wiki/concepts/estandares-desarrollo.md`).
 
+> **Excepción desde `v0.146.0`: `tabs`.** El kit usa su propio `libra-ui/ui/tabs` (`src/ui/tabs.tsx`) y ya no importa `@/components/ui/tabs`: el consumidor puede
+> dejar su `components/ui/tabs.tsx` como un reexport (`export * from 'libra-ui/ui/tabs'`) o seguir con el suyo para sus propias pantallas (ADR-058).
+>
 > Un primitivo nuevo en este paquete es un cambio que **rompe el build de
 > los consumidores que no lo tengan**, y no lo avisa nadie hasta el
 > `npm run build` de cada uno. `tabs` entro en la v0.30.0 (las pestanas de
@@ -85,6 +88,9 @@ para que el motor de Tailwind v4 escanee las clases usadas dentro de
 | `libra-ui/data-table` | `DataTable`, `sortableHeader`, `anchoColumnaAcciones`, `BuscadorDeTabla`, `type DataTableSearch` | Wrapper de TanStack Table + shadcn. Buscador opcional desde `v0.8.0`: pasando `search={{ campos }}` aparece un input que filtra la tabla; sin esa prop el render queda idéntico. `campos` lo declara la página porque el dato crudo no siempre es lo que se ve (`cliente_id: 3` se muestra como "Compulibra", y quien busca escribe lo segundo). |
 | `libra-ui/tabla-o-tarjetas` | `TablaOTarjetas`, `TarjetaDeFila` | Una lista que es **tabla cuando entra y tarjetas cuando no** (`v0.145.0`, ADR-057): nunca scrollea de costado. `<TablaOTarjetas columns data clave etiqueta tarjeta search? cargando? emptyMessage? getRowClassName? onRowClick? />` mide el contenedor y, si es más angosto que la suma de los `size` de las columnas, pinta `tarjeta(fila)` (un `TarjetaDeFila`: `titulo`, `subtitulo?`, `estado?`, `datos?`, `acciones?`) en vez de la tabla. El buscador (`search`) viaja a las tarjetas; el orden por columna no. Sin medida (jsdom) o sin ningún `size`, la tabla. La columna de acciones declara `size: anchoColumnaAcciones(n, useBajoLg())`. Lo usan Clientes, Productos, Turnos, Compras y Proveedores; Stock y Ventas tienen su propio híbrido (ADR-016, ADR-020). |
 | `libra-ui/use-ancho` | `useAncho`, `useBajoLg`, `TACTIL`, `TACTIL_BAJO_LG` | `useAncho()` mide un elemento (`ResizeObserver`; 0 sin medida). `useBajoLg()` dice si la ventana mide menos de 1024 px (`max-lg` de Tailwind). `TACTIL` (botones de 44 px en las tarjetas) y `TACTIL_BAJO_LG` (los de la columna de acciones de una tabla, 44 px bajo `lg` y 36 desde ahí) van como clase del contenedor de los botones; `anchoColumnaAcciones(n, true)` cuenta esos 44. |
+| `libra-ui/fechas` | `hoyISO`, `enDiasISO`, `sumarDiasISO`, `primerDiaDelMesISO`, `fecha`, `fechaHora`, `hora`, `horaConSegundos`, `fechaDeTexto`, `fechaHoraDeTexto`, `ZONA_AR` | El día de hoy en Argentina (UTC-3 fijo) y **cómo se escribe una fecha en pantalla** (`dd-mm-aaaa`, `v0.146.0`, ADR-058). `fecha`/`fechaHora`/`hora`/`horaConSegundos` aceptan texto o `Date`: un `aaaa-mm-dd` o un timestamp sin zona se **reordena** (nunca pasa por `Date`), un ISO con zona (`Z`, `-03:00`) se convierte a hora de Argentina. `fechaDeTexto`/`fechaHoraDeTexto` reordenan siempre y no convierten nunca (la variante de LibraCargo). El kit ya no importa `@/lib/fechas`. |
+| `libra-ui/formatos` | `formatoMoneda`, `formatoMonedaEntera`, `formatoCantidad`, `formatoMonto` | Plata y cantidades en es-AR (ADR-050). `formatoMonto` (`v0.146.0`): `1.234,50`, dos decimales fijos y sin «$», para donde el símbolo va aparte. |
+| `libra-ui/ui/tabs` | `Tabs`, `TabsList`, `TabsTrigger`, `TabsContent` | El primitivo de pestañas de shadcn con `activationMode="manual"` por defecto (`v0.146.0`, ADR-058): es el primero que el kit usa **propio** y no el del consumidor. Cada producto reemplaza su `components/ui/tabs.tsx` por `export * from 'libra-ui/ui/tabs'`. |
 | `libra-ui/Usuarios` | `Usuarios({ basePath? })` | Página de gestión de usuarios, 100% genérica. `basePath` (default `/users`) es la ruta del router de usuarios en el backend del consumidor -- LibraDesk pasa `/api/usuarios`. |
 | `libra-ui/Layout` | `createLayout({ productName, productInitial, navItems })` | Factory: recibe la parte propia de cada producto (branding + items de navegación) y devuelve el componente `Layout`. Acepta `logo` y `wordmarkClassName` — ver abajo. |
 | `libra-ui/Login` | `createLogin({ productName, productInitial, redirectTo })` | Factory: recibe branding + ruta de redirect post-login. Acepta `logo` y `wordmarkClassName` — ver abajo. Desde `v0.70.0` abre el modal del segundo factor en dos pasos si el `useAuth` que recibe trae `confirmarCodigo` — ver abajo. |
@@ -426,7 +432,8 @@ Las dos tarjetas usan el recuadro del título de pantalla (`data-slot="icono-til
 | `pagos` | `CircleArrowUp` (= `ArrowUpCircle`) | Plata que salió: pagado. El rubro Egresos es `egresos` |
 | `montoVendido` | `DollarSign` | El monto de lo vendido; la cantidad es `ventas` |
 | `porCobrar` | `Hourglass` | Lo que todavía no se cobró |
-| `margen` | `TrendingUp` | Margen y rentabilidad |
+| `margen` | `TrendingUp` | Margen y rentabilidad; el resultado del período de Caja |
+| `costo` | `PackageOpen` | Lo que costó lo que se vendió (Margen y rotación) |
 | `stockBajo` | `PackageMinus` | Productos por debajo de su mínimo |
 | `tiempo` | `Timer` | Horas invertidas, tiempos de comanda |
 | `recordatorios` | `Bell` | Recordatorios enviados |
@@ -563,11 +570,10 @@ productos, así que **no hay que instalar nada**.
 | `components/ui/alert-dialog.tsx` | Base del confirmador. |
 | `components/confirm-dialog.tsx` | La confirmación de la restauración de datos. Ya lo exigía `libra-ui/FacturaDetalle`. |
 
-Y una función: **`@/lib/fechas` tiene que exportar `fechaHora`**, que es con lo
-que se muestra la fecha de cada copia de backup en `dd-mm-aaaa HH:MM`. Los
-productos que tienen su formateador en otro módulo (LibraCargo, LibraDesk)
-resuelven esto con un **adaptador que re-exporta el suyo**, no con una segunda
-implementación: el formateo va en un helper único por producto.
+~~Y una función: `@/lib/fechas` tiene que exportar `fechaHora`~~ — **ya no** (`v0.146.0`, ADR-058):
+las fechas para mostrar son del kit (`libra-ui/fechas`, con la fecha de cada copia de backup en
+`dd-mm-aaaa HH:MM`) y ningún módulo del kit importa `@/lib/fechas`. Los adaptadores que
+LibraCargo y LibraDesk escribieron para esto se pueden borrar cuando todo su código use el kit.
 
 > ⚠️ Lo que falta acá **no se degrada en silencio: no compila**. Es la misma
 > trampa que se comió a Gestiolibra y VentaLibra con la v0.29.0 y a LibraCargo

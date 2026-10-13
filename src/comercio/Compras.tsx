@@ -16,8 +16,9 @@ import { BadgeEstado } from '../badge-estado'
 import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
 import { SelectBuscable } from '../SelectBuscable'
+import { formatoMonto } from '../formatos'
 import {
-  opcionesProveedor, PURCHASE_ORDER_STATUS_LABELS, PURCHASE_ORDER_STATUS_TONO,
+  llegoElCosto, opcionesProveedor, PURCHASE_ORDER_STATUS_LABELS, PURCHASE_ORDER_STATUS_TONO,
   type Proveedor, type PurchaseOrder,
 } from './tipos'
 import { Card, CardContent } from '@/components/ui/card'
@@ -32,12 +33,20 @@ function describeError(err: unknown): string {
   return 'Error de conexión.'
 }
 
-function money(value: number): string {
-  return value.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+/** El total de la orden, o `null` si no se puede calcular: alguna línea llegó sin `subtotal` (el rol no tiene `costos.ver`). */
+function totalDe(order: PurchaseOrder): number | null {
+  let total = 0
+  for (const linea of order.items) {
+    if (!llegoElCosto(linea.subtotal)) return null
+    total += Number(linea.subtotal)
+  }
+  return Number.isFinite(total) ? total : null
 }
 
-function totalDe(order: PurchaseOrder): number {
-  return order.items.reduce((acc, linea) => acc + Number(linea.subtotal), 0)
+/** `$1.234,50`, o «—» si el total no se puede calcular. Nunca «$NaN». */
+function textoDelTotal(order: PurchaseOrder): string {
+  const total = totalDe(order)
+  return total === null ? '—' : `$${formatoMonto(total)}`
 }
 
 /** El botón "Nueva compra" y su modal: sólo elige proveedor y crea la orden
@@ -111,9 +120,12 @@ function NuevaCompraDialog({
 export type ComprasProps = {
   /** A dónde lleva el click en una fila y la creación de una orden nueva. */
   rutaDelDetalle?: (id: number) => string
+  /** Si la persona puede crear órdenes de compra (`compras.escribir` en VentaLibra). Con `false` no se ofrece «Nueva compra»: el depósito lee las
+   *  órdenes pero el motor le contesta 403 al alta. Sin la prop (`true`), la pantalla es la de siempre. */
+  puedeEscribir?: boolean
 }
 
-export function Compras({ rutaDelDetalle = (id) => `/compras/${id}` }: ComprasProps) {
+export function Compras({ rutaDelDetalle = (id) => `/compras/${id}`, puedeEscribir = true }: ComprasProps) {
   const navigate = useNavigate()
   const [orders, setOrders] = useState<PurchaseOrder[]>([])
   const [suppliers, setSuppliers] = useState<Proveedor[]>([])
@@ -149,6 +161,11 @@ export function Compras({ rutaDelDetalle = (id) => `/compras/${id}` }: ComprasPr
     navigate(rutaDelDetalle(orden.id))
   }
 
+  // Ninguna línea de ninguna orden trae `subtotal`: el rol no ve costos (`costos.ver`) y la columna «Total» sólo mostraría «—» (o «$NaN»). Mismo criterio que
+  // `Productos.sinCosto`. Sin líneas no hay con qué decidir: la columna queda (el total de una orden vacía es 0).
+  const lineas = orders.flatMap((o) => o.items)
+  const sinCosto = lineas.length > 0 && lineas.every((l) => !llegoElCosto(l.subtotal))
+
   // Anchos fijos al contenido real + Proveedor elastica, mismo patron que el
   // resto de la familia (ver Catalogo/Productos.tsx).
   const columns = useMemo<ColumnDef<PurchaseOrder>[]>(() => [
@@ -172,15 +189,15 @@ export function Compras({ rutaDelDetalle = (id) => `/compras/${id}` }: ComprasPr
       ),
     },
     { id: 'lineas', header: 'Líneas', size: 90, minSize: 80, cell: ({ row }) => row.original.items.length },
-    { id: 'total', header: 'Total', size: 130, minSize: 100, cell: ({ row }) => `$${money(totalDe(row.original))}` },
+    ...(sinCosto ? [] : [{ id: 'total', header: 'Total', size: 130, minSize: 100, cell: ({ row }) => textoDelTotal(row.original) } as ColumnDef<PurchaseOrder>]),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [suppliers])
+  ], [suppliers, sinCosto])
 
   return (
     <div className="grid gap-4">
       <div className="flex items-center justify-between">
         <TituloPantalla icono={ICONOS.ordenesDeCompra}>Compras</TituloPantalla>
-        <NuevaCompraDialog suppliers={suppliers} onCreada={irAlDetalle} />
+        {puedeEscribir && <NuevaCompraDialog suppliers={suppliers} onCreada={irAlDetalle} />}
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
@@ -207,7 +224,7 @@ export function Compras({ rutaDelDetalle = (id) => `/compras/${id}` }: ComprasPr
                 )}
                 datos={[
                   { etiqueta: 'Líneas', valor: o.items.length },
-                  { etiqueta: 'Total', valor: `$${money(totalDe(o))}` },
+                  ...(sinCosto ? [] : [{ etiqueta: 'Total', valor: textoDelTotal(o) }]),
                 ]}
               />
             )}

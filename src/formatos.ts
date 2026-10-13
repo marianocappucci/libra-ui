@@ -43,6 +43,9 @@ const MONEDA_ENTERA = new Intl.NumberFormat('es-AR', {
 // funciones se llaman por cada celda de cada tabla.
 const CANTIDAD = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 10 })
 
+// Un monto sin símbolo: siempre dos decimales (`1.234,50`), para donde el «$» va aparte o no va (los importes de las órdenes de compra).
+const MONTO = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
 /** `$ 1.234,56`, como lo escribían las pantallas — cada una con su copia. */
 export function formatoMoneda(valor: number): string {
   return MONEDA.format(valor)
@@ -60,4 +63,12 @@ export function formatoMonedaEntera(valor: number): string {
 export function formatoCantidad(valor: string | number): string {
   const n = Number(valor)
   return Number.isFinite(n) ? CANTIDAD.format(n) : String(valor)
+}
+
+/** `1.234,50`: un monto con dos decimales fijos y **sin** el «$», para donde el símbolo va aparte (`$${formatoMonto(x)}`) o no va. Acepta el texto
+ *  decimal del motor (`"900.00"`) además de un número. Lo que no es un número finito se devuelve como vino, como `formatoCantidad`: quien llama
+ *  decide qué mostrar cuando el importe no llegó, no se lo esconde detrás de un «NaN». */
+export function formatoMonto(valor: string | number): string {
+  const n = Number(valor)
+  return Number.isFinite(n) ? MONTO.format(n) : String(valor)
 }

@@ -189,6 +189,18 @@ describe('Reportes', () => {
     const filtros = (await screen.findByText('Agrupar por')).closest('.grid')!.parentElement
     tiene(filtros, 'flex', 'flex-wrap', 'items-end')
   })
+
+  it('🔴 la tabla de «Stock bajo mínimo» tiene su propio scroll: con un nombre largo ensanchaba la página a 390 px (0.146.0, ADR-058)', async () => {
+    // Hallazgo del e2e de VentaLibra: Código | Producto | Stock actual | Mínimo | Faltante, sin contenedor, empujaba la columna de la pantalla. Las otras tres tablas ya lo tenían.
+    const NOMBRE = 'Yerba mate compuesta con hierbas serranas selección especial paquete de 500 gramos edición aniversario'
+    responder({ '/api/reportes': { ...REPORTES, stock_bajo: [{ id: 1, codigo: 'Y001', nombre: NOMBRE, stock_actual: 2, stock_minimo: 10 }] } })
+    montar('/reportes', <Reportes />)
+    const tabla = (await screen.findByText(NOMBRE)).closest('table')!
+    expect(within(tabla).getByText('Faltante')).toBeTruthy()
+    tiene(tabla.parentElement, 'overflow-x-auto')
+    // El control: las otras tablas del reporte (ventas por período, medios, productos) siguen en su contenedor con scroll; ninguna <table> queda suelta.
+    for (const t of document.querySelectorAll('table')) tiene(t.parentElement, 'overflow-x-auto')
+  })
 })
 
 describe('Cajas', () => {

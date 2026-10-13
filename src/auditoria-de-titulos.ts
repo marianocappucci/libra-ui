@@ -22,6 +22,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import * as lucide from 'lucide-react'
+import { INDICADORES, type ConceptoIndicador } from './iconos-indicador'
 import { ICONOS, iconoDelConcepto, type Concepto } from './iconos-identidad'
 import type { Producto } from './identidad'
 
@@ -112,12 +113,20 @@ export function resolverAlias(fuente: string, local: string): string {
 /** A qué componente de lucide apunta una expresión de icono, para comparar un `icon: Users` del menú con un `icono={ICONOS.clientes}` del título
  *  (o al revés) sin marcar un desajuste que no existe. `X.concepto` se resuelve contra el catálogo (con las excepciones de `producto`); un
  *  nombre suelto, contra lucide (`BarChart3` y `ChartColumn` son el mismo); lo que no es ninguna de las dos cosas (un icono propio del
- *  producto) se compara por su nombre. */
+ *  producto) se compara por su nombre.
+ *
+ *  `INDICADORES.concepto` (ADR-038) se resuelve contra el catálogo de indicadores y no contra el de identidad: `stockBajo` o `montoVendido` no
+ *  están en `ICONOS`, y sin esto un título con `icono={INDICADORES.stockBajo}` contra un menú con `PackageMinus` —el mismo ícono— salía como
+ *  desajuste. Es el catálogo base (sin excepciones por producto), igual que lo que dibuja el fuente. */
 function comparable(expresion: string, fuente: string, producto?: Producto): string {
-  const miembro = /^[A-Z][A-Za-z0-9_]*\.([a-z][A-Za-z0-9]*)$/.exec(expresion)
+  const miembro = /^([A-Z][A-Za-z0-9_]*)\.([a-z][A-Za-z0-9]*)$/.exec(expresion)
   if (miembro) {
-    return miembro[1] in ICONOS
-      ? (iconoDelConcepto(miembro[1] as Concepto, producto) as { displayName?: string }).displayName ?? expresion
+    const [, objeto, concepto] = miembro
+    if (objeto === 'INDICADORES') {
+      return (INDICADORES[concepto as ConceptoIndicador] as { displayName?: string } | undefined)?.displayName ?? expresion
+    }
+    return concepto in ICONOS
+      ? (iconoDelConcepto(concepto as Concepto, producto) as { displayName?: string }).displayName ?? expresion
       : expresion
   }
   const nombre = resolverAlias(fuente, expresion)

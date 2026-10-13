@@ -173,6 +173,7 @@ export type ItemListaPrecio = {
   unidad: string
   categoria: string
   precio_venta: number
+  /** Falta en la respuesta si el rol no tiene `costos.ver` (ver `llegoElCosto`). */
   precio_costo: number
   precio_lista: number
   en_lista: number
@@ -491,13 +492,21 @@ export const PURCHASE_ORDER_STATUS_TONO: Record<PurchaseOrderStatus, TonoEstado>
   received: 'ok', cancelled: 'negativo',
 }
 
+/** ¿El motor mandó este importe? Sin `costos.ver` la API **saca** `unit_cost`, `subtotal` y `precio_costo` de la respuesta (no los manda en cero:
+ *  no vienen), y formatearlos da «NaN». Las pantallas que muestran un costo lo preguntan acá y, si no llegó, ocultan la columna o el total. */
+export function llegoElCosto(valor: unknown): boolean {
+  return valor !== undefined && valor !== null
+}
+
 export type PurchaseOrderItem = {
   item_id: number
   quantity_ordered: string
   quantity_received: string
   pending_quantity: string
+  /** Falta en la respuesta si el rol no tiene `costos.ver` (ver `llegoElCosto`). */
   unit_cost: string
   tax_rate: string
+  /** Ídem `unit_cost`. */
   subtotal: string
 }
 

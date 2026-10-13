@@ -16,9 +16,8 @@
 // único que cada uno decide es qué `external_reference` omitir, que se resuelve
 // del lado del servidor. Así que acá no hay una sola URL que parametrizar.
 //
-// Lo que sí se resuelve contra el consumidor son `@/components/ui/*` y
-// `@/lib/fechas`: cada producto trae sus primitivas y su helper único de
-// fechas, que es donde el estándar de la familia manda que viva el formateo.
+// Lo que sí se resuelve contra el consumidor son los `@/components/ui/*`: cada
+// producto trae sus primitivas. Las fechas son del kit desde 0.146.0 (`./fechas`, ADR-058).
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import type { ColumnDef } from './data-table'
@@ -35,7 +34,7 @@ import { BadgeEstado } from './badge-estado'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsList, TabsTrigger } from './ui/tabs'
 import { anchoColumnaAcciones, DataTable, sortableHeader } from './data-table'
 import {
   CreditCard, Wallet, Landmark, Banknote, RefreshCw, UserPlus, ReceiptText, X, Mail,
@@ -43,7 +42,7 @@ import {
 } from 'lucide-react'
 import { TituloPantalla } from './titulo-pantalla'
 import { ICONOS } from './iconos-identidad'
-import { fecha } from '@/lib/fechas'
+import { fecha } from './fechas'
 import { formatoMoneda } from './formatos'
 
 type Bandeja = {

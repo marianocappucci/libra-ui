@@ -17,11 +17,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
   Tabs, TabsContent, TabsList, TabsTrigger,
-} from '@/components/ui/tabs'
+} from '../ui/tabs'
 import { BookText, Boxes, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Clock, Download, ExternalLink, FileText, Inbox, LogIn, LogOut, PackageCheck, PencilLine, PiggyBank, Shield, ShoppingCart, User as UserIcon, XCircle } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
-import { fecha, fechaHora, horaConSegundos } from '@/lib/fechas'
+import { fecha, fechaHora, horaConSegundos } from '../fechas'
 import { SelectBuscable } from '../SelectBuscable'
 import { formatoMoneda } from '../formatos'
 

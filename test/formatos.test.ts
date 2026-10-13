@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 
 import * as formatos from '../src/formatos'
 import * as tipos from '../src/comercio/tipos'
-import { formatoCantidad, formatoMoneda, formatoMonedaEntera } from '../src/formatos'
+import { formatoCantidad, formatoMoneda, formatoMonedaEntera, formatoMonto } from '../src/formatos'
 
 describe('formatoCantidad', () => {
   it('un entero se muestra sin decimales', () => {
@@ -47,6 +47,36 @@ describe('formatoCantidad', () => {
     expect(formatoCantidad(Number.NaN)).toBe('NaN')
     expect(formatoCantidad(Infinity)).toBe('Infinity')
     expect(formatoCantidad('')).toBe('0') // Number('') es 0: el texto vacío no es un dato raro, es cero
+  })
+})
+
+describe('formatoMonto (ADR-058)', () => {
+  it('un monto sin símbolo, con punto de miles, coma decimal y siempre dos decimales', () => {
+    expect(formatoMonto(1234.5)).toBe('1.234,50')
+    expect(formatoMonto(0)).toBe('0,00')
+    expect(formatoMonto(900)).toBe('900,00')
+    expect(formatoMonto(1234567.891)).toBe('1.234.567,89')
+  })
+
+  it('acepta el texto decimal del motor, que es como llegan los importes de las órdenes de compra', () => {
+    expect(formatoMonto('900.00')).toBe('900,00')
+    expect(formatoMonto('9000')).toBe('9.000,00')
+    expect(formatoMonto('12.5')).toBe('12,50')
+  })
+
+  it('un importe negativo conserva el signo', () => {
+    expect(formatoMonto(-1500)).toBe('-1.500,00')
+  })
+
+  it('lo que no es un número se devuelve como vino, sin inventar un monto', () => {
+    expect(formatoMonto('abc')).toBe('abc')
+    expect(formatoMonto(Number.NaN)).toBe('NaN')
+  })
+
+  it('es el mismo texto que las copias que reemplaza (`toLocaleString` con dos decimales fijos)', () => {
+    for (const v of [0, 0.5, 9000, 1234.567, 1e6]) {
+      expect(formatoMonto(v)).toBe(v.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+    }
   })
 })
 
@@ -141,8 +171,6 @@ describe('no quedan copias locales', () => {
     'CampoArchivo.tsx': { veces: 1, razon: 'tamaño de archivo: 0 decimales en bytes y 1 en KB/MB/GB' },
     'TarjetaIndicador.tsx': { veces: 2, razon: 'porcentajes e indicadores con un decimal a propósito (con y sin signo)' },
     'comercio/Margen.tsx': { veces: 1, razon: 'porcentaje de margen con un decimal' },
-    'comercio/Compras.tsx': { veces: 1, razon: 'monto sin símbolo con 2 decimales fijos (`money`); ver ADR-050, «lo que no cubre»' },
-    'comercio/CompraDetalle.tsx': { veces: 1, razon: 'monto sin símbolo con 2 decimales fijos (`money`); ver ADR-050, «lo que no cubre»' },
     'comercio/Productos.tsx': { veces: 1, razon: '`textoDecimal`: serializa a un decimal en-US sin separadores para el campo, no es texto de pantalla' },
   }
 

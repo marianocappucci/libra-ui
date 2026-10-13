@@ -18,7 +18,7 @@ import { DataTable } from '../data-table'
 import { BadgeEstado } from '../badge-estado'
 import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
-import type { CategoriaProducto, ItemListaPrecio, ListaPrecio, PrecioVigente, Quiebre } from './tipos'
+import { llegoElCosto, type CategoriaProducto, type ItemListaPrecio, type ListaPrecio, type PrecioVigente, type Quiebre } from './tipos'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -369,11 +369,15 @@ export function ListaPrecioDetalle({ conQuiebres = false, conVigencias = false, 
     }
   }
 
+  // Ningún producto de la lista trae `precio_costo`: el rol no ve costos (`costos.ver`) y «P. Costo» y «Margen» (que sale del costo) sólo mostrarían «$NaN». Mismo
+  // criterio que `Productos.sinCosto`.
+  const sinCosto = items.length > 0 && items.every((p) => !llegoElCosto(p.precio_costo))
+
   const itemColumns = useMemo<ColumnDef<ItemListaPrecio>[]>(() => [
     { accessorKey: 'codigo', header: 'Código', size: 90, minSize: 78, cell: ({ row }) => <span className="block truncate font-mono text-xs" title={row.original.codigo ?? undefined}>{row.original.codigo || '—'}</span> },
     { accessorKey: 'nombre', header: 'Producto', size: 160, minSize: 100, meta: { stretch: true }, cell: ({ row }) => <span className="block truncate font-medium" title={row.original.nombre}>{row.original.nombre}</span> },
     { accessorKey: 'categoria', header: 'Categoría', size: 100, minSize: 85, cell: ({ row }) => <span className="block truncate" title={row.original.categoria ?? undefined}>{row.original.categoria || '—'}</span> },
-    { accessorKey: 'precio_costo', header: () => <div className="text-right">P. Costo</div>, size: 100, minSize: 85, cell: ({ row }) => <div className="truncate text-right text-muted-foreground">{formatoMoneda(row.original.precio_costo)}</div> },
+    ...(sinCosto ? [] : [{ accessorKey: 'precio_costo', header: () => <div className="text-right">P. Costo</div>, size: 100, minSize: 85, cell: ({ row }) => <div className="truncate text-right text-muted-foreground">{formatoMoneda(row.original.precio_costo)}</div> } as ColumnDef<ItemListaPrecio>]),
     { accessorKey: 'precio_venta', header: () => <div className="text-right">P. Venta</div>, size: 100, minSize: 85, cell: ({ row }) => <div className="truncate text-right text-muted-foreground">{formatoMoneda(row.original.precio_venta)}</div> },
     {
       id: 'precio_lista',
@@ -390,18 +394,18 @@ export function ListaPrecioDetalle({ conQuiebres = false, conVigencias = false, 
         />
       ),
     },
-    {
+    ...(sinCosto ? [] : [{
       id: 'margen',
       header: () => <div className="text-right">Margen</div>,
       size: 90,
       minSize: 75,
-      cell: ({ row }) => {
+      cell: ({ row }: { row: { original: ItemListaPrecio } }) => {
         const precio = Number(precios[row.original.id]) || row.original.precio_venta
         const label = margenPct(precio, row.original.precio_costo)
         const cls = label === '—' ? 'text-muted-foreground' : precio >= row.original.precio_costo ? 'text-exito' : 'text-destructive'
         return <div className={`truncate text-right text-sm ${cls}`}>{label}</div>
       },
-    },
+    } as ColumnDef<ItemListaPrecio>]),
     ...(conQuiebres ? [{
       id: 'quiebres',
       header: 'Quiebres',
@@ -421,7 +425,7 @@ export function ListaPrecioDetalle({ conQuiebres = false, conVigencias = false, 
       ),
     }] : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [precios, conQuiebres, conVigencias])
+  ], [precios, conQuiebres, conVigencias, sinCosto])
 
   return (
     <div className="grid gap-4">

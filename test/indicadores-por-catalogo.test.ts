@@ -24,10 +24,18 @@ const MINIMO_DE_ARCHIVOS = 40
 /** Las pantallas del kit que son de reporte o de tablero, por nombre. Si aparece una nueva (o se va una), el test lo dice. */
 const PANTALLAS_DEL_KIT = ['comercio/Dashboard.tsx', 'comercio/Reportes.tsx']
 
+/** Pantallas del kit que no se llaman «Reporte*» ni «Dashboard*» pero arman KPI y ya pasan por el catálogo (0.146.0, ADR-058): Caja, Egresos y Margen. Quedan cubiertas por
+ *  este guard igual que las de arriba, con los glifos de acción que usan (`GLIFOS_DE_ACCION`). */
+const MIGRADAS = ['comercio/Caja.tsx', 'comercio/Egresos.tsx', 'comercio/Margen.tsx']
+
+/** Los glifos de acción o de estado que esas tres pantallas importan sueltos y no nombran nada que se mida: filtrar (`Filter`), anular (`Ban`), ver (`Eye`) y el triángulo de aviso
+ *  (`AlertTriangle`). Se suman a `LUCIDE_PERMITIDOS` sólo para ellas: es lo que `opciones.permitidos` está hecho para pedir. */
+const GLIFOS_DE_ACCION = ['Filter', 'Ban', 'Eye', 'AlertTriangle']
+
 /** Pantallas del kit con tarjetas de KPI armadas a mano, que todavía no pasaron al catálogo. **Son deuda, no excepciones**: cada una se
  *  migra a `TarjetaIndicador` y se saca de acá (el test de abajo exige que sigan violando: si una ya migró, hay que sacarla de la lista, y
- *  entonces pasa a estar cubierta por `auditarIndicadores` con la lista de `PANTALLAS_GUARDADAS`). */
-const PENDIENTES_DE_MIGRAR = ['comercio/Caja.tsx', 'comercio/Egresos.tsx', 'comercio/Margen.tsx']
+ *  entonces pasa a estar cubierta por `auditarIndicadores`, sumándola a `MIGRADAS`). Hoy no queda ninguna. */
+const PENDIENTES_DE_MIGRAR: string[] = []
 
 describe('los reportes y tableros del kit usan el catálogo', () => {
   const r = auditarIndicadores(SRC)
@@ -64,10 +72,37 @@ describe('los reportes y tableros del kit usan el catálogo', () => {
   })
 })
 
+describe('Caja, Egresos y Margen ya arman sus KPI con el catálogo (0.146.0)', () => {
+  const r = auditarIndicadores(SRC, { esPantalla: (ruta) => MIGRADAS.includes(ruta), permitidos: [...LUCIDE_PERMITIDOS, ...GLIFOS_DE_ACCION] })
+
+  it('el control — el barrido las encontró (un parser que devuelve cero sería un falso verde)', () => {
+    expect(r.pantallas).toBe(MIGRADAS.length)
+  })
+
+  it('🔴 ninguna importa un ícono de concepto de lucide', () => {
+    expect(describirInfracciones(r.infracciones)).toEqual([])
+  })
+
+  it.each(MIGRADAS)('🔴 %s usa TarjetaIndicador y no arma el recuadro del ícono a mano', (archivo) => {
+    const fuente = readFileSync(join(SRC, archivo), 'utf8')
+    expect(fuente).toContain('TarjetaIndicador')
+    expect(fuente).not.toMatch(/rounded-lg bg-[\w/-]+ p-2/)
+    expect(fuente).not.toMatch(/<Tarjeta(?:Indicador|Reporte)[^>]*\bicono=/)
+  })
+
+  it('el glifo de acción es un permiso explícito: sin él el guard las marca, y no sobra ninguno (el control negativo)', () => {
+    const sin = auditarIndicadores(SRC, { esPantalla: (ruta) => MIGRADAS.includes(ruta) })
+    // Exactamente los cuatro glifos: si uno deja de usarse, hay que sacarlo de GLIFOS_DE_ACCION (un permiso muerto es un agujero en el guard).
+    expect([...new Set(sin.infracciones.flatMap((i) => i.iconos))].sort()).toEqual([...GLIFOS_DE_ACCION].sort())
+  })
+})
+
 describe('la deuda del kit está a la vista', () => {
-  it.each(PENDIENTES_DE_MIGRAR)('%s todavía arma sus KPI con íconos de lucide (migrarla es sacarla de PENDIENTES_DE_MIGRAR)', (archivo) => {
-    const fuera = iconosDeConceptoEn(readFileSync(join(SRC, archivo), 'utf8'))
-    expect(fuera.length, `${archivo} ya no importa íconos de concepto: sacala de PENDIENTES_DE_MIGRAR`).toBeGreaterThan(0)
+  it('cada pantalla pendiente todavía arma sus KPI con íconos de lucide (migrarla es sacarla de PENDIENTES_DE_MIGRAR)', () => {
+    for (const archivo of PENDIENTES_DE_MIGRAR) {
+      const fuera = iconosDeConceptoEn(readFileSync(join(SRC, archivo), 'utf8'))
+      expect(fuera.length, `${archivo} ya no importa íconos de concepto: sacala de PENDIENTES_DE_MIGRAR`).toBeGreaterThan(0)
+    }
   })
 
   it('un pendiente migrado quedaría cubierto: el barrido con una lista explícita lo vería', () => {

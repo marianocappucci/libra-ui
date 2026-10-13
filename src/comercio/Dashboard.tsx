@@ -21,7 +21,7 @@ import type { DashboardData } from './tipos'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
-import { fecha } from '@/lib/fechas'
+import { fecha } from '../fechas'
 import { formatoMonedaEntera } from '../formatos'
 
 const ACCIONES_DEFAULT = [

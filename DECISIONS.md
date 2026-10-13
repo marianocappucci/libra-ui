@@ -1224,3 +1224,118 @@ Para que tengan umbral, **Clientes y Proveedores declaran `size`** en sus column
 **Tests** (`comercio-tablas-en-tarjetas`, `tabla-o-tarjetas`, `botones-de-tabla-tactiles`, `comercio-stock-cantidades`, y los de `comercio-stock-sin-scroll`, `data-table`, `siete-pantallas-sin-desborde` y `comercio-flujos`): por pantalla, tabla con ancho de sobra, tarjetas con el ancho chico (mismos datos, mismas acciones, los botones andan), el umbral exacto con los botones de 36 y de 44, sin medida se queda la tabla, y la clase de 44 px en la tabla; en las tarjetas, el buscador. Contra 0.143.0 (los mismos archivos de test copiados a un árbol de `origin/main`) fallan 29 de los 98 tests que corren, y `tabla-o-tarjetas.test.tsx` (16 tests) ni carga; con el cambio pasan los 114.
 
 **Cómo se adopta.** Subir el pin a 0.145.0. Los productos no cambian nada, salvo que un producto que arma su propia tabla con `DataTable` y quiera las tarjetas use `TablaOTarjetas` y pase `anchoColumnaAcciones(n, useBajoLg())`.
+
+## ADR-058 — Deuda del kit (0.146.0): roles parciales, `formatoMonto`, KPI por catálogo, fechas y pestañas del kit, y el guard de títulos entiende `INDICADORES`
+
+Siete pendientes relevados en la sesión del 2026-10-13, resueltos juntos. Cada uno con su sección; las props nuevas son todas opcionales y, sin pasarlas, la pantalla es la de siempre.
+
+### 1. Roles parciales: `puedeAjustar`, `puedeEscribir`, `puedeRecibir` y los costos que no llegan
+
+**Problema (VentaLibra, `app/permisos.py`).** El **depósito** tiene `compras.ver` pero no `compras.escribir`, `compras.recibir` ni `costos.ver`: el backend le saca `subtotal`, `unit_cost` y `precio_costo` de la respuesta (`app/costos.py`, un filtro por prefijo de ruta; las claves no vienen, no vienen en cero). El **vendedor** ve Stock (`stock.ver`) pero no tiene `stock.ajustar`. El kit le ofrecía botones que contestaban 403 y formateaba lo que no llegó: `$NaN` en el total de cada orden, en cada línea y en la lista de precios.
+
+**Qué ya existe.** `Productos.sinCosto` (ningún producto trae `precio_costo` → se oculta la columna) y `conAlta`/`puedeMover`/`puedeMermar` (ADR-051): el patrón es «una prop de rol, con `true` por defecto» y «detectar la ausencia en la respuesta, no pedirle el rol al producto».
+
+**Decisión.**
+1. **`Stock` suma `puedeAjustar` (`true`).** Con `false` no hay «Ajustar stock», ni en la tabla ni en las tarjetas; queda «Ver movimientos» y la columna de acciones declara un botón (`anchoColumnaAcciones(1, …)`).
+2. **`Compras` suma `puedeEscribir` (`true`):** sin él no hay «Nueva compra». **`CompraDetalle` suma `puedeEscribir`** (sin él no hay «Agregar línea») **y `puedeRecibir`** (sin él no hay «Recibir mercadería» ni «Confirmar recepción»). Se renombró la variable local `puedeRecibir` (que significaba «hay algo pendiente») a `hayQueRecibir`.
+3. **Costos ausentes: se ocultan, nunca se formatean.** `llegoElCosto(valor)` (en `comercio/tipos`) pregunta por `undefined`/`null`. `Compras`: si ninguna línea de ninguna orden trae `subtotal`, la columna «Total» y su dato de la tarjeta no están; una orden a la que sólo le falta algún subtotal dice «—» (nunca `$NaN`). `CompraDetalle`: sin `unit_cost` / sin `subtotal` en ninguna línea, no están «Costo unitario» ni «Subtotal» (el `colSpan` de «Sin líneas todavía.» sigue el número de columnas); en el diálogo de recibir, sin `unit_cost` no hay columna ni campo de costo y el cuerpo no manda `unit_cost` (`LineaDeRecepcion.unit_cost` pasa a opcional). `ListaPrecioDetalle`: sin `precio_costo`, no están «P. Costo» ni «Margen» (que sale del costo). La detección es la de `Productos.sinCosto`: **con una lista vacía no hay con qué decidir** y la columna queda (una orden vacía vale `$0,00`).
+4. **Una divergencia con el pedido, a propósito:** «Confirmar recepción» (el botón de una recepción en borrador) depende de **`puedeRecibir`**, no de `puedeEscribir`. Es lo que hace el backend (`app/main.py`: todo `POST /api/purchase-receipts/**`, que incluye `/recibir` y `/{id}/confirm`, es `compras.recibir`; `purchase-orders` es `compras.escribir`). Con el depósito (ninguna de las dos) da igual; con un rol que tenga una sola, la otra forma dejaba un botón que contesta 403.
+
+**Cómo lo adopta cada producto (VentaLibra, `puede(user, …)` de `lib/permisos.ts`):**
+
+| Pantalla | Prop | Capacidad |
+|---|---|---|
+| `Stock` | `puedeAjustar` | `stock.ajustar` (encargado y depósito; no el vendedor) |
+| `Compras` | `puedeEscribir` | `compras.escribir` (encargado) |
+| `CompraDetalle` | `puedeEscribir` | `compras.escribir` |
+| `CompraDetalle` | `puedeRecibir` | `compras.recibir` (encargado; **no** el depósito) |
+
+`Compras`, `CompraDetalle` y `ListaPrecioDetalle` **ocultan solos** los costos que no llegan: no hay prop ni capacidad que pasar. `Compras` no recibe `puedeRecibir`: no tiene ninguna acción de recepción. Los demás productos con Stock o Compras (hoy sólo VentaLibra monta Compras) no cambian nada.
+
+**Lo que no cubre.** Los selects «Precio de costo de cada producto» del lote y de importar precios en `ListaPrecioDetalle` siguen (son de `precios.escribir`, que sólo tiene el encargado, que ve costos). El formulario «Agregar línea» sigue pidiendo «Costo unitario» (con `puedeEscribir` pero sin costos: no es un rol que exista hoy, y una orden vacía no deja decidirlo). Que el motor acepte una recepción sin `unit_cost` **no se verificó**: el diálogo sin costos sólo se alcanza con un rol que tenga `compras.recibir` y no `costos.ver`, que en VentaLibra no existe.
+
+### 2. `formatoMonto`: la última copia de formateo de plata
+
+`Compras.money` y `CompraDetalle.money` eran dos copias (`toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })`) y la excepción que ADR-055 dejó anotada. `formatos.ts` suma **`formatoMonto(valor: string | number)`**: `1.234,50`, dos decimales fijos y **sin** el «$» (acepta el texto decimal del motor, `"900.00"`); un valor no finito se devuelve como vino, como `formatoCantidad`. Las dos pantallas lo usan y las dos excepciones salen de la lista del guard de ADR-055 (el guard falla si vuelven). Mismo texto que antes: lo fija un test que compara con el `toLocaleString` de las copias. «Stock resultante» ya estaba resuelto en 0.145.0.
+
+### 3. Caja, Egresos y Margen arman sus KPI con `TarjetaIndicador`
+
+Las tres eran la deuda de `PENDIENTES_DE_MIGRAR` (el test que «obliga»). Migradas y sacadas de la lista; el guard las cubre ahora con `MIGRADAS`.
+
+| Pantalla | Tarjeta | Concepto | Antes |
+|---|---|---|---|
+| Caja | Saldo actual | `caja` | `PiggyBank` |
+| Caja | Ingresos del período | `cobros` | `ArrowDownCircle` (el mismo componente) |
+| Caja | Egresos del período | `egresos` (como «Egresos este mes» del Dashboard) | `ArrowUpCircle` |
+| Caja | Resultado del período | `margen` (ingresos menos egresos) | `Wallet` |
+| Egresos | Total del período | `egresos` | `ArrowUpCircle` |
+| Egresos | Pagado | `pagos` | `CheckCircle2` |
+| Egresos | Pendiente / Parcial | `porCobrar` (el catálogo ya lo nombraba para Egresos) | `Hourglass` |
+| Margen | Ingreso | `montoVendido` | `DollarSign` |
+| Margen | **Costo** | **`costo` (nuevo)** | `Package` |
+| Margen | Margen | `margen` | `TrendingUp` |
+| Margen | Unidades vendidas | `stock` | `Boxes` |
+
+**Un concepto nuevo: `costo` = `PackageOpen`** (`iconos-indicador`, con su fila en el test y en el README): lo que costó lo que se vendió. No existía ninguno (`egresos` es un gasto cargado y `pagos` es plata que salió); `Package` es `productos` y repetirlo habría dicho que «Costo» es un producto. `PackageOpen` es distinto de `Package` y de `PackageMinus` (`stockBajo`). `margen` suma, en su comentario, el «Resultado del período» de Caja.
+
+Para que las tres quedaran **limpias** (el guard prohíbe cualquier ícono de lucide que nombre un concepto, no sólo los de las tarjetas) pasaron también al catálogo los íconos sueltos: las insignias y las opciones de Ingreso/Egreso de Caja (`cobros`/`pagos`: los mismos componentes que ya usaba), `Receipt` → `comprobantes`, el título del diálogo de Caja (`PiggyBank` → `caja`) y el de Egresos (`ArrowUpCircle` → `egresos`), los dos bloques de Margen (`Boxes` → `productos`, `CalendarRange` → `margen`) y el título de la pantalla de Margen: `icono={INDICADORES.margen}` en vez de `TrendingUp`, que sale de `FUERA_DEL_CATALOGO` en `test/iconos-identidad.test.tsx` (que ahora acepta `INDICADORES.<concepto>`). Los glifos de acción que no nombran nada que se mida (`Filter`, `Ban`, `Eye`, `AlertTriangle`) se permiten **sólo para estas tres** con `opciones.permitidos` del guard, y el test falla si uno deja de usarse.
+
+**Lo que se ve:** el recuadro del ícono es el de `TarjetaIndicador` (gris sobrio, 36 px) y no el tinte de color de cada tarjeta (amarillo, violeta, verde); la cifra conserva su color (`tono`). Las cuatro tarjetas de Caja y de Margen y las tres de Egresos ocupan el mismo lugar que antes. **Cambian los íconos** de Caja (saldo y resultado), Egresos (total, pagado, pendiente) y Margen (costo y los dos títulos): ya dicen lo mismo que el menú y que el Dashboard.
+
+### 4. Fechas para mostrar, del kit: `fecha`, `fechaHora`, `hora`, `horaConSegundos`
+
+**Problema.** El kit le pedía al consumidor `@/lib/fechas` (29 archivos) y cada producto traía el suyo. Relevado en `origin/develop` el 2026-10-13:
+
+| Variante | Productos | Cuerpo |
+|---|---|---|
+| A | Contalibra, RestoLibra | idénticos byte a byte (122 líneas) |
+| A′ | VentaLibra, GestioLibra | el mismo código; cambia sólo el comentario del encabezado |
+| A″ | MedLibra | el mismo código, **más** `diaMesYHora(local)` (`dd-mm HH:MM` de la hora de pared de la sede, para una celda de la agenda) |
+| B | LibraClub | otra implementación (157 líneas): todo pasa por `Date` salvo un `aaaa-mm-dd` pelado; sin `horaConSegundos`; más `diaISO`, `diasDeDiferencia`, `lunesDeLaSemana`, `nombreDelDia`, `pesos`, `diaYMes` |
+| C | LibraCargo | adaptador de 19 líneas: `fecha`/`fechaHora` son `formatearFecha`/`formatearFechaHoraDeTexto` de `components/esquema-orden.ts`, que **reordenan el texto** (`^aaaa-mm-dd`) **sin mirar la zona** |
+| D | LibraDesk | adaptador de 12 líneas a `lib/format.ts` (`fecha`/`fechaHora` sin `hora`) |
+
+**Decisión: se toma A** (cinco de ocho, y la que resuelve bien los tres casos: un día del calendario, un timestamp sin zona, un instante con zona) y se la lleva a `src/fechas.ts`, junto a `hoyISO` (exportado ya como `libra-ui/fechas`). Diferencias respecto de A, todas del lado de la corrección:
+- `Intl.DateTimeFormat` se construye una vez (A lo armaba en cada llamada) y la hora es `hourCycle: 'h23'` (A usaba `hour12: false`, que en algunos motores escribe «24:05»).
+- `horaConSegundos` convierte un `Date` o un ISO con zona a hora de Argentina; A reordenaba el texto de `…T01:30:15Z` y mostraba la hora **UTC** (y daba vacío con un `Date`).
+- No exporta `TZ` (el kit ya tiene `ZONA_AR`; no se encontró ningún import de `TZ` desde el `lib/fechas` de un producto).
+- Frente a **B (LibraClub):** un timestamp sin zona se reordena en vez de pasar por `Date` (igual en un navegador en Argentina, correcto en cualquiera); un texto que no es una fecha se devuelve como vino en vez de `''`; suma `horaConSegundos`. `diaISO`, `diasDeDiferencia`, `lunesDeLaSemana`, `nombreDelDia`, `pesos` y `diaYMes` son del dominio del club y **no entran** al kit (`lunesDeLaSemana` ya usa `sumarDiasISO` del kit; `pesos` ya usa `formatoMoneda`).
+- Frente a **C (LibraCargo):** la variante «sólo texto» **es otra función**, no un modo de `fecha`: **`fechaDeTexto`** y **`fechaHoraDeTexto`** reordenan siempre y no convierten nunca, ni siquiera con un sufijo de zona (`2026-08-22 01:30:00Z` → `22-08-2026 01:30`, mientras `fechaHora` da `21-08-2026 22:30`). Es el reloj de pared del servidor (el `mtime` de un backup): convertirlo lo correría de día.
+
+**El kit pasa a usar las suyas.** Los 29 archivos que importaban `@/lib/fechas` ahora importan `./fechas` / `../fechas` y el stub `test/stubs/lib/fechas.ts` se borra. No rompe a ningún consumidor: el kit **deja de pedir** algo, no pide nada nuevo, y los `lib/fechas.ts` de los productos siguen sirviendo a su propio código. Lo que cambia, sólo en las pantallas del kit: LibraClub, LibraCargo y LibraDesk escriben ahora las fechas del kit con las reglas de A (iguales para un ISO normal; distintas con un texto sin fecha o con zona, que es justo lo que A arregla). El producto que quiera conservar un formato propio en el kit ya no puede (no hay dónde engancharlo): era una divergencia, no una costura.
+
+**Cómo migra cada producto** (después de subir el pin a 0.146.0; ninguno es urgente, el kit ya funciona sin tocar nada):
+- **Contalibra, RestoLibra:** `lib/fechas.ts` → `export { fecha, fechaHora, hora, horaConSegundos } from 'libra-ui/fechas'` (y `TZ` como `export { ZONA_AR as TZ }` si algo lo usa). Se pierde el 100 % del cuerpo.
+- **VentaLibra, GestioLibra:** igual.
+- **MedLibra:** igual, y `diaMesYHora` queda en su archivo (la hora de pared de la sede es suya).
+- **LibraClub:** `fecha`, `fechaHora` y `hora` pasan a reexportar las del kit; `diaISO`, `diasDeDiferencia`, `lunesDeLaSemana`, `nombreDelDia`, `pesos` y `diaYMes` se quedan. Revisar sus tests de `fecha` con un texto que no es una fecha (hoy `''`, con el kit el texto) y con un timestamp sin zona.
+- **LibraCargo:** `formatearFecha`/`formatearFechaHoraDeTexto` de `esquema-orden.ts` pasan a ser `fechaDeTexto`/`fechaHoraDeTexto` del kit (`export { fechaDeTexto as formatearFecha, … }`), y `lib/fechas.ts` (el adaptador) se borra si nada más lo importa. `formatearFechaHora(Date)` es `fechaHora(Date)`.
+- **LibraDesk:** su `lib/format.ts` usa `Date` local (sin zona fija); migrar `fecha`/`fechaHora` al kit cambia a la hora de Argentina. Es lo que dice la regla del ecosistema, pero hay que revisar sus tests de fechas antes. El adaptador `lib/fechas.ts` se borra.
+
+**Lo que no cubre.** No se migró ningún producto. `README.md` ya no dice que `@/lib/fechas` tiene que exportar `fechaHora`: los adaptadores de LibraCargo y LibraDesk sobran para el kit.
+
+### 5. «Stock bajo mínimo» de Reportes: la tabla con su propio scroll
+
+**Hallazgo del e2e de VentaLibra:** la tabla «Código | Producto | Stock actual | Mínimo | Faltante» de `/reportes` no tenía contenedor y un nombre largo ensanchaba la página a 390 px. Está **en el kit** (`comercio/Reportes.tsx`), no en VentaLibra. Las otras tres tablas de la pantalla ya iban en un `overflow-x-auto` (ADR-023): ésta quedó afuera. Va en el mismo.
+
+**Medido** (Chromium, `Reportes` con tres productos bajo mínimo, dos de nombre largo —uno de 102 caracteres con espacios y otro de 76 sin ellos—, un arnés con Tailwind 4 sobre las fuentes del kit; el desborde es `scrollWidth − clientWidth` de la página, la barra de 15 px ya descontada): `origin/main` **655 px a 320, 585 a 390 y 207 a 768**; con el cambio **0 en las cuatro (320, 390, 768, 1280)**. La tabla scrollea por dentro (a 390 px se ven Código y Producto; las tres cifras quedan a la derecha del scroll). Se eligió el contenedor y no el «…» con `title`: es lo que hacen las otras tres tablas, y un nombre cortado en un reporte de «qué falta» es peor que uno que se desliza. Si se prefiere ver las cifras sin deslizar, el siguiente paso es la lista de tarjetas (`TablaOTarjetas`); no se pidió.
+
+### 6. Pestañas del kit: `libra-ui/ui/tabs`
+
+Las pestañas eran el único primitivo cuyo arreglo (`activationMode="manual"`, 2026-10-09: con el modo automático de Radix la pestaña con foco se reactiva sola y el «atrás» del navegador no volvía en las pestañas atadas a la URL) hubo que aplicar **en ocho productos** (un PR por producto, bitácora del 2026-10-09). **Relevado en `origin/develop`:** los ocho `components/ui/tabs.tsx` son **idénticos byte a byte desde `import * as React`** (72 líneas de cuerpo); cambian sólo el encabezado, el `"use client"` (LibraCargo, LibraClub, LibraDesk y MedLibra no lo tienen) y el `cn` (`@/lib/utils`). No hay varias variantes de cuerpo: hay un cuerpo y cinco encabezados distintos (`libra-backoffice` no tiene frontend ni `tabs`).
+
+**Decisión.** `src/ui/tabs.tsx` (`Tabs`, `TabsList`, `TabsTrigger`, `TabsContent`), con `activationMode="manual"` por defecto y `cn` de `../utils`, exportado como `libra-ui/ui/tabs` como el resto de `src/ui/` (ADR-006). Los **9** archivos del kit que importaban `@/components/ui/tabs` (`Facturas`, `Presupuestos`, `MpBandeja`, `Logs`, `Configuracion`, `configuracion/arca`, `comercio/Logs`, `comercio/LibrosIva`, `comercio/Ventas`) importan el propio, y el stub de `test/stubs/components/ui/tabs.tsx` se borra: **los tests ahora corren contra Radix de verdad**. Dos consecuencias en los tests, ambas del DOM real y no de un cambio de comportamiento: el snapshot de ARCA (`ArcaServicios`) pasó a llevar los atributos de Radix (`data-state`, `aria-controls`, los dos paneles inactivos vacíos y ocultos), con los ids que genera Radix (`radix-…`, un contador que avanza con cada render) normalizados en el test; y el chequeo «idéntico al que no tiene la ruta» compara sin esos ids. (El diff del snapshot es sólo la barra de pestañas y los paneles.)
+
+**Cómo reemplaza cada producto su copia:** `frontend/src/components/ui/tabs.tsx` → `export * from 'libra-ui/ui/tabs'`. Es seguro hacerlo en el mismo cambio que sube el pin (el cuerpo es el mismo). Un producto que no lo reemplaza **sigue funcionando** (el kit ya no usa la suya, así que un cambio futuro del primitivo ya no llega a las pantallas del kit por su copia, sólo por la del kit).
+
+**Lo que no cubre.** `dialog` queda para otro lote (el kit sigue importando el del consumidor). El defecto del «atrás» no se pudo reproducir en jsdom (el intento de test pasaba también con el modo automático); lo que el test fija es lo que distingue los dos modos: las flechas mueven el foco sin activar y Enter/Espacio activan.
+
+### 7. El guard de títulos entiende `INDICADORES.x`
+
+`comparable()` de `auditoria-de-titulos` resolvía `X.concepto` sólo contra `ICONOS`: un título con `icono={INDICADORES.stockBajo}` (un concepto que sólo existe como indicador) quedaba sin resolver y se comparaba por su texto contra el `PackageMinus` del menú, así que **una pantalla correcta salía como desajuste**. Ahora `INDICADORES.<concepto>` se resuelve contra el catálogo de indicadores (`INDICADORES[x]`, el base: sin excepciones por producto, igual que lo que dibuja el fuente); un concepto que no existe se compara por su nombre y se marca. Lo usa Margen (§3). Tests con control positivo (`montoVendido` contra un `Wallet`: se sigue detectando) y negativo (`stockBajo`, `margen` y el sinónimo `gastos` contra el ícono que les corresponde: no dan desajuste).
+
+### Tests y verificación
+
+**72 tests nuevos** (2633 → 2705; 106 → 109 archivos, 2 omitidos igual que antes): `comercio-roles-parciales` (21), `fechas-para-mostrar` (32), `ui-tabs` (6), y los de `auditoria-de-titulos` (2), `formatos` (5), `indicadores-por-catalogo`, `iconos-indicador` (la fila de `costo`) y `siete-pantallas-sin-desborde` (1). **Contra `origin/main`, 69 de los tests nuevos o modificados fallan** (roles 12 de 21; los 9 que pasan son los de «sin la prop es lo de siempre», que tienen que pasar; fechas 31 de 32; `ui-tabs` 6 de 6, el archivo no carga; titulos 2; formatos 6 —los cinco de `formatoMonto` y el guard sin las dos excepciones—; indicadores-por-catalogo 5; iconos-indicador 5; iconos-identidad 1; reportes 1). Suite completa, `typecheck` y `lint` (46 avisos, los mismos que `main`) en verde. Medido en Chromium con un arnés descartable (no versionado): Reportes, Caja, Egresos y Margen a 320, 390, 768 y 1280 px, antes y después; ninguna de las cuatro desborda la página después, y las tarjetas de Caja, Egresos y Margen ocupan el mismo lugar que antes (capturas a 390 px, antes y después).
+
+**Cómo se adopta.** Subir el pin a 0.146.0. VentaLibra pasa las cuatro props de §1; todos pueden reemplazar su `tabs.tsx` por el reexport de §6 y migrar sus fechas según §4, cuando quieran.

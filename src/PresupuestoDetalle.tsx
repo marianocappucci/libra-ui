@@ -21,7 +21,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog'
 import { ArrowLeft, CheckCheck, CheckCircle2, FileDown, Mail, Pencil, Receipt, RefreshCw, Send, Trash2, Undo2, XCircle } from 'lucide-react'
 import { TituloPantalla } from './titulo-pantalla'
 import { ICONOS } from './iconos-identidad'
-import { fecha } from '@/lib/fechas'
+import { fecha } from './fechas'
 import { formatoMoneda } from './formatos'
 
 const ESTADO_TONO: Record<string, TonoEstado> = {

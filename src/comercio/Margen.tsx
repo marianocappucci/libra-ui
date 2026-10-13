@@ -12,18 +12,20 @@
 import { useEffect, useState } from 'react'
 import { api, ApiError } from '../api-client'
 import { TituloPantalla } from '../titulo-pantalla'
-import { hoyISO, primerDiaDelMesISO } from '../fechas'
+import { hoyISO, primerDiaDelMesISO, fecha } from '../fechas'
 import type {
   MargenAgrupacion, MargenCifras, MargenData, MargenOrden, MargenPeriodo, MargenProducto, MargenSentido,
 } from './tipos'
 import { formatoCantidad, formatoMoneda } from '../formatos'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { fecha } from '@/lib/fechas'
-import { AlertTriangle, Boxes, CalendarRange, DollarSign, Download, Package, TrendingUp, X } from 'lucide-react'
+import { AlertTriangle, Download, X } from 'lucide-react'
+import { IconoIndicador } from '../IconoIndicador'
+import { INDICADORES } from '../iconos-indicador'
+import { TarjetaIndicador } from '../TarjetaIndicador'
 
 const RUTA = '/api/reportes/margen'
 
@@ -111,7 +113,7 @@ export function Margen() {
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <TituloPantalla icono={TrendingUp}>Margen y rotación</TituloPantalla>
+        <TituloPantalla icono={INDICADORES.margen}>Margen y rotación</TituloPantalla>
         <div className="flex flex-wrap items-end gap-3">
           <div className="grid gap-2"><Label htmlFor="margen-desde">Desde</Label><Input id="margen-desde" type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className="w-40" /></div>
           <div className="grid gap-2"><Label htmlFor="margen-hasta">Hasta</Label><Input id="margen-hasta" type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} className="w-40" /></div>
@@ -154,52 +156,23 @@ export function Margen() {
             </p>
           )}
 
+          {/* Los cuatro KPI toman su ícono del catálogo de indicadores (ADR-038): se pasa el concepto, no un ícono de lucide. */}
           <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
-            <Card>
-              <CardContent className="flex items-start justify-between gap-3">
-                <div className="min-w-0 [&_p]:truncate">
-                  <CardDescription>Ingreso</CardDescription>
-                  <p className="text-2xl font-bold">{formatoMoneda(data.resumen.ingreso)}</p>
-                  <CardDescription>lo cobrado, con descuentos</CardDescription>
-                </div>
-                <span className="shrink-0 rounded-lg bg-primary/10 p-2 text-primary"><DollarSign /></span>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="flex items-start justify-between gap-3">
-                <div className="min-w-0 [&_p]:truncate">
-                  <CardDescription>Costo</CardDescription>
-                  <p className="text-2xl font-bold">{formatoMoneda(data.resumen.costo)}</p>
-                  <CardDescription>de lo vendido</CardDescription>
-                </div>
-                <span className="shrink-0 rounded-lg bg-amber-500/10 p-2 text-amber-600 dark:text-amber-400"><Package /></span>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="flex items-start justify-between gap-3">
-                <div className="min-w-0 [&_p]:truncate">
-                  <CardDescription>Margen</CardDescription>
-                  <p className={`text-2xl font-bold ${colorDelMargen(data.resumen)}`}>{formatoMoneda(data.resumen.margen)}</p>
-                  <CardDescription>{porcentaje(data.resumen.margen_pct)} sobre el ingreso</CardDescription>
-                </div>
-                <span className="shrink-0 rounded-lg bg-exito/10 p-2 text-exito"><TrendingUp /></span>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="flex items-start justify-between gap-3">
-                <div className="min-w-0 [&_p]:truncate">
-                  <CardDescription>Unidades vendidas</CardDescription>
-                  <p className="text-2xl font-bold">{formatoCantidad(data.resumen.unidades)}</p>
-                  <CardDescription>{data.resumen.productos} producto{data.resumen.productos !== 1 ? 's' : ''}</CardDescription>
-                </div>
-                <span className="shrink-0 rounded-lg bg-violet-500/10 p-2 text-violet-600 dark:text-violet-400"><Boxes /></span>
-              </CardContent>
-            </Card>
+            <TarjetaIndicador concepto="montoVendido" etiqueta="Ingreso" valor={formatoMoneda(data.resumen.ingreso)} ayuda="lo cobrado, con descuentos" />
+            <TarjetaIndicador concepto="costo" etiqueta="Costo" valor={formatoMoneda(data.resumen.costo)} ayuda="de lo vendido" />
+            <TarjetaIndicador
+              concepto="margen" etiqueta="Margen" tono={data.resumen.margen < 0 ? 'peligro' : 'exito'} valor={formatoMoneda(data.resumen.margen)}
+              ayuda={`${porcentaje(data.resumen.margen_pct)} sobre el ingreso`}
+            />
+            <TarjetaIndicador
+              concepto="stock" etiqueta="Unidades vendidas" valor={formatoCantidad(data.resumen.unidades)}
+              ayuda={`${data.resumen.productos} producto${data.resumen.productos !== 1 ? 's' : ''}`}
+            />
           </div>
 
           <Card>
             <CardHeader className="flex flex-wrap items-center justify-between gap-2 space-y-0">
-              <CardTitle className="flex items-center gap-2 text-base"><Boxes className="size-4 text-purple-600 dark:text-purple-400" />Margen y rotación por producto</CardTitle>
+              <CardTitle className="flex items-center gap-2 text-base"><IconoIndicador concepto="productos" className="text-muted-foreground" />Margen y rotación por producto</CardTitle>
               <div className="flex items-center gap-2">
                 {productoId !== null && (
                   <Button size="sm" variant="outline" onClick={() => setProductoId(null)}>
@@ -259,7 +232,7 @@ export function Margen() {
 
           <Card>
             <CardHeader className="flex flex-wrap items-center justify-between gap-2 space-y-0">
-              <CardTitle className="flex items-center gap-2 text-base"><CalendarRange className="size-4 text-primary" />Por período{filtrado ? `: ${filtrado.nombre}` : ''}</CardTitle>
+              <CardTitle className="flex items-center gap-2 text-base"><IconoIndicador concepto="margen" className="text-muted-foreground" />Por período{filtrado ? `: ${filtrado.nombre}` : ''}</CardTitle>
               <Button asChild size="sm" variant="outline">
                 <a href={`${RUTA}/export/periodos?${consulta({ agrupacion })}`}><Download />CSV</a>
               </Button>
