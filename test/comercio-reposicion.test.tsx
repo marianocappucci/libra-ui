@@ -888,3 +888,145 @@ describe('Reposición: layout de la barra y de la tabla (ADR-012)', () => {
     expect(yerba.querySelector('.whitespace-normal')).toBeNull()
   })
 })
+
+// Los filtros plegables en el celular y el valor de los selects en 2 líneas (ADR-056). jsdom no aplica las clases de Tailwind, así que `hidden`/`sm:flex` no esconden nada acá:
+// lo que se prueba es la estructura que hace posible el comportamiento (qué clases lleva el bloque cerrado y abierto, el botón, su estado) y que el resumen diga lo que corresponde.
+// Las medidas a 390 y 1280 px con Chromium están en el ADR.
+describe('Reposición: filtros plegables en el celular (ADR-056)', () => {
+  const ROTULO = 'Descontar lo que vence en el horizonte'
+  const AMBAS: ReposicionData = { ...DATA, estacionalidad: true, descontar_por_vencer: true }
+  const PROVEEDORES = [{ id: 7, nombre: 'Distribuidora Norte' }]
+  const CON_PROVEEDOR: ReposicionData = { ...DATA, proveedor_id: null }
+  const TODO_CON_PROVEEDOR = { ...TODO, [RUTA]: CON_PROVEEDOR, '/api/proveedores': PROVEEDORES }
+
+  const boton = () => screen.getByRole('button', { name: /^Filtros y parámetros/ })
+  const bloque = () => document.getElementById('reposicion-filtros')!
+  /** El resumen que lee el encabezado: lo que sigue al título dentro del botón. */
+  const resumen = () => texto(boton()).replace('Filtros y parámetros', '').trim()
+  /** Cerrado se oculta sólo bajo `sm`: `hidden` y `sm:flex`, sin `flex` a secas. */
+  const cerrado = () => bloque().classList.contains('hidden') && bloque().classList.contains('sm:flex') && !bloque().classList.contains('flex')
+  const abierto = () => bloque().classList.contains('flex') && !bloque().classList.contains('hidden')
+
+  it('arranca plegado: el botón dice que está cerrado, controla el bloque, y el bloque se oculta sólo bajo `sm`', async () => {
+    await abrir()
+    expect(boton()).toHaveAttribute('aria-expanded', 'false')
+    expect(boton()).toHaveAttribute('aria-controls', 'reposicion-filtros')
+    expect(boton()).toHaveAttribute('type', 'button')
+    expect(cerrado()).toBe(true)
+    // Desde `sm` el botón no existe y el bloque es el de siempre (flex-wrap); 44 px de alto para el dedo.
+    expect(boton().classList.contains('sm:hidden')).toBe(true)
+    expect(boton().classList.contains('min-h-11')).toBe(true)
+    expect(bloque().classList.contains('flex-wrap')).toBe(true)
+    // Todo lo que es filtro o parámetro está adentro del bloque: los tres selects, los dos numéricos y las casillas.
+    await screen.findByLabelText('Sucursal')
+    for (const nombre of ['Sucursal', 'Categoría', 'Días de rotación', 'Días de cobertura', 'Plazo de entrega (días)', 'Sólo lo que hay que pedir']) {
+      expect(bloque().contains(screen.getByLabelText(nombre))).toBe(true)
+    }
+  })
+
+  it('el botón va antes que el bloque en el orden del documento (y por lo tanto del foco), y la tabla queda afuera', async () => {
+    await abrir()
+    expect(boton().compareDocumentPosition(bloque()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(bloque().contains(screen.getByRole('table'))).toBe(false)
+    expect(bloque().contains(boton())).toBe(false)
+  })
+
+  it('el encabezado resume lo activo: toda la instancia, cobertura + plazo y «sólo a pedir»', async () => {
+    await abrir()
+    expect(resumen()).toBe('Toda la instancia · 15 + 3 días · Sólo lo que hay que pedir')
+  })
+
+  it('se abre y se cierra con el teclado (Enter y Espacio) y `aria-expanded` lo acompaña', async () => {
+    const user = userEvent.setup()
+    await abrir()
+    boton().focus()
+    await user.keyboard('{Enter}')
+    expect(boton()).toHaveAttribute('aria-expanded', 'true')
+    expect(abierto()).toBe(true)
+    await user.keyboard(' ')
+    expect(boton()).toHaveAttribute('aria-expanded', 'false')
+    expect(cerrado()).toBe(true)
+    // Y con el mouse también.
+    await user.click(boton())
+    expect(boton()).toHaveAttribute('aria-expanded', 'true')
+    expect(abierto()).toBe(true)
+  })
+
+  it('con un parámetro inválido se abre solo, y no se vuelve a abrir sola mientras siga el mismo error', async () => {
+    const user = userEvent.setup()
+    await abrir()
+    expect(cerrado()).toBe(true)
+    fireEvent.change(screen.getByLabelText('Días de cobertura'), { target: { value: '0' } })
+    expect(boton()).toHaveAttribute('aria-expanded', 'true')
+    expect(abierto()).toBe(true)
+    expect(screen.getByRole('alert')).toHaveTextContent('Tiene que ser un entero entre 1 y 365.')
+    // Se puede cerrar a mano aunque el error siga; no se reabre hasta que haya un error nuevo.
+    await user.click(boton())
+    expect(cerrado()).toBe(true)
+    fireEvent.change(screen.getByLabelText('Días de cobertura'), { target: { value: '00' } })
+    expect(cerrado()).toBe(true)
+    // Corregirlo y volver a errar lo abre de nuevo.
+    fireEvent.change(screen.getByLabelText('Días de cobertura'), { target: { value: '20' } })
+    expect(cerrado()).toBe(true)
+    fireEvent.change(screen.getByLabelText('Plazo de entrega (días)'), { target: { value: '999' } })
+    expect(abierto()).toBe(true)
+  })
+
+  it('un parámetro inválido sale del resumen (no se resume un horizonte que no vale)', async () => {
+    await abrir()
+    fireEvent.change(screen.getByLabelText('Días de cobertura'), { target: { value: '' } })
+    expect(resumen()).toBe('Toda la instancia · Sólo lo que hay que pedir')
+    fireEvent.change(screen.getByLabelText('Días de cobertura'), { target: { value: '30' } })
+    expect(resumen()).toBe('Toda la instancia · 30 + 3 días · Sólo lo que hay que pedir')
+  })
+
+  it('el resumen sigue a los controles: días, sucursal, categoría y casillas', async () => {
+    const user = userEvent.setup()
+    await abrir()
+    await screen.findByLabelText('Sucursal')
+    fireEvent.change(screen.getByLabelText('Días de cobertura'), { target: { value: '30' } })
+    fireEvent.change(screen.getByLabelText('Plazo de entrega (días)'), { target: { value: '7' } })
+    expect(resumen()).toBe('Toda la instancia · 30 + 7 días · Sólo lo que hay que pedir')
+
+    await elegirEnBuscable(user, screen.getByLabelText('Sucursal'), 'Norte')
+    expect(resumen()).toBe('Norte · 30 + 7 días · Sólo lo que hay que pedir')
+    await elegirEnBuscable(user, screen.getByLabelText('Categoría'), 'Bebidas')
+    expect(resumen()).toBe('Norte · Bebidas · 30 + 7 días · Sólo lo que hay que pedir')
+
+    await user.click(screen.getByLabelText('Sólo lo que hay que pedir'))
+    expect(resumen()).toBe('Norte · Bebidas · 30 + 7 días')
+    // Volver a «Toda la instancia» saca la sucursal; con la categoría todavía puesta, el resumen nombra la categoría y no «Toda la instancia».
+    await elegirEnBuscable(user, screen.getByLabelText('Sucursal'), 'Toda la instancia')
+    expect(resumen()).toBe('Bebidas · 30 + 7 días')
+  })
+
+  it('el resumen nombra al proveedor y a las casillas del motor (estacionalidad y por vencer) sólo si están prendidas', async () => {
+    const user = userEvent.setup()
+    await abrir({ ...TODO, [RUTA]: { ...AMBAS, ...CON_PROVEEDOR }, '/api/proveedores': PROVEEDORES })
+    await elegirEnBuscable(user, await screen.findByLabelText('Proveedor'), 'Distribuidora Norte')
+    expect(resumen()).toBe('Distribuidora Norte · 15 + 3 días · Sólo lo que hay que pedir')
+    await user.click(screen.getByLabelText('Ajustar por estacionalidad'))
+    await user.click(screen.getByLabelText(ROTULO))
+    expect(resumen()).toBe('Distribuidora Norte · 15 + 3 días · Sólo lo que hay que pedir · Ajustar por estacionalidad · Descontar lo que vence en el horizonte')
+    await user.click(screen.getByLabelText('Ajustar por estacionalidad'))
+    expect(resumen()).toBe('Distribuidora Norte · 15 + 3 días · Sólo lo que hay que pedir · Descontar lo que vence en el horizonte')
+  })
+
+  it('en el celular los campos son un objetivo táctil de 44 px y los tres selects parten el valor elegido en 2 líneas', async () => {
+    await abrir(TODO_CON_PROVEEDOR)
+    await screen.findByLabelText('Proveedor')
+    for (const nombre of ['Días de rotación', 'Días de cobertura', 'Plazo de entrega (días)']) {
+      expect(screen.getByLabelText(nombre).className).toContain('max-sm:h-11')
+    }
+    expect(screen.getByLabelText('Sólo lo que hay que pedir').closest('label')!.className).toContain('max-sm:min-h-11')
+    for (const nombre of ['Sucursal', 'Categoría', 'Proveedor']) {
+      const contenedor = screen.getByLabelText(nombre).parentElement!
+      const valor = contenedor.querySelector('[data-valor-en-movil] > span')
+      expect(valor, nombre).toBeTruthy()
+      expect(valor!.className).toContain('line-clamp-2')
+      expect(valor!.className).toContain('whitespace-normal')
+      expect(valor!.className).toContain('break-words')
+      expect(valor!.textContent).toBe({ Sucursal: 'Toda la instancia', Categoría: 'Todas las categorías', Proveedor: 'Todos los proveedores' }[nombre])
+    }
+  })
+})

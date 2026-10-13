@@ -302,6 +302,7 @@ El control cerrado de `SelectBuscable` **es un campo de texto con lupa** (ADR-03
 | `required` | `required` en el `<input>` (el navegador no deja enviar vacío) y `aria-required`. Un campo obligatorio no ofrece la ×. |
 | `limpiable` | Si se ofrece la ×. Por defecto sí, salvo `required` o una opción de valor `''`. `limpiable={false}` donde vaciar no es una elección (una caja, un depósito). |
 | `title` | El tooltip nativo, para cuando la etiqueta elegida se corta. |
+| `lineasEnMovil` | `1` (defecto) o `2`: cuántas líneas ocupa el valor elegido bajo `sm` (640 px) antes de cortarse con «…» (`v0.144.0`, ADR-056). Desde `sm` es siempre una. Para nombres largos en una pantalla angosta; ver ADR-056. |
 | `buscarEscribiendo={false}` | Vuelve al botón con el buscador adentro. Se conserva por compatibilidad; no se recomienda: la gente no descubre que puede escribir. |
 
 **El criterio** (ADR-039): un desplegable es **de datos** si las opciones las arma el código (un `.map` sobre una lista, una variable, una llamada, un componente): clientes, fleteros, choferes, vehículos, localidades, productos, profesionales, pacientes, depósitos, cajas, cuentas, categorías… **y entonces es `SelectBuscable`**. Es **cerrado** si son `<SelectItem>` o `<option>` escritos a mano, hasta 8 (estado, tipo, sí/no, alícuota, orden, cantidad por página): puede seguir siendo un `Select`, porque en un celular un campo de texto abre el teclado y para tres valores no hay nada que buscar. Más de 8 opciones fijas (provincias, meses) se buscan igual.
