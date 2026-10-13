@@ -132,6 +132,46 @@ describe('no quedan copias locales', () => {
     expect(dondeAparece(/maximumFractionDigits:\s*10\b/)).toEqual([])
   })
 
+  // Las formas sueltas de formatear un número: `new Intl.NumberFormat(…)` o `valor.toLocaleString(…)` fuera de `formatos.ts`.
+  // Es lo que hacían las copias de Reposición, Vencimientos y reposicion-ordenes (y la de `Productos`): no usaban
+  // `maximumFractionDigits: 10` a secas, pero eran lo mismo. Las fechas (`dateStyle`/`timeStyle`) no son números.
+  // Cada excepción dice por qué es legítima y cuántas veces aparece: si aparece una más, o la razón deja de valer, falla.
+  const SUELTAS = /Intl\.NumberFormat|\.toLocaleString\(/
+  const EXCEPCIONES: Record<string, { veces: number; razon: string }> = {
+    'CampoArchivo.tsx': { veces: 1, razon: 'tamaño de archivo: 0 decimales en bytes y 1 en KB/MB/GB' },
+    'TarjetaIndicador.tsx': { veces: 2, razon: 'porcentajes e indicadores con un decimal a propósito (con y sin signo)' },
+    'comercio/Margen.tsx': { veces: 1, razon: 'porcentaje de margen con un decimal' },
+    'comercio/Compras.tsx': { veces: 1, razon: 'monto sin símbolo con 2 decimales fijos (`money`); ver ADR-050, «lo que no cubre»' },
+    'comercio/CompraDetalle.tsx': { veces: 1, razon: 'monto sin símbolo con 2 decimales fijos (`money`); ver ADR-050, «lo que no cubre»' },
+    'comercio/Productos.tsx': { veces: 1, razon: '`textoDecimal`: serializa a un decimal en-US sin separadores para el campo, no es texto de pantalla' },
+  }
+
+  function sueltas(): Record<string, number> {
+    const hallado: Record<string, number> = {}
+    for (const f of fuentes(SRC)) {
+      const rel = relative(SRC, f)
+      if (rel === 'formatos.ts') continue
+      const lineas = readFileSync(f, 'utf8').split('\n').filter((l) => {
+        const t = l.trim()
+        return !t.startsWith('//') && !t.startsWith('*') && !t.startsWith('/*') && SUELTAS.test(l) && !/dateStyle|timeStyle/.test(l)
+      })
+      if (lineas.length) hallado[rel] = lineas.length
+    }
+    return hallado
+  }
+
+  it('🔴 ninguna pantalla formatea números por su cuenta (`Intl.NumberFormat` o `toLocaleString`) salvo las excepciones justificadas', () => {
+    const esperado = Object.fromEntries(Object.entries(EXCEPCIONES).map(([f, e]) => [f, e.veces]))
+    expect(sueltas()).toEqual(esperado)
+  })
+
+  it('el guard de formas sueltas reconoce las que usaban las copias (y no confunde las fechas)', () => {
+    expect(SUELTAS.test("new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 })")).toBe(true)
+    expect(SUELTAS.test("valor.toLocaleString('es-AR', { maximumFractionDigits: 2 })")).toBe(true)
+    expect(SUELTAS.test("MAX.toLocaleString('es-AR')")).toBe(true)
+    expect(SUELTAS.test('formatoCantidad(valor)')).toBe(false)
+  })
+
   it('el control — el guard sabe encontrar una copia', () => {
     // Si `fuentes` devolviera una lista vacía, los dos casos de arriba pasarían igual.
     expect(fuentes(SRC).length).toBeGreaterThan(50)

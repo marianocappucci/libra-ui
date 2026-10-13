@@ -18,7 +18,7 @@ import { Label } from '@/components/ui/label'
 import {
   Tabs, TabsContent, TabsList, TabsTrigger,
 } from '@/components/ui/tabs'
-import { BookText, Boxes, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Clock, Download, ExternalLink, FileText, Inbox, LogIn, LogOut, PackageCheck, PiggyBank, Shield, ShoppingCart, User as UserIcon, XCircle } from 'lucide-react'
+import { BookText, Boxes, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Clock, Download, ExternalLink, FileText, Inbox, LogIn, LogOut, PackageCheck, PencilLine, PiggyBank, Shield, ShoppingCart, User as UserIcon, XCircle } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
 import { fecha, fechaHora, horaConSegundos } from '@/lib/fechas'
@@ -28,11 +28,16 @@ import { formatoMoneda } from '../formatos'
 // Orden y set canonico de tipos -- coincide con TIPO_META de
 // web/api/logs.py (que a su vez preserva el dict del router Jinja2 viejo,
 // ver git 1a8808c:web/routers/logs.py).
+// `actividad` (libracore 1.157.0, «Cambios») no está acá a propósito: sólo existe en los motores nuevos y, cuando
+// la lista sale de `tipo_meta` del motor, aparece sola. Esto es el respaldo para cuando el motor todavía no contestó.
 const ALL_TIPOS = ['venta', 'caja', 'stock', 'factura', 'turno', 'remito', 'presupuesto']
 
+// El motor manda de cada tipo la etiqueta y el color (`TIPO_META`), no el ícono: el ícono se elige acá. Un tipo que
+// el motor suma y el kit no conoce sale con el carrito; por eso cada tipo nuevo del motor suma su fila acá (ADR-055).
+// `actividad` = las altas y ediciones de la auditoría del motor (clientes, hoy): el lápiz, que no usa ningún otro tipo.
 const TIPO_ICONS: Record<string, typeof ShoppingCart> = {
   venta: ShoppingCart, caja: PiggyBank, stock: Boxes, factura: FileText,
-  turno: Clock, remito: PackageCheck, presupuesto: ClipboardList,
+  turno: Clock, remito: PackageCheck, presupuesto: ClipboardList, actividad: PencilLine,
 }
 
 // Deep-links de "Ver" por fila, uno por cada ref_tabla que puede aparecer

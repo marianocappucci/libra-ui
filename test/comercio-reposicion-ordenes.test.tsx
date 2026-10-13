@@ -80,6 +80,15 @@ describe('Reposición: generar órdenes en borrador', () => {
     expect(escrituras()).toHaveLength(0)                                      // abrir el diálogo no escribe nada
   })
 
+  it('las cantidades del resumen se escriben como en el resto del kit: miles con punto, coma decimal, sin ceros de más (ADR-050)', async () => {
+    const user = userEvent.setup()
+    const yerba = { ...YERBA, sugerido: 1250 }
+    const fideos = { ...FIDEOS, sugerido: 1.5 }
+    await abrir({ conGenerarOrdenes: true }, { ...TODO, [RUTA]: { ...DATA, productos: [yerba, fideos] } })
+    await user.click(boton()!)
+    expect(within(dialogo()).getByText(/Distribuidora Norte/).closest('li')!.textContent).toContain('Yerba (1.250), Fideos (1,5)')
+  })
+
   it('crear manda los parámetros de la pantalla, los ids de los productos con proveedor y una clave; muestra las órdenes con su enlace y los avisos', async () => {
     const user = userEvent.setup()
     await abrir()
