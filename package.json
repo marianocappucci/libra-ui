@@ -136,7 +136,7 @@
   },
   "peerDependencies": {
     "@hookform/resolvers": "^5.4.0",
-    "@playwright/test": "^1.63.0",
+    "@playwright/test": "^1.64.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.26.0",
@@ -157,7 +157,7 @@
     "@hookform/resolvers": "^5.4.0",
     "@iconify-json/fluent": "^1.2.59",
     "@iconify-json/fluent-color": "^1.2.21",
-    "@playwright/test": "^1.63.0",
+    "@playwright/test": "^1.64.0",
     "@svgr/core": "^8.1.0",
     "@svgr/plugin-jsx": "^8.1.0",
     "@tanstack/react-table": "^9.2.6",
