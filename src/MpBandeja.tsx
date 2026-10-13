@@ -22,6 +22,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import type { ColumnDef } from './data-table'
+import { TACTIL_BAJO_LG } from './use-ancho'
 import { api, ApiError } from './api-client'
 import { IVA_CONDITIONS } from './facturas'
 import type { Cliente, MpMovimiento, MpPago } from './mp'
@@ -358,7 +359,7 @@ export function MpBandeja() {
       size: anchoColumnaAcciones(2),
       minSize: anchoColumnaAcciones(2),
       cell: ({ row }) => (
-        <div className="flex justify-end gap-1">
+        <div className={`flex justify-end gap-1 ${TACTIL_BAJO_LG}`}>
           <Button size="icon" variant="outline" title="Facturar" disabled={saving} onClick={() => facturar('mov', row.original.id)}><ReceiptText /></Button>
           <Button size="icon" variant="outline" title="Ignorar" onClick={() => ignorar('mov', row.original.id)}><X /></Button>
         </div>
@@ -413,7 +414,7 @@ export function MpBandeja() {
       size: anchoColumnaAcciones(2),
       minSize: anchoColumnaAcciones(2),
       cell: ({ row }) => (
-        <div className="flex justify-end gap-1">
+        <div className={`flex justify-end gap-1 ${TACTIL_BAJO_LG}`}>
           <Button size="icon" variant="outline" title="Facturar" disabled={saving} onClick={() => facturar('pago', row.original.id)}><ReceiptText /></Button>
           <Button size="icon" variant="outline" title="Ignorar" onClick={() => ignorar('pago', row.original.id)}><X /></Button>
         </div>

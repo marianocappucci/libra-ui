@@ -3,6 +3,7 @@
 // wiki/analyses/auditoria-duplicacion-familia-libra.md.
 import { useEffect, useMemo, useState } from 'react'
 import type { ColumnDef } from './data-table'
+import { TACTIL_BAJO_LG } from './use-ancho'
 import { KeyRound, Pencil, Trash2, UserCheck, UserX } from 'lucide-react'
 import { api, ApiError, type User } from './api-client'
 import { Card, CardContent } from '@/components/ui/card'
@@ -271,7 +272,7 @@ export function Usuarios({
         // botón -- ver los comentarios de las dos props, arriba.
         const puedeEliminar = permitirEliminar && u.id !== usuarioActualId
         return (
-          <div className="flex justify-end gap-2">
+          <div className={`flex justify-end gap-2 ${TACTIL_BAJO_LG}`}>
             <Button size="icon" variant="outline" className="size-8"
                     title="Editar" aria-label={`Editar ${u.name}`}
                     onClick={() => startEdit(u)}>

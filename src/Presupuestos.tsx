@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { ColumnDef } from './data-table'
+import { TACTIL_BAJO_LG } from './use-ancho'
 import { api, ApiError } from './api-client'
 import { type Presupuesto } from './facturas'
 import { Card, CardContent } from '@/components/ui/card'
@@ -92,7 +93,7 @@ export function Presupuestos({ urlDelPdf = (id: number) => `/presupuestos/${id}/
       size: anchoColumnaAcciones(3),
       minSize: anchoColumnaAcciones(3),
       cell: ({ row }) => (
-        <div className="flex justify-end gap-1">
+        <div className={`flex justify-end gap-1 ${TACTIL_BAJO_LG}`}>
           <Button asChild size="icon" variant="outline" title="Ver presupuesto">
             <Link to={`/presupuestos/${row.original.id}`} aria-label="Ver presupuesto"><Eye /></Link>
           </Button>

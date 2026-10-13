@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { ColumnDef } from '../data-table'
+import { TACTIL_BAJO_LG } from '../use-ancho'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
@@ -181,7 +182,7 @@ export function Egresos() {
       size: anchoColumnaAcciones(1),
       minSize: anchoColumnaAcciones(1),
       cell: ({ row }) => (
-        <div className="flex justify-end gap-1">
+        <div className={`flex justify-end gap-1 ${TACTIL_BAJO_LG}`}>
           <Button asChild size="icon" variant="outline" title="Ver egreso">
             <Link to={`/egresos/${row.original.id}`} aria-label="Ver egreso"><Eye /></Link>
           </Button>

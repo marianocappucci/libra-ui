@@ -4,6 +4,7 @@
 // (`OpcionesVentas.promociones`); esta pantalla sólo carga las reglas.
 import { useEffect, useMemo, useState } from 'react'
 import type { ColumnDef } from '../data-table'
+import { TACTIL_BAJO_LG } from '../use-ancho'
 import { Ban, Pencil, Percent, Plus, Trash2, Undo2 } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
@@ -209,7 +210,7 @@ export function Promociones() {
       id: 'actions',
       header: () => <div className="text-right">Acciones</div>,
       cell: ({ row }) => (
-        <div className="flex justify-end gap-1">
+        <div className={`flex justify-end gap-1 ${TACTIL_BAJO_LG}`}>
           <Button
             size="icon" variant="outline" title="Editar promoción"
             aria-label={`Editar ${row.original.nombre}`} onClick={() => abrirEdicion(row.original)}

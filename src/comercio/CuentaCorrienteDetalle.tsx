@@ -12,6 +12,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import type { ColumnDef } from '../data-table'
+import { TACTIL_BAJO_LG } from '../use-ancho'
 import { api, ApiError } from '../api-client'
 import { type Caja } from '../facturas'
 import { type Cliente } from '../mp'
@@ -247,7 +248,7 @@ export function CuentaCorrienteDetalle({ esAdmin = false, conRecibos = false }: 
       minSize: anchoColumnaAcciones(conRecibos ? 2 : 1),
       cell: ({ row }) => (
         row.original.cc_pago_id && (conRecibos || esAdmin) ? (
-          <div className="flex justify-end gap-1">
+          <div className={`flex justify-end gap-1 ${TACTIL_BAJO_LG}`}>
             {conRecibos && (
               <Button size="icon" variant="ghost" title="Ver recibo" aria-label="Ver recibo" onClick={() => verRecibo(row.original.cc_pago_id!)}><ReceiptText /></Button>
             )}

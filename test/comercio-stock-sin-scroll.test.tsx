@@ -102,12 +102,23 @@ describe('Stock: tabla o tarjetas según el ancho', () => {
 })
 
 describe('Stock: cosméticos', () => {
-  it('el encabezado de un depósito de nombre largo se corta con «…» y lleva el nombre entero en el title', async () => {
+  it('el encabezado de un depósito de nombre largo parte en hasta dos líneas antes del «…» y lleva el nombre entero en el title (0.145.0)', async () => {
+    // Medido en Chromium con tres depósitos: con `truncate` los tres encabezados de 110 px se leían «Cas…», «Suc…», «Dep…». ADR-057.
     await abrir(1600)
     const boton = screen.getByTitle(DEPOSITOS[1].nombre)
     expect(boton.className).toContain('max-w-full')
-    expect(boton.querySelector('.truncate')!.textContent).toBe(DEPOSITOS[1].nombre)
+    const texto = within(boton).getByText(DEPOSITOS[1].nombre)
+    for (const clase of ['line-clamp-2', 'break-words', 'whitespace-normal']) expect(texto.className).toContain(clase)
+    expect(texto.className).not.toContain('truncate')
+    expect(boton.className).toContain('h-auto')   // el botón crece con la segunda línea
     expect(boton.querySelector('svg')!.getAttribute('class')).toContain('shrink-0')   // el icono de orden no se pierde
+  })
+
+  it('el resto de los encabezados con orden (Producto) siguen cortando con «…» en una línea', async () => {
+    await abrir(1600)
+    const boton = screen.getByTitle('Producto')
+    expect(within(boton).getByText('Producto').className).toContain('truncate')
+    expect(boton.className).toContain('h-8')
   })
 
   it('«Stock resultante» no muestra tres decimales fijos: 11 y no 11.000, 11,5 y no 11.500', async () => {
@@ -122,6 +133,32 @@ describe('Stock: cosméticos', () => {
     await user.clear(campo)
     await user.type(campo, '11.5')
     expect(within(dialogo).getByText(/Stock resultante:/).textContent).toBe('Stock resultante: 11,5 kg')
+  })
+})
+
+describe('Stock: los botones de la tabla son de 44 px bajo 1024 px (0.145.0)', () => {
+  it('la clase va en el contenedor de los botones de la fila, para el `<button>` y el `<a>`', async () => {
+    await abrir(1600)
+    const fila = screen.getAllByRole('row')[1]
+    const contenedor = within(fila).getByLabelText('Ajustar stock').closest('div.justify-end')!
+    expect(contenedor.className).toContain('max-lg:[&_button]:size-11')
+    expect(contenedor.className).toContain('max-lg:[&_a]:size-11')
+  })
+
+  it('el umbral de las tarjetas cuenta los 8 px de más por botón bajo 1024 px: 1057 con los de 36, 1073 con los de 44', async () => {
+    // Con dos depósitos: 200 + 120 + 85 + 100 + 2 × 110 + 115 + 125 + acciones (2 botones: 92, o 108 con los de 44) = 1057 o 1073.
+    await abrir(1057)
+    expect(screen.getByRole('table')).toBeTruthy()
+    cleanup()
+    await abrir(1056)
+    expect(screen.queryByRole('table')).toBeNull()
+    cleanup()
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: true, media: query, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
+    await abrir(1072)
+    expect(screen.queryByRole('table')).toBeNull()
+    cleanup()
+    await abrir(1073)
+    expect(screen.getByRole('table')).toBeTruthy()
   })
 })
 

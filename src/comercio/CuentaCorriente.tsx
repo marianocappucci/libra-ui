@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { ColumnDef } from '../data-table'
+import { TACTIL_BAJO_LG } from '../use-ancho'
 import { api, ApiError } from '../api-client'
 import { type ClienteConSaldoCC } from './tipos'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -69,7 +70,7 @@ export function CuentaCorriente() {
       id: 'actions',
       header: () => <div className="text-right">Acciones</div>,
       cell: ({ row }) => (
-        <div className="flex justify-end">
+        <div className={`flex justify-end ${TACTIL_BAJO_LG}`}>
           <Button asChild size="icon" variant="outline" title="Ver cuenta corriente"><Link to={`/cuenta-corriente/${row.original.id}`} aria-label="Ver cuenta corriente"><Eye /></Link></Button>
         </div>
       ),

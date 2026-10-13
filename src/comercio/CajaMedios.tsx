@@ -107,10 +107,15 @@ export function CajaMedios() {
       ) : (
         <>
           {/* ── Resumen total ── */}
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Card><CardHeader><CardDescription>Total Ingresos</CardDescription><CardTitle className="text-2xl text-exito">{formatoMoneda(granTotalIng)}</CardTitle><CardDescription>en el período</CardDescription></CardHeader></Card>
-            <Card><CardHeader><CardDescription>Total Egresos</CardDescription><CardTitle className="text-2xl text-destructive">{formatoMoneda(granTotalEgr)}</CardTitle><CardDescription>en el período</CardDescription></CardHeader></Card>
-            <Card><CardHeader><CardDescription>Saldo Neto</CardDescription><CardTitle className={`text-2xl ${granTotalIng >= granTotalEgr ? 'text-primary' : 'text-destructive'}`}>{formatoMoneda(granTotalIng - granTotalEgr)}</CardTitle><CardDescription>ingresos − egresos</CardDescription></CardHeader></Card>
+          {/* Tres tarjetas en fila sólo si el CONTENEDOR da (`@4xl`, 896 px: cada importe de `text-2xl` mide ~215 px con ocho cifras); si no, una debajo de otra. Con `sm:grid-cols-3` (viewport) a 768 px con el menú abierto
+              quedaban 447 px para tres importes: la columna de la pantalla (`auto`) se ensanchaba al mínimo de las tres y la página scrolleaba de costado (medido en Chromium). El `@container` además le saca al resumen el
+              mínimo de su contenido, y `[overflow-wrap:anywhere]` parte un importe que ni solo entra. ADR-057. */}
+          <div className="@container">
+            <div className="grid gap-4 @4xl:grid-cols-3">
+              <Card><CardHeader><CardDescription>Total Ingresos</CardDescription><CardTitle className="text-2xl text-exito [overflow-wrap:anywhere]">{formatoMoneda(granTotalIng)}</CardTitle><CardDescription>en el período</CardDescription></CardHeader></Card>
+              <Card><CardHeader><CardDescription>Total Egresos</CardDescription><CardTitle className="text-2xl text-destructive [overflow-wrap:anywhere]">{formatoMoneda(granTotalEgr)}</CardTitle><CardDescription>en el período</CardDescription></CardHeader></Card>
+              <Card><CardHeader><CardDescription>Saldo Neto</CardDescription><CardTitle className={`text-2xl [overflow-wrap:anywhere] ${granTotalIng >= granTotalEgr ? 'text-primary' : 'text-destructive'}`}>{formatoMoneda(granTotalIng - granTotalEgr)}</CardTitle><CardDescription>ingresos − egresos</CardDescription></CardHeader></Card>
+            </div>
           </div>
 
           {/* ── Totales por medio (todas las cajas) ── */}

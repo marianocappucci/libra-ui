@@ -90,6 +90,10 @@ declare module '@tanstack/table-core' {
 // medicion no puede leer del contenido, porque mide el hijo de la celda.
 const PADDING_CELDA = 16
 
+// Alto y ancho de un botón de icono de la tabla: `size-9` en escritorio y, bajo `lg`, los 44 px del objetivo táctil (`TACTIL_BAJO_LG`, ADR-057).
+const BOTON_ESCRITORIO = 36
+const BOTON_TACTIL = 44
+
 // Una columna es "de acciones" por convencion de id (todas las tablas de la
 // familia la declaran como `id: 'actions'`) o marcandola explicitamente con
 // `meta.acciones`.
@@ -108,10 +112,15 @@ function esColumnaDeAcciones(id: string, meta?: { acciones?: boolean }): boolean
  *
  * Los valores son los de las clases reales: `size-9` (36px) por boton,
  * `gap-1` (4px) entre botones y el `p-2` (16px) de la celda.
+ *
+ * `tactil` cuenta los botones de 44 px que la tabla usa bajo `lg` (1024 px,
+ * `TACTIL_BAJO_LG` de `use-ancho`): quien necesita el ancho de antemano (el
+ * umbral de las tarjetas de `TablaOTarjetas`, la suma de los `size`) pasa
+ * `useBajoLg()`. Sin el segundo argumento, los 36 de escritorio de siempre.
  */
-export function anchoColumnaAcciones(cantidadBotones: number): number {
+export function anchoColumnaAcciones(cantidadBotones: number, tactil = false): number {
   if (cantidadBotones <= 0) return PADDING_CELDA
-  return cantidadBotones * 36 + (cantidadBotones - 1) * 4 + PADDING_CELDA
+  return cantidadBotones * (tactil ? BOTON_TACTIL : BOTON_ESCRITORIO) + (cantidadBotones - 1) * 4 + PADDING_CELDA
 }
 
 
@@ -133,19 +142,53 @@ export type DataTableSearch<TData> = {
   ariaLabel?: string
 }
 
-export function sortableHeader(label: string) {
+export function sortableHeader(label: string, { dosLineas = false }: { dosLineas?: boolean } = {}) {
   return ({ column }: { column: { toggleSorting: (desc?: boolean) => void; getIsSorted: () => false | 'asc' | 'desc' } }) => (
     <Button
       variant="ghost"
       size="sm"
-      className="-ml-3 h-8 max-w-full"
+      className={cn('max-w-full', dosLineas ? 'h-auto min-h-8 gap-0.5 py-1 has-[>svg]:px-1' : '-ml-3 h-8')}
       title={label}
       onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
     >
-      {/* El título largo (el nombre de un depósito, por ejemplo) se corta con «…» dentro de su columna y se lee entero en el `title`; antes el botón `nowrap` se salía de la celda y quedaba recortado a secas. */}
-      <span className="truncate">{label}</span>
-      <ArrowUpDown className="ml-2 h-3.5 w-3.5 shrink-0" />
+      {/* El título largo (el nombre de un depósito, por ejemplo) se corta con «…» dentro de su columna y se lee entero en el `title`; antes el botón `nowrap` se salía de la celda y quedaba recortado a secas.
+          Con `dosLineas` parte en hasta dos líneas antes de cortar (ADR-057): varios depósitos de nombre largo ya no se leen todos «Dep…». En una columna de 110 px quedan 94 de celda: con el relleno y el
+          margen del ícono de siempre el texto tenía 44 px y «Sucursal» (60) se partía en «Sucur / sal…»; con el botón más ajustado tiene ~70 y una palabra común («Depósito», 61) entra entera. */}
+      <span className={dosLineas ? 'line-clamp-2 min-w-0 text-left break-words whitespace-normal' : 'truncate'}>{label}</span>
+      <ArrowUpDown className={cn('h-3.5 w-3.5 shrink-0', dosLineas ? 'ml-0' : 'ml-2')} />
     </Button>
+  )
+}
+
+/** El cuadro de búsqueda de una tabla (el de la prop `search`). Se comparte con `TablaOTarjetas`, que lo muestra igual cuando la lista pasa a tarjetas: quien busca no pierde el buscador al achicar la ventana. */
+export function BuscadorDeTabla<TData>({
+  valor, onChange, search,
+}: { valor: string; onChange: (v: string) => void; search: DataTableSearch<TData> }) {
+  return (
+    <div className="relative w-full max-w-sm">
+      <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+      <Input
+        type="search"
+        value={valor}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={search.placeholder ?? 'Buscar…'}
+        aria-label={search.ariaLabel ?? search.placeholder ?? 'Buscar'}
+        className="pl-8"
+      />
+      {valor !== '' && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="absolute top-1/2 right-1 size-7 -translate-y-1/2"
+          title="Limpiar búsqueda"
+          aria-label="Limpiar búsqueda"
+          onClick={() => onChange('')}
+        >
+          <X />
+        </Button>
+      )}
+    </div>
   )
 }
 
@@ -417,30 +460,7 @@ export function DataTable<TData extends RowData>({
 
   return (
     <div className="grid gap-3">
-      <div className="relative w-full max-w-sm">
-        <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          type="search"
-          value={consulta}
-          onChange={(e) => setConsulta(e.target.value)}
-          placeholder={search.placeholder ?? 'Buscar…'}
-          aria-label={search.ariaLabel ?? search.placeholder ?? 'Buscar'}
-          className="pl-8"
-        />
-        {consulta !== '' && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="absolute top-1/2 right-1 size-7 -translate-y-1/2"
-            title="Limpiar búsqueda"
-            aria-label="Limpiar búsqueda"
-            onClick={() => setConsulta('')}
-          >
-            <X />
-          </Button>
-        )}
-      </div>
+      <BuscadorDeTabla valor={consulta} onChange={setConsulta} search={search} />
       {tabla}
     </div>
   )

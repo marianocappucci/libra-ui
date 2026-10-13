@@ -27,6 +27,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import type { ColumnDef } from './data-table'
+import { TACTIL_BAJO_LG } from './use-ancho'
 import {
   CheckCircle2, ChevronLeft, ChevronRight, CircleDollarSign, Eye, FileDown, FileMinus, FilePlus, Hourglass, Search, X,
 } from 'lucide-react'
@@ -303,7 +304,7 @@ export function Facturas({
         const puedeCobrar = Boolean(rutaDelDetalle) && muestraCobros && !esNota
           && estaAutorizada(f) && cobrado < f.total
         return (
-          <div className="flex justify-end gap-1">
+          <div className={`flex justify-end gap-1 ${TACTIL_BAJO_LG}`}>
             {puedeCobrar && rutaDelDetalle && (
               <Button asChild size="icon" variant="outline" title="Registrar cobro">
                 <Link to={rutaDelDetalle(f.id)} aria-label="Registrar cobro"><CircleDollarSign /></Link>

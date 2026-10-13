@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { ColumnDef } from './data-table'
+import { TACTIL_BAJO_LG } from './use-ancho'
 import { api, ApiError } from './api-client'
 import { type Remito } from './facturas'
 import { Card, CardContent } from '@/components/ui/card'
@@ -66,7 +67,7 @@ export function Remitos({ urlDelPdf = (id: number) => `/remitos/${id}/pdf` }: {
       size: anchoColumnaAcciones(2),
       minSize: anchoColumnaAcciones(2),
       cell: ({ row }) => (
-        <div className="flex justify-end gap-1">
+        <div className={`flex justify-end gap-1 ${TACTIL_BAJO_LG}`}>
           <Button asChild size="icon" variant="outline" title="Ver remito">
             <Link to={`/remitos/${row.original.id}`} aria-label="Ver remito"><Eye /></Link>
           </Button>

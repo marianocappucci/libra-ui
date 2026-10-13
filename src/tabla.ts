@@ -77,3 +77,18 @@ export type { RowData }
  */
 export type ColumnDef<TData extends RowData, TValue = unknown> =
   ColumnDefTanstack<LibraFeatures, TData, TValue>
+
+/** El ancho de columna que TanStack usa cuando la columna no declara `size`. */
+const ANCHO_POR_DEFECTO = 150
+
+/** Cuánto necesita la tabla para no scrollear: lo mismo que `DataTable` fija como `min-width` (la suma de lo que mide cada columna visible). 0 si ninguna columna declara `size` (entonces la
+ *  tabla es de layout automático y no hay un mínimo que comparar). */
+export function anchoMinimoDeColumnas<TData extends RowData>(columns: ColumnDef<TData>[]): number {
+  if (!columns.some((c) => c.size !== undefined)) return 0
+  return columns.reduce((total, c) => {
+    // `meta.opcional` lo declara `data-table.tsx`; acá se lee sin depender de que ese módulo esté en el programa (quien importa sólo `libra-ui/tabla` no tiene la ampliación de `ColumnMeta`).
+    if ((c.meta as { opcional?: boolean } | undefined)?.opcional) return total
+    return total + Math.min(Math.max(c.minSize ?? 20, c.size ?? ANCHO_POR_DEFECTO), c.maxSize ?? Infinity)
+  }, 0)
+}
+

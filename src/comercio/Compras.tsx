@@ -5,12 +5,13 @@
 // Extraída de `pages/Compras.tsx` de VentaLibra (F9, 2026-09-27): el único
 // producto de la familia con este módulo (ver el docstring de `tipos.ts`).
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import type { ColumnDef } from '../data-table'
 import { Plus } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
-import { DataTable, sortableHeader } from '../data-table'
+import { sortableHeader } from '../data-table'
+import { TablaOTarjetas, TarjetaDeFila } from '../tabla-o-tarjetas'
 import { BadgeEstado } from '../badge-estado'
 import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
@@ -186,22 +187,37 @@ export function Compras({ rutaDelDetalle = (id) => `/compras/${id}` }: ComprasPr
 
       <Card>
         <CardContent>
-          {loading ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">Cargando…</p>
-          ) : (
-            <DataTable
-              columns={columns}
-              data={orders}
-              emptyMessage="Sin órdenes de compra todavía."
-              onRowClick={irAlDetalle}
-              // Mismo buscador que Clientes/Proveedores/Productos.
-              search={{
-                campos: (o) => [o.number, supplierName(o.proveedor_id)],
-                placeholder: 'Buscar por número o proveedor',
-                ariaLabel: 'Buscar orden de compra',
-              }}
-            />
-          )}
+          {/* Sin columna de acciones: la fila entera lleva al detalle. En la tarjeta lo hace el número, un link de 44 px de alto. Ver ADR-057. */}
+          <TablaOTarjetas
+            columns={columns}
+            data={orders}
+            cargando={loading}
+            clave={(o) => o.id}
+            etiqueta="Órdenes de compra"
+            emptyMessage="Sin órdenes de compra todavía."
+            onRowClick={irAlDetalle}
+            tarjeta={(o) => (
+              <TarjetaDeFila
+                titulo={<Link to={rutaDelDetalle(o.id)} className="inline-flex min-h-11 items-center text-primary hover:underline">{o.number}</Link>}
+                subtitulo={supplierName(o.proveedor_id)}
+                estado={(
+                  <BadgeEstado tono={PURCHASE_ORDER_STATUS_TONO[o.status] ?? 'neutro'}>
+                    {PURCHASE_ORDER_STATUS_LABELS[o.status] ?? o.status}
+                  </BadgeEstado>
+                )}
+                datos={[
+                  { etiqueta: 'Líneas', valor: o.items.length },
+                  { etiqueta: 'Total', valor: `$${money(totalDe(o))}` },
+                ]}
+              />
+            )}
+            // Mismo buscador que Clientes/Proveedores/Productos.
+            search={{
+              campos: (o) => [o.number, supplierName(o.proveedor_id)],
+              placeholder: 'Buscar por número o proveedor',
+              ariaLabel: 'Buscar orden de compra',
+            }}
+          />
         </CardContent>
       </Card>
     </div>

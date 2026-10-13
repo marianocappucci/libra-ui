@@ -26,7 +26,9 @@ import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose,
 } from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/confirm-dialog'
-import { DataTable, sortableHeader } from '../data-table'
+import { TACTIL_BAJO_LG, useBajoLg } from '../use-ancho'
+import { anchoColumnaAcciones, sortableHeader } from '../data-table'
+import { TablaOTarjetas, TarjetaDeFila } from '../tabla-o-tarjetas'
 import {
   Plus, Pencil, Eye, Trash2, Undo2, Search, Loader2, CheckCircle2, XCircle,
 } from 'lucide-react'
@@ -173,45 +175,55 @@ export function Clientes({ conConsultaCuit = true }: { conConsultaCuit?: boolean
     }
   }
 
+  // Los botones de la fila, en la tabla y en la tarjeta: ver y editar la ficha, y dar de baja (activo) o reactivar (inactivo).
+  const acciones = (c: Cliente) => (
+    <div className={`flex justify-end gap-1 ${TACTIL_BAJO_LG}`}>
+      <Button asChild size="icon" variant="outline" title="Ver ficha">
+        <Link to={`/clientes/${c.id}`} aria-label="Ver ficha"><Eye /></Link>
+      </Button>
+      {c.activo && (
+        <Button asChild size="icon" variant="outline" title="Editar cliente">
+          <Link to={`/clientes/${c.id}`} aria-label="Editar cliente"><Pencil /></Link>
+        </Button>
+      )}
+      {c.activo ? (
+        <Button size="icon" variant="outline" className="text-destructive hover:text-destructive" title="Eliminar cliente" aria-label="Eliminar cliente" onClick={() => setConfirmDelete(c)}><Trash2 /></Button>
+      ) : (
+        <Button size="icon" variant="outline" title="Reactivar cliente" aria-label="Reactivar cliente" onClick={() => toggleActivo(c)}><Undo2 /></Button>
+      )}
+    </div>
+  )
+
   // Orden y columnas igual a web/templates/clientes/list.html: Nombre,
   // CUIT/DNI, Condición IVA, Teléfono, acciones -- esa tabla vieja no tenía
   // columnas de Email ni de Estado separadas (el "Inactivo" viaja como
   // badge junto al nombre, igual que acá). "Ver" navega a la página propia
   // (/clientes/:id); "Editar" ahora abre el modal de edición inline en esa
   // misma página de detalle en vez de navegar a /clientes/:id/editar.
+  //
+  // Con `size` en las columnas (ADR-057) la tabla es de layout fijo y la columna Nombre se queda con el sobrante; la suma de los `size` es el
+  // ancho desde el cual entra: más angosto, `TablaOTarjetas` pasa a tarjetas en vez de scrollear de costado.
+  const bajoLg = useBajoLg()
   const columns = useMemo<ColumnDef<Cliente>[]>(() => [
-    { accessorKey: 'name', header: sortableHeader('Nombre / Razón social'), cell: ({ row }) => (
-      <Link to={`/clientes/${row.original.id}`} className="font-medium hover:underline">
-        {row.original.name}
-        {!row.original.activo && <BadgeEstado tono="neutro" className="ml-2">Inactivo</BadgeEstado>}
+    { accessorKey: 'name', header: sortableHeader('Nombre / Razón social'), size: 220, minSize: 140, meta: { stretch: true }, cell: ({ row }) => (
+      <Link to={`/clientes/${row.original.id}`} className="flex w-full items-center gap-2 font-medium hover:underline">
+        <span className="truncate" title={row.original.name}>{row.original.name}</span>
+        {!row.original.activo && <BadgeEstado tono="neutro" className="shrink-0">Inactivo</BadgeEstado>}
       </Link>
     ) },
-    { accessorKey: 'cuit_dni', header: 'CUIT / DNI', cell: ({ row }) => row.original.cuit_dni || '—' },
-    { accessorKey: 'iva_condition', header: 'Condición IVA', cell: ({ row }) => row.original.iva_condition || '—' },
-    { accessorKey: 'phone', header: 'Teléfono', cell: ({ row }) => row.original.phone || '—' },
+    { accessorKey: 'cuit_dni', header: 'CUIT / DNI', size: 130, minSize: 110, cell: ({ row }) => <span className="block truncate" title={row.original.cuit_dni ?? undefined}>{row.original.cuit_dni || '—'}</span> },
+    { accessorKey: 'iva_condition', header: 'Condición IVA', size: 170, minSize: 120, cell: ({ row }) => <span className="block truncate" title={row.original.iva_condition ?? undefined}>{row.original.iva_condition || '—'}</span> },
+    { accessorKey: 'phone', header: 'Teléfono', size: 130, minSize: 100, cell: ({ row }) => <span className="block truncate" title={row.original.phone ?? undefined}>{row.original.phone || '—'}</span> },
     {
       id: 'actions',
       header: () => <div className="text-right">Acciones</div>,
-      cell: ({ row }) => (
-        <div className="flex justify-end gap-1">
-          <Button asChild size="icon" variant="outline" title="Ver ficha">
-            <Link to={`/clientes/${row.original.id}`} aria-label="Ver ficha"><Eye /></Link>
-          </Button>
-          {row.original.activo && (
-            <Button asChild size="icon" variant="outline" title="Editar cliente">
-              <Link to={`/clientes/${row.original.id}`} aria-label="Editar cliente"><Pencil /></Link>
-            </Button>
-          )}
-          {row.original.activo ? (
-            <Button size="icon" variant="outline" className="text-destructive hover:text-destructive" title="Eliminar cliente" aria-label="Eliminar cliente" onClick={() => setConfirmDelete(row.original)}><Trash2 /></Button>
-          ) : (
-            <Button size="icon" variant="outline" title="Reactivar cliente" aria-label="Reactivar cliente" onClick={() => toggleActivo(row.original)}><Undo2 /></Button>
-          )}
-        </div>
-      ),
+      // Tres botones como máximo (ver, editar y eliminar; un inactivo tiene ver y reactivar).
+      size: anchoColumnaAcciones(3, bajoLg),
+      minSize: anchoColumnaAcciones(3, bajoLg),
+      cell: ({ row }) => acciones(row.original),
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [])
+  ], [bajoLg])
 
   return (
     <div className="grid gap-4">
@@ -344,25 +356,37 @@ export function Clientes({ conConsultaCuit = true }: { conConsultaCuit?: boolean
 
       <Card>
         <CardContent>
-          {loading ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">Cargando…</p>
-          ) : (
-            <DataTable
-              columns={columns}
-              data={clientes}
-              emptyMessage="No hay clientes registrados aún."
-              getRowClassName={(c) => !c.activo ? 'opacity-50' : undefined}
-              // La tabla no pagina: sin buscador, llegar a un cliente entre
-              // cientos es scrollear. El email entra en la búsqueda aunque no
-              // sea columna -- es lo que se tiene a mano cuando el cliente
-              // escribió por correo; el CUIT, lo que se tiene del papel.
-              search={{
-                campos: (c) => [c.name, c.cuit_dni, c.email, c.phone],
-                placeholder: 'Buscar por nombre, CUIT/DNI, email o teléfono',
-                ariaLabel: 'Buscar cliente',
-              }}
-            />
-          )}
+          <TablaOTarjetas
+            columns={columns}
+            data={clientes}
+            cargando={loading}
+            clave={(c) => c.id}
+            etiqueta="Clientes"
+            emptyMessage="No hay clientes registrados aún."
+            getRowClassName={(c) => !c.activo ? 'opacity-50' : undefined}
+            tarjeta={(c) => (
+              <TarjetaDeFila
+                className={!c.activo ? 'opacity-50' : undefined}
+                titulo={<Link to={`/clientes/${c.id}`} className="text-primary hover:underline">{c.name}</Link>}
+                estado={!c.activo ? <BadgeEstado tono="neutro">Inactivo</BadgeEstado> : undefined}
+                datos={[
+                  { etiqueta: 'CUIT / DNI', valor: c.cuit_dni || '—' },
+                  { etiqueta: 'Condición IVA', valor: c.iva_condition || '—' },
+                  { etiqueta: 'Teléfono', valor: c.phone || '—' },
+                ]}
+                acciones={acciones(c)}
+              />
+            )}
+            // La tabla no pagina: sin buscador, llegar a un cliente entre
+            // cientos es scrollear. El email entra en la búsqueda aunque no
+            // sea columna -- es lo que se tiene a mano cuando el cliente
+            // escribió por correo; el CUIT, lo que se tiene del papel.
+            search={{
+              campos: (c) => [c.name, c.cuit_dni, c.email, c.phone],
+              placeholder: 'Buscar por nombre, CUIT/DNI, email o teléfono',
+              ariaLabel: 'Buscar cliente',
+            }}
+          />
         </CardContent>
       </Card>
 
