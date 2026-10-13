@@ -27,6 +27,10 @@
 // datos de la suite se busca escribiendo (ADR-039). Suma `disabled` por opción,
 // `required` y `limpiable`, y arregla que un Escape con la lista abierta
 // cerraba también el diálogo de afuera.
+//
+// **v0.144.0 (2026-10-13)**: `lineasEnMovil`. El valor elegido puede ocupar hasta 2 líneas
+// bajo `sm` (640 px) en vez de cortarse a la primera con «…». Es opt-in: por defecto el
+// control es el de siempre. Ver ADR-056.
 import {
   useEffect, useId, useMemo, useRef, useState,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -83,6 +87,11 @@ type Props = {
    *  `''` es un valor válido; la forma preferida de vaciar sigue siendo una
    *  opción de valor `''` («Todos», «Ninguno») en la lista. */
   limpiable?: boolean
+  /** Cuántas líneas ocupa el valor elegido **bajo `sm` (640 px)** antes de cortarse con «…» (0.144.0, ADR-056). **Por defecto 1**: el control es el de siempre.
+   *  Con `2` el texto se parte en el celular (`line-clamp-2`, `whitespace-normal`, `break-words`) y el control crece a lo que ocupe, con un mínimo de 44 px
+   *  de alto para el dedo; desde `sm` queda en una línea, como siempre. Sirve para los nombres largos (sucursal, categoría, proveedor) que en un celular
+   *  se cortaban a mitad de palabra. Conviene acompañarlo con el `title` de siempre: lo que no entra en las 2 líneas se lee ahí. */
+  lineasEnMovil?: 1 | 2
   // --- Lo que inyecta un `FormControl` de shadcn ---------------------------
   //
   // `FormControl` es un `Slot.Root`: le pasa estas tres props **al hijo**, sin
@@ -190,9 +199,10 @@ function ListaDeOpciones({
 
 function SelectDeBoton({
   value, onChange, opciones, placeholder = 'Elegí una opción…',
-  emptyMessage = 'Sin resultados.', disabled, required, className, ariaLabel, title,
+  emptyMessage = 'Sin resultados.', disabled, required, className, ariaLabel, title, lineasEnMovil,
   id, 'aria-describedby': describedBy, 'aria-invalid': invalido,
 }: Props) {
+  const dosLineas = lineasEnMovil === 2
   const [abierto, setAbierto] = useState(false)
   const [consulta, setConsulta] = useState('')
   const [resaltada, setResaltada] = useState(0)
@@ -286,9 +296,14 @@ function SelectDeBoton({
         aria-required={required}
         disabled={disabled}
         onClick={() => setAbierto((v) => !v)}
-        className={cn('justify-between font-normal', !seleccionada && 'text-muted-foreground', className)}
+        className={cn(
+          'justify-between font-normal', !seleccionada && 'text-muted-foreground',
+          // Con 2 líneas el botón crece con el texto (el `h-9` de la variante lo fijaría) y el texto se parte en vez de quedar en una línea.
+          dosLineas && 'max-sm:h-auto max-sm:min-h-11 max-sm:py-1.5 max-sm:whitespace-normal',
+          className,
+        )}
       >
-        <span className="truncate">{seleccionada?.label ?? placeholder}</span>
+        <span className={dosLineas ? 'line-clamp-2 break-words text-left sm:line-clamp-none sm:truncate' : 'truncate'}>{seleccionada?.label ?? placeholder}</span>
         <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
       </Button>
 
@@ -328,9 +343,10 @@ function SelectDeBoton({
  *  a `null`: la etiqueta elegida reaparece y lo escrito a medias se descarta. */
 function SelectDeCampo({
   value, onChange, opciones, placeholder = 'Buscar…',
-  emptyMessage = 'Sin resultados.', disabled, required, limpiable, className, ariaLabel, title,
+  emptyMessage = 'Sin resultados.', disabled, required, limpiable, className, ariaLabel, title, lineasEnMovil,
   id, 'aria-describedby': describedBy, 'aria-invalid': invalido,
 }: Props) {
+  const dosLineas = lineasEnMovil === 2
   const [abierto, setAbierto] = useState(false)
   const [consulta, setConsulta] = useState<string | null>(null)
   const [resaltada, setResaltada] = useState(0)
@@ -433,7 +449,7 @@ function SelectDeCampo({
       // porque el `mousedown` de la lista no le saca el foco al campo.
       onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) cerrar() }}
     >
-      <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+      <Search className={cn('pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground', dosLineas && 'z-10')} />
       <Input
         id={id}
         ref={campo}
@@ -459,8 +475,26 @@ function SelectDeCampo({
         title={title}
         aria-describedby={describedBy}
         aria-invalid={invalido}
-        className={cn('w-full pl-9', conCruz && 'pr-9')}
+        className={cn(
+          'w-full pl-9', conCruz && 'pr-9',
+          // Un `<input>` no parte el texto en líneas. Bajo `sm` el campo se estira sobre el contenedor y su texto se esconde mientras no se escribe:
+          // lo que se ve es el valor de abajo, que sí se parte y le da el alto al contenedor. Al enfocar vuelve el texto del campo (seleccionado, para escribir encima).
+          dosLineas && 'peer max-sm:absolute max-sm:inset-0 max-sm:h-full max-sm:text-transparent max-sm:focus:text-foreground',
+        )}
       />
+      {dosLineas && (
+        // Decorativo (el lector de pantalla lee el campo) y sin eventos: el click, el foco y el `title` son del campo de abajo. `invisible` y no `hidden` al enfocar,
+        // para que el contenedor no cambie de alto al empezar a escribir. 44 px de mínimo: el objetivo táctil.
+        <div
+          aria-hidden="true" data-valor-en-movil=""
+          className={cn(
+            'pointer-events-none relative z-10 flex min-h-11 items-center py-1.5 pl-9 text-base leading-5 peer-focus:invisible sm:hidden',
+            conCruz ? 'pr-9' : 'pr-3', disabled && 'opacity-50',
+          )}
+        >
+          <span className="line-clamp-2 min-w-0 whitespace-normal break-words">{etiqueta}</span>
+        </div>
+      )}
       {conCruz && (
         <Button
           type="button"

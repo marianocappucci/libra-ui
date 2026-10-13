@@ -839,3 +839,77 @@ describe('SelectBuscable, la × y los formularios nativos', () => {
     expect(document.querySelector('form')!.checkValidity()).toBe(false)
   })
 })
+
+// `lineasEnMovil` (0.144.0, ADR-056): el valor elegido en hasta 2 líneas bajo `sm`. jsdom no aplica las clases, así que se prueba que estén (y que sin la prop no estén).
+describe.each([
+  ['campo (el defecto)', {}],
+  ['botón (`buscarEscribiendo={false}`)', { buscarEscribiendo: false }],
+] as const)('SelectBuscable, `lineasEnMovil`: modo %s', (_nombre, modo) => {
+  const enBoton = 'buscarEscribiendo' in modo
+  const LARGO = 'Sucursal Centro Comercial Paseo del Bosque Local 214'
+  const OPCIONES: OpcionSelect[] = [{ value: 'a', label: LARGO }, { value: 'b', label: 'Norte' }]
+
+  const montar = (extra: { lineasEnMovil?: 1 | 2; disabled?: boolean; limpiable?: boolean } = {}) =>
+    render(<SelectBuscable {...modo} ariaLabel="Sucursal" value="a" onChange={vi.fn()} opciones={OPCIONES} className="w-full sm:w-64" {...extra} />)
+  /** Donde se ve el texto elegido: en el modo botón el `<span>` del botón; en el de campo, el valor decorativo de debajo del campo. */
+  const valor = (c: HTMLElement) => (enBoton ? c.querySelector('button span') : c.querySelector('[data-valor-en-movil] > span')) as HTMLElement | null
+
+  it('con `lineasEnMovil={2}` el valor elegido se parte en 2 líneas y sólo desde `sm` es de una', () => {
+    const { container } = montar({ lineasEnMovil: 2 })
+    expect(valor(container)).toHaveTextContent(LARGO)
+    expect(valor(container)).toHaveClass('line-clamp-2', 'break-words')
+    if (enBoton) {
+      // El botón crece con el texto (no queda en el `h-9` fijo), con 44 px de mínimo, y desde `sm` el texto vuelve a una línea con «…».
+      expect(screen.getByRole('combobox', { name: 'Sucursal' })).toHaveClass('max-sm:h-auto', 'max-sm:min-h-11', 'max-sm:whitespace-normal')
+      expect(valor(container)).toHaveClass('sm:truncate', 'sm:line-clamp-none')
+    } else {
+      // Un <input> no parte el texto: el valor de debajo hace de alto del contenedor y deja de existir desde `sm`; el campo conserva el `title`, el foco y el nombre.
+      const decorativo = container.querySelector('[data-valor-en-movil]')!
+      expect(decorativo).toHaveAttribute('aria-hidden', 'true')
+      expect(decorativo).toHaveClass('min-h-11', 'sm:hidden', 'pointer-events-none', 'peer-focus:invisible')
+      expect(valor(container)).toHaveClass('whitespace-normal')
+      expect(screen.getByRole('combobox', { name: 'Sucursal' })).toHaveClass('peer', 'max-sm:absolute', 'max-sm:inset-0', 'max-sm:text-transparent')
+      expect(screen.getByRole('combobox', { name: 'Sucursal' })).toHaveValue(LARGO)
+    }
+  })
+
+  it('🔴 por defecto (y con `lineasEnMovil={1}`) el control es el de siempre: sin clases ni nodos de más', () => {
+    const { container: sin, unmount } = montar()
+    const htmlSin = sin.innerHTML
+    expect(sin.querySelector('[data-valor-en-movil]')).toBeNull()
+    expect(htmlSin).not.toMatch(/line-clamp|max-sm:|break-words|min-h-11/)
+    if (enBoton) expect(valor(sin)).toHaveClass('truncate')
+    unmount()
+    const { container: uno } = montar({ lineasEnMovil: 1 })
+    expect(uno.innerHTML).toBe(htmlSin)
+  })
+
+  it('con 2 líneas el campo sigue funcionando igual: abre, filtra y elige', async () => {
+    const user = userEvent.setup()
+    const onChange = vi.fn()
+    render(<SelectBuscable {...modo} ariaLabel="Sucursal" value="a" onChange={onChange} opciones={OPCIONES} lineasEnMovil={2} />)
+    await user.click(screen.getByRole('combobox', { name: 'Sucursal' }))
+    await user.click(await screen.findByRole('option', { name: 'Norte' }))
+    expect(onChange).toHaveBeenCalledWith('b')
+  })
+
+  it('sin nada elegido el placeholder sigue siendo el del campo o el botón, sin texto de más', () => {
+    const { container } = render(<SelectBuscable {...modo} ariaLabel="Sucursal" value="" onChange={vi.fn()} opciones={OPCIONES} placeholder="Elegí…" lineasEnMovil={2} />)
+    const combo = screen.getByRole('combobox', { name: 'Sucursal' })
+    if (enBoton) expect(combo).toHaveTextContent('Elegí…')
+    else {
+      expect(combo).toHaveAttribute('placeholder', 'Elegí…')
+      expect(valor(container)).toBeEmptyDOMElement()
+    }
+  })
+
+  it.skipIf(enBoton)('deshabilitado, el valor de debajo se atenúa como el campo', () => {
+    const { container } = montar({ lineasEnMovil: 2, disabled: true })
+    expect(container.querySelector('[data-valor-en-movil]')).toHaveClass('opacity-50')
+  })
+
+  it.skipIf(enBoton)('con la × el valor deja lugar para ella', () => {
+    const { container } = montar({ lineasEnMovil: 2, limpiable: true })
+    expect(container.querySelector('[data-valor-en-movil]')).toHaveClass('pr-9')
+  })
+})

@@ -36,6 +36,10 @@
 // **Mínimo por sucursal (0.108.0, ADR-010):** con una sucursal elegida, la fila trae `stock_minimo` ya resuelto y `stock_minimo_propio`: si es `true`, el mínimo
 // que se ve es el que ese producto tiene en esa sucursal (se carga en el formulario del producto, «Mínimo por sucursal») y la celda lo dice con texto; si no, es el global.
 //
+// **Filtros plegables en el celular (0.144.0, ADR-056):** bajo `sm` (640 px) los filtros y parámetros van dentro de un bloque «Filtros y parámetros», plegado por defecto, cuyo
+// encabezado resume lo que está activo; desde `sm` se ve el bloque entero, sin botón. Se abre solo si un parámetro tiene error. Y el valor elegido de los tres selects ocupa hasta
+// 2 líneas en el celular (`lineasEnMovil`, de `SelectBuscable`).
+//
 // 🔴 **Los avisos por fila no son adorno.** `posible_quiebre` dice que la rotación de ese producto se estimó con
 // pocos días con stock y puede estar subestimada (se sugiere de menos); `sin_ventas` que no hay rotación, y por eso
 // la cobertura es un guion y el producto sólo aparece si está bajo el mínimo; `en_camino_sin_sucursal`, que con una
@@ -53,12 +57,13 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { AlertTriangle, Download, FilePlus2, PackagePlus, TrendingDown } from 'lucide-react'
+import { AlertTriangle, ChevronDown, Download, FilePlus2, PackagePlus, TrendingDown } from 'lucide-react'
 import { nuevaClaveDeOperacion } from './clave-de-operacion'
 import { DialogoGenerarOrdenes } from './reposicion-ordenes'
 import { borrarIntentoPendiente, leerIntentoPendiente, type IntentoDeOrdenes, type ParametrosDeOrdenes } from './reposicion-ordenes-pendiente'
 import { SelectBuscable } from '../SelectBuscable'
 import { formatoCantidad } from '../formatos'
+import { cn } from '../utils'
 
 const RUTA = '/api/reportes/reposicion'
 /** El relleno de las celdas de la tabla (ADR-012): 6 px a los lados en vez de 12: con las 13 columnas (las dos opcionales, Estacional y Por vencer, prendidas) son unos 150 px menos de ancho y la tabla entra en 1440 px sin desplazarse. */
@@ -224,6 +229,16 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
   const valido = PARAMETROS.every((p) => errores[p.clave] === null)
   const validoPedido = valido && PARAMETROS.every((p) => errorDelParametro(valoresPedidos[p.clave], p.max) === null)
 
+  // Los filtros y parámetros, plegados en el celular (ADR-056); desde `sm` el bloque se ve siempre y el botón no existe. Con un parámetro inválido se abre solo: el motivo
+  // de que la tabla no se actualice no puede quedar escondido. Se abre en el momento en que aparece el error (ajuste de estado durante el render, el patrón de React para
+  // esto) y no se deriva de él, para que, abierto por el error, se pueda cerrar a mano sin que vuelva a abrirse hasta que haya un error nuevo.
+  const [filtrosAbiertos, setFiltrosAbiertos] = useState(false)
+  const [conErrorDeParametro, setConErrorDeParametro] = useState(false)
+  if (conErrorDeParametro === valido) {
+    setConErrorDeParametro(!valido)
+    if (!valido) setFiltrosAbiertos(true)
+  }
+
   // Una sola forma de armar la consulta para el JSON y para el CSV. `null` con un parámetro inválido: no se pide.
   const consulta = useMemo(() => {
     // Con los controles adelante de lo pedido tampoco se pide: sería repetir la consulta de antes.
@@ -307,12 +322,38 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
   const columnas = conColumnaEstacional ? [...base.slice(0, base.findIndex((c) => c.orden === 'sugerido')), COLUMNA_ESTACIONAL, ...base.slice(base.findIndex((c) => c.orden === 'sugerido'))] : base
   // Lo que dice la ayuda son los controles, que son también lo que muestra la tabla (sólo se muestra la de esta consulta).
   const horizonte = valido ? Number(valores.dias_cobertura) + Number(valores.plazo_entrega_dias) : null
+  // El nombre completo de lo elegido en cada select: va al `title` y al resumen del bloque plegado. `undefined` con «todas».
+  const tituloSucursal = tituloDe(sucursal, sucursales.map((x) => [String(x.id), x.nombre]))
+  const tituloCategoria = tituloDe(categoria, categorias.map((x) => [x.nombre, x.nombre]))
+  const tituloProveedor = tituloDe(proveedor, proveedores.map((x) => [String(x.id), x.nombre]))
+  // Lo activo, en una o dos líneas, para el encabezado del bloque plegado: lo que acota la lista (o «Toda la instancia» si nada la acota), el horizonte (cobertura + plazo, sólo si los
+  // dos valen) y las casillas prendidas. Una casilla que el motor no maneja no se nombra aunque haya quedado prendida.
+  const alcance = [tituloSucursal, tituloCategoria, tituloProveedor].filter((t): t is string => t !== undefined)
+  const resumenDeFiltros = [
+    ...(alcance.length > 0 ? alcance : ['Toda la instancia']),
+    ...(valido ? [`${Number(valores.dias_cobertura)} + ${Number(valores.plazo_entrega_dias)} días`] : []),
+    ...(soloAPedir ? ['Sólo lo que hay que pedir'] : []),
+    ...(conEstacionalidad && estacionalidad ? ['Ajustar por estacionalidad'] : []),
+    ...(conDescontarPorVencer && descontarPorVencer ? ['Descontar lo que vence en el horizonte'] : []),
+  ].join(' · ')
 
   return (
     <div className="grid gap-4">
       <TituloPantalla icono={PackagePlus}>Reposición sugerida</TituloPantalla>
 
-      <div className="flex flex-wrap items-start gap-3">
+      <button
+        type="button" aria-expanded={filtrosAbiertos} aria-controls="reposicion-filtros" onClick={() => setFiltrosAbiertos((v) => !v)}
+        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-md border border-input px-3 py-2 text-left outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 sm:hidden"
+      >
+        <span className="grid min-w-0 gap-0.5">
+          <span className="text-sm font-medium">Filtros y parámetros</span>
+          <span className="line-clamp-2 break-words text-xs text-muted-foreground">{resumenDeFiltros}</span>
+        </span>
+        <ChevronDown aria-hidden="true" className={cn('size-4 shrink-0 text-muted-foreground', filtrosAbiertos && 'rotate-180')} />
+      </button>
+
+      {/* Cerrado, sólo se oculta bajo `sm`: `hidden` saca el bloque del orden de foco y del árbol de accesibilidad, y `sm:flex` lo devuelve en pantallas anchas sin medir nada con JS. */}
+      <div id="reposicion-filtros" className={cn('flex-wrap items-start gap-3 sm:flex', filtrosAbiertos ? 'flex' : 'hidden')}>
         {sucursales.length > 0 && (
           <div className="grid w-full gap-2 sm:w-auto">
             <Label htmlFor="reposicion-sucursal">Sucursal</Label>
@@ -325,7 +366,8 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
                 ...sucursales.map((s) => ({ value: String(s.id), label: s.nombre })),
               ]}
               limpiable={false}
-              title={tituloDe(sucursal, sucursales.map((x) => [String(x.id), x.nombre]))}
+              title={tituloSucursal}
+              lineasEnMovil={2}
               className="w-full min-w-0 sm:w-64"
             />
           </div>
@@ -342,7 +384,8 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
                 ...categorias.map((c) => ({ value: c.nombre, label: c.nombre })),
               ]}
               limpiable={false}
-              title={tituloDe(categoria, categorias.map((x) => [x.nombre, x.nombre]))}
+              title={tituloCategoria}
+              lineasEnMovil={2}
               className="w-full min-w-0 sm:w-64"
             />
           </div>
@@ -359,7 +402,8 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
                 ...proveedores.map((p) => ({ value: String(p.id), label: p.nombre })),
               ]}
               limpiable={false}
-              title={tituloDe(proveedor, proveedores.map((x) => [String(x.id), x.nombre]))}
+              title={tituloProveedor}
+              lineasEnMovil={2}
               className="w-full min-w-0 sm:w-64"
             />
           </div>
@@ -369,7 +413,7 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
             <Label htmlFor={`reposicion-${p.clave}`}>{p.etiqueta}</Label>
             <Input
               id={`reposicion-${p.clave}`} type="number" inputMode="numeric" min={1} max={p.max} step={1}
-              value={valores[p.clave]} className="w-40"
+              value={valores[p.clave]} className="w-40 max-sm:h-11"
               aria-invalid={errores[p.clave] !== null} aria-describedby={errores[p.clave] ? `reposicion-${p.clave}-error` : undefined}
               onChange={(e) => setValores((v) => ({ ...v, [p.clave]: e.target.value }))}
             />
@@ -383,12 +427,12 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
         <div className="grid gap-2">
           <span aria-hidden="true" className="invisible hidden text-sm leading-none sm:block">&nbsp;</span>
           <div className="flex flex-wrap items-start gap-x-6 gap-y-2">
-            <label className="flex min-h-9 items-center gap-2 text-sm sm:whitespace-nowrap">
+            <label className="flex min-h-9 items-center gap-2 text-sm max-sm:min-h-11 sm:whitespace-nowrap">
               <input type="checkbox" checked={soloAPedir} onChange={(e) => setSoloAPedir(e.target.checked)} className="size-4 shrink-0" />
               Sólo lo que hay que pedir
             </label>
             {conEstacionalidad && (
-              <label className="flex min-h-9 items-center gap-2 text-sm sm:whitespace-nowrap" title="Proyecta con lo que pasó hace un año: lo que se vendió después de una ventana como la de ahora">
+              <label className="flex min-h-9 items-center gap-2 text-sm max-sm:min-h-11 sm:whitespace-nowrap" title="Proyecta con lo que pasó hace un año: lo que se vendió después de una ventana como la de ahora">
                 <input type="checkbox" checked={estacionalidad} onChange={(e) => {
                   setEstacionalidad(e.target.checked)
                   // Al apagarlo la columna desaparece: un orden por ella quedaría activo sin que se vea (y sin su flecha).
@@ -399,7 +443,7 @@ export function Reposicion({ conGenerarOrdenes = false, rutaDeOrden }: Reposicio
             )}
             {conDescontarPorVencer && (
               <div className="grid max-w-xs">
-                <label className="flex min-h-9 items-center gap-2 text-sm sm:whitespace-nowrap">
+                <label className="flex min-h-9 items-center gap-2 text-sm max-sm:min-h-11 sm:whitespace-nowrap">
                   <input type="checkbox" checked={descontarPorVencer} aria-describedby="reposicion-por-vencer-ayuda" onChange={(e) => {
                     setDescontarPorVencer(e.target.checked)
                     // Al apagarlo la columna desaparece: un orden por ella quedaría activo sin que se vea (y sin su flecha).
