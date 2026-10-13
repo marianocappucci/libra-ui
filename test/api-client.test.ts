@@ -307,3 +307,31 @@ describe('sesión vencida', () => {
     expect(error.status).toBe(401)
   })
 })
+
+
+describe('el ref de un 500 del backend (ADR-044 de libracore)', () => {
+  it('🔴 un 500 con {"detail", "ref"} deja el ref en el ApiError', async () => {
+    responde({ detail: 'Error interno', ref: 'a1b2c3d4' }, { status: 500 })
+    const e = (await api.get('/api/x').catch((err) => err)) as ApiError
+    expect(e).toBeInstanceOf(ApiError)
+    expect(e.status).toBe(500)
+    expect(e.detail).toBe('Error interno')
+    expect(e.ref).toBe('a1b2c3d4')
+  })
+
+  it('el ref también llega desde un upload', async () => {
+    responde({ detail: 'Error interno', ref: 'deadbeef' }, { status: 500 })
+    const e = (await api.postForm('/api/logo', new FormData()).catch((err) => err)) as ApiError
+    expect(e.ref).toBe('deadbeef')
+  })
+
+  it.each([
+    ['sin ref', { detail: 'No existe' }],
+    ['ref vacío', { detail: 'x', ref: '' }],
+    ['ref que no es un texto', { detail: 'x', ref: { a: 1 } }],
+  ])('%s: no hay ref', async (_nombre, cuerpo) => {
+    responde(cuerpo, { status: 404 })
+    const e = (await api.get('/api/x').catch((err) => err)) as ApiError
+    expect(e.ref).toBeUndefined()
+  })
+})

@@ -25,14 +25,18 @@ export class ApiError extends Error {
   /** El `detail` tal cual lo mandó el backend, cuando `detail` es la traducción de un 401/403 genérico
    *  («forbidden», «not authenticated»; ver `textoDeError`). En cualquier otro caso es igual a `detail`. */
   detailOriginal: string
+  /** El código corto que el backend le puso a un error 500 (`{"detail": "Error interno", "ref": "a1b2c3d4"}`, ADR-044
+   *  de libracore): el mismo que quedó en su registro de errores. Lo muestra `ErrorBoundary`. `undefined` si no vino. */
+  ref?: string
 
-  constructor(status: number, detail: string, detailData?: unknown) {
+  constructor(status: number, detail: string, detailData?: unknown, ref?: string) {
     const texto = textoDeError(status, detail, detailData)
     super(texto)
     this.status = status
     this.detail = texto
     this.detailData = detailData
     this.detailOriginal = detail
+    this.ref = ref
   }
 }
 
@@ -177,6 +181,13 @@ function detalleDe(data: unknown, statusText: string): [string, unknown] {
   return [String(detail), detail]
 }
 
+/** El `ref` de un error 500 del backend (`{"detail": "Error interno", "ref": "…"}`), si vino y es un texto. */
+function refDe(data: unknown): string | undefined {
+  if (!data || typeof data !== 'object' || !('ref' in data)) return undefined
+  const ref = (data as { ref: unknown }).ref
+  return typeof ref === 'string' && ref !== '' ? ref : undefined
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const response = await fetch(path, {
     method,
@@ -198,7 +209,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     const pendientes = terminosPendientesDe(response.status, data)
     if (pendientes) alHaberTerminosPendientes(pendientes)
     const [detail, detailData] = detalleDe(data, response.statusText)
-    throw new ApiError(response.status, detail, detailData)
+    throw new ApiError(response.status, detail, detailData, refDe(data))
   }
 
   return data as T
@@ -218,7 +229,7 @@ async function requestForm<T>(method: string, path: string, form: FormData): Pro
     const pendientes = terminosPendientesDe(response.status, data)
     if (pendientes) alHaberTerminosPendientes(pendientes)
     const [detail, detailData] = detalleDe(data, response.statusText)
-    throw new ApiError(response.status, detail, detailData)
+    throw new ApiError(response.status, detail, detailData, refDe(data))
   }
   return data as T
 }

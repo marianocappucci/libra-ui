@@ -1060,3 +1060,42 @@ botón sigue deshabilitado hasta recargar.
 
 **Cómo se adopta.** Subir el pin del kit a la versión que incluya este ADR. Nadie está obligado a pasar la prop. VentaLibra la pasa cuando el módulo
 `multisucursal` está apagado y retira la caja de aviso de esa pantalla.
+
+## ADR-053 — Los errores del navegador llegan al registro de la instancia: `ErrorBoundary` e `instalarReporteDeErrores`
+
+**Problema.** Una pantalla que se rompe en el navegador de un cliente no deja rastro en ningún servidor: un error de render desmonta toda la SPA y el
+usuario queda frente a una pantalla en blanco; una promesa rechazada sin atrapar no se ve en ningún lado. El motor tiene desde `libracore` ADR-045 un
+registro de errores propio (`DATA_DIR/errores/errores.jsonl`) y un `POST /api/errores-cliente` que espera estos reportes; faltaba el lado del navegador.
+
+**Qué ya existe** (se miró antes de cambiar): ningún `ErrorBoundary`, `window.onerror` ni `unhandledrejection` en el kit (`git grep` de «ErrorBoundary»,
+«componentDidCatch», «unhandledrejection», «onerror» no da nada en `src/`); `ApiError` (que ya traduce y conserva el `detail`) y la convención de
+`api-client` de resolver las cosas transversales en un solo lugar y no pantalla por pantalla (sesión vencida, Términos). El endpoint, la limpieza de datos
+y los topes viven en el motor (`docs/errores.md` de libracore); acá no se duplica nada de eso.
+
+**Decisión.**
+1. **`<ErrorBoundary>`** (`libra-ui/ErrorBoundary`): una clase (React no tiene otra forma) que, ante un error de render, muestra «Algo falló. Recargá la
+   página.» con un botón «Recargar», hecha con `Card` y `Button` del consumidor (como `Login`). Si el error es un `ApiError` con `ref` —un 500 que reventó
+   una pantalla— muestra el código para que soporte lo encuentre en el registro. **Nunca muestra el mensaje del error**: puede traer datos.
+2. **`ApiError.ref`**: el `ref` del `{"detail": "Error interno", "ref": "…"}` que contesta el motor en un 500, tanto en `request` como en `postForm`. Es el
+   cuarto parámetro opcional del constructor, así que nadie que construya un `ApiError` a mano se entera.
+3. **`instalarReporteDeErrores({ release })`** (`libra-ui/errores-del-navegador`): escucha `error` y `unhandledrejection` y manda cada uno con
+   `navigator.sendBeacon` a `/api/errores-cliente` (mismo origen: la CSP de las SPA es `connect-src 'self'`); sin `sendBeacon`, o si lo rechaza, `fetch` con
+   `keepalive`. Se manda `{tipo, mensaje, stack, pagina, release}`; `pagina` es `location.pathname` —nunca la query ni el fragmento—. Idempotente.
+4. **Qué no se reporta**: **ningún `ApiError`** (un 4xx es del usuario; un ≥ 500 ya quedó en el registro del backend con su `ref`, y reportarlo duplicaría
+   cada 500), el ruido conocido (`ResizeObserver loop…`, `Script error.`) y los eventos sin error ni mensaje.
+5. **Sin desborde**: dedup por mensaje + stack, **10 por pestaña**, y el payload se recorta hasta entrar en los 4 KB que acepta el backend.
+6. **Mandar nunca es un error**: todo está envuelto; un `sendBeacon` que lanza, un `fetch` que falla o un reason ilegible se tragan en silencio, para no
+   entrar en un bucle de reportar el reporte.
+7. `ErrorBoundary` además reporta (`tipo: "render"`, con el stack de componentes) los errores de render que no son de la API, **sólo si el producto llamó a
+   `instalarReporteDeErrores`**: sin eso, el boundary es sólo la pantalla.
+
+**Tests** (`test/errores-del-navegador.test.ts`, `test/ErrorBoundary.test.tsx`, `test/api-client.test.ts`): qué se manda y a dónde; ningún `ApiError` (400, 401,
+403, 404, 422, 500, 503) ni el ruido se reporta; dedup, tope de 10 y payload ≤ 4 KB; los caminos de `fetch` y los fallos de envío; la pantalla, el botón, el
+`ref`, la ausencia del mensaje y el reporte de render; el `ref` en `request` y `postForm`.
+
+**Cómo se adopta.** Subir el pin y, en `main.tsx`: `instalarReporteDeErrores()` antes de montar y `<ErrorBoundary>` alrededor de `<App />`. El backend tiene
+que haber instalado `instalar_registro_de_errores` (libracore ≥ la que traiga ADR-045), si no el `POST` da 404 y los reportes se pierden sin ruido.
+
+**Lo que no cubre.** No se probó en un navegador real (jsdom no dispara `onerror` como un navegador). Los errores de render sólo se atrapan debajo del
+`<ErrorBoundary>`: lo que falle fuera, en `main.tsx`, queda en `window.onerror`. El `release` es opcional y lo decide el producto; el backend registra
+siempre el de la imagen.
