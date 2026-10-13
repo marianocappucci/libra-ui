@@ -285,4 +285,27 @@ describe('DataTable: el resto del contrato', () => {
     expect(anchoColumnaAcciones(1)).toBe(52)
     expect(anchoColumnaAcciones(3)).toBe(132)
   })
+
+  it('anchoColumnaAcciones(n, true) cuenta los botones de 44px que la tabla usa bajo 1024px (ADR-057)', () => {
+    // 44px por boton: 8px mas por boton que los de escritorio; el gap y el padding no cambian.
+    expect(anchoColumnaAcciones(0, true)).toBe(16)
+    expect(anchoColumnaAcciones(1, true)).toBe(60)
+    expect(anchoColumnaAcciones(3, true)).toBe(156)
+    for (let n = 1; n <= 5; n++) expect(anchoColumnaAcciones(n, true) - anchoColumnaAcciones(n)).toBe(8 * n)
+  })
+
+  it('sortableHeader: una linea con «…» por defecto; con dosLineas parte en dos antes de cortar, sin perder el title ni el icono', () => {
+    const origen = { column: { toggleSorting: () => {}, getIsSorted: () => false as const } }
+    const una = render(<>{sortableHeader('Sucursal Centro Comercial Paseo del Bosque')(origen)}</>)
+    const botonUna = una.getByTitle('Sucursal Centro Comercial Paseo del Bosque')
+    expect(botonUna.querySelector('span')!.className).toBe('truncate')
+    expect(botonUna.className).toContain('h-8')
+    una.unmount()
+    const dos = render(<>{sortableHeader('Sucursal Centro Comercial Paseo del Bosque', { dosLineas: true })(origen)}</>)
+    const boton = dos.getByTitle('Sucursal Centro Comercial Paseo del Bosque')
+    for (const clase of ['line-clamp-2', 'break-words', 'whitespace-normal']) expect(boton.querySelector('span')!.className).toContain(clase)
+    expect(boton.className).toContain('h-auto')
+    expect(boton.className.split(/\s+/)).not.toContain('h-8')   // `min-h-8` sí: es el piso de una línea
+    expect(boton.querySelector('svg')!.getAttribute('class')).toContain('shrink-0')
+  })
 })

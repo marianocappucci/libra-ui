@@ -24,7 +24,9 @@ import {
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose,
 } from '@/components/ui/dialog'
-import { DataTable, sortableHeader } from '../data-table'
+import { anchoColumnaAcciones, sortableHeader } from '../data-table'
+import { TablaOTarjetas, TarjetaDeFila } from '../tabla-o-tarjetas'
+import { TACTIL_BAJO_LG, useBajoLg } from '../use-ancho'
 import { Plus, Pencil, Eye, Search, X } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
@@ -116,6 +118,14 @@ export function Proveedores() {
     }
   }
 
+  // Los dos botones de la fila, en la tabla y en la tarjeta.
+  const acciones = (p: Proveedor) => (
+    <div className={`flex justify-end gap-1 ${TACTIL_BAJO_LG}`}>
+      <Button asChild size="icon" variant="outline" title="Ver proveedor"><Link to={`/proveedores/${p.id}`} aria-label="Ver proveedor"><Eye /></Link></Button>
+      <Button asChild size="icon" variant="outline" title="Editar proveedor"><Link to={`/proveedores/${p.id}`} aria-label="Editar proveedor"><Pencil /></Link></Button>
+    </div>
+  )
+
   // Orden igual a web/templates/proveedores/list.html: Nombre, CUIT/DNI,
   // Email, Teléfono, acciones. Esa fila solo tenía Ver + Editar -- "Eliminar
   // proveedor" vivía como botón aparte al pie de la página de detalle
@@ -123,24 +133,24 @@ export function Proveedores() {
   // página propia (/proveedores/:id); "Editar" ahora abre el modal de
   // edición inline en esa misma página de detalle en vez de navegar a
   // /proveedores/:id/editar.
+  // Con `size` (ADR-057) la tabla es de layout fijo, con Nombre elástico, y la suma de los `size` es el ancho desde el cual entra: más angosto, tarjetas.
+  const bajoLg = useBajoLg()
   const columns = useMemo<ColumnDef<Proveedor>[]>(() => [
-    { accessorKey: 'nombre', header: sortableHeader('Nombre'), cell: ({ row }) => (
-      <Link to={`/proveedores/${row.original.id}`} className="font-medium hover:underline">{row.original.nombre}</Link>
+    { accessorKey: 'nombre', header: sortableHeader('Nombre'), size: 200, minSize: 130, meta: { stretch: true }, cell: ({ row }) => (
+      <Link to={`/proveedores/${row.original.id}`} className="block truncate font-medium hover:underline" title={row.original.nombre}>{row.original.nombre}</Link>
     ) },
-    { accessorKey: 'cuit_dni', header: 'CUIT/DNI', cell: ({ row }) => row.original.cuit_dni || '—' },
-    { accessorKey: 'email', header: 'Email', cell: ({ row }) => row.original.email || '—' },
-    { accessorKey: 'phone', header: 'Teléfono', cell: ({ row }) => row.original.phone || '—' },
+    { accessorKey: 'cuit_dni', header: 'CUIT/DNI', size: 130, minSize: 110, cell: ({ row }) => <span className="block truncate" title={row.original.cuit_dni ?? undefined}>{row.original.cuit_dni || '—'}</span> },
+    { accessorKey: 'email', header: 'Email', size: 200, minSize: 120, cell: ({ row }) => <span className="block truncate" title={row.original.email ?? undefined}>{row.original.email || '—'}</span> },
+    { accessorKey: 'phone', header: 'Teléfono', size: 130, minSize: 100, cell: ({ row }) => <span className="block truncate" title={row.original.phone ?? undefined}>{row.original.phone || '—'}</span> },
     {
       id: 'actions',
       header: () => <div className="text-right">Acciones</div>,
-      cell: ({ row }) => (
-        <div className="flex justify-end gap-1">
-          <Button asChild size="icon" variant="outline" title="Ver proveedor"><Link to={`/proveedores/${row.original.id}`} aria-label="Ver proveedor"><Eye /></Link></Button>
-          <Button asChild size="icon" variant="outline" title="Editar proveedor"><Link to={`/proveedores/${row.original.id}`} aria-label="Editar proveedor"><Pencil /></Link></Button>
-        </div>
-      ),
+      size: anchoColumnaAcciones(2, bajoLg),
+      minSize: anchoColumnaAcciones(2, bajoLg),
+      cell: ({ row }) => acciones(row.original),
     },
-  ], [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [bajoLg])
 
   return (
     <div className="grid gap-4">
@@ -271,15 +281,25 @@ export function Proveedores() {
 
       <Card>
         <CardContent>
-          {loading ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">Cargando…</p>
-          ) : (
-            <DataTable
-              columns={columns}
-              data={proveedores}
-              emptyMessage={q ? `No se encontraron proveedores para "${q}".` : 'No hay proveedores registrados aún.'}
-            />
-          )}
+          <TablaOTarjetas
+            columns={columns}
+            data={proveedores}
+            cargando={loading}
+            clave={(p) => p.id}
+            etiqueta="Proveedores"
+            emptyMessage={q ? `No se encontraron proveedores para "${q}".` : 'No hay proveedores registrados aún.'}
+            tarjeta={(p) => (
+              <TarjetaDeFila
+                titulo={<Link to={`/proveedores/${p.id}`} className="text-primary hover:underline">{p.nombre}</Link>}
+                datos={[
+                  { etiqueta: 'CUIT/DNI', valor: p.cuit_dni || '—' },
+                  { etiqueta: 'Email', valor: p.email || '—' },
+                  { etiqueta: 'Teléfono', valor: p.phone || '—' },
+                ]}
+                acciones={acciones(p)}
+              />
+            )}
+          />
         </CardContent>
       </Card>
     </div>

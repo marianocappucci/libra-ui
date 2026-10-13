@@ -27,10 +27,12 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import type { ColumnDef } from '../data-table'
+import { TACTIL_BAJO_LG, useBajoLg } from '../use-ancho'
 import { Barcode, ClipboardList, Pencil, Plus, Search, Trash2, TrendingUp, X } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
-import { anchoColumnaAcciones, DataTable, sortableHeader } from '../data-table'
+import { anchoColumnaAcciones, sortableHeader } from '../data-table'
+import { TablaOTarjetas, TarjetaDeFila } from '../tabla-o-tarjetas'
 import { BadgeEstado } from '../badge-estado'
 import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
@@ -712,6 +714,25 @@ export function Productos({
     }
   }
 
+  /** Los botones de la fila, en la tabla y en la tarjeta. */
+  const botonesDeFila = (p: Producto) => (
+    <div className={`flex justify-end gap-1 ${TACTIL_BAJO_LG}`}>
+      {rutaDeReceta && (
+        <Button size="icon" variant="outline" title="Receta" aria-label="Receta" asChild>
+          <Link to={rutaDeReceta(p.id)}><ClipboardList /></Link>
+        </Button>
+      )}
+      <Button size="icon" variant="outline" title="Editar producto" aria-label="Editar producto" data-editar-producto={p.id} onClick={(e) => abrirEditarActual.current(p, e.currentTarget)}><Pencil /></Button>
+      {conDetalle && (
+        <Button size="icon" variant="outline" title="Gestionar códigos y variantes" aria-label="Gestionar códigos y variantes" onClick={() => setDetalle(p)}><Barcode /></Button>
+      )}
+      {conEliminar && (
+        <Button size="icon" variant="outline" title="Eliminar producto" aria-label="Eliminar producto" onClick={() => setConfirmDelete(p)}><Trash2 /></Button>
+      )}
+    </div>
+  )
+
+  const bajoLg = useBajoLg()
   const columns = useMemo<ColumnDef<Producto>[]>(() => {
     const cols: ColumnDef<Producto>[] = [
       { accessorKey: 'codigo', header: 'Código', size: 88, minSize: 78, cell: ({ row }) => <span className="block truncate font-mono text-xs" title={row.original.codigo ?? undefined}>{row.original.codigo || '—'}</span> },
@@ -790,29 +811,14 @@ export function Productos({
       {
         id: 'actions',
         header: () => <div className="text-right">Acciones</div>,
-        size: anchoColumnaAcciones(1 + (rutaDeReceta ? 1 : 0) + (conDetalle ? 1 : 0) + (conEliminar ? 1 : 0)),
-        minSize: anchoColumnaAcciones(1 + (rutaDeReceta ? 1 : 0) + (conDetalle ? 1 : 0) + (conEliminar ? 1 : 0)),
-        cell: ({ row }) => (
-          <div className="flex justify-end gap-1">
-            {rutaDeReceta && (
-              <Button size="icon" variant="outline" title="Receta" aria-label="Receta" asChild>
-                <Link to={rutaDeReceta(row.original.id)}><ClipboardList /></Link>
-              </Button>
-            )}
-            <Button size="icon" variant="outline" title="Editar producto" aria-label="Editar producto" data-editar-producto={row.original.id} onClick={(e) => abrirEditarActual.current(row.original, e.currentTarget)}><Pencil /></Button>
-            {conDetalle && (
-              <Button size="icon" variant="outline" title="Gestionar códigos y variantes" aria-label="Gestionar códigos y variantes" onClick={() => setDetalle(row.original)}><Barcode /></Button>
-            )}
-            {conEliminar && (
-              <Button size="icon" variant="outline" title="Eliminar producto" aria-label="Eliminar producto" onClick={() => setConfirmDelete(row.original)}><Trash2 /></Button>
-            )}
-          </div>
-        ),
+        size: anchoColumnaAcciones(1 + (rutaDeReceta ? 1 : 0) + (conDetalle ? 1 : 0) + (conEliminar ? 1 : 0), bajoLg),
+        minSize: anchoColumnaAcciones(1 + (rutaDeReceta ? 1 : 0) + (conDetalle ? 1 : 0) + (conEliminar ? 1 : 0), bajoLg),
+        cell: ({ row }) => botonesDeFila(row.original),
       },
     )
     return cols
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conTipo, conEstacion, conVendible, rutaDeReceta, conDetalle, conStockTotal, conEliminar, stockTotal, sinCosto])
+  }, [conTipo, conEstacion, conVendible, rutaDeReceta, conDetalle, conStockTotal, conEliminar, stockTotal, sinCosto, bajoLg])
 
   /** Radix devuelve el foco al `DialogTrigger`; la edición no tiene (se abre por `onClick`) y con `conAlta={false}` ni siquiera existe «Nuevo producto». Se devuelve al botón de la
    *  fila que lo abrió; si la fila se volvió a dibujar, a ese mismo producto; si la tabla se está recargando, a «Nuevo producto» (si existe) o a la tabla, y cuando vuelve se lo
@@ -1211,16 +1217,40 @@ export function Productos({
       <Card>
         <CardContent>
           <div ref={tablaRef} tabIndex={-1} className="outline-none">
-            {loading ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">Cargando…</p>
-            ) : (
-              <DataTable
-                columns={columns}
-                data={productos}
-                emptyMessage={q ? `No se encontraron productos para "${q}".` : 'No hay productos registrados aún.'}
-                getRowClassName={(p) => !p.activo ? 'opacity-60' : undefined}
-              />
-            )}
+            <TablaOTarjetas
+              columns={columns}
+              data={productos}
+              cargando={loading}
+              clave={(p) => p.id}
+              etiqueta="Productos"
+              emptyMessage={q ? `No se encontraron productos para "${q}".` : 'No hay productos registrados aún.'}
+              getRowClassName={(p) => !p.activo ? 'opacity-60' : undefined}
+              tarjeta={(p) => {
+                const stock = stockTotal[p.id]
+                const estacion = conEstacion ? estaciones!.find((e) => e.value === p.estacion) : undefined
+                return (
+                  <TarjetaDeFila
+                    className={!p.activo ? 'opacity-60' : undefined}
+                    titulo={(
+                      <span className="flex flex-wrap items-center gap-1.5">
+                        {p.nombre}
+                        {conVendible && !p.vendible && <Badge variant="secondary" className="shrink-0">Insumo</Badge>}
+                      </span>
+                    )}
+                    subtitulo={[p.codigo, p.categoria].filter(Boolean).join(' · ') || undefined}
+                    estado={<BadgeEstado tono={p.activo ? 'ok' : 'neutro'}>{p.activo ? 'Activo' : 'Inactivo'}</BadgeEstado>}
+                    datos={[
+                      ...(conTipo ? [{ etiqueta: 'Tipo', valor: p.tipo === 'servicio' ? 'Servicio' : 'Producto' }] : []),
+                      ...(conEstacion ? [{ etiqueta: 'Estación', valor: estacion && estacion.value ? estacion.label : '—' }] : []),
+                      { etiqueta: 'Precio venta', valor: p.unidad ? `${formatoMoneda(p.precio_venta)} / ${p.unidad}` : formatoMoneda(p.precio_venta) },
+                      ...(sinCosto ? [] : [{ etiqueta: 'Precio costo', valor: formatoMoneda(p.precio_costo) }]),
+                      ...(conStockTotal ? [{ etiqueta: 'Stock total', valor: stock === undefined ? '—' : `${formatEntero(stock)} ${p.unidad}`.trim() }] : []),
+                    ]}
+                    acciones={botonesDeFila(p)}
+                  />
+                )
+              }}
+            />
           </div>
         </CardContent>
       </Card>

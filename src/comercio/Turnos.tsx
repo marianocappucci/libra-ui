@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import type { ColumnDef } from '../data-table'
+import { TACTIL_BAJO_LG, useBajoLg } from '../use-ancho'
 import { api, ApiError } from '../api-client'
 import { formatoMoneda, type CajaConfig, type Turno } from './tipos'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -14,7 +15,8 @@ import { BadgeEstado } from '../badge-estado'
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose,
 } from '@/components/ui/dialog'
-import { anchoColumnaAcciones, DataTable, sortableHeader } from '../data-table'
+import { anchoColumnaAcciones, sortableHeader } from '../data-table'
+import { TablaOTarjetas, TarjetaDeFila } from '../tabla-o-tarjetas'
 import { PlayCircle, StopCircle, Eye, ArrowUpCircle, ArrowDownCircle, CheckCircle2 } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
@@ -116,6 +118,16 @@ export function Turnos({ esAdmin = false, conCaja = false }: TurnosProps = {}) {
     }
   }
 
+  // El botón de la fila, en la tabla y en la tarjeta.
+  const acciones = (t: Turno) => (
+    <div className={`flex justify-end ${TACTIL_BAJO_LG}`}>
+      <Button asChild size="icon" variant="outline" title="Ver detalle">
+        <Link to={`/turnos/${t.id}`} aria-label="Ver detalle"><Eye /></Link>
+      </Button>
+    </div>
+  )
+
+  const bajoLg = useBajoLg()
   const columns = useMemo<ColumnDef<Turno>[]>(() => {
     const cols: ColumnDef<Turno>[] = [
       { accessorKey: 'id', header: 'N°', size: 45, minSize: 40, cell: ({ row }) => <span className="text-sm text-muted-foreground">{row.original.id}</span> },
@@ -170,19 +182,13 @@ export function Turnos({ esAdmin = false, conCaja = false }: TurnosProps = {}) {
       {
         id: 'actions',
         header: () => <div className="text-right">Acciones</div>,
-        size: anchoColumnaAcciones(1),
-        minSize: anchoColumnaAcciones(1),
-        cell: ({ row }) => (
-          <div className="flex justify-end">
-            <Button asChild size="icon" variant="outline" title="Ver detalle">
-              <Link to={`/turnos/${row.original.id}`} aria-label="Ver detalle"><Eye /></Link>
-            </Button>
-          </div>
-        ),
+        size: anchoColumnaAcciones(1, bajoLg),
+        minSize: anchoColumnaAcciones(1, bajoLg),
+        cell: ({ row }) => acciones(row.original),
       },
     )
     return cols
-  }, [esAdmin, turnos])
+  }, [esAdmin, turnos, bajoLg])
 
   return (
     <div className="grid gap-4">
@@ -244,11 +250,29 @@ export function Turnos({ esAdmin = false, conCaja = false }: TurnosProps = {}) {
       <Card>
         <CardHeader><CardTitle className="text-base">{esAdmin ? 'Todos los turnos' : 'Mis turnos'}</CardTitle></CardHeader>
         <CardContent>
-          {loading ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">Cargando…</p>
-          ) : (
-            <DataTable columns={columns} data={turnos} emptyMessage="No hay turnos registrados." />
-          )}
+          <TablaOTarjetas
+            columns={columns}
+            data={turnos}
+            cargando={loading}
+            clave={(t) => t.id}
+            etiqueta="Turnos"
+            emptyMessage="No hay turnos registrados."
+            tarjeta={(t) => (
+              <TarjetaDeFila
+                titulo={<Link to={`/turnos/${t.id}`} className="text-primary hover:underline">Turno N° {t.id}</Link>}
+                subtitulo={[esAdmin ? t.usuario_nombre : null, t.caja?.nombre].filter(Boolean).join(' · ') || undefined}
+                estado={<BadgeEstado tono={t.estado === 'abierto' ? 'ok' : 'neutro'}>{t.estado === 'abierto' ? 'Abierto' : 'Cerrado'}</BadgeEstado>}
+                datos={[
+                  { etiqueta: 'Apertura', valor: sinSegundos(t.apertura) || '—' },
+                  { etiqueta: 'Cierre', valor: sinSegundos(t.cierre) || '—' },
+                  { etiqueta: 'Esperado', valor: t.monto_esperado_cierre != null ? formatoMoneda(t.monto_esperado_cierre) : '—' },
+                  { etiqueta: 'Declarado', valor: t.monto_declarado_cierre != null ? formatoMoneda(t.monto_declarado_cierre) : '—' },
+                  { etiqueta: 'Diferencia', valor: <DiferenciaBadge esperado={t.monto_esperado_cierre} declarado={t.monto_declarado_cierre} /> },
+                ]}
+                acciones={acciones(t)}
+              />
+            )}
+          />
         </CardContent>
       </Card>
     </div>

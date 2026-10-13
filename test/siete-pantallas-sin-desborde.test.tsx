@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createConfiguracion, TutorialLink } from '../src/Configuracion'
 import { Logs } from '../src/Logs'
 import { Cajas } from '../src/comercio/Cajas'
+import { CajaMedios } from '../src/comercio/CajaMedios'
 import { DepositoTransferencia } from '../src/comercio/DepositoTransferencia'
 import { LibrosIva } from '../src/comercio/LibrosIva'
 import { Reportes } from '../src/comercio/Reportes'
@@ -222,5 +223,27 @@ describe('Tesorería', () => {
     const cabecera = cabeceraDe('Tesorería')
     tiene(cabecera, 'flex', 'flex-wrap', 'justify-between')
     tiene(cabecera.lastElementChild, 'flex', 'flex-wrap')
+  })
+})
+
+describe('Caja por medio de cobro (0.145.0)', () => {
+  // Medido en Chromium (VentaLibra, 768 px con el menú abierto): 792 de ancho de página contra 768, 24 px de desborde. Las tres tarjetas del resumen (Ingresos, Egresos, Saldo) iban en tres
+  // columnas desde `sm` (640 px de ventana) con 447 px de contenido: la columna de la pantalla (`auto`) tomaba el mínimo de las tres y ensanchaba la página. ADR-057.
+  const MEDIO = { ingresos: 100, ingresos_ops: 1, egresos: 0, egresos_ops: 0 }
+  const DATOS = {
+    desde: '2026-10-01', hasta: '2026-10-13', cajas_config: [], medio_label: { efectivo: 'Efectivo' }, totales: { efectivo: MEDIO },
+    cajas: [{ id: 1, nombre: 'Caja 1', medios: { efectivo: MEDIO }, total_ingresos: 169135690.75, total_egresos: 16913569.07, saldo: 152222121.68 }],
+  }
+
+  it('el resumen va en tres columnas sólo si el CONTENEDOR da (@4xl), no por el ancho de la ventana (sm), y parte un importe que no entra', async () => {
+    responder({ '/api/reportes/caja-medios': DATOS })
+    render(<MemoryRouter><CajaMedios /></MemoryRouter>)
+    const titulo = (await screen.findByText('Total Ingresos')).nextElementSibling as HTMLElement
+    const grilla = titulo.parentElement!.parentElement!.parentElement as HTMLElement   // título > cabecera > tarjeta > grilla
+    tiene(grilla, 'grid', '@4xl:grid-cols-3')
+    expect(clases(grilla)).not.toContain('sm:grid-cols-3')
+    // Un contenedor propio: la columna `auto` de la pantalla ya no hereda el mínimo de las tres tarjetas.
+    tiene(grilla.parentElement, '@container')
+    for (const t of ['Total Ingresos', 'Total Egresos', 'Saldo Neto']) tiene(screen.getByText(t).nextElementSibling, '[overflow-wrap:anywhere]')
   })
 })

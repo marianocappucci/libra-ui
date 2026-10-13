@@ -25,7 +25,8 @@ import { BadgeEstado } from '../badge-estado'
 import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
 import { SelectBuscable } from '../SelectBuscable'
-import { TACTIL, useAncho } from '../use-ancho'
+import { anchoMinimoDeColumnas } from '../tabla'
+import { TACTIL, TACTIL_BAJO_LG, useAncho, useBajoLg } from '../use-ancho'
 import { IVA_CONDITIONS } from '../facturas'
 import { fecha } from '@/lib/fechas'
 import { hoyISO } from '../fechas'
@@ -306,7 +307,7 @@ export function Ventas({
       : <span className="text-muted-foreground">—</span>
 
   const acciones = (v: Venta) => (
-    <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+    <div className={`flex justify-end gap-1 ${TACTIL_BAJO_LG}`} onClick={(e) => e.stopPropagation()}>
       <Button asChild size="icon" variant="outline" title="Ver venta"><Link to={rutaDeDetalle(v.id)} aria-label="Ver venta"><Eye /></Link></Button>
       <Button size="icon" variant="outline" title="Imprimir ticket" aria-label="Imprimir ticket" onClick={() => imprimir(`/ventas/${v.id}/ticket`)}><Printer /></Button>
       {v.pagos.length > 0 && rutaDeRecibo && (
@@ -321,6 +322,7 @@ export function Ventas({
   // Los botones que puede llegar a tener una fila: el umbral de las tarjetas es la suma de las columnas, así que la de acciones no reserva los que el producto no muestra.
   const botonesDeAccion = 2 + (rutaDeRecibo ? 1 : 0) + (puedeAnular ? 1 : 0)
 
+  const bajoLg = useBajoLg()
   const columns = useMemo<ColumnDef<Venta>[]>(() => [
     // 110 px: «POS-000010» en monoespaciada mide 84,3 px y con 100 la caja quedaba en 84 y se cortaba con «…» (medido en Chromium contra VentaLibra dev).
     { accessorKey: 'numero', header: sortableHeader('N°'), size: 110, minSize: 100, cell: ({ row }) => <span className="block truncate font-mono text-sm font-semibold text-primary" title={row.original.numero}>{row.original.numero}</span> },
@@ -359,16 +361,16 @@ export function Ventas({
     {
       id: 'actions',
       header: () => <div className="text-right">Acciones</div>,
-      size: anchoColumnaAcciones(botonesDeAccion),
-      minSize: anchoColumnaAcciones(botonesDeAccion),
+      size: anchoColumnaAcciones(botonesDeAccion, bajoLg),
+      minSize: anchoColumnaAcciones(botonesDeAccion, bajoLg),
       cell: ({ row }) => acciones(row.original),
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [puedeAnular, medios, botonesDeAccion])
+  ], [puedeAnular, medios, botonesDeAccion, bajoLg])
 
   // Como en Stock (ADR-016): la tabla pide la suma de los `size` de sus columnas; si el contenedor es más angosto, tarjetas en vez de scroll de costado. Sin medida (0), la tabla.
   const [medidaTabla, anchoTabla] = useAncho()
-  const anchoMinimoTabla = useMemo(() => columns.reduce((total, c) => total + (c.size ?? 0), 0), [columns])
+  const anchoMinimoTabla = useMemo(() => anchoMinimoDeColumnas(columns), [columns])
   const enTarjetas = anchoTabla > 0 && anchoTabla < anchoMinimoTabla
 
   const emptyMessage = tab === 'sin_facturar'

@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import type { ColumnDef } from '../data-table'
+import { TACTIL_BAJO_LG } from '../use-ancho'
 import { api, ApiError } from '../api-client'
 import { TIPOS_CUENTA_TESORERIA, type CuentaTesoreria, type MovimientoTesoreria } from './tipos'
 import { MovTipoBadge } from './Tesoreria'
@@ -221,7 +222,7 @@ export function TesoreriaDetalle() {
       size: anchoColumnaAcciones(1),
       minSize: anchoColumnaAcciones(1),
       cell: ({ row }) => (
-        <div className="flex justify-end">
+        <div className={`flex justify-end ${TACTIL_BAJO_LG}`}>
           <Button size="icon" variant="ghost" title="Eliminar movimiento" aria-label="Eliminar movimiento" onClick={() => setConfirmDeleteMov(row.original.id)}><Trash2 /></Button>
         </div>
       ),

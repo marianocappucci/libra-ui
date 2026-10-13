@@ -8,6 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import type { ColumnDef } from '../data-table'
+import { TACTIL_BAJO_LG } from '../use-ancho'
 import { Ban, Pencil, Plus, Star, Trash2, Undo2 } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
@@ -160,7 +161,7 @@ export function ListasPrecio({ rutaDelDetalle = (id) => `/listas-precio/${id}` }
       id: 'actions',
       header: () => <div className="text-right">Acciones</div>,
       cell: ({ row }) => (
-        <div className="flex justify-end gap-1">
+        <div className={`flex justify-end gap-1 ${TACTIL_BAJO_LG}`}>
           <Button asChild size="icon" variant="outline" title="Editar precios">
             <Link to={rutaDelDetalle(row.original.id)} aria-label="Editar precios"><Pencil /></Link>
           </Button>

@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import type { ColumnDef } from '../data-table'
+import { TACTIL_BAJO_LG } from '../use-ancho'
 import { api, ApiError } from '../api-client'
 import { formatoMoneda, type CajaConfig, type CajaMovimiento, type ResumenCaja } from './tipos'
 import { useMediosPago } from './medios-pago'
@@ -223,7 +224,7 @@ export function Caja() {
         size: anchoColumnaAcciones(1),
         minSize: anchoColumnaAcciones(1),
         cell: ({ row }) => (
-          <div className="flex justify-end">
+          <div className={`flex justify-end ${TACTIL_BAJO_LG}`}>
             {/* Un anulado no se vuelve a anular: el botón desaparece en vez de
                 quedar deshabilitado, que invita a apretarlo. */}
             {row.original.anulado ? null : (

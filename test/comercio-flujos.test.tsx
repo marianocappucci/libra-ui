@@ -162,7 +162,8 @@ describe('Stock: ajustes, historial inline y errores', () => {
     await user.type(within(dialogo).getByPlaceholderText('bolsa, caja…'), 'bolsa')
     await user.clear(within(dialogo).getByLabelText('Factor'))
     await user.type(within(dialogo).getByLabelText('Factor'), '500')
-    expect(within(dialogo).getByText(/Stock resultante: 1008/)).toBeTruthy()
+    // Con el formateador de cantidades del kit (`formatoCantidad`, es-AR): 8 + 2 × 500 es «1.008», con el punto de los miles.
+    expect(within(dialogo).getByText(/Stock resultante: 1\.008/)).toBeTruthy()
     await user.click(within(dialogo).getByRole('button', { name: 'Guardar movimiento' }))
     await waitFor(() => expect(pedidas()).toContain('POST /api/stock/1/ajuste'))
     expect(cuerpoDe('POST /api/stock/1/ajuste')).toMatchObject({ modo: 'entrada', cantidad: 2, unidad_compra: 'bolsa', factor: 500 })

@@ -33,7 +33,8 @@ import { BadgeEstado, type TonoEstado } from '../badge-estado'
 import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
 import { SelectBuscable } from '../SelectBuscable'
-import { TACTIL, useAncho } from '../use-ancho'
+import { anchoMinimoDeColumnas } from '../tabla'
+import { TACTIL, TACTIL_BAJO_LG, useAncho, useBajoLg } from '../use-ancho'
 // Alias: `fecha` ya es el estado del campo de fecha del ajuste de stock.
 import { fecha as formatearFecha } from '@/lib/fechas'
 import { hoyISO } from '../fechas'
@@ -50,6 +51,7 @@ import {
   Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
 import { formatEntero } from '@/lib/utils'
+import { formatoCantidad } from '../formatos'
 
 export const TIPO_BADGE: Record<string, { tono: TonoEstado; icon: typeof ArrowDownToLine }> = {
   entrada: { tono: 'ok', icon: ArrowDownToLine },
@@ -319,7 +321,7 @@ export function Stock({
 
   /** Los dos botones de cada producto, en la tabla y en la tarjeta. */
   const acciones = (p: StockItem) => (
-    <div className="flex justify-end gap-1">
+    <div className={`flex justify-end gap-1 ${TACTIL_BAJO_LG}`}>
       {rutaDeMovimientos ? (
         <Button asChild size="icon" variant="outline" title="Ver movimientos" aria-label="Ver movimientos">
           <Link to={rutaDeMovimientos(p.id)}><History /></Link>
@@ -331,6 +333,7 @@ export function Stock({
     </div>
   )
 
+  const bajoLg = useBajoLg()
   const columns = useMemo<ColumnDef<StockItem>[]>(() => [
     {
       accessorKey: 'nombre',
@@ -350,7 +353,8 @@ export function Stock({
     { accessorKey: 'stock_minimo', header: () => <div className="text-center">Mínimo</div>, size: 100, minSize: 85, cell: ({ row }) => <div className="truncate text-center text-muted-foreground">{row.original.stock_minimo > 0 ? formatEntero(row.original.stock_minimo) : '—'}</div> },
     ...depositos.map((d): ColumnDef<StockItem> => ({
       id: `deposito-${d.id}`,
-      header: sortableHeader(d.nombre),
+      // Hasta dos líneas antes del «…» (ADR-057): con varios depósitos de nombre largo, uno solo no alcanzaba para distinguirlos.
+      header: sortableHeader(d.nombre, { dosLineas: true }),
       size: 110,
       minSize: 80,
       // El NÚMERO y no el texto, para que ordenar por un depósito ordene por cantidad.
@@ -384,16 +388,16 @@ export function Stock({
     {
       id: 'actions',
       header: () => <div className="text-right">Acciones</div>,
-      size: anchoColumnaAcciones(2),
-      minSize: anchoColumnaAcciones(2),
+      size: anchoColumnaAcciones(2, bajoLg),
+      minSize: anchoColumnaAcciones(2, bajoLg),
       cell: ({ row }) => acciones(row.original),
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [rutaDeMovimientos, depositos])
+  ], [rutaDeMovimientos, depositos, bajoLg])
 
   // La tabla necesita la suma de los `size` de sus columnas (`DataTable` la fija como `min-width`): si el contenedor es más angosto, en vez de scrollear de costado
   // la pantalla pasa a tarjetas. Sin medida (0) se queda la tabla.
-  const anchoMinimoTabla = useMemo(() => columns.reduce((total, c) => total + (c.size ?? 0), 0), [columns])
+  const anchoMinimoTabla = useMemo(() => anchoMinimoDeColumnas(columns), [columns])
   const enTarjetas = anchoTabla > 0 && anchoTabla < anchoMinimoTabla
   const tarjetas = useMemo(() => {
     const orden_ = [...visibles]
@@ -526,13 +530,13 @@ export function Stock({
             <div className="flex gap-4">
               <div className="text-center">
                 <div className={`text-3xl font-bold ${stockBase <= 0 ? 'text-destructive' : (editing?.stock_minimo ?? 0) > 0 && stockBase <= (editing?.stock_minimo ?? 0) ? 'text-amber-800 dark:text-amber-400' : 'text-exito'}`}>
-                  {formatEntero(stockBase)}
+                  {formatoCantidad(stockBase)}
                 </div>
                 <div className="text-sm text-muted-foreground">Stock actual ({editing?.unidad})</div>
               </div>
               {(editing?.stock_minimo ?? 0) > 0 && (
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-muted-foreground">{formatEntero(editing?.stock_minimo ?? 0)}</div>
+                  <div className="text-3xl font-bold text-muted-foreground">{formatoCantidad(editing?.stock_minimo ?? 0)}</div>
                   <div className="text-sm text-muted-foreground">Mínimo</div>
                 </div>
               )}
@@ -605,7 +609,7 @@ export function Stock({
             {formError && <p className="text-sm text-destructive">{formError}</p>}
             {resultado !== null && (
               <p className={`text-sm ${resultado < 0 ? 'text-destructive' : 'text-exito'}`}>
-                Stock resultante: {String(Number(resultado.toFixed(3))).replace('.', ',')} {editing?.unidad}
+                Stock resultante: {formatoCantidad(resultado)} {editing?.unidad}
               </p>
             )}
           </div>
