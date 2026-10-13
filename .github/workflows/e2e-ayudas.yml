@@ -1,0 +1,64 @@
+name: Ayudas de e2e
+
+# `libra-ui/e2e` se publica COMPILADO (e2e/dist/, versionado): los consumidores instalan el tag desde git y Playwright no
+# transpila lo que vive en node_modules. Este workflow cuida las dos cosas que pueden salir mal:
+#  1. que lo commiteado en e2e/dist/ no coincida con el fuente (se editó e2e/src/ y no se corrió `npm run build:e2e`);
+#  2. que las ayudas no funcionen en un Chromium de verdad (sus tests corren contra un servidor de juguete, sin producto).
+# Sólo corre si el PR toca esa carpeta o el package.json; el CI de siempre (ci.yml) sigue cubriendo el resto.
+
+on:
+  pull_request:
+    branches: [develop, main]
+    paths:
+      - "e2e/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/e2e-ayudas.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ayudas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+
+      - name: e2e/dist coincide con el fuente
+        run: |
+          npm run build:e2e
+          if ! git diff --exit-code --stat -- e2e/dist || [ -n "$(git ls-files --others --exclude-standard e2e/dist)" ]; then
+            echo "::error::e2e/dist está desactualizado: correr 'npm run build:e2e' y commitear la salida"; exit 1
+          fi
+
+      - name: El export libra-ui/e2e resuelve a JS que Node carga
+        run: node --input-type=module -e "const m = await import('libra-ui/e2e'); for (const n of ['definirConfig','entrarComo','sinDesborde']) if (typeof m[n] !== 'function') throw new Error('falta ' + n)"
+
+      - name: Cache de los navegadores de Playwright
+        id: navegadores
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - name: Chromium
+        run: |
+          if [ "${{ steps.navegadores.outputs.cache-hit }}" = "true" ]; then npx playwright install-deps chromium; else npx playwright install --with-deps chromium; fi
+
+      - name: Tests de las ayudas
+        run: npm run test:e2e
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: e2e-ayudas
+          path: e2e/test-results/
+          if-no-files-found: ignore

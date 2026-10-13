@@ -38,6 +38,10 @@
     "./Terminos": "./src/Terminos.tsx",
     "./Usuarios": "./src/Usuarios.tsx",
     "./acciones": "./src/acciones.tsx",
+    "./e2e": {
+      "types": "./e2e/dist/index.d.ts",
+      "default": "./e2e/dist/index.js"
+    },
     "./agenda": "./src/agenda/index.ts",
     "./api-client": "./src/api-client.ts",
     "./auditoria-de-barra-lateral": "./src/auditoria-de-barra-lateral.ts",
@@ -132,6 +136,7 @@
   },
   "peerDependencies": {
     "@hookform/resolvers": "^5.4.0",
+    "@playwright/test": "^1.63.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.26.0",
@@ -143,10 +148,16 @@
     "tailwind-merge": "^3.6.0",
     "zod": "^4.4.3"
   },
+  "peerDependenciesMeta": {
+    "@playwright/test": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@hookform/resolvers": "^5.4.0",
     "@iconify-json/fluent": "^1.2.59",
     "@iconify-json/fluent-color": "^1.2.21",
+    "@playwright/test": "^1.63.0",
     "@svgr/core": "^8.1.0",
     "@svgr/plugin-jsx": "^8.1.0",
     "@tanstack/react-table": "^9.2.6",
@@ -181,7 +192,9 @@
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "marcas": "ACTUALIZAR_MARCAS=1 vitest run test/marcas.test.ts",
-    "typecheck": "tsc -p tsconfig.check.json --noEmit"
+    "typecheck": "tsc -p tsconfig.check.json --noEmit",
+    "build:e2e": "tsc -p e2e/tsconfig.json",
+    "test:e2e": "cd e2e && playwright test"
   },
   "dependencies": {
     "@tanstack/react-table": "^9.2.4",
