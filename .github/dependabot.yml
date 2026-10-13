@@ -31,6 +31,9 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "@vitest/coverage-v8"
         update-types: ["version-update:semver-major"]
+      # `@vitejs/plugin-react` NO se ignora: 6.1.2 entra limpio gracias al `overrides` de `@babel/plugin-transform-runtime`
+      # del package.json (ADR-055). Sin el `overrides`, npm elige Babel 8 para una dependencia opcional que el kit no usa,
+      # choca con el Babel 7 que piden los plugins de `@svgr` y da ERESOLVE al actualizar el lock.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

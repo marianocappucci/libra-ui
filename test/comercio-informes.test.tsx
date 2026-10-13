@@ -167,6 +167,30 @@ describe('Logs (actividad)', () => {
     await waitFor(() => expect(pedidas().at(-1)).toBe('GET /api/logs?page=1'))
   })
 
+  it('🔴 cada tipo del motor lleva su ícono, y «actividad» (Cambios) el lápiz y no el carrito genérico (ADR-055)', async () => {
+    const TIPOS = { // lo que manda `libracore.logs_router.TIPO_META` desde 1.157.0
+      venta: ['Venta', 'shopping-cart'], caja: ['Caja', 'piggy-bank'], stock: ['Stock', 'boxes'], factura: ['Factura', 'file-text'],
+      turno: ['Turno', 'clock'], remito: ['Remito', 'package-check'], presupuesto: ['Presupuesto', 'clipboard-list'],
+      actividad: ['Cambios', 'pencil-line'],
+    } as const
+    const meta = Object.fromEntries(Object.entries(TIPOS).map(([t, [label]]) => [t, { label, color: '#444' }]))
+    const filas = Object.keys(TIPOS).map((tipo, i) => (
+      { ts: `2026-09-02 10:00:0${i}`, fecha: '2026-09-02', tipo, descripcion: `fila ${tipo}`, monto: 0, usuario: 'Admin', turno_id: null }
+    ))
+    responder({ '/api/logs': { ...LOGS, actividad: filas, tipo_meta: meta, total: filas.length, total_pages: 1 } })
+    montar('/logs', <Logs />)
+    await screen.findByText('fila actividad')
+    const clase = (el: Element | null | undefined) => el?.querySelector('svg')?.getAttribute('class') ?? ''
+    for (const [tipo, [label, icono]] of Object.entries(TIPOS)) {
+      // La píldora del filtro y el badge de la fila llevan el mismo ícono.
+      expect(clase(screen.getByRole('button', { name: label }))).toContain(`lucide-${icono}`)
+      const celdaDelTipo = screen.getByText(`fila ${tipo}`).closest('tr')!.querySelectorAll('td')[1]
+      expect(clase(celdaDelTipo)).toContain(`lucide-${icono}`)
+    }
+    // Ningún tipo comparte ícono con otro: el lápiz es sólo de «Cambios».
+    expect(new Set(Object.values(TIPOS).map(([, icono]) => icono)).size).toBe(Object.keys(TIPOS).length)
+  })
+
   it('los accesos, el vacío y el error', async () => {
     responder({ '/api/logs': LOGS })
     const user = userEvent.setup()

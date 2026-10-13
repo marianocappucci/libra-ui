@@ -53,7 +53,7 @@ import {
 } from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { SelectBuscable } from '../SelectBuscable'
-import { formatoMoneda } from '../formatos'
+import { formatoCantidad, formatoMoneda } from '../formatos'
 
 const productoSchema = z.object({
   nombre: z.string().trim().min(1, 'El nombre es obligatorio'),
@@ -216,7 +216,7 @@ function leerMinimosAMandar(filas: MinimoEditable[], techo: number | null):
       }
       valor = Number(t)
       if (valor > MAX_MINIMO_SUCURSAL) {
-        return { error: `El mínimo de «${fila.sucursal}» no puede pasar de ${MAX_MINIMO_SUCURSAL.toLocaleString('es-AR')}.`, campo: idDelMinimo(fila.sucursal_id) }
+        return { error: `El mínimo de «${fila.sucursal}» no puede pasar de ${formatoCantidad(MAX_MINIMO_SUCURSAL)}.`, campo: idDelMinimo(fila.sucursal_id) }
       }
       if (techo !== null && valor > techo) {
         return { error: `El mínimo de «${fila.sucursal}» (${valor}) no puede ser mayor que el stock máximo (${techo}).`, campo: idDelMinimo(fila.sucursal_id) }

@@ -1011,7 +1011,7 @@ productos no tocan nada.
 
 **Cómo se adopta.** Subir el pin a 0.138.0. Cada producto puede cambiar sus copias locales de `Intl.NumberFormat('es-AR', …)` por `import { formatoMoneda, formatoCantidad } from 'libra-ui/formatos'`; no es obligatorio para subir el pin.
 
-**Nota (pesos enteros): `formatoMonedaEntera`.** «Otro formato» no era razón para dejarlo afuera: los pesos sin centavos también se repiten en los productos (contalibra, libradesk, libra-panel), cada uno con su `Intl`. `formatos.ts` suma `formatoMonedaEntera(valor: number)` (`$ 1.235`; ARS con `minimumFractionDigits: 0` y `maximumFractionDigits: 0`, redondea sin truncar), el `Dashboard` del kit la usa en lugar de su `formatCurrency` local —mismo texto, medido contra la función anterior— y el guard ya no exceptúa ningún archivo: también falla ante `maximumFractionDigits: 0` fuera de `formatos.ts`. El mínimo en 0 se escribe aunque Node 22 lo deduzca solo: con el mínimo por defecto de la moneda (2) y un máximo de 0, los motores más viejos tiran `RangeError`. Quien necesite los centavos usa `formatoMoneda`; un importe que se factura o se cobra no va en pesos enteros.
+**Nota (pesos enteros): `formatoMonedaEntera`.** «Otro formato» no era razón para dejarlo afuera: los pesos sin centavos también se repiten en los productos (contalibra, libradesk, libra-panel), cada uno con su `Intl`. `formatos.ts` suma `formatoMonedaEntera(valor: number)` (`$ 1.235`; ARS con `minimumFractionDigits: 0` y `maximumFractionDigits: 0`, redondea sin truncar), el `Dashboard` del kit la usa en lugar de su `formatCurrency` local —mismo texto, medido contra la función anterior— y el guard ya no exceptúa ningún archivo: también falla ante `maximumFractionDigits: 0` fuera de `formatos.ts`. El mínimo en 0 se escribe aunque Node 22 lo deduzca solo: con el mínimo por defecto de la moneda (2) y un máximo de 0, los motores más viejos tiran `RangeError`. Quien necesite los centavos usa `formatoMoneda`; un importe que se factura o se cobra no va en pesos enteros. *(0.143.0, ADR-055: el guard pasó a detectar cualquier `Intl.NumberFormat` o `toLocaleString` suelto, con una lista de excepciones justificadas.)*
 
 ## ADR-051 — `Vencimientos` separa `puedeMermar` de `puedeMover` (0.140.0)
 
@@ -1099,3 +1099,44 @@ que haber instalado `instalar_registro_de_errores` (libracore ≥ la que traiga 
 **Lo que no cubre.** No se probó en un navegador real (jsdom no dispara `onerror` como un navegador). Los errores de render sólo se atrapan debajo del
 `<ErrorBoundary>`: lo que falle fuera, en `main.tsx`, queda en `window.onerror`. El `release` es opcional y lo decide el producto; el backend registra
 siempre el de la imagen.
+
+## ADR-055 — Deuda del kit (0.143.0): el guard de formateo mira cualquier número suelto, `@vitejs/plugin-react` 6.1.2 entra con un `overrides` y «Cambios» tiene ícono
+
+Tres pendientes chicos que venían anotados en la bitácora, resueltos juntos. (El 054 se dejó libre: lo tiene otra rama.)
+
+### 1. El guard de ADR-050 detecta también las formas sueltas de formatear un número
+
+**Problema.** El guard de ADR-050 buscaba tres literales (`style: 'currency'`, `maximumFractionDigits: 0` y `maximumFractionDigits: 10`). Una copia nueva con otras opciones —`toLocaleString('es-AR', { maximumFractionDigits: 3 })`, un `Intl.NumberFormat` con cualquier tope— pasaba sin que ningún test lo notara.
+
+**Qué ya existe** (se miró antes de cambiar): `test/formatos.test.ts` (el guard, con control positivo) y `formatos.ts`. Las copias de Reposición, Vencimientos y reposicion-ordenes que la bitácora anotaba el 2026-10-11 **ya estaban migradas en 0.138.0** (ADR-050): las tres importan `formatoCantidad` de `../formatos` y ya no queda ahí ningún `Intl` ni `toLocaleString`. Los tests de esas pantallas ya fijaban decimales y miles (`1.234,5`, `0,25`, `1.248 unid.`); `reposicion-ordenes` no tenía ninguno con decimales y ahora sí.
+
+**Decisión.**
+1. El guard falla ante cualquier `Intl.NumberFormat` o `.toLocaleString(` fuera de `formatos.ts`, salvo las líneas de fecha (`dateStyle`/`timeStyle`) y los comentarios. Las excepciones son una lista explícita **con la cantidad de veces y la razón**: si aparece una más, o una excepción desaparece, el test falla (no se acumulan excepciones muertas).
+2. Excepciones legítimas hoy: `CampoArchivo` (tamaño de archivo: 0 decimales en bytes, 1 en KB/MB/GB), `TarjetaIndicador` (2, porcentajes con un decimal) y `Margen` (el porcentaje), `Productos.textoDecimal` (serializa un decimal en-US sin separadores para el campo: no es texto de pantalla), y `Compras`/`CompraDetalle.money` (monto sin símbolo con 2 decimales fijos).
+3. Una copia que sí había: `Productos` escribía el tope de los mínimos con `MAX_MINIMO_SUCURSAL.toLocaleString('es-AR')`. Pasó a `formatoCantidad` (mismo texto: «1.000.000.000», lo fija su test).
+
+**Lo que no cubre.** `Compras.money` y `CompraDetalle.money` son dos copias entre sí (monto sin símbolo, 2 decimales fijos) y quedan como excepción: no son `formatoCantidad` (que no fija decimales) ni `formatoMoneda` (que lleva el «$»). Si se quiere una sola, es un `formatoMonto` nuevo en `formatos.ts`. `Stock` arma «Stock resultante» a mano (`toFixed(3)` + `replace('.', ',')`, sin punto de miles): tampoco es `formatoCantidad` sin cambiar lo que se ve, y el guard no lo detecta (no usa `Intl`).
+
+### 2. `@vitejs/plugin-react` 6.1.2: el `ERESOLVE` no era de Babel 8 sino de una dependencia opcional, y se resuelve con un `overrides`
+
+**Causa (medida).** `npm install @vitejs/plugin-react@6.1.2` sobre el `package-lock.json` del kit da `ERESOLVE` (reproducido el 2026-10-13, npm 10.9.8). La cadena que muestra npm: `plugin-react@6.1.2` → *peerOptional* `@rolldown/plugin-babel` (`^0.1.7 || ^0.2.0`) → *peerOptional* `@babel/plugin-transform-runtime` (`^7.29.0 || ^8.0.0-rc.1`) → npm elige el más nuevo, el 8.0.6, que pide *peer* `@babel/core ^8`. Pero el kit tiene `@babel/core` 7.29.7 en la raíz, y **tiene que estar en la 7**: lo piden como peer `^7.0.0-0` los plugins de `@svgr/babel-preset` 8.1.0 (`@svgr/core` es lo que usa `unplugin-icons` para los íconos), y `@svgr/core` 8.1.0 es su última versión (no existe una que acepte Babel 8). Nada de eso se usa: el kit no usa `@rolldown/plugin-babel` ni el compilador de React (`vitest.config.ts` sólo llama a `react()`), y los tres peers de `plugin-react` son opcionales. El único cambio de `peerDependencies` entre 6.1.1 y 6.1.2 es `oxc-transform-react` (`^0.145.0` → `^0.152.0`, también opcional y no instalado): tampoco es la causa.
+
+**Por qué recién ahora.** Sin lockfile (`npm install` en un directorio vacío con el mismo `package.json`) resuelve a 6.1.2 sin error; el `ERESOLVE` aparece sólo cuando npm tiene que **cambiar** el nodo de `plugin-react` dentro de un lock existente. Por eso dependabot (#291) lo trajo roto y quedó afuera del bump de #303.
+
+**Decisión.** Se sube a `^6.1.2` y se agrega `"overrides": { "@babel/plugin-transform-runtime": "^7.29.0" }` al `package.json`: la cadena opcional queda en Babel 7, que es el que el kit tiene. No instala nada (el paquete sigue sin estar en el árbol) y el lock cambia **sólo** la entrada de `plugin-react` (más la versión del kit). Entra sin `--legacy-peer-deps` ni `--force`, y `npm ci` queda limpio. Sin el `overrides` el mismo `npm install` vuelve a dar `ERESOLVE` (medido). Se descartaron: ignorar 6.1.2 en dependabot (no es una versión mala: habría que ignorar cada versión nueva), agregar `@babel/core@8` (rompe los peers de `@svgr`) y `legacy-peer-deps` en `.npmrc` (esconde conflictos reales de todo el árbol).
+
+**Condición para sacar el `overrides`.** Cuando `@svgr/*` acepte Babel 8 (o el kit deje `@svgr`). Mientras tanto no estorba: un override sobre un paquete que no se instala no tiene efecto.
+
+**Los productos (relevado, no tocado).** En `origin/develop` y `origin/main`: contalibra, restolibra, gestiolibra, medlibra, libraclub, libradesk, libracargo, libra-backoffice y libra-panel ya tienen `^6.1.2` con 6.1.2 en el lock; **ventalibra sigue en `^6.1.1`/6.1.1**. Ninguno tiene `overrides`. `libraclub` es el único con `@svgr/core` (y `@babel/core` 7.29.7 en el lock): es el que va a chocar con la misma cadena en la próxima versión de `plugin-react` que tenga que actualizar; si pasa, lleva el mismo `overrides`.
+
+### 3. El tipo `actividad` («Cambios») de los Logs tiene su ícono
+
+**Problema.** `libracore` 1.157.0 suma el tipo `actividad` a `logs_router.TIPO_META` (altas y ediciones de la auditoría del motor, clientes hoy) y la pantalla de Logs de los productos comerciales le ponía el carrito de «Venta», que es el respaldo para un tipo desconocido.
+
+**Qué ya existe.** El mapeo tipo → ícono vive **en el kit**, no en el motor: `TIPO_ICONS` en `comercio/Logs.tsx`. `TIPO_META` sólo manda `label` y `color`. La pantalla de la raíz (`Logs.tsx`, accesos de `libraauth.auditoria`) es otra y no se toca. El kit usa `lucide-react` (ADR-038).
+
+**Decisión.** `actividad: PencilLine` (el lápiz con línea: un cambio hecho a un registro). Ningún otro tipo de Logs ni concepto del catálogo de identidad lo usa (`ScrollText` es la pantalla de Logs; `Pencil` y `History` ya significan otra cosa en Stock y MpBandeja). `actividad` **no** entra en `ALL_TIPOS`: ese listado es el respaldo mientras el motor no contestó, y un motor anterior a 1.157.0 no tiene el tipo; con el motor nuevo las píldoras salen de `tipo_meta` y aparece sola.
+
+**Tests** (`test/comercio-informes.test.tsx`, `test/formatos.test.ts`, `test/comercio-reposicion-ordenes.test.tsx`): los ocho tipos del motor llevan en la píldora del filtro **y** en la fila el ícono esperado y no se repite ninguno (se pone rojo sin el cambio: el lápiz sale como carrito); las cantidades del resumen de reposición salen con miles y coma (`1.250`, `1,5`); el guard falla con una copia nueva (se probó agregando una a `Reposicion.tsx`) y reconoce las formas de copia.
+
+**Cómo se adopta.** Subir el pin a 0.143.0. Un tipo nuevo del motor suma su fila en `TIPO_ICONS` en el mismo cambio que el kit.
