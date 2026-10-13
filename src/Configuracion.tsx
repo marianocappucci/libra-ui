@@ -53,7 +53,7 @@ import {
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsList, TabsTrigger } from './ui/tabs'
 import { TituloPantalla } from './titulo-pantalla'
 import { ICONOS } from './iconos-identidad'
 import { ArcaCard } from './configuracion/arca'

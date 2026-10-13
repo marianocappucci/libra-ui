@@ -17,7 +17,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { formatEntero } from '@/lib/utils'
-import { fecha } from '@/lib/fechas'
+import { fecha } from '../fechas'
 
 export type StockMovimientosProps = {
   /** A dónde vuelve el botón «Stock». */

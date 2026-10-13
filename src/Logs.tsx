@@ -53,7 +53,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import {
   Tabs, TabsContent, TabsList, TabsTrigger,
-} from '@/components/ui/tabs'
+} from './ui/tabs'
 import {
   BookText, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Inbox, LogIn,
   LogOut, Shield, ShieldAlert,

@@ -20,7 +20,8 @@ import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Check, PackageCheck } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
-import { fechaHora } from '@/lib/fechas'
+import { formatoMonto } from '../formatos'
+import { fechaHora } from '../fechas'
 import { BadgeEstado } from '../badge-estado'
 import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
@@ -32,7 +33,7 @@ import {
   type CuerpoDeRecepcion, type LineaDeRecepcion, type RecepcionPendiente,
 } from './recepcion-pendiente'
 import {
-  formatoCantidad, opcionesProducto, PURCHASE_ORDER_STATUS_LABELS, PURCHASE_ORDER_STATUS_TONO,
+  formatoCantidad, llegoElCosto, opcionesProducto, PURCHASE_ORDER_STATUS_LABELS, PURCHASE_ORDER_STATUS_TONO,
   PURCHASE_RECEIPT_STATUS_LABELS, PURCHASE_RECEIPT_STATUS_TONO,
   type Producto, type Deposito, type PurchaseOrder, type PurchaseReceipt, type Proveedor, type RecepcionRecibida,
 } from './tipos'
@@ -62,16 +63,23 @@ const MAX_LARGO_LOTE = 64
 const LOTE_Y_FECHA = 'Completá el lote y el vencimiento, o dejá los dos vacíos.'
 const FECHA_INVALIDA = 'La fecha de vencimiento no es válida.'
 
-function money(value: string | number): string {
-  return Number(value).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+/** `$1.234,50`, o «—» si el importe no llegó (el rol no tiene `costos.ver`). Nunca «$NaN». */
+function importe(valor: string | undefined): string {
+  return llegoElCosto(valor) ? `$${formatoMonto(valor as string)}` : '—'
 }
 
 export type CompraDetalleProps = {
   /** A dónde lleva «Volver». */
   rutaDeCompras?: string
+  /** Si la persona puede cargar líneas en la orden (`compras.escribir` en VentaLibra). Con `false` no se ofrece «Agregar línea». Sin la prop (`true`), la
+   *  pantalla es la de siempre. */
+  puedeEscribir?: boolean
+  /** Si la persona puede recibir mercadería (`compras.recibir` en VentaLibra: crear la recepción, cargarla y confirmarla). Con `false` no se ofrece «Recibir
+   *  mercadería» ni «Confirmar recepción»: el depósito lee las órdenes y recepciones, pero el motor le contesta 403. Sin la prop (`true`), la pantalla es la de siempre. */
+  puedeRecibir?: boolean
 }
 
-export function CompraDetalle({ rutaDeCompras = '/compras' }: CompraDetalleProps) {
+export function CompraDetalle({ rutaDeCompras = '/compras', puedeEscribir = true, puedeRecibir = true }: CompraDetalleProps) {
   const { id } = useParams<{ id: string }>()
   const orderId = Number(id)
 
@@ -168,14 +176,18 @@ export function CompraDetalle({ rutaDeCompras = '/compras' }: CompraDetalleProps
   }
 
   const pendientes = order?.items.filter((l) => Number(l.pending_quantity) > 0) ?? []
-  const puedeRecibir = !!order
+  const hayQueRecibir = !!order
     && pendientes.length > 0
     && order.status !== 'received' && order.status !== 'cancelled'
   // `is_fully_received()` da vacuamente `true` para una orden sin líneas
   // (`all()` sobre una colección vacía) -- el gate real de "se pueden seguir
   // agregando líneas" es el status, mismo criterio que valida
   // `erp.compras.agregar_linea_orden` del lado del motor.
-  const puedeAgregarLinea = order?.status === 'draft' || order?.status === 'sent'
+  const puedeAgregarLinea = puedeEscribir && (order?.status === 'draft' || order?.status === 'sent')
+
+  // Ninguna línea trae el costo ni el subtotal: el rol no ve costos (`costos.ver`) y las columnas sólo mostrarían «—» (o «$NaN»). Sin líneas no hay con qué decidir.
+  const sinUnitario = !!order && order.items.length > 0 && order.items.every((l) => !llegoElCosto(l.unit_cost))
+  const sinSubtotal = !!order && order.items.length > 0 && order.items.every((l) => !llegoElCosto(l.subtotal))
 
   if (loading || !order) {
     return (
@@ -198,7 +210,7 @@ export function CompraDetalle({ rutaDeCompras = '/compras' }: CompraDetalleProps
           </BadgeEstado>
         </TituloPantalla>
         <div className="flex flex-wrap gap-2">
-          {puedeRecibir && (
+          {puedeRecibir && hayQueRecibir && (
             <Button size="sm" onClick={() => { setAviso(null); setRecibirOpen(true) }}>
               <PackageCheck />Recibir mercadería
             </Button>
@@ -233,13 +245,13 @@ export function CompraDetalle({ rutaDeCompras = '/compras' }: CompraDetalleProps
                 <TableHead>Pedido</TableHead>
                 <TableHead>Recibido</TableHead>
                 <TableHead>Pendiente</TableHead>
-                <TableHead>Costo unitario</TableHead>
-                <TableHead>Subtotal</TableHead>
+                {!sinUnitario && <TableHead>Costo unitario</TableHead>}
+                {!sinSubtotal && <TableHead>Subtotal</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {order.items.length === 0 && (
-                <TableRow><TableCell colSpan={6} className="text-center text-sm text-muted-foreground">Sin líneas todavía.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6 - Number(sinUnitario) - Number(sinSubtotal)} className="text-center text-sm text-muted-foreground">Sin líneas todavía.</TableCell></TableRow>
               )}
               {order.items.map((line, idx) => (
                 <TableRow key={idx}>
@@ -247,8 +259,8 @@ export function CompraDetalle({ rutaDeCompras = '/compras' }: CompraDetalleProps
                   <TableCell className="tabular-nums">{formatoCantidad(line.quantity_ordered)}</TableCell>
                   <TableCell className="tabular-nums">{formatoCantidad(line.quantity_received)}</TableCell>
                   <TableCell className="tabular-nums">{formatoCantidad(line.pending_quantity)}</TableCell>
-                  <TableCell>${money(line.unit_cost)}</TableCell>
-                  <TableCell>${money(line.subtotal)}</TableCell>
+                  {!sinUnitario && <TableCell>{importe(line.unit_cost)}</TableCell>}
+                  {!sinSubtotal && <TableCell>{importe(line.subtotal)}</TableCell>}
                 </TableRow>
               ))}
             </TableBody>
@@ -284,6 +296,7 @@ export function CompraDetalle({ rutaDeCompras = '/compras' }: CompraDetalleProps
       <RecepcionesDeLaOrden
         receipts={receipts}
         locations={locations}
+        puedeConfirmar={puedeRecibir}
         onConfirmada={async () => { await Promise.all([cargarOrden(), cargarRecepciones()]) }}
       />
 
@@ -328,6 +341,8 @@ function RecibirMercaderiaDialog({
     () => order.items.filter((l) => Number(l.pending_quantity) > 0),
     [order],
   )
+  // Si las líneas llegaron sin `unit_cost` (el rol no tiene `costos.ver`) no hay costo que precargar ni que editar: la columna sobra y el cuerpo no lo manda.
+  const conCosto = pendientes.some((l) => llegoElCosto(l.unit_cost))
   /** ¿Se ofrecen «Lote» y «Vencimiento» en la línea? Sí si vence o no se sabe; no si se sabe que no. */
   const venceDe = (itemId: number) => vencimientoDe(itemId) !== 'no'
 
@@ -486,7 +501,7 @@ function RecibirMercaderiaDialog({
                 <TableHead>Producto</TableHead>
                 <TableHead>Pendiente</TableHead>
                 <TableHead>Recibir</TableHead>
-                <TableHead>Costo unitario</TableHead>
+                {conCosto && <TableHead>Costo unitario</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -508,18 +523,20 @@ function RecibirMercaderiaDialog({
                         />
                         {err && <p className="text-xs text-destructive">{err}</p>}
                       </TableCell>
-                      <TableCell>
-                        <Input
-                          value={costos[linea.item_id] ?? ''}
-                          onChange={(e) => setCostos((prev) => ({ ...prev, [linea.item_id]: e.target.value }))}
-                          aria-label={`Costo unitario de ${itemName(linea.item_id)}`}
-                          className="w-28 tabular-nums"
-                        />
-                      </TableCell>
+                      {conCosto && (
+                        <TableCell>
+                          <Input
+                            value={costos[linea.item_id] ?? ''}
+                            onChange={(e) => setCostos((prev) => ({ ...prev, [linea.item_id]: e.target.value }))}
+                            aria-label={`Costo unitario de ${itemName(linea.item_id)}`}
+                            className="w-28 tabular-nums"
+                          />
+                        </TableCell>
+                      )}
                     </TableRow>
                     {vence && (
                       <TableRow>
-                        <TableCell colSpan={4} className="pt-0">
+                        <TableCell colSpan={conCosto ? 4 : 3} className="pt-0">
                           {vencimientoDe(linea.item_id) === 'desconocido' && (
                             <p className="mb-1 text-xs text-muted-foreground">
                               No pudimos saber si este producto vence; si vence, cargá lote y vencimiento.
@@ -652,8 +669,8 @@ function IntentoPendiente({ pendiente, itemName, depositoNombre, busy, confirman
  *  que puede haber quedado de un "Recibir mercadería" cortado a mitad de
  *  camino- ofrece acá su propio "Confirmar", con el depósito. */
 function RecepcionesDeLaOrden({
-  receipts, locations, onConfirmada,
-}: { receipts: PurchaseReceipt[]; locations: Deposito[]; onConfirmada: () => void | Promise<void> }) {
+  receipts, locations, puedeConfirmar, onConfirmada,
+}: { receipts: PurchaseReceipt[]; locations: Deposito[]; puedeConfirmar: boolean; onConfirmada: () => void | Promise<void> }) {
   const [confirmando, setConfirmando] = useState<PurchaseReceipt | null>(null)
 
   return (
@@ -692,7 +709,7 @@ function RecepcionesDeLaOrden({
                   {/* Sin líneas el motor rechaza la confirmación ("no se puede
                       confirmar una recepción sin líneas"): ofrecer el botón
                       sería mandar a un error seguro. */}
-                  {receipt.status === 'draft' && receipt.items.length > 0 && (
+                  {puedeConfirmar && receipt.status === 'draft' && receipt.items.length > 0 && (
                     <Button size="icon" variant="outline" className="size-8"
                             title="Confirmar recepción" aria-label="Confirmar recepción"
                             onClick={() => setConfirmando(receipt)}>

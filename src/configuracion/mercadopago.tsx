@@ -36,7 +36,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
-import { fechaHora } from '@/lib/fechas'
+import { fechaHora } from '../fechas'
 
 /** Lo que devuelve `GET {basePath}`. Los dos secretos vienen enmascarados y
  *  acompañados de un booleano que dice si hay algo cargado. */

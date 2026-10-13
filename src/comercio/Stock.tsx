@@ -36,8 +36,7 @@ import { SelectBuscable } from '../SelectBuscable'
 import { anchoMinimoDeColumnas } from '../tabla'
 import { TACTIL, TACTIL_BAJO_LG, useAncho, useBajoLg } from '../use-ancho'
 // Alias: `fecha` ya es el estado del campo de fecha del ajuste de stock.
-import { fecha as formatearFecha } from '@/lib/fechas'
-import { hoyISO } from '../fechas'
+import { hoyISO, fecha as formatearFecha } from '../fechas'
 import {
   opcionesProducto, TIPO_MOVIMIENTO_LABELS, type DepositoColumna, type MovimientoStock, type StockItem,
   type StockListado,
@@ -96,6 +95,9 @@ export type StockProps = {
   /** Un buscador por nombre y un «sólo los que tienen stock» sobre la lista: con muchos productos y varios
    *  depósitos la pregunta es «¿de dónde saco esto?». Sin esto, la lista es la de siempre. */
   conFiltros?: boolean
+  /** Si la persona puede ajustar el stock (`stock.ajustar` en VentaLibra). Con `false` no se ofrece «Ajustar stock», ni en la tabla ni en las
+   *  tarjetas, y queda «Ver movimientos». El vendedor ve el stock pero el motor le contesta 403 al ajuste. Sin la prop (`true`), la pantalla es la de siempre. */
+  puedeAjustar?: boolean
 }
 
 /** Bajo este ancho el historial de movimientos pasa de tabla a lista (con las columnas que hacen wrap la tabla entra desde ahí). */
@@ -142,7 +144,7 @@ function TarjetaDeStock({ p, depositos, acciones }: { p: StockItem; depositos: D
 }
 
 export function Stock({
-  rutaDeMovimientos, conConversionDeUnidad = false, rutaDeProductos = '/productos', conFiltros = false,
+  rutaDeMovimientos, conConversionDeUnidad = false, rutaDeProductos = '/productos', conFiltros = false, puedeAjustar = true,
 }: StockProps) {
   const [productos, setProductos] = useState<StockItem[]>([])
   const [alertas, setAlertas] = useState<StockItem[]>([])
@@ -319,7 +321,7 @@ export function Stock({
     return stockBase - val
   }, [editing, modo, cantidad, factor, conConversionDeUnidad, stockBase])
 
-  /** Los dos botones de cada producto, en la tabla y en la tarjeta. */
+  /** Los botones de cada producto, en la tabla y en la tarjeta: los dos, o sólo «Ver movimientos» si no puede ajustar. */
   const acciones = (p: StockItem) => (
     <div className={`flex justify-end gap-1 ${TACTIL_BAJO_LG}`}>
       {rutaDeMovimientos ? (
@@ -329,7 +331,9 @@ export function Stock({
       ) : (
         <Button size="icon" variant="outline" title="Ver movimientos" aria-label="Ver movimientos" onClick={() => verMovimientos(p.id)}><History /></Button>
       )}
-      <Button size="icon" variant="outline" title="Ajustar stock" aria-label="Ajustar stock" onClick={() => abrirAjuste(p)}><Pencil /></Button>
+      {puedeAjustar && (
+        <Button size="icon" variant="outline" title="Ajustar stock" aria-label="Ajustar stock" onClick={() => abrirAjuste(p)}><Pencil /></Button>
+      )}
     </div>
   )
 
@@ -388,12 +392,12 @@ export function Stock({
     {
       id: 'actions',
       header: () => <div className="text-right">Acciones</div>,
-      size: anchoColumnaAcciones(2, bajoLg),
-      minSize: anchoColumnaAcciones(2, bajoLg),
+      size: anchoColumnaAcciones(puedeAjustar ? 2 : 1, bajoLg),
+      minSize: anchoColumnaAcciones(puedeAjustar ? 2 : 1, bajoLg),
       cell: ({ row }) => acciones(row.original),
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [rutaDeMovimientos, depositos, bajoLg])
+  ], [rutaDeMovimientos, depositos, bajoLg, puedeAjustar])
 
   // La tabla necesita la suma de los `size` de sus columnas (`DataTable` la fija como `min-width`): si el contenedor es más angosto, en vez de scrollear de costado
   // la pantalla pasa a tarjetas. Sin medida (0) se queda la tabla.

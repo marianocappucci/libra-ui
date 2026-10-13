@@ -333,3 +333,58 @@ describe('los íconos del catálogo en el menú y en los títulos', () => {
     })
   })
 })
+
+// ── El catálogo de indicadores en los títulos (ADR-058, v0.146.0) ────────
+//
+// `INDICADORES.x` (ADR-038) es otra forma de escribir el ícono del título. Antes `comparable` sólo sabía resolver `X.concepto` contra el catálogo
+// de identidad: un concepto que sólo existe como indicador (`stockBajo`, `montoVendido`) quedaba sin resolver y se comparaba por su nombre
+// escrito, así que una pantalla correcta salía como desajuste.
+
+describe('los íconos de INDICADORES en el menú y en los títulos', () => {
+  let raiz: string
+  beforeAll(() => {
+    raiz = mkdtempSync(join(tmpdir(), 'auditoria-indicadores-'))
+    mkdirSync(join(raiz, 'components'), { recursive: true })
+    mkdirSync(join(raiz, 'pages'), { recursive: true })
+    writeFileSync(join(raiz, 'components', 'Layout.tsx'), `
+      import { PackageMinus, TrendingUp, Wallet } from 'lucide-react'
+      const NAV = [
+        { to: '/stock-bajo', label: 'Stock bajo', icon: PackageMinus },
+        { to: '/margen', label: 'Margen', icon: TrendingUp },
+        { to: '/egresos', label: 'Egresos', icon: ICONOS.egresos },
+        { to: '/vendido', label: 'Vendido', icon: Wallet },
+        { to: '/inventado', label: 'Inventado', icon: Wallet },
+      ]`)
+    writeFileSync(join(raiz, 'App.tsx'), `
+      <Route path="/stock-bajo" element={<ProtectedRoute><StockBajo /></ProtectedRoute>} />
+      <Route path="/margen" element={<ProtectedRoute><Margen /></ProtectedRoute>} />
+      <Route path="/egresos" element={<ProtectedRoute><Egresos /></ProtectedRoute>} />
+      <Route path="/vendido" element={<ProtectedRoute><Vendido /></ProtectedRoute>} />
+      <Route path="/inventado" element={<ProtectedRoute><Inventado /></ProtectedRoute>} />`)
+    // Control NEGATIVO: `stockBajo` y `margen` sólo existen como indicador y son `PackageMinus` y `TrendingUp`, los mismos del menú. Cumplen.
+    writeFileSync(join(raiz, 'pages', 'StockBajo.tsx'), '<TituloPantalla icono={INDICADORES.stockBajo}>Stock bajo</TituloPantalla>')
+    writeFileSync(join(raiz, 'pages', 'Margen.tsx'), '<TituloPantalla icono={INDICADORES.margen}>Margen</TituloPantalla>')
+    // Un sinónimo (`gastos` es `egresos`) lleva el ícono de su concepto: el menú por identidad y el título por indicadores. Cumple.
+    writeFileSync(join(raiz, 'pages', 'Egresos.tsx'), '<TituloPantalla icono={INDICADORES.gastos}>Egresos</TituloPantalla>')
+    // Control POSITIVO: el título dice `montoVendido` (DollarSign) y el menú `Wallet`. Es un desajuste real y se sigue detectando.
+    writeFileSync(join(raiz, 'pages', 'Vendido.tsx'), '<TituloPantalla icono={INDICADORES.montoVendido}>Vendido</TituloPantalla>')
+    // Un concepto que no existe en el catálogo no se inventa un ícono: se compara por su nombre y no coincide con el del menú.
+    writeFileSync(join(raiz, 'pages', 'Inventado.tsx'), '<TituloPantalla icono={INDICADORES.noExiste}>Inventado</TituloPantalla>')
+  })
+  afterAll(() => rmSync(raiz, { recursive: true, force: true }))
+
+  it('🔴 un uso correcto de `INDICADORES.x` no da un desajuste falso, y uno equivocado sí', () => {
+    const a = auditarTitulos(raiz)
+    expect(a.pantallas).toBe(5)
+    expect(a.conIcono).toBe(3)
+    expect(a.distinto.map((d) => d.pantalla)).toEqual(['Inventado', 'Vendido'])
+    expect(a.sinIcono).toEqual([])
+  })
+
+  it('🔴 el menú contra el catálogo también entiende `INDICADORES.x`', () => {
+    // `INDICADORES.gastos` es el ícono de `egresos`: el menú puede escribirlo así y cumple; con otro concepto, no.
+    const layout = "{ to: '/egresos', icon: INDICADORES.gastos },"
+    expect(auditarMenuContraCatalogo(layout, { '/egresos': 'egresos' })).toEqual({ medidas: 1, mal: [], faltan: [] })
+    expect(auditarMenuContraCatalogo(layout, { '/egresos': 'caja' }).mal.map((m) => m.ruta)).toEqual(['/egresos'])
+  })
+})

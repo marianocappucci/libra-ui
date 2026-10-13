@@ -24,8 +24,7 @@ import {
 } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
-import { fecha } from '@/lib/fechas'
-import { hoyISO } from '../fechas'
+import { hoyISO, fecha } from '../fechas'
 import { SelectBuscable } from '../SelectBuscable'
 import { formatoMoneda } from '../formatos'
 

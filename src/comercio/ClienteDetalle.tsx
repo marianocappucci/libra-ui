@@ -35,7 +35,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog'
 import { ArrowLeft, ArrowLeftRight, BarChart3, CheckCircle2, Eye, Inbox, Loader2, Pencil, Plus, Search, Trash2, Undo2, XCircle } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
-import { fecha } from '@/lib/fechas'
+import { fecha } from '../fechas'
 import { SelectBuscable } from '../SelectBuscable'
 import { formatoMoneda } from '../formatos'
 

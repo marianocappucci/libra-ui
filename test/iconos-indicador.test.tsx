@@ -6,7 +6,7 @@
 import { render } from '@testing-library/react'
 import {
   Banknote, BadgePercent, Bell, CircleArrowDown, CircleArrowUp, ClipboardList, DollarSign, Droplets, FileBadge, FilePenLine, Gauge, Headset,
-  Hourglass, Monitor, PackageMinus, Route, ShieldCheck, Store, Ticket, Timer, TrendingUp, Truck, Weight, Wrench,
+  Hourglass, Monitor, PackageMinus, PackageOpen, Route, ShieldCheck, Store, Ticket, Timer, TrendingUp, Truck, Weight, Wrench,
   type LucideIcon,
 } from 'lucide-react'
 import { describe, expect, it } from 'vitest'
@@ -26,6 +26,7 @@ const PROPIOS = {
   montoVendido: DollarSign,
   porCobrar: Hourglass,
   margen: TrendingUp,
+  costo: PackageOpen,
   stockBajo: PackageMinus,
   tiempo: Timer,
   recordatorios: Bell,
@@ -76,7 +77,7 @@ describe('los conceptos propios', () => {
   it('🔴 son exactamente los de la tabla, ni uno más ni uno menos', () => {
     expect(Object.keys(ICONOS_PROPIOS_DE_INDICADOR).sort()).toEqual([...NOMBRES_PROPIOS].sort())
     // El control: la tabla no está vacía, así que la igualdad de arriba mide algo.
-    expect(NOMBRES_PROPIOS).toHaveLength(22)
+    expect(NOMBRES_PROPIOS).toHaveLength(23)
   })
 
   it.each(NOMBRES_PROPIOS)('🔴 «%s» lleva el ícono de la tabla', (concepto) => {
@@ -147,7 +148,7 @@ describe('el catálogo entero', () => {
 
   it('🔴 tiene los de identidad, los propios y los sinónimos', () => {
     expect([...TODOS].sort()).toEqual([...DE_IDENTIDAD, ...NOMBRES_PROPIOS, ...NOMBRES_SINONIMOS].sort())
-    expect(TODOS).toHaveLength(33 + 22 + 11)
+    expect(TODOS).toHaveLength(33 + 23 + 11)
   })
 
   it('🔴 dos conceptos no comparten ícono, salvo los sinónimos (que son el mismo concepto) y proveedores/fleteros (que se separan en LibraCargo)', () => {

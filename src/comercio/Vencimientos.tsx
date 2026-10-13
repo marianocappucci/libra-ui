@@ -49,7 +49,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, ApiError } from '../api-client'
 import { SelectBuscable } from '../SelectBuscable'
-import { ZONA_AR } from '../fechas'
+import { ZONA_AR, fecha } from '../fechas'
 import { TituloPantalla } from '../titulo-pantalla'
 import { nuevaClaveDeOperacion } from './clave-de-operacion'
 import { esFechaISOValida } from './fecha-iso'
@@ -71,7 +71,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { fecha } from '@/lib/fechas'
 import { CalendarClock, CalendarPlus, Check, Download, PackagePlus, TriangleAlert, Trash2 } from 'lucide-react'
 
 const RUTA = '/api/vencimientos'

@@ -30,8 +30,7 @@ import { DataTable, sortableHeader } from '../data-table'
 import { Pencil, ArrowLeft, Plus, Inbox, Trash2 } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
-import { fecha } from '@/lib/fechas'
-import { hoyISO } from '../fechas'
+import { hoyISO, fecha } from '../fechas'
 import { formatoMoneda } from '../formatos'
 
 const estadoTono: Record<Egreso['estado'], TonoEstado> = {

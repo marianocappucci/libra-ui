@@ -19,8 +19,7 @@ import { ICONOS } from '../iconos-identidad'
 import { IconoIndicador } from '../IconoIndicador'
 import { TarjetaIndicador } from '../TarjetaIndicador'
 import { iconoDe } from '../medios-pago'
-import { fecha } from '@/lib/fechas'
-import { hoyISO, primerDiaDelMesISO } from '../fechas'
+import { hoyISO, primerDiaDelMesISO, fecha } from '../fechas'
 import { formatoMoneda } from '../formatos'
 
 // 🔴 Acá había un `MEDIO_LABELS` y un `MEDIO_ICONS` propios: dos copias más del
@@ -243,28 +242,31 @@ export function Reportes() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <table className="w-full text-sm">
-                  <thead className="border-b text-muted-foreground">
-                    <tr>
-                      <th className="p-3 text-left font-medium">Código</th>
-                      <th className="p-3 text-left font-medium">Producto</th>
-                      <th className="p-3 text-right font-medium">Stock actual</th>
-                      <th className="p-3 text-right font-medium">Mínimo</th>
-                      <th className="p-3 text-right font-medium">Faltante</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.stock_bajo.map((p) => (
-                      <tr key={p.id} className="border-b last:border-0">
-                        <td className="p-3 text-muted-foreground">{p.codigo || '—'}</td>
-                        <td className="p-3">{p.nombre}</td>
-                        <td className="p-3 text-right font-semibold text-destructive">{p.stock_actual}</td>
-                        <td className="p-3 text-right">{p.stock_minimo}</td>
-                        <td className="p-3 text-right text-destructive">{p.stock_minimo - p.stock_actual}</td>
+                {/* Con su propio scroll, como las otras tres tablas de la pantalla: un nombre largo scrollea la tabla y no ensancha la página (ADR-058). */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="border-b text-muted-foreground">
+                      <tr>
+                        <th className="p-3 text-left font-medium">Código</th>
+                        <th className="p-3 text-left font-medium">Producto</th>
+                        <th className="p-3 text-right font-medium">Stock actual</th>
+                        <th className="p-3 text-right font-medium">Mínimo</th>
+                        <th className="p-3 text-right font-medium">Faltante</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {data.stock_bajo.map((p) => (
+                        <tr key={p.id} className="border-b last:border-0">
+                          <td className="p-3 text-muted-foreground">{p.codigo || '—'}</td>
+                          <td className="p-3">{p.nombre}</td>
+                          <td className="p-3 text-right font-semibold text-destructive">{p.stock_actual}</td>
+                          <td className="p-3 text-right">{p.stock_minimo}</td>
+                          <td className="p-3 text-right text-destructive">{p.stock_minimo - p.stock_actual}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </CardContent>
             </Card>
           )}

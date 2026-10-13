@@ -35,8 +35,7 @@ import {
 import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
 // Alias: `fecha` ya es el estado del campo de fecha del formulario de pago.
-import { fecha as formatearFecha } from '@/lib/fechas'
-import { hoyISO } from '../fechas'
+import { hoyISO, fecha as formatearFecha } from '../fechas'
 import { SelectBuscable } from '../SelectBuscable'
 import { formatoMoneda } from '../formatos'
 

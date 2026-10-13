@@ -9,8 +9,9 @@
 // contesta `repetida: true`.
 import { ApiError } from '../api-client'
 
-/** Una línea de lo que se recibe. `quantity` y `unit_cost` viajan como texto (lo que tipeó la persona, sin pasar por `number`). */
-export type LineaDeRecepcion = { item_id: number; quantity: string; unit_cost: string; lot_code?: string; expires_at?: string }
+/** Una línea de lo que se recibe. `quantity` y `unit_cost` viajan como texto (lo que tipeó la persona, sin pasar por `number`). `unit_cost` no va si la
+ *  orden llegó sin costos (el rol no tiene `costos.ver`): no hay uno que precargar y no se manda. */
+export type LineaDeRecepcion = { item_id: number; quantity: string; unit_cost?: string; lot_code?: string; expires_at?: string }
 
 /** El cuerpo de `POST /api/purchase-receipts/recibir`. */
 export type CuerpoDeRecepcion = {

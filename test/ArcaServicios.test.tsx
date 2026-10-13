@@ -112,6 +112,10 @@ async function montarEnCtg() {
   return usuario
 }
 
+/** El HTML sin los ids que genera Radix (`radix-_r_1_-trigger-general`): salen de un contador que avanza con cada render del proceso, así que dos renders del mismo árbol
+ *  no los comparten. Desde 0.146.0 las pestañas son las reales del kit (`ui/tabs`, ADR-058) y no el stub; sin esto el snapshot dependería del orden de los tests. */
+const sinIdsDeRadix = (html: string) => html.replace(/(?<![\w-])radix-[^"]*/g, 'radix-ID')
+
 describe('ARCA — con la facturación sola, la tarjeta es la de siempre', () => {
   it('🔴 el HTML de la pestaña General de un producto que sólo factura no cambia de rebote (snapshot)', async () => {
     // Fija el HTML de la pestaña General de un producto que sólo factura. Si esto se pone rojo,
@@ -121,21 +125,21 @@ describe('ARCA — con la facturación sola, la tarjeta es la de siempre', () =>
     servir(null)
     const { container } = render(<ArcaCard producto="Contalibra" />)
     await screen.findByLabelText(/^CUIT$/)
-    expect(container.innerHTML).toMatchSnapshot()
+    expect(sinIdsDeRadix(container.innerHTML)).toMatchSnapshot()
   })
 
   it('un backend que lista SÓLO la facturación se ve idéntico al que no tiene la ruta', async () => {
     servir(null)
     const sin = render(<ArcaCard producto="Contalibra" />)
     await screen.findByLabelText(/^CUIT$/)
-    const htmlSin = sin.container.innerHTML
+    const htmlSin = sinIdsDeRadix(sin.container.innerHTML)
     sin.unmount()
 
     servir([FACTURACION])
     const con = render(<ArcaCard producto="Contalibra" />)
     await screen.findByLabelText(/^CUIT$/)
     await waitFor(() => expect(pedidos.some((p) => p.url.endsWith('/servicios'))).toBe(true))
-    expect(con.container.innerHTML).toBe(htmlSin)
+    expect(sinIdsDeRadix(con.container.innerHTML)).toBe(htmlSin)
   })
 
   it('el título y los campos conservan sus nombres de siempre', async () => {

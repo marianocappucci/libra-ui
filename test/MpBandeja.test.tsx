@@ -175,12 +175,8 @@ describe('la bandeja compartida', () => {
     })
   })
 
-  it('🔴 la fecha se formatea con el helper del PRODUCTO', async () => {
-    // El kit no trae formateador de presentación a propósito: `src/fechas.ts`
-    // dice que `dd-mm-aaaa` vive en el helper único de cada producto. Este
-    // componente lo toma de `@/lib/fechas`, que resuelve contra el consumidor.
-    // Si alguien lo reemplazara por un formateador propio del kit, los tres
-    // productos perderían su única fuente de formato y esto se pondría rojo.
+  it('🔴 la fecha se escribe `dd-mm-aaaa`, con el formateador del kit', async () => {
+    // Hasta 0.145.0 el formato vivía en el helper de cada producto (`@/lib/fechas`) y el kit se lo pedía prestado; desde 0.146.0 es del kit (ADR-058).
     const user = userEvent.setup()
     await montar()
     await user.click(screen.getByRole('tab', { name: /cobros sincronizados/i }))

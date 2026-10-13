@@ -9,7 +9,7 @@ import { TACTIL_BAJO_LG } from '../use-ancho'
 import { api, ApiError } from '../api-client'
 import { formatoMoneda, type CajaConfig, type CajaMovimiento, type ResumenCaja } from './tipos'
 import { useMediosPago } from './medios-pago'
-import { Card, CardContent, CardDescription } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -21,11 +21,12 @@ import {
 } from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { anchoColumnaAcciones, DataTable, sortableHeader } from '../data-table'
-import { ArrowDownCircle, ArrowUpCircle, Check, Filter, PiggyBank, Plus, Receipt, Ban, Wallet, X } from 'lucide-react'
+import { Check, Filter, Plus, Ban, X } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
-import { fecha } from '@/lib/fechas'
-import { hoyISO, primerDiaDelMesISO } from '../fechas'
+import { IconoIndicador } from '../IconoIndicador'
+import { TarjetaIndicador } from '../TarjetaIndicador'
+import { hoyISO, primerDiaDelMesISO, fecha } from '../fechas'
 import { SelectBuscable } from '../SelectBuscable'
 
 export function Caja() {
@@ -163,8 +164,8 @@ export function Caja() {
         header: 'Tipo',
         cell: ({ row }) => (
           row.original.tipo === 'ingreso'
-            ? <BadgeEstado tono="ok"><ArrowDownCircle />Ingreso</BadgeEstado>
-            : <BadgeEstado tono="negativo"><ArrowUpCircle />Egreso</BadgeEstado>
+            ? <BadgeEstado tono="ok"><IconoIndicador concepto="cobros" />Ingreso</BadgeEstado>
+            : <BadgeEstado tono="negativo"><IconoIndicador concepto="pagos" />Egreso</BadgeEstado>
         ),
       },
       {
@@ -183,7 +184,7 @@ export function Caja() {
             ) : null}
             {row.original.factura_id && (
               <Link to={`/facturas/${row.original.factura_id}`} className="text-muted-foreground hover:text-primary" title="Ver factura">
-                <Receipt className="size-3.5" />
+                <IconoIndicador concepto="comprobantes" className="size-3.5" />
               </Link>
             )}
           </span>
@@ -248,7 +249,7 @@ export function Caja() {
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2"><PiggyBank className="size-4 text-primary" />Nuevo movimiento de caja</DialogTitle>
+              <DialogTitle className="flex items-center gap-2"><IconoIndicador concepto="caja" className="text-primary" />Nuevo movimiento de caja</DialogTitle>
             </DialogHeader>
             <div className="grid gap-3">
               <div className="grid grid-cols-2 gap-3">
@@ -257,8 +258,8 @@ export function Caja() {
                   <Select value={tipoMov} onValueChange={setTipoMov}>
                     <SelectTrigger id="mov-tipo" aria-label="Tipo"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="ingreso"><ArrowDownCircle />Ingreso</SelectItem>
-                      <SelectItem value="egreso"><ArrowUpCircle />Egreso</SelectItem>
+                      <SelectItem value="ingreso"><IconoIndicador concepto="cobros" />Ingreso</SelectItem>
+                      <SelectItem value="egreso"><IconoIndicador concepto="pagos" />Egreso</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -306,10 +307,14 @@ export function Caja() {
 
       {resumen && (
         <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
-          <Card><CardContent className="flex items-start justify-between gap-3"><div className="min-w-0 [&_p]:truncate"><CardDescription>Saldo actual</CardDescription><p className={resumen.saldo_total >= 0 ? 'text-2xl font-bold text-exito' : 'text-2xl font-bold text-destructive'}>{formatoMoneda(resumen.saldo_total)}</p></div><span className="shrink-0 rounded-lg bg-primary/10 p-2 text-primary"><PiggyBank /></span></CardContent></Card>
-          <Card><CardContent className="flex items-start justify-between gap-3"><div className="min-w-0 [&_p]:truncate"><CardDescription>Ingresos del período</CardDescription><p className="text-2xl font-bold text-exito">+ {formatoMoneda(resumen.ingresos)}</p></div><span className="shrink-0 rounded-lg bg-exito/10 p-2 text-exito"><ArrowDownCircle /></span></CardContent></Card>
-          <Card><CardContent className="flex items-start justify-between gap-3"><div className="min-w-0 [&_p]:truncate"><CardDescription>Egresos del período</CardDescription><p className="text-2xl font-bold text-destructive">− {formatoMoneda(resumen.egresos)}</p></div><span className="shrink-0 rounded-lg bg-destructive/10 p-2 text-destructive"><ArrowUpCircle /></span></CardContent></Card>
-          <Card><CardContent className="flex items-start justify-between gap-3"><div className="min-w-0 [&_p]:truncate"><CardDescription>Resultado del período</CardDescription><p className={resumen.saldo_periodo >= 0 ? 'text-2xl font-bold text-exito' : 'text-2xl font-bold text-destructive'}>{resumen.saldo_periodo >= 0 ? '+' : ''}{formatoMoneda(resumen.saldo_periodo)}</p></div><span className="shrink-0 rounded-lg bg-primary/10 p-2 text-primary"><Wallet /></span></CardContent></Card>
+          {/* Los cuatro KPI toman su ícono del catálogo de indicadores (ADR-038): se pasa el concepto, no un ícono de lucide. */}
+          <TarjetaIndicador concepto="caja" etiqueta="Saldo actual" tono={resumen.saldo_total >= 0 ? 'exito' : 'peligro'} valor={formatoMoneda(resumen.saldo_total)} />
+          <TarjetaIndicador concepto="cobros" etiqueta="Ingresos del período" tono="exito" valor={`+ ${formatoMoneda(resumen.ingresos)}`} />
+          <TarjetaIndicador concepto="egresos" etiqueta="Egresos del período" tono="peligro" valor={`− ${formatoMoneda(resumen.egresos)}`} />
+          <TarjetaIndicador
+            concepto="margen" etiqueta="Resultado del período" tono={resumen.saldo_periodo >= 0 ? 'exito' : 'peligro'}
+            valor={`${resumen.saldo_periodo >= 0 ? '+' : ''}${formatoMoneda(resumen.saldo_periodo)}`}
+          />
         </div>
       )}
 

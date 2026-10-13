@@ -14,7 +14,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog'
 import { ArrowLeft, FileDown, Trash2 } from 'lucide-react'
 import { TituloPantalla } from './titulo-pantalla'
 import { ICONOS } from './iconos-identidad'
-import { fecha } from '@/lib/fechas'
+import { fecha } from './fechas'
 
 export function RemitoDetalle({ urlDelPdf = (id: number) => `/remitos/${id}/pdf` }: {
   urlDelPdf?: (id: number) => string

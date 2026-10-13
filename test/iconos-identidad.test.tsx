@@ -10,7 +10,7 @@ import { render, screen } from '@testing-library/react'
 import {
   BarChart3, BookOpen, BookText, Boxes, Calculator, CalendarCheck, CalendarClock, CalendarDays, Clock, Coins, CreditCard, FileClock,
   FileSpreadsheet, FileText, HandCoins, Inbox, Landmark, LayoutDashboard, MapPin, Package, PackagePlus, Percent, Receipt, ReceiptText,
-  ScanBarcode, ScrollText, Settings, ShoppingBag, ShoppingBasket, ShoppingCart, SquareStack, Store, Tags, TrendingUp, Truck, UserCog, Users,
+  ScanBarcode, ScrollText, Settings, ShoppingBag, ShoppingBasket, ShoppingCart, SquareStack, Store, Tags, Truck, UserCog, Users,
   Wallet, Warehouse,
   type LucideIcon,
 } from 'lucide-react'
@@ -45,6 +45,7 @@ import { MpBandeja } from '../src/MpBandeja'
 import {
   ICONOS, ICONOS_POR_PRODUCTO, iconoDelConcepto, iconosDe, type Concepto,
 } from '../src/iconos-identidad'
+import { INDICADORES } from '../src/iconos-indicador'
 import { IDENTIDAD, type Producto } from '../src/identidad'
 
 // La tabla del wiki. `BarChart3` está escrito como en la tabla (y como lo importan los productos hoy): en lucide es el MISMO componente que
@@ -299,7 +300,6 @@ describe('el fuente del kit', () => {
   const FUERA_DEL_CATALOGO: Record<string, [string, LucideIcon]> = {
     'comercio/Promociones.tsx': ['Percent', Percent],
     'comercio/Vencimientos.tsx': ['CalendarClock', CalendarClock],
-    'comercio/Margen.tsx': ['TrendingUp', TrendingUp],
     'comercio/Reposicion.tsx': ['PackagePlus', PackagePlus],
     'comercio/EtiquetasGondola.tsx': ['ScanBarcode', ScanBarcode],
     'comercio/ActualizacionMasivaPrecios.tsx': ['FileSpreadsheet', FileSpreadsheet],
@@ -321,6 +321,9 @@ describe('el fuente del kit', () => {
     const sueltos = titulos.filter(({ archivo, icono }) => {
       const concepto = /^ICONOS\.([a-zA-Z]+)$/.exec(icono)
       if (concepto) return !(concepto[1] in ICONOS)
+      // Un concepto que se mide y no es una pantalla del menú (`margen`, `stockBajo`…) está en el catálogo de indicadores (ADR-038, 0.146.0).
+      const indicador = /^INDICADORES\.([a-zA-Z]+)$/.exec(icono)
+      if (indicador) return !(indicador[1] in INDICADORES)
       if (icono === 'icono') return !['Usuarios.tsx', 'Logs.tsx', 'Configuracion.tsx'].includes(archivo)
       return FUERA_DEL_CATALOGO[archivo]?.[0] !== icono
     })

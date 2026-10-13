@@ -20,7 +20,7 @@ import { TablaOTarjetas, TarjetaDeFila } from '../tabla-o-tarjetas'
 import { PlayCircle, StopCircle, Eye, ArrowUpCircle, ArrowDownCircle, CheckCircle2 } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
-import { fechaHora } from '@/lib/fechas'
+import { fechaHora } from '../fechas'
 import { SelectBuscable } from '../SelectBuscable'
 
 // El backend guarda "YYYY-MM-DD HH:MM:SS"; en el listado los segundos son

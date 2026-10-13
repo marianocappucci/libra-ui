@@ -12,7 +12,7 @@ import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { api, ApiError } from '../api-client'
 import { TIPOS_COMPROBANTE, type CategoriaEgreso, type Egreso, type Proveedor, type ResumenEgresos, opcionesProveedor, opcionesCategoriaPorNombre } from './tipos'
-import { Card, CardContent, CardDescription } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -29,11 +29,12 @@ import {
 } from '@/components/ui/form'
 import { anchoColumnaAcciones, DataTable, sortableHeader } from '../data-table'
 import { SelectBuscable } from '../SelectBuscable'
-import { ArrowUpCircle, CheckCircle2, Eye, Filter, Hourglass, Plus, X } from 'lucide-react'
+import { Eye, Filter, Plus, X } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
-import { fecha } from '@/lib/fechas'
-import { hoyISO, primerDiaDelMesISO } from '../fechas'
+import { IconoIndicador } from '../IconoIndicador'
+import { TarjetaIndicador } from '../TarjetaIndicador'
+import { hoyISO, primerDiaDelMesISO, fecha } from '../fechas'
 import { formatoMoneda } from '../formatos'
 
 const egresoSchema = z.object({
@@ -206,18 +207,10 @@ export function Egresos() {
 
         {resumen && (
           <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
-            <Card><CardContent className="flex items-start justify-between gap-3">
-              <div className="min-w-0 [&_p]:truncate"><CardDescription>Total del período</CardDescription><p className="text-2xl font-bold">{formatoMoneda(resumen.total_periodo)}</p></div>
-              <span className="shrink-0 rounded-lg bg-muted p-2 text-muted-foreground"><ArrowUpCircle /></span>
-            </CardContent></Card>
-            <Card><CardContent className="flex items-start justify-between gap-3">
-              <div className="min-w-0 [&_p]:truncate"><CardDescription>Pagado</CardDescription><p className="text-2xl font-bold text-exito">{formatoMoneda(resumen.pagado)}</p></div>
-              <span className="shrink-0 rounded-lg bg-exito/10 p-2 text-exito"><CheckCircle2 /></span>
-            </CardContent></Card>
-            <Card><CardContent className="flex items-start justify-between gap-3">
-              <div className="min-w-0 [&_p]:truncate"><CardDescription>Pendiente / Parcial</CardDescription><p className="text-2xl font-bold text-destructive">{formatoMoneda(resumen.pendiente)}</p></div>
-              <span className="shrink-0 rounded-lg bg-destructive/10 p-2 text-destructive"><Hourglass /></span>
-            </CardContent></Card>
+            {/* Los tres KPI toman su ícono del catálogo de indicadores (ADR-038): se pasa el concepto, no un ícono de lucide. */}
+            <TarjetaIndicador concepto="egresos" etiqueta="Total del período" valor={formatoMoneda(resumen.total_periodo)} />
+            <TarjetaIndicador concepto="pagos" etiqueta="Pagado" tono="exito" valor={formatoMoneda(resumen.pagado)} />
+            <TarjetaIndicador concepto="porCobrar" etiqueta="Pendiente / Parcial" tono="peligro" valor={formatoMoneda(resumen.pendiente)} />
           </div>
         )}
 
@@ -276,7 +269,7 @@ export function Egresos() {
 
       <DialogContent>
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><ArrowUpCircle className="size-4" />Nuevo egreso</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><IconoIndicador concepto="egresos" />Nuevo egreso</DialogTitle>
         </DialogHeader>
         {formError && <p className="text-sm text-destructive">{formError}</p>}
         <Form {...form}>

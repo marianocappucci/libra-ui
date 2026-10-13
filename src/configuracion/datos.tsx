@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { ConfirmDialog } from '@/components/confirm-dialog'
-import { fechaHora } from '@/lib/fechas'
+import { fechaHora } from '../fechas'
 
 export type BackupGuardado = {
   filename: string
