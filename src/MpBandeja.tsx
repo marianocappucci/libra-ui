@@ -25,11 +25,14 @@ import { TACTIL_BAJO_LG } from './use-ancho'
 import { api, ApiError } from './api-client'
 import { IVA_CONDITIONS } from './facturas'
 import type { Cliente, MpMovimiento, MpPago } from './mp'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import {
+  Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog'
 import { BadgeEstado } from './badge-estado'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -139,6 +142,7 @@ export function MpBandeja() {
   }
 
   function abrirCrearCliente(kind: 'pago' | 'mov', item: MpPago | MpMovimiento) {
+    setError(null)
     setCreandoCliente({ kind, id: item.id })
     setNombre(item.payer_name || ''); setEmail(item.payer_email || '')
     setTipoId(item.payer_id_type || 'DNI'); setCuit(item.payer_id_number || '')
@@ -164,6 +168,7 @@ export function MpBandeja() {
   }
 
   function abrirCargarEmail(m: MpMovimiento) {
+    setError(null)
     setCargandoEmail(m.id)
     setEmailMov(m.payer_email || '')
     setNombreMov(m.payer_name || m.origen_nombre || '')
@@ -448,42 +453,52 @@ export function MpBandeja() {
         </TabsList>
       </Tabs>
 
-      {creandoCliente && (
-        <Card>
-          <CardHeader><CardTitle className="text-base">Dar de alta cliente</CardTitle></CardHeader>
-          <CardContent className="flex flex-wrap items-end gap-3">
-            <div className="grid gap-2"><Label>Nombre / Razón social *</Label><Input value={nombre} onChange={(e) => setNombre(e.target.value)} className="w-48" /></div>
-            <div className="grid gap-2"><Label>Email</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-52" placeholder="Para enviar la factura" /></div>
-            <div className="grid gap-2"><Label>Tipo ID</Label><Input value={tipoId} onChange={(e) => setTipoId(e.target.value)} className="w-24" placeholder="DNI / CUIT" /></div>
-            <div className="grid gap-2"><Label>CUIT/DNI</Label><Input value={cuit} onChange={(e) => setCuit(e.target.value)} className="w-36" /></div>
-            <div className="grid gap-2"><Label>Domicilio</Label><Input value={direccion} onChange={(e) => setDireccion(e.target.value)} className="w-48" placeholder="Opcional" /></div>
-            <div className="grid gap-2">
+      {/* 🔑 Modales y no tarjetas arriba de la tabla: el link de cada fila puede
+          estar muy abajo, y una tarjeta que aparece arriba queda fuera de la
+          vista (reclamo del 2026-10-14). El error del alta se muestra adentro
+          por lo mismo: el de la pantalla queda tapado por el modal. */}
+      <Dialog open={creandoCliente !== null} onOpenChange={(abierto) => { if (!abierto) setCreandoCliente(null) }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><UserPlus className="size-4" />Dar de alta cliente</DialogTitle></DialogHeader>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-2 sm:col-span-2"><Label>Nombre / Razón social *</Label><Input value={nombre} onChange={(e) => setNombre(e.target.value)} /></div>
+            <div className="grid gap-2 sm:col-span-2"><Label>Email</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Para enviar la factura" /></div>
+            <div className="grid gap-2"><Label>Tipo ID</Label><Input value={tipoId} onChange={(e) => setTipoId(e.target.value)} placeholder="DNI / CUIT" /></div>
+            <div className="grid gap-2"><Label>CUIT/DNI</Label><Input value={cuit} onChange={(e) => setCuit(e.target.value)} /></div>
+            <div className="grid gap-2 sm:col-span-2"><Label>Domicilio</Label><Input value={direccion} onChange={(e) => setDireccion(e.target.value)} placeholder="Opcional" /></div>
+            <div className="grid gap-2 sm:col-span-2">
               <Label>Condición IVA</Label>
               {/* select-cerrado: las condiciones frente al IVA son un catálogo cerrado de ARCA, fijo en el código (`IVA_CONDITIONS`) */}
               <Select value={ivaCond} onValueChange={setIvaCond}>
-                <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {IVA_CONDITIONS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
+          </div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <DialogFooter>
+            <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
             <Button disabled={saving || !nombre.trim()} onClick={crearCliente}><UserPlus />{saving ? 'Guardando…' : 'Dar de alta'}</Button>
-            <Button type="button" variant="outline" onClick={() => setCreandoCliente(null)}>Cancelar</Button>
-          </CardContent>
-        </Card>
-      )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      {cargandoEmail !== null && (
-        <Card>
-          <CardHeader><CardTitle className="text-base">Datos del emisor</CardTitle></CardHeader>
-          <CardContent className="flex flex-wrap items-end gap-3">
-            <div className="grid gap-2"><Label>Nombre completo</Label><Input value={nombreMov} onChange={(e) => setNombreMov(e.target.value)} className="w-52" /></div>
-            <div className="grid gap-2"><Label>Email *</Label><Input type="email" value={emailMov} onChange={(e) => setEmailMov(e.target.value)} className="w-52" placeholder="email@ejemplo.com" /></div>
+      <Dialog open={cargandoEmail !== null} onOpenChange={(abierto) => { if (!abierto) setCargandoEmail(null) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Mail className="size-4" />Datos del emisor</DialogTitle></DialogHeader>
+          <div className="grid gap-3">
+            <div className="grid gap-2"><Label>Nombre completo</Label><Input value={nombreMov} onChange={(e) => setNombreMov(e.target.value)} /></div>
+            <div className="grid gap-2"><Label>Email *</Label><Input type="email" value={emailMov} onChange={(e) => setEmailMov(e.target.value)} placeholder="email@ejemplo.com" /></div>
+          </div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <DialogFooter>
+            <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
             <Button disabled={saving || !emailMov.trim()} onClick={guardarEmailMov}><Mail />{saving ? 'Guardando…' : 'Guardar'}</Button>
-            <Button type="button" variant="outline" onClick={() => setCargandoEmail(null)}>Cancelar</Button>
-          </CardContent>
-        </Card>
-      )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {loading ? (
         <p className="py-6 text-center text-sm text-muted-foreground">Cargando…</p>

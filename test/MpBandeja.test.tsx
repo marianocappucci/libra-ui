@@ -247,6 +247,26 @@ describe('la bandeja compartida', () => {
     })
   }, 20_000)   // tipea ~60 teclas con userEvent: bajo carga (la suite completa en un runner lento) los 5 s por defecto no alcanzan
 
+  it('🔑 el alta y la carga de email se abren en un modal, no arriba de la tabla', async () => {
+    // El 2026-10-14: con el link «Dar de alta» de una fila de abajo, el
+    // formulario aparecía arriba de la tabla y no se veía. En un modal queda
+    // delante de la fila, esté donde esté.
+    const user = userEvent.setup()
+    await montar()
+    await user.click(screen.getByRole('tab', { name: /cobros sincronizados/i }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    await user.click((await screen.findAllByRole('button', { name: /dar de alta/i }))[0])
+    const alta = await screen.findByRole('dialog')
+    expect(within(alta).getByText('Dar de alta cliente')).toBeInTheDocument()
+    await user.click(within(alta).getByRole('button', { name: /cancelar/i }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    await user.click(await screen.findByRole('button', { name: /cargar email/i }))
+    const emisor = await screen.findByRole('dialog')
+    expect(within(emisor).getByPlaceholderText('email@ejemplo.com')).toBeInTheDocument()
+  })
+
   it('cargar el email de un emisor anónimo lo guarda en ESE movimiento', async () => {
     // Una transferencia bancaria llega sin email: sin cargarlo no hay a quién
     // mandarle el comprobante, y es la única forma de completarlo desde acá.
