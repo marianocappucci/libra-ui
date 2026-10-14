@@ -16,7 +16,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MpBandeja } from '../src/MpBandeja'
-import type { Cliente, MpMovimiento, MpPago } from '../src/mp'
+import { legible, nombreDelMedio, type Cliente, type MpMovimiento, type MpPago } from '../src/mp'
 
 const CLIENTE: Cliente = {
   id: 5, name: 'Ana Perez', address: '', cuit_dni: '20111111112',
@@ -98,6 +98,55 @@ async function enCobros(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('tab', { name: /cobros sincronizados/i }))
   return screen.findByRole('button', { name: /sincronizar/i })
 }
+
+describe('los medios de pago, en palabras (2026-10-14)', () => {
+  // Hasta acá se veía el código de MercadoPago tal cual: «Tarjeta de crédito (VISA)», «ACCOUNT_MONEY»,
+  // «DEBIN_TRANSFER». Son los ocho códigos que hay en Compulibra, más los que MP manda en la Argentina.
+  it.each([
+    ['visa', 'Visa (crédito)'], ['master', 'Mastercard (crédito)'], ['amex', 'American Express (crédito)'],
+    ['debvisa', 'Visa (débito)'], ['debmaster', 'Mastercard (débito)'], ['maestro', 'Maestro (débito)'],
+    ['account_money', 'Saldo de Mercado Pago'], ['cvu', 'Transferencia desde billetera virtual'],
+    ['debin_transfer', 'Transferencia bancaria (DEBIN)'], ['rapipago', 'Rapipago (efectivo)'],
+    ['pagofacil', 'Pago Fácil (efectivo)'], ['DEBIN_TRANSFER', 'Transferencia bancaria (DEBIN)'],
+  ])('%s → %s', (codigo, texto) => {
+    expect(nombreDelMedio(codigo)).toBe(texto)
+  })
+
+  it('un código que no está en la tabla se ve legible, nunca en mayúsculas ni con guiones bajos', () => {
+    expect(nombreDelMedio('nuevo_medio')).toBe('Nuevo medio')
+    expect(legible('PREPAID_CARD')).toBe('Prepaid card')
+  })
+
+  it('🔑 el Historial muestra sólo el tipo y Cobros sincronizados el medio traducido', async () => {
+    const user = userEvent.setup()
+    const tarjeta: MpMovimiento = {
+      ...TRANSFERENCIA, id: 31, tipo: 'credit_card', origen_banco: 'master',
+      estado_factura: 'facturado', factura_id: 78,
+    }
+    const pendientes: MpMovimiento[] = [
+      { ...TRANSFERENCIA, id: 41, origen_banco: 'debin_transfer' },
+      { ...TRANSFERENCIA, id: 42, tipo: 'account_money', origen_banco: 'account_money' },
+      { ...TRANSFERENCIA, id: 43, origen_banco: 'nuevo_medio' },
+    ]
+    fetchMock.mockImplementation(() => Promise.resolve(json({
+      ...BANDEJA, historial: [{ ...PAGO_FACTURADO, payment_type: 'debit_card', payment_method: 'debvisa' }],
+      transferencias_hist: [tarjeta], transferencias: pendientes,
+    })))
+    await montar()
+
+    // Historial (la pestaña que abre): el tipo, sin el código entre paréntesis.
+    expect(await screen.findByText('Tarjeta de crédito')).toBeInTheDocument()
+    expect(screen.getByText('Tarjeta de débito')).toBeInTheDocument()
+    expect(screen.queryByText(/MASTER|DEBVISA|\(/)).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: /cobros sincronizados/i }))
+    expect(await screen.findByText('Medio de pago')).toBeInTheDocument()
+    expect(screen.getByText('Transferencia bancaria (DEBIN)')).toBeInTheDocument()
+    expect(screen.getByText('Saldo de Mercado Pago')).toBeInTheDocument()
+    expect(screen.getByText('Nuevo medio')).toBeInTheDocument()
+    expect(screen.queryByText(/DEBIN_TRANSFER|ACCOUNT_MONEY|Banco \/ Billetera/)).not.toBeInTheDocument()
+  })
+})
 
 describe('la bandeja compartida', () => {
   it('🔴 todas sus llamadas van al prefijo que los tres productos montan', async () => {

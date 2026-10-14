@@ -24,7 +24,7 @@ import type { ColumnDef } from './data-table'
 import { TACTIL_BAJO_LG } from './use-ancho'
 import { api, ApiError } from './api-client'
 import { IVA_CONDITIONS } from './facturas'
-import type { Cliente, MpMovimiento, MpPago } from './mp'
+import { legible, nombreDelMedio, type Cliente, type MpMovimiento, type MpPago } from './mp'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -56,7 +56,9 @@ type Bandeja = {
   mp_concepto_default: string
 }
 
-function OrigenBadge({ tipo, metodo }: { tipo: string | null; metodo?: string | null }) {
+/** El tipo de pago, sin el código del medio: «Tarjeta de crédito» y no «Tarjeta de crédito (VISA)». El medio
+ *  concreto va en su propia columna (Cobros sincronizados), traducido con `nombreDelMedio`. */
+function OrigenBadge({ tipo }: { tipo: string | null }) {
   if (!tipo) return <span className="text-muted-foreground">—</span>
   const t = tipo.toLowerCase()
   const map: Record<string, { label: string; icon: typeof Wallet; className: string }> = {
@@ -64,13 +66,13 @@ function OrigenBadge({ tipo, metodo }: { tipo: string | null; metodo?: string | 
     credit_card: { label: 'Tarjeta de crédito', icon: CreditCard, className: 'bg-emerald-600 text-white' },
     debit_card: { label: 'Tarjeta de débito', icon: CreditCard, className: 'bg-cyan-600 text-white' },
     ticket: { label: 'Efectivo', icon: Banknote, className: 'bg-amber-500 text-white' },
-    bank_transfer: { label: 'Transf. bancaria', icon: Landmark, className: 'bg-secondary text-secondary-foreground' },
+    bank_transfer: { label: 'Transferencia', icon: Landmark, className: 'bg-secondary text-secondary-foreground' },
   }
-  const conf = map[t] ?? { label: tipo, icon: CreditCard, className: 'bg-muted text-foreground' }
+  const conf = map[t] ?? { label: legible(tipo), icon: CreditCard, className: 'bg-muted text-foreground' }
   const Icon = conf.icon
   return (
     <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${conf.className}`}>
-      <Icon className="size-3.5" />{conf.label}{metodo && metodo !== 'mercadopago' ? ` (${metodo.toUpperCase()})` : ''}
+      <Icon className="size-3.5" />{conf.label}
     </span>
   )
 }
@@ -246,7 +248,7 @@ export function MpBandeja() {
     ...historialPagos.map((p): HistRow => ({
       key: `p${p.id}`,
       fecha: p.created_at,
-      tipoNode: <OrigenBadge tipo={p.payment_type} metodo={p.payment_method} />,
+      tipoNode: <OrigenBadge tipo={p.payment_type} />,
       emisor: p.payer_name || p.payer_email || '—',
       cliente: p.cliente,
       monto: p.monto,
@@ -257,7 +259,7 @@ export function MpBandeja() {
     ...historialMov.map((m): HistRow => ({
       key: `m${m.id}`,
       fecha: m.fecha || m.created_at,
-      tipoNode: <OrigenBadge tipo={m.tipo} metodo={m.origen_banco} />,
+      tipoNode: <OrigenBadge tipo={m.tipo} />,
       emisor: m.origen_nombre || m.payer_name || '—',
       cliente: m.cliente,
       monto: m.monto,
@@ -317,11 +319,12 @@ export function MpBandeja() {
     },
     {
       id: 'banco',
-      header: 'Banco / Billetera',
-      size: 130,
-      minSize: 100,
+      header: 'Medio de pago',
+      // Más ancha que cuando mostraba el código: «Transferencia desde billetera virtual» es el texto más largo.
+      size: 190,
+      minSize: 140,
       cell: ({ row }) => row.original.origen_banco
-        ? <Badge variant="outline">{row.original.origen_banco.toUpperCase()}</Badge>
+        ? <Badge variant="outline" className="whitespace-normal text-left">{nombreDelMedio(row.original.origen_banco)}</Badge>
         : <span className="text-muted-foreground">—</span>,
     },
     {
@@ -389,7 +392,7 @@ export function MpBandeja() {
         </div>
       ),
     },
-    { id: 'origen', header: 'Origen', size: 160, minSize: 130, cell: ({ row }) => <OrigenBadge tipo={row.original.payment_type} metodo={row.original.payment_method} /> },
+    { id: 'origen', header: 'Origen', size: 160, minSize: 130, cell: ({ row }) => <OrigenBadge tipo={row.original.payment_type} /> },
     {
       id: 'cliente',
       header: 'Cliente',
