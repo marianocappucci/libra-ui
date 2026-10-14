@@ -1,4 +1,4 @@
-// El rastro de los envíos por mail de un comprobante o un presupuesto (ADR-044 del motor).
+// El rastro de los envíos por mail de un comprobante o un presupuesto (ADR-050 del motor).
 //
 // Antes el mail salía y no quedaba nada: «¿se mandó la factura?» no se podía contestar. El motor
 // anota cada intento (enviado o con error) y lo devuelve en el detalle (`envios_email`) y, resumido,
