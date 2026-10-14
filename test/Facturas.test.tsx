@@ -266,3 +266,23 @@ describe('las notas', () => {
     expect(screen.getByText(/^- /)).toBeInTheDocument()
   })
 })
+
+describe('el filtro por envío por mail', () => {
+  it('pide el listado con envio= al elegirlo y lo saca al limpiar', async () => {
+    const user = userEvent.setup()
+    montar()
+    await screen.findByText('Ana Perez')
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Envío por mail' }), 'sin_enviar')
+    await waitFor(() => expect(urlesDelListado().at(-1)).toContain('envio=sin_enviar'))
+    expect(urlesDelListado().at(-1)).toContain('page=1')
+
+    await user.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
+    await waitFor(() => expect(urlesDelListado().at(-1)).not.toContain('envio='))
+  })
+
+  it('«todas» no manda el parámetro', async () => {
+    montar()
+    await screen.findByText('Ana Perez')
+    expect(urlesDelListado().every((u) => !u.includes('envio='))).toBe(true)
+  })
+})
