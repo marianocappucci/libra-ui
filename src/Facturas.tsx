@@ -23,6 +23,7 @@
 // con la reserva—, así que mostrar «Sin cobrar» diría eso de todo lo cobrado en
 // efectivo. Es la misma decisión que ya se había tomado para la columna de
 // cobrado el 2026-08-27.
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { IndicadorEnvioEmail } from './envios-email'
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
@@ -92,6 +93,9 @@ export type FacturasProps = {
   mensajeVacio?: string
 }
 
+/** `sin_enviar` incluye los envíos que fallaron y sólo comprobantes con CAE (lo decide el motor). */
+type FiltroEnvio = 'todas' | 'enviada' | 'sin_enviar'
+
 export function Facturas({
   urlDelPdf,
   rutaDelDetalle,
@@ -106,6 +110,8 @@ export function Facturas({
   const [q, setQ] = useState('')
   const [desde, setDesde] = useState('')
   const [hasta, setHasta] = useState('')
+  // Filtro por el rastro de envíos por mail (libracore ≥ v1.165.0, ADR-051 del motor).
+  const [envio, setEnvio] = useState<FiltroEnvio>('todas')
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState<number | null>(null)
   const [totalPages, setTotalPages] = useState(1)
@@ -141,17 +147,18 @@ export function Facturas({
    *
    * Venía de Contalibra y se encontró al extraer esto y escribirle un test.
    */
-  type Filtros = { q: string; desde: string; hasta: string }
+  type Filtros = { q: string; desde: string; hasta: string; envio: FiltroEnvio }
 
   function armarQuery(f: Filtros, pagina: number): string {
     const params = new URLSearchParams({ vista, page: String(pagina) })
     if (f.q) params.set('q', f.q)
     if (f.desde) params.set('desde', f.desde)
     if (f.hasta) params.set('hasta', f.hasta)
+    if (f.envio !== 'todas') params.set('envio', f.envio)
     return params.toString()
   }
 
-  async function cargar(f: Filtros = { q, desde, hasta }, pagina: number = page) {
+  async function cargar(f: Filtros = { q, desde, hasta, envio }, pagina: number = page) {
     setLoading(true)
     setError(null)
     try {
@@ -174,8 +181,8 @@ export function Facturas({
   }
 
   function limpiarFiltros() {
-    const vacios = { q: '', desde: '', hasta: '' }
-    setQ(''); setDesde(''); setHasta(''); setPage(1)
+    const vacios: Filtros = { q: '', desde: '', hasta: '', envio: 'todas' }
+    setQ(''); setDesde(''); setHasta(''); setEnvio('todas'); setPage(1)
     // Con los filtros explícitos, no con lo que haya en el estado: acá todavía
     // tiene lo viejo.
     cargar(vacios, 1)
@@ -343,7 +350,15 @@ export function Facturas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vista, muestraCobros, cuantosBotones])
 
-  const hayFiltros = Boolean(q || desde || hasta)
+  function filtrarPorEnvio(valor: FiltroEnvio) {
+    setEnvio(valor)
+    setPage(1)
+    // Se aplica en el acto, como las pestañas: con el valor nuevo explícito, porque el estado
+    // todavía tiene el viejo (ver `Filtros`).
+    cargar({ q, desde, hasta, envio: valor }, 1)
+  }
+
+  const hayFiltros = Boolean(q || desde || hasta || envio !== 'todas')
 
   return (
     <div className="grid gap-4">
@@ -378,6 +393,14 @@ export function Facturas({
           />
           <Input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} aria-label="Desde" className="w-40" />
           <Input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} aria-label="Hasta" className="w-40" />
+          <Select value={envio} onValueChange={(v) => filtrarPorEnvio(v as FiltroEnvio)}>
+            <SelectTrigger aria-label="Envío por mail" className="w-40"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todas">Mail: todas</SelectItem>
+              <SelectItem value="enviada">Enviadas</SelectItem>
+              <SelectItem value="sin_enviar">Sin enviar</SelectItem>
+            </SelectContent>
+          </Select>
           <Button variant="outline" size="icon" aria-label="Buscar" onClick={buscar}><Search /></Button>
           {hayFiltros && (
             <Button variant="outline" size="icon" aria-label="Limpiar filtros" onClick={limpiarFiltros}><X /></Button>
