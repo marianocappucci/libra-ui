@@ -94,7 +94,7 @@ export type Factura = {
   fch_serv_desde?: string
   fch_serv_hasta?: string
   fch_vto_pago?: string
-  /** El resumen de sus envíos por mail (motor ≥ ADR-044); `null` si nunca se mandó. */
+  /** El resumen de sus envíos por mail (motor ≥ ADR-050); `null` si nunca se mandó. */
   envio_email?: ResumenEnvioEmail
 }
 
