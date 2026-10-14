@@ -522,6 +522,17 @@ export function VentaDetalle({
               {accionesExtra?.({ detalle, recargar: cargar })}
             </div>
           )}
+
+          {/* 🔑 Una venta ya devuelta EN PARTE admite más devoluciones (ADR-040 de libracommerce: cada devolución sucesiva escribe su
+              egreso), y es la única salida que le queda: el servidor no deja anularla («devolvé el resto de las líneas»). Sin este
+              bloque el botón de devolver desaparecía en cuanto la venta pasaba a `devuelta_parcial` y no había forma de seguir desde
+              la pantalla. Acá van SÓLO las acciones del producto: facturar, el remito, la nota y anular son de una venta que todavía
+              no se devolvió, y anular daría 409. (ADR-060.) */}
+          {detalle.estado === 'devuelta_parcial' && accionesExtra && (
+            <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
+              {accionesExtra({ detalle, recargar: cargar })}
+            </div>
+          )}
         </>
       )}
 

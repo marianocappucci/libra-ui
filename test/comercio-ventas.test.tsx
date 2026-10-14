@@ -1052,4 +1052,38 @@ describe('VentaDetalle', () => {
     await user.click(devolver)
     await waitFor(() => expect(pedidosDetalle).toBe(2))
   })
+
+  // ADR-060: una venta devuelta EN PARTE sigue admitiendo devoluciones. El servidor no la deja anular («devolvé el resto de las líneas»),
+  // así que si la pantalla escondía el botón, la venta quedaba sin salida.
+  it('una venta devuelta en parte sigue ofreciendo las acciones del producto (devolver), y sólo esas', async () => {
+    responder({
+      ...BASE,
+      '/api/ventas/7': () => ({ ...VENTA, estado: 'devuelta_parcial', items: [{ ...VENTA.items[0], id: 55 }] }),
+    })
+    montarDetalle(7, {
+      puedeAnular: true,
+      puedeEmitirNota: true,
+      accionesExtra: (ctx) => <button onClick={() => ctx.recargar()}>Devolver</button>,
+    })
+    await screen.findByText(/Venta V-00007/)
+    expect(screen.getByRole('button', { name: 'Devolver' })).toBeTruthy()
+    // Lo que es de una venta sin devolver no aparece: anular daría 409 y facturar/remito/nota no corresponden.
+    expect(screen.queryByRole('button', { name: /Anular venta/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Generar factura/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Emitir nota de crédito/ })).toBeNull()
+  })
+
+  it('una venta devuelta por completo no ofrece devolver', async () => {
+    responder({ ...BASE, '/api/ventas/7': () => ({ ...VENTA, estado: 'devuelta' }) })
+    montarDetalle(7, { puedeAnular: true, accionesExtra: () => <button>Devolver</button> })
+    await screen.findByText(/Venta V-00007/)
+    expect(screen.queryByRole('button', { name: 'Devolver' })).toBeNull()
+  })
+
+  it('sin accionesExtra, una venta devuelta en parte no renderiza un bloque vacío', async () => {
+    responder({ ...BASE, '/api/ventas/7': () => ({ ...VENTA, estado: 'devuelta_parcial' }) })
+    const { container } = montarDetalle(7, { puedeAnular: true })
+    await screen.findByText(/Venta V-00007/)
+    expect(container.querySelectorAll('.border-t.pt-4').length).toBe(0)
+  })
 })
