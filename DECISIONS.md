@@ -1405,3 +1405,15 @@ No hay helper `precios-distintos` ni código que lea ese 409 (`grep precios.dist
 **Tests.** 3 en `test/comercio-ventas.test.tsx`: el botón aparece y no aparecen anular, factura ni nota (falla contra `main`); `devuelta` no ofrece devolver; sin `accionesExtra` no hay bloque vacío.
 
 **Cómo se adopta.** Subir el pin a 0.148.0; el producto que monte `accionesExtra` no cambia nada. VentaLibra deja de tener que decirles a sus usuarios que carguen todo en una sola devolución.
+
+## ADR-061 — Los envíos por mail se ven: en el detalle y en el listado (0.149.0)
+
+**Estado:** aceptada (2026-10-14). Pedido del humano: en ContaLibra un cliente reclamaba facturas y no había forma de saber si se habían mandado.
+
+**El hueco.** El motor mandaba el PDF por SMTP y no guardaba nada; la pantalla mostraba el error de un envío fallido una sola vez. Desde libracore v1.164.0 (ADR-044 del motor) cada intento queda en `envios_email` y el motor lo devuelve: `envios_email` en el detalle de comprobantes y presupuestos, `envio_email` (resumen o `null`) en cada fila del listado, y `GET …/{id}/envios`.
+
+**Qué se hizo.** `src/envios-email.tsx` (exportado como `./envios-email`): `EnviosEmailCard` (cada intento con fecha, destinatario, usuario y el motivo si falló) e `IndicadorEnvioEmail` (Enviada / Falló / Sin enviar, con destinatario y fecha en la ayuda). `FacturaDetalle` y `PresupuestoDetalle` muestran la tarjeta y la refrescan después de enviar; tras un envío fallido releen **sólo** `…/envios`, porque `cargar()` borraría el error y el destinatario que el usuario tiene que corregir. `Facturas` (sólo comprobantes con CAE) y `Presupuestos` suman la columna «Mail».
+
+**Compatibilidad.** Contra un motor anterior los campos no llegan: el detalle dice «Todavía no se envió por mail» y el listado «Sin enviar». Por eso el pin del kit sube junto con el del motor.
+
+**Tests.** 2 en `test/FacturaDetalle.test.tsx`; el de errores de `comprobantes-presupuestos.test.tsx` cuidó que un envío fallido no borre el mensaje.

@@ -721,3 +721,24 @@ describe('los medios de cobro que pasa el producto', () => {
     expect(await opcionesDe(user, await screen.findByRole('combobox', { name: 'Medio de pago 1' }))).toEqual([])
   })
 })
+
+describe('envíos por mail', () => {
+  it('muestra cada intento con destinatario, quién lo mandó y el motivo si falló', async () => {
+    montar({
+      ...CON_CAE,
+      envios_email: [
+        { id: 2, documento_label: 'FACTURA C 0005-00000001', destinatario: 'ok@cliente.com', estado: 'enviado', error: '', usuario: 'ana', created_at: '2026-10-14 10:00:00' },
+        { id: 1, documento_label: 'FACTURA C 0005-00000001', destinatario: 'mal@cliente.com', estado: 'error', error: 'smtp caído', usuario: 'ana', created_at: '2026-10-14 09:00:00' },
+      ],
+    })
+    expect(await screen.findByText('Envíos por mail')).toBeTruthy()
+    expect(screen.getByText('ok@cliente.com')).toBeTruthy()
+    expect(screen.getByText('mal@cliente.com')).toBeTruthy()
+    expect(screen.getByText('smtp caído')).toBeTruthy()
+  })
+
+  it('sin envíos lo dice, en vez de dejar un hueco', async () => {
+    montar({ ...CON_CAE, envios_email: [] })
+    expect(await screen.findByText('Todavía no se envió por mail.')).toBeTruthy()
+  })
+})
