@@ -105,6 +105,12 @@ export type MovimientoStock = {
   venta_id?: number | null
   created_at?: string
   deposito_id?: number | null
+  /** Valuación de una merma (ADR-059 de libracommerce). Sólo las mermas los llenan; en los demás tipos vienen `null`. El producto que no deja ver costos
+   *  SACA las tres claves de la respuesta: ausentes, no `null`. El historial muestra la columna «Importe» sólo si llegan. */
+  costo_unitario?: number | null
+  costo_total?: number | null
+  /** `true` si la merma no tiene costo (el producto no lo tenía cargado, o es anterior a ADR-059: no se reconstruye). */
+  sin_costo?: boolean | null
 }
 
 /** Una transferencia del historial (`GET /api/depositos/transferencias`). */
@@ -916,6 +922,11 @@ export type VencimientoMermaRespuesta = {
   vence: string | null
   cantidad: number
   saldo_restante: number
+  /** El costo de la baja (ADR-059): `costo_total = cantidad × costo_unitario`, o `null` en los dos y `sin_costo: true` si el producto no tenía costo. Un
+   *  reintento (`repetida`) devuelve el que se guardó la primera vez. Un producto que no deja ver costos saca las tres claves: ausentes, no `null`. */
+  costo_unitario?: number | null
+  costo_total?: number | null
+  sin_costo?: boolean
   repetida: boolean
 }
 
@@ -970,6 +981,87 @@ export type VencimientoEntradaRespuesta = {
   /** El saldo de ese lote (en ese depósito y variante) tras la entrada. */
   saldo_lote: number
   repetida: boolean
+}
+
+/** Un tramo del reparto de una conciliación: cuánto del saldo «sin lote» negativo se carga a un lote (`lote` y `vence` del bucket, tal como los devuelve el motor). */
+export type VencimientoTramo = { lote: string | null; vence: string | null; cantidad: number }
+
+/** Un lote con saldo > 0 de `GET /api/vencimientos/conciliacion`, en orden FEFO. */
+export type VencimientoLoteConciliable = {
+  lote: string | null
+  vence: string | null
+  saldo: number
+  dias_para_vencer: number | null
+  estado: 'vencido' | 'vigente' | 'sin_fecha'
+}
+
+/** `GET /api/vencimientos/conciliacion?producto_id&deposito_id[&variante_id]` (ADR-060 de libracommerce): la vista previa de `POST /conciliar`. Lectura pura. */
+export type VencimientoConciliacion = {
+  producto_id: number
+  codigo: string | null
+  nombre: string
+  unidad: string
+  vence: boolean
+  deposito_id: number
+  variante_id: number | null
+  hoy: string
+  /** El saldo del bucket «sin lote» (puede ser >= 0 si ya no hay nada que conciliar). */
+  saldo_sin_lote: number
+  /** Lo que está en negativo (`-saldo_sin_lote`), o 0. */
+  a_conciliar: number
+  lotes: VencimientoLoteConciliable[]
+  /** Un reparto FEFO con la forma exacta del `reparto` de `POST /conciliar`. */
+  propuesta: VencimientoTramo[]
+  cubierto: number
+  /** Lo que los lotes no alcanzan a cubrir: un faltante real, se corrige con un conteo físico. */
+  sin_cubrir: number
+}
+
+/** `POST /api/vencimientos/conciliar`: reparte el «sin lote» negativo entre los lotes que lo respaldan (el stock total no cambia). Misma regla de la clave que las otras escrituras. */
+export type VencimientoConciliarPayload = {
+  producto_id: number
+  deposito_id: number
+  variante_id: number | null
+  reparto: VencimientoTramo[]
+  clave_operacion: string
+  nota: string
+}
+
+export type VencimientoConciliarRespuesta = {
+  producto_id: number
+  deposito_id: number
+  variante_id: number | null
+  referencia: string
+  tramos: VencimientoTramo[]
+  cantidad: number
+  /** El saldo «sin lote» al terminar. */
+  saldo_sin_lote: number
+  /** Lo que sigue negativo porque ningún lote lo respalda. */
+  sin_cubrir: number
+  repetida: boolean
+}
+
+// ── Mermas por período (`GET /api/reportes/mermas`, `libracommerce.erp.mermas`, ADR-059 del motor) ──
+
+/** Lo que suma una merma: `costo_total` es un PISO (lo que no tiene costo no suma y se cuenta aparte en `movimientos_sin_costo` y `cantidad_sin_costo`). */
+export type MermasCifras = {
+  cantidad: number
+  costo_total: number
+  movimientos: number
+  movimientos_sin_costo: number
+  cantidad_sin_costo: number
+  sin_costo: boolean
+}
+export type MermaProducto = MermasCifras & { producto_id: number; codigo: string | null; nombre: string; unidad: string }
+export type MermasResumen = MermasCifras & { productos: number; productos_sin_costo: number }
+export type MermasData = {
+  desde: string
+  hasta: string
+  deposito_id: number | null
+  producto_id: number | null
+  resumen: MermasResumen
+  /** Por `costo_total` descendente, después por cantidad y nombre. */
+  productos: MermaProducto[]
 }
 
 export type CajaMedioVals = { ingresos: number; ingresos_ops: number; egresos: number; egresos_ops: number }

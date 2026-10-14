@@ -7,6 +7,11 @@
 // (`POST /api/vencimientos/entrada`: stock NUEVO con lote y fecha; a diferencia de `asignar`, que sólo le pone fecha a lo
 // que ya está contado sin lote) con la misma idempotencia que las otras dos escrituras.
 //
+// 0.151.0 (ADR-063, motor ADR-059 y ADR-060): dos agregados, los dos opt-in. (a) La baja de un lote dice cuánto valía lo que se tiró si el motor lo manda (`costo_total`; «sin costo cargado»
+// si `sin_costo`; sin las claves, nada: un rol sin `costos.ver` no las recibe). (b) `puedeConciliar` (default `false`): las filas «Salidas sin lote» ofrecen «Conciliar», que reparte el saldo «sin lote»
+// negativo entre los lotes que lo respaldan (`GET /conciliacion` para la propuesta FEFO, `POST /conciliar` para escribirla), con la misma idempotencia, el mismo intento pendiente y la misma
+// regla de «incierto» que las otras escrituras: su firma es la del saldo «sin lote» del producto, depósito y variante.
+//
 // Pantalla nueva (0.91.0, roadmap de producto de VentaLibra, A-2); todo lo que se cuenta es del motor
 // (`/api/vencimientos`, `libracommerce.erp.vencimientos`, ADR-018) y acá sólo se muestra y se pide. Props opcionales
 // `puedeMover` (asignar y cargar stock con lote), `puedeMermar` (dar de baja un lote; si no se pasa, vale lo que `puedeMover`, que
@@ -54,14 +59,15 @@ import { TituloPantalla } from '../titulo-pantalla'
 import { nuevaClaveDeOperacion } from './clave-de-operacion'
 import { esFechaISOValida } from './fecha-iso'
 import {
-  firmaDeAsignacion, firmaDeEntrada, firmaDeMerma, guardarPendiente, leerPendientes, quitarPendiente, type Payload, type Pendiente,
+  firmaDeAsignacion, firmaDeConciliacion, firmaDeEntrada, firmaDeMerma, guardarPendiente, leerPendientes, quitarPendiente, type Payload, type Pendiente,
 } from './vencimientos-pendientes'
 import type {
   CategoriaProducto, Deposito, Producto, Sucursal, VarianteProducto, VencimientoAsignarPayload, VencimientoAsignarRespuesta,
+  VencimientoConciliacion, VencimientoConciliarPayload, VencimientoConciliarRespuesta,
   VencimientoEntradaPayload, VencimientoEntradaRespuesta, VencimientoLote, VencimientoMarca, VencimientoMermaPayload, VencimientoMermaRespuesta, VencimientoProductoLotes, VencimientoSinLote,
   VencimientosData, VencimientoSituacion,
 } from './tipos'
-import { formatoCantidad } from '../formatos'
+import { formatoCantidad, formatoMoneda } from '../formatos'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -71,7 +77,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { CalendarClock, CalendarPlus, Check, Download, PackagePlus, TriangleAlert, Trash2 } from 'lucide-react'
+import { CalendarClock, CalendarPlus, Check, Download, PackagePlus, Scale, TriangleAlert, Trash2 } from 'lucide-react'
 
 const RUTA = '/api/vencimientos'
 /** El valor de «Toda la instancia» y de «Todas las categorías» en su `Select` (uno de Radix no admite `''`). */
@@ -81,6 +87,11 @@ const DIAS_POR_DEFECTO = '15'
 const MAX_DIAS = 365
 /** El motor limita el lote a 64 caracteres (`add_movimiento_stock`). */
 const MAX_LARGO_LOTE = 64
+
+/** Bajo `lg` (1024 px) los botones y campos que se tocan con el dedo miden 44 px (ADR-057). Sólo los del diálogo y el botón «Conciliar», que son nuevos. */
+const TACTIL_BAJO_LG = 'max-lg:h-11'
+/** Tolerancia para comparar sumas de cantidades decimales (0,1 + 0,2 no es 0,3 en punto flotante). */
+const EPSILON = 1e-9
 
 const AVISO_SALDO =
   'Las ventas, devoluciones y transferencias anteriores al descuento por lote, y los ajustes de stock, restaron del stock “sin lote”: ' +
@@ -127,6 +138,13 @@ function mensajeDeError(err: unknown): string {
     if (msgs.length > 0) return msgs.join(' ')
   }
   return err.detail
+}
+
+/** Lo que se dice de lo que valía una baja (ADR-063): el importe si el motor lo manda, «sin costo cargado» si el producto no tenía costo, y nada si las claves no vienen (un rol que no ve costos). */
+function textoDelCosto(r: VencimientoMermaRespuesta): string {
+  if (typeof r.costo_total === 'number') return ` Importe: ${formatoMoneda(r.costo_total)}.`
+  if (r.sin_costo === true) return ' Importe: sin costo cargado.'
+  return ''
 }
 
 const ubicacion = (f: { sucursal: string | null; deposito: string }) => (f.sucursal ? `${f.sucursal} · ${f.deposito}` : f.deposito)
@@ -512,6 +530,193 @@ function DialogoAsignar({ fila, alCambiarPendientes, onCerrar, onListo }: {
   )
 }
 
+// ── Conciliar el saldo «sin lote» negativo (ADR-063 del kit, ADR-060 del motor) ───────────────────────────────────
+
+/** La clave de un lote dentro del reparto: `lote` y `vence` son los del bucket, y cualquiera de los dos puede ser `null`. */
+const claveDeTramo = (t: { lote: string | null; vence: string | null }) => JSON.stringify([t.lote, t.vence])
+
+/** El motivo del rechazo de lo que se carga a un lote, o `null` si vale: vacío es 0 (no se le carga nada), un número >= 0 que no pasa de su saldo. */
+function errorDeTramo(valor: string, saldo: number): string | null {
+  if (valor.trim() === '') return null
+  const n = Number(valor)
+  if (!Number.isFinite(n) || n < 0) return 'Tiene que ser un número mayor o igual a 0.'
+  return n > saldo + EPSILON ? `No puede pasar del saldo del lote (${formatoCantidad(saldo)}).` : null
+}
+
+function DialogoConciliar({ fila, alCambiarPendientes, onCerrar, onListo }: {
+  fila: VencimientoSinLote
+  alCambiarPendientes: () => void
+  onCerrar: () => void
+  onListo: (respuesta: VencimientoConciliarRespuesta) => void
+}) {
+  // La vista previa del motor, de la fila que se abrió (el diálogo se monta por fila). `intentoDeCarga` sube con «Reintentar».
+  const [vista, setVista] = useState<{ data: VencimientoConciliacion | null; error: string | null } | null>(null)
+  const [intentoDeCarga, setIntentoDeCarga] = useState(0)
+  // Lo que se carga a cada lote, como texto (lo que se tipea); arranca en la propuesta FEFO del motor.
+  const [cantidades, setCantidades] = useState<Record<string, string>>({})
+  const [nota, setNota] = useState('')
+  const [intentado, setIntentado] = useState(false)
+  const { enVuelo, error, claveDe, enviar, descartar } = useEscritura(alCambiarPendientes)
+
+  useEffect(() => {
+    let vigente = true
+    const q = new URLSearchParams({ producto_id: String(fila.producto_id), deposito_id: String(fila.deposito_id) })
+    if (fila.variante_id !== null) q.set('variante_id', String(fila.variante_id))
+    api.get<VencimientoConciliacion>(`${RUTA}/conciliacion?${q.toString()}`)
+      .then((data) => {
+        if (!vigente) return
+        setVista({ data, error: null })
+        setCantidades(Object.fromEntries(data.propuesta.map((t) => [claveDeTramo(t), String(t.cantidad)])))
+      })
+      .catch((err) => { if (vigente) setVista({ data: null, error: mensajeDeError(err) }) })
+    return () => { vigente = false }
+  }, [fila, intentoDeCarga])
+
+  const data = vista?.data ?? null
+  const unidad = data?.unidad ?? fila.unidad
+  const lotes = data?.lotes ?? []
+  const aConciliar = data?.a_conciliar ?? 0
+
+  // El destino es el saldo «sin lote» de la fila: con un intento pendiente sobre él, el reparto y la nota quedan bloqueados y sólo se puede reenviarlo o descartarlo.
+  const firma = firmaDeConciliacion(fila)
+  const pendiente = leerPendientes()[firma] ?? null
+  const cuerpoPendiente = pendiente?.tipo === 'conciliar' ? pendiente.cuerpo as VencimientoConciliarPayload : undefined
+  const valorDe = (l: { lote: string | null; vence: string | null }) =>
+    cuerpoPendiente
+      ? String(cuerpoPendiente.reparto.find((t) => claveDeTramo(t) === claveDeTramo(l))?.cantidad ?? '')
+      : (cantidades[claveDeTramo(l)] ?? '')
+  const erroresDeTramos = lotes.map((l) => errorDeTramo(cantidades[claveDeTramo(l)] ?? '', l.saldo))
+  const reparto = lotes
+    .map((l) => ({ lote: l.lote, vence: l.vence, cantidad: Number(cantidades[claveDeTramo(l)] ?? '') }))
+    .filter((t) => Number.isFinite(t.cantidad) && t.cantidad > 0)
+  const total = reparto.reduce((suma, t) => suma + t.cantidad, 0)
+  const resto = Math.max(aConciliar - total, 0)
+  const errorDelTotal = total <= 0
+    ? 'Cargá una cantidad en al menos un lote.'
+    : (total > aConciliar + EPSILON ? `El total no puede pasar de lo que está en negativo (${formatoCantidad(aConciliar)}).` : null)
+  const hayErrorDeTramo = erroresDeTramos.some((e) => e !== null)
+  const puedeConfirmar = !!cuerpoPendiente || (data !== null && aConciliar > 0)
+
+  function confirmar() {
+    const post = (cuerpo: Payload) => api.post<VencimientoConciliarRespuesta>(`${RUTA}/conciliar`, cuerpo)
+    if (pendiente && cuerpoPendiente) {
+      void enviar(pendiente, post, onListo)
+      return
+    }
+    setIntentado(true)
+    if (!data || hayErrorDeTramo || errorDelTotal) return
+    const datos = {
+      producto_id: fila.producto_id, deposito_id: fila.deposito_id, variante_id: fila.variante_id, reparto, nota: nota.trim(),
+    }
+    const cuerpo: VencimientoConciliarPayload = { ...datos, clave_operacion: claveDe(JSON.stringify(datos)) }
+    void enviar({ firma, tipo: 'conciliar', cuerpo }, post, onListo)
+  }
+
+  return (
+    <Dialog open onOpenChange={(abierto) => { if (!abierto && !enVuelo) onCerrar() }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><Scale className="size-4" />Conciliar salidas sin lote</DialogTitle>
+          <DialogDescription>
+            {fila.nombre}{fila.variante ? ` (${fila.variante})` : ''} · {ubicacion(fila)} · saldo sin lote {formatoCantidad(fila.saldo)} {fila.unidad}.
+            {' '}Se reparte lo que está en negativo entre los lotes que lo respaldan: el stock total no cambia.
+          </DialogDescription>
+        </DialogHeader>
+        <AvisoSaldoSobreestimado />
+        {pendiente && cuerpoPendiente && !enVuelo && (
+          <PanelIntentoPendiente
+            pendiente={pendiente} deshabilitado={enVuelo} onDescartar={() => descartar(firma)}
+            resumen={`conciliar ${formatoCantidad(cuerpoPendiente.reparto.reduce((suma, t) => suma + t.cantidad, 0))} ${fila.unidad} entre ${cuerpoPendiente.reparto.length} lote${cuerpoPendiente.reparto.length !== 1 ? 's' : ''}`}
+          />
+        )}
+        {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+        <div className="grid max-h-[60vh] gap-4 overflow-y-auto pr-1">
+          {vista === null && <p role="status" className="text-sm text-muted-foreground">Consultando…</p>}
+          {vista?.error && (
+            <div className="grid gap-2">
+              <p role="alert" className="text-sm text-destructive">{vista.error}</p>
+              <div>
+                <Button type="button" size="sm" variant="outline" className={TACTIL_BAJO_LG} onClick={() => { setVista(null); setIntentoDeCarga((n) => n + 1) }}>Reintentar</Button>
+              </div>
+            </div>
+          )}
+          {data && aConciliar <= 0 && !cuerpoPendiente && (
+            <p role="status" className="rounded-md border p-3 text-sm">
+              Ya no hay saldo sin lote en negativo en este depósito: no hay nada que conciliar.
+            </p>
+          )}
+          {data && aConciliar > 0 && (
+            <>
+              <p className="text-sm">
+                Están en negativo <strong className="font-medium">{formatoCantidad(aConciliar)} {unidad}</strong>: salieron de algún lote y siguen contados en él.
+                {' '}La propuesta los reparte por vencimiento (primero los que vencen antes); podés cambiarla.
+              </p>
+              {data.sin_cubrir > 0 && (
+                <p role="note" className="flex items-start gap-2 rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">
+                  <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+                  <span>
+                    Los lotes no alcanzan a cubrir {formatoCantidad(data.sin_cubrir)} {unidad}; ese resto es un faltante real: corregilo con un conteo físico.
+                  </span>
+                </p>
+              )}
+              {lotes.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Este producto no tiene lotes con saldo en este depósito, así que no hay entre qué repartir.</p>
+              ) : (
+                <ul className="grid gap-2" aria-label="Lotes">
+                  {lotes.map((l, i) => {
+                    const id = `conciliar-lote-${i}`
+                    const e = cuerpoPendiente ? null : erroresDeTramos[i]
+                    return (
+                      <li key={claveDeTramo(l)} className="grid gap-2 rounded-md border p-3 sm:grid-cols-[minmax(0,1fr)_9rem] sm:items-start">
+                        <div className="grid min-w-0 gap-1">
+                          <Label htmlFor={id} className="[overflow-wrap:anywhere]">Lote {l.lote ?? '(sin código)'}</Label>
+                          <p id={`${id}-detalle`} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                            <span>{l.vence ? `vence ${fecha(l.vence)}` : 'sin fecha de vencimiento'}</span>
+                            {l.dias_para_vencer !== null && <BadgeDeDias dias={l.dias_para_vencer} />}
+                            <span>saldo {formatoCantidad(l.saldo)} {unidad}</span>
+                          </p>
+                        </div>
+                        <div className="grid gap-1">
+                          <Input
+                            id={id} type="number" inputMode="decimal" min={0} max={l.saldo} step="any" disabled={!!cuerpoPendiente || enVuelo}
+                            className={TACTIL_BAJO_LG} aria-describedby={`${id}-detalle`} aria-invalid={!!e}
+                            value={valorDe(l)} onChange={(ev) => setCantidades((c) => ({ ...c, [claveDeTramo(l)]: ev.target.value }))}
+                          />
+                          {e && <p role="alert" className="text-xs text-destructive">{e}</p>}
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+              {!cuerpoPendiente && (
+                <div className="grid gap-1 text-sm" aria-live="polite">
+                  <p data-testid="conciliar-total">Se concilian {formatoCantidad(total)} de {formatoCantidad(aConciliar)} {unidad}.</p>
+                  {intentado && errorDelTotal && <p role="alert" className="text-xs text-destructive">{errorDelTotal}</p>}
+                  {!errorDelTotal && resto > EPSILON && (
+                    <p className="text-muted-foreground">
+                      Quedan {formatoCantidad(resto)} {unidad} en negativo sin conciliar. Mientras haya saldo sin lote negativo, no se puede dar de baja un lote de este producto.
+                    </p>
+                  )}
+                </div>
+              )}
+              <Campo id="conciliar-nota" etiqueta="Nota">
+                <Textarea id="conciliar-nota" rows={2} disabled={!!cuerpoPendiente} value={cuerpoPendiente ? cuerpoPendiente.nota : nota} onChange={(e) => setNota(e.target.value)} />
+              </Campo>
+            </>
+          )}
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" className={TACTIL_BAJO_LG} disabled={enVuelo} onClick={onCerrar}>Cancelar</Button>
+          <Button type="button" className={TACTIL_BAJO_LG} disabled={enVuelo || !puedeConfirmar} onClick={confirmar}>
+            <Check />{enVuelo ? 'Guardando…' : (cuerpoPendiente ? 'Reenviar el intento anterior' : 'Confirmar')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ── Cargar stock con lote (entrada) ──────────────────────────────────────────────────────────────────────────────
 
 /** El valor de «sin variante» en el `Select` de variantes (uno de Radix no admite `''`). */
@@ -856,10 +1061,11 @@ function ordenar(lotes: VencimientoLote[], orden: { clave: ClaveOrden; sentido: 
   })
 }
 
-/** ¿Hay un intento sin confirmar sobre esta fila? En un lote, la baja de ese lote; en un saldo sin lote, la asignación
- *  sobre ese producto, depósito y variante. */
+/** ¿Hay un intento sin confirmar sobre esta fila? En un lote, la baja de ese lote; en un saldo sin lote, la asignación o la
+ *  conciliación sobre ese producto, depósito y variante. */
 const pendienteDeLote = (todos: Pendiente[], l: VencimientoLote) => todos.some((p) => p.firma === firmaDeMerma(l))
-const pendienteDeSinLote = (todos: Pendiente[], s: VencimientoSinLote) => todos.some((p) => p.firma === firmaDeAsignacion(s))
+const pendienteDeSinLote = (todos: Pendiente[], s: VencimientoSinLote) =>
+  todos.some((p) => p.firma === firmaDeAsignacion(s) || p.firma === firmaDeConciliacion(s))
 
 function MarcaSinConfirmar() {
   return (
@@ -874,12 +1080,15 @@ const claveDeFila = (f: VencimientoLote | VencimientoSinLote) =>
 
 type Aviso = { texto: string }
 
-export function Vencimientos({ puedeMover = true, puedeMermar = puedeMover, puedeMarcar = true }: {
+export function Vencimientos({ puedeMover = true, puedeMermar = puedeMover, puedeMarcar = true, puedeConciliar = false }: {
   puedeMover?: boolean
   /** Dar de baja un lote (merma). Sin pasarla vale lo que `puedeMover`: el producto que las separa (la baja es una decisión
    *  distinta de mover stock) pasa las dos. */
   puedeMermar?: boolean
   puedeMarcar?: boolean
+  /** Conciliar el saldo «sin lote» negativo (ADR-063): las filas «Salidas sin lote» ofrecen «Conciliar». Sin pasarla (`false`) la pantalla es la de siempre; no hereda de `puedeMover` porque es una
+   *  escritura nueva y el motor la protege con el mismo gate que los movimientos (ADR-060): el producto la prende para quien tiene ese permiso. */
+  puedeConciliar?: boolean
 } = {}) {
   const [dias, setDias] = useState(DIAS_POR_DEFECTO)
   const [sucursal, setSucursal] = useState(TODAS)
@@ -895,6 +1104,7 @@ export function Vencimientos({ puedeMover = true, puedeMermar = puedeMover, pued
   const [aviso, setAviso] = useState<Aviso | null>(null)
   const [aMermar, setAMermar] = useState<VencimientoLote | null>(null)
   const [aAsignar, setAAsignar] = useState<VencimientoSinLote | null>(null)
+  const [aConciliar, setAConciliar] = useState<VencimientoSinLote | null>(null)
   // «Cargar stock con lote»: cerrado, abierto en blanco o abierto sobre un intento sin confirmar (`inicial`).
   const [entrada, setEntrada] = useState<{ inicial: VencimientoEntradaPayload | null } | null>(null)
   // Los productos, una sola consulta para «Productos que vencen» y para el diálogo de la entrada.
@@ -963,6 +1173,7 @@ export function Vencimientos({ puedeMover = true, puedeMermar = puedeMover, pued
   function listo(texto: string) {
     setAMermar(null)
     setAAsignar(null)
+    setAConciliar(null)
     setEntrada(null)
     setAviso({ texto })
     setRecarga((r) => r + 1)
@@ -970,8 +1181,17 @@ export function Vencimientos({ puedeMover = true, puedeMermar = puedeMover, pued
 
   function mermaHecha(f: VencimientoLote, r: VencimientoMermaRespuesta) {
     listo(r.repetida
-      ? `Ya estaba registrado: esta baja se había guardado antes, no se volvió a descontar. Saldo del lote: ${formatoCantidad(r.saldo_restante)} ${f.unidad}.`
-      : `Se dieron de baja ${formatoCantidad(r.cantidad)} ${f.unidad} de ${f.nombre}, lote ${r.lote ?? '(sin código)'}. Saldo del lote: ${formatoCantidad(r.saldo_restante)} ${f.unidad}.`)
+      ? `Ya estaba registrado: esta baja se había guardado antes, no se volvió a descontar. Saldo del lote: ${formatoCantidad(r.saldo_restante)} ${f.unidad}.${textoDelCosto(r)}`
+      : `Se dieron de baja ${formatoCantidad(r.cantidad)} ${f.unidad} de ${f.nombre}, lote ${r.lote ?? '(sin código)'}. Saldo del lote: ${formatoCantidad(r.saldo_restante)} ${f.unidad}.${textoDelCosto(r)}`)
+  }
+
+  function conciliacionHecha(f: VencimientoSinLote, r: VencimientoConciliarRespuesta) {
+    const resto = r.sin_cubrir > 0
+      ? ` Quedan ${formatoCantidad(r.sin_cubrir)} ${f.unidad} sin respaldo en ningún lote; ese resto es un faltante real: corregilo con un conteo físico.`
+      : ''
+    listo(r.repetida
+      ? `Ya estaba registrado: esta conciliación se había guardado antes, no se movió stock de nuevo. Sin lote quedan ${formatoCantidad(r.saldo_sin_lote)} ${f.unidad}.${resto}`
+      : `Se conciliaron ${formatoCantidad(r.cantidad)} ${f.unidad} de ${f.nombre}: pasaron del “sin lote” a ${r.tramos.length === 1 ? 'su lote' : `sus ${r.tramos.length} lotes`}. Sin lote quedan ${formatoCantidad(r.saldo_sin_lote)} ${f.unidad}.${resto}`)
   }
 
   function asignacionHecha(f: VencimientoSinLote, r: VencimientoAsignarRespuesta) {
@@ -1219,7 +1439,7 @@ export function Vencimientos({ puedeMover = true, puedeMermar = puedeMover, pued
                         <th scope="col" className="p-3 text-left font-medium">Sucursal / depósito</th>
                         <th scope="col" className="p-3 text-right font-medium">Saldo sin lote</th>
                         <th scope="col" className="p-3 text-left font-medium">Situación</th>
-                        {puedeMover && <th scope="col" className="p-3 text-right font-medium">Acciones</th>}
+                        {(puedeMover || puedeConciliar) && <th scope="col" className="p-3 text-right font-medium">Acciones</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -1247,12 +1467,18 @@ export function Vencimientos({ puedeMover = true, puedeMermar = puedeMover, pued
                               {SITUACION[s.situacion].etiqueta}
                             </Badge>
                           </td>
-                          {puedeMover && (
+                          {(puedeMover || puedeConciliar) && (
                             <td className="p-3 text-right">
                               {/* Sólo hay qué asignar con saldo positivo: un negativo son salidas, no stock. */}
-                              {s.situacion === 'sin_fecha' && (
+                              {puedeMover && s.situacion === 'sin_fecha' && (
                                 <Button size="sm" variant="outline" aria-label={`Asignar vencimiento ${s.nombre}${s.variante ? ` (${s.variante})` : ''}, ${ubicacion(s)}`} onClick={() => { setAviso(null); setAAsignar(s) }}>
                                   <CalendarPlus />Asignar vencimiento
+                                </Button>
+                              )}
+                              {/* Y sólo hay qué conciliar con saldo negativo: son las salidas que no bajaron ningún lote. */}
+                              {puedeConciliar && s.situacion === 'salidas_sin_lote' && (
+                                <Button size="sm" variant="outline" className={TACTIL_BAJO_LG} aria-label={`Conciliar ${s.nombre}${s.variante ? ` (${s.variante})` : ''}, ${ubicacion(s)}`} onClick={() => { setAviso(null); setAConciliar(s) }}>
+                                  <Scale />Conciliar
                                 </Button>
                               )}
                             </td>
@@ -1273,6 +1499,9 @@ export function Vencimientos({ puedeMover = true, puedeMermar = puedeMover, pued
       )}
       {aAsignar && (
         <DialogoAsignar fila={aAsignar} alCambiarPendientes={alCambiarPendientes} onCerrar={() => setAAsignar(null)} onListo={(r) => asignacionHecha(aAsignar, r)} />
+      )}
+      {aConciliar && (
+        <DialogoConciliar fila={aConciliar} alCambiarPendientes={alCambiarPendientes} onCerrar={() => setAConciliar(null)} onListo={(r) => conciliacionHecha(aConciliar, r)} />
       )}
       {entrada && (
         <DialogoEntrada

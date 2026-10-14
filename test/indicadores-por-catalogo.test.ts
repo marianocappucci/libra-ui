@@ -24,9 +24,9 @@ const MINIMO_DE_ARCHIVOS = 40
 /** Las pantallas del kit que son de reporte o de tablero, por nombre. Si aparece una nueva (o se va una), el test lo dice. */
 const PANTALLAS_DEL_KIT = ['comercio/Dashboard.tsx', 'comercio/Reportes.tsx']
 
-/** Pantallas del kit que no se llaman «Reporte*» ni «Dashboard*» pero arman KPI y ya pasan por el catálogo (0.146.0, ADR-058): Caja, Egresos y Margen. Quedan cubiertas por
+/** Pantallas del kit que no se llaman «Reporte*» ni «Dashboard*» pero arman KPI y ya pasan por el catálogo (0.146.0, ADR-058): Caja, Egresos y Margen, y desde 0.151.0 Mermas (ADR-063). Quedan cubiertas por
  *  este guard igual que las de arriba, con los glifos de acción que usan (`GLIFOS_DE_ACCION`). */
-const MIGRADAS = ['comercio/Caja.tsx', 'comercio/Egresos.tsx', 'comercio/Margen.tsx']
+const MIGRADAS = ['comercio/Caja.tsx', 'comercio/Egresos.tsx', 'comercio/Margen.tsx', 'comercio/Mermas.tsx']
 
 /** Los glifos de acción o de estado que esas tres pantallas importan sueltos y no nombran nada que se mida: filtrar (`Filter`), anular (`Ban`), ver (`Eye`) y el triángulo de aviso
  *  (`AlertTriangle`). Se suman a `LUCIDE_PERMITIDOS` sólo para ellas: es lo que `opciones.permitidos` está hecho para pedir. */
