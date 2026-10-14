@@ -1422,7 +1422,7 @@ No hay helper `precios-distintos` ni código que lea ese 409 (`grep precios.dist
 
 **Estado:** aceptada (2026-10-14). Pedido del humano, a continuación del ADR-061.
 
-**Qué se hizo.** `Facturas` suma un selector «Mail: todas / Enviadas / Sin enviar» en la barra de filtros. Manda `envio=enviada|sin_enviar` al motor (libracore v1.165.0, ADR-051), que filtra en el `WHERE`, así que el total y la paginación lo respetan. Se aplica al elegirlo (como las pestañas), vuelve a la página 1 y lo saca «Limpiar filtros». Con «todas» no viaja el parámetro.
+**Qué se hizo.** `Facturas` suma un selector «Mail: todas / Enviadas / Sin enviar» en la barra de filtros. Manda `envio=enviada|sin_enviar` al motor (libracore v1.166.0, ADR-051), que filtra en el `WHERE`, así que el total y la paginación lo respetan. Se aplica al elegirlo (como las pestañas), vuelve a la página 1 y lo saca «Limpiar filtros». Con «todas» no viaja el parámetro.
 
 **Qué decide el motor, no el kit.** «Sin enviar» incluye los envíos que fallaron (el cliente no lo recibió) y sólo comprobantes con CAE. Un comprobante mandado antes del 2026-10-14 figura como «sin enviar»: el rastro empezó ese día. Contra un motor anterior el parámetro se ignora y el listado sale sin filtrar.
 
