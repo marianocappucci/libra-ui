@@ -65,3 +65,35 @@ export type MpMovimiento = {
   created_at: string
   cliente: Cliente | null
 }
+
+// ── Los medios de pago, en palabras (2026-10-14) ──────────────────────────────
+
+/** Un código de MercadoPago (`nuevo_medio`) que no está en las tablas, legible: «Nuevo medio». Nunca en
+ *  mayúsculas ni con guiones bajos, que es como se veían hasta el 2026-10-14. */
+export function legible(codigo: string): string {
+  const t = codigo.replace(/[_-]+/g, ' ').trim().toLowerCase()
+  return t ? t[0].toUpperCase() + t.slice(1) : codigo
+}
+
+/** El medio concreto (`payment_method_id` del pago, `origen_banco` del movimiento), en palabras. Los de la
+ *  tabla son los que aparecen en Compulibra y los que MercadoPago manda en la Argentina; el resto, `legible`. */
+const MEDIOS: Record<string, string> = {
+  visa: 'Visa (crédito)',
+  master: 'Mastercard (crédito)',
+  amex: 'American Express (crédito)',
+  naranja: 'Naranja (crédito)',
+  cabal: 'Cabal (crédito)',
+  debvisa: 'Visa (débito)',
+  debmaster: 'Mastercard (débito)',
+  maestro: 'Maestro (débito)',
+  debcabal: 'Cabal (débito)',
+  account_money: 'Saldo de Mercado Pago',
+  cvu: 'Transferencia desde billetera virtual',
+  debin_transfer: 'Transferencia bancaria (DEBIN)',
+  rapipago: 'Rapipago (efectivo)',
+  pagofacil: 'Pago Fácil (efectivo)',
+}
+
+export function nombreDelMedio(codigo: string): string {
+  return MEDIOS[codigo.trim().toLowerCase()] ?? legible(codigo)
+}
