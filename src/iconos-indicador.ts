@@ -33,7 +33,7 @@
 // diferencia de la identidad): el reporte de un producto tiene que decir lo mismo que su menú, y el catálogo es lo que lo garantiza.
 import {
   Banknote, BadgePercent, Bell, CircleArrowDown, CircleArrowUp, ClipboardList, DollarSign, Droplets, FileBadge, FilePenLine, Gauge, Headset,
-  Hourglass, Monitor, PackageMinus, PackageOpen, Route, ShieldCheck, Ticket, Timer, TrendingUp, Weight, Wrench,
+  Hourglass, Monitor, PackageMinus, PackageOpen, PackageX, Route, ShieldCheck, Ticket, Timer, TrendingUp, Weight, Wrench,
   type LucideIcon,
 } from 'lucide-react'
 import { ICONOS, iconoDelConcepto, type Concepto } from './iconos-identidad'
@@ -53,6 +53,8 @@ const PROPIOS = {
   margen: TrendingUp,
   /** Lo que costó lo que se vendió: el «Costo» de «Margen y rotación» (Margen del kit). Es la mercadería, no el gasto cargado (`egresos`) ni la plata que salió (`pagos`). */
   costo: PackageOpen,
+  /** Lo que se perdió por mermas, en unidades y en plata: «Mermas» (Mermas del kit, ADR-063). Es la mercadería que se tiró; no el costo de lo vendido (`costo`) ni el stock bajo (`stockBajo`). */
+  mermas: PackageX,
   /** Productos por debajo de su mínimo: «Stock bajo mínimo». Es `stock` con una alerta; no se dibuja con el triángulo de advertencia. */
   stockBajo: PackageMinus,
   /** Tiempo medido: «Horas invertidas» (LibraDesk), «Tiempos de comanda por estación» (RestoLibra). */

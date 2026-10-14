@@ -12,6 +12,8 @@ import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
 import { SelectBuscable } from '../SelectBuscable'
 import { TipoBadge } from './Stock'
+import { ImporteDeMerma } from './importe-de-merma'
+import { traeImportes } from './importes-de-merma'
 import { opcionesProducto, type MovimientoStock, type Producto } from './tipos'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -83,6 +85,9 @@ export function StockMovimientos({
 
   const productoNombre = productos.find((p) => String(p.id) === productoId)?.nombre
 
+  // El importe de las mermas se muestra sólo si el backend lo manda (ADR-063): sin las claves, la historia es la de siempre.
+  const conImporte = useMemo(() => traeImportes(movimientos), [movimientos])
+
   const columns = useMemo<ColumnDef<MovimientoStock>[]>(() => [
     { accessorKey: 'fecha', header: sortableHeader('Fecha'), cell: ({ row }) => <span className="text-muted-foreground">{fecha(row.original.fecha)}</span> },
     {
@@ -108,9 +113,14 @@ export function StockMovimientos({
         return <div className={`text-center font-semibold ${c > 0 ? 'text-exito' : 'text-destructive'}`}>{c > 0 ? '+' : ''}{formatEntero(c)}</div>
       },
     },
+    ...(conImporte ? [{
+      id: 'importe',
+      header: () => <div className="text-right">Importe</div>,
+      cell: ({ row }: { row: { original: MovimientoStock } }) => <div className="text-right"><ImporteDeMerma movimiento={row.original} /></div>,
+    } as ColumnDef<MovimientoStock>] : []),
     { accessorKey: 'referencia', header: 'Referencia', cell: ({ row }) => row.original.referencia || '—' },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [rutaDeProducto])
+  ], [rutaDeProducto, conImporte])
 
   return (
     <div className="grid gap-4">

@@ -1,4 +1,4 @@
-// Los intentos de escritura de Vencimientos (`asignar`, `entrada` y `merma`) cuyo resultado no se conoce: el cuerpo COMPLETO con su
+// Los intentos de escritura de Vencimientos (`asignar`, `entrada`, `merma` y `conciliar`) cuyo resultado no se conoce: el cuerpo COMPLETO con su
 // `clave_operacion`, guardados para poder reenviarlos exactamente igual (o descartarlos a propósito). Ver el encabezado
 // de `Vencimientos.tsx` por el principio; acá está sólo el almacén.
 //
@@ -8,10 +8,10 @@
 // falla, cuota, modo privado, sin `sessionStorage`), `guardarPendiente` lo dice y NO se envía. Un borrado que no se pudo persistir queda anotado (`borrados`) para que lo viejo del storage no
 // lo resucite. Límite: otra pestaña u otro navegador (otro `sessionStorage`) no lo ve; ahí lo que protege es el motor, que
 // con la misma clave y el mismo cuerpo contesta `repetida: true`.
-import type { VencimientoAsignarPayload, VencimientoEntradaPayload, VencimientoMermaPayload } from './tipos'
+import type { VencimientoAsignarPayload, VencimientoConciliarPayload, VencimientoEntradaPayload, VencimientoMermaPayload } from './tipos'
 
-export type Payload = VencimientoMermaPayload | VencimientoAsignarPayload | VencimientoEntradaPayload
-export type TipoDeEscritura = 'merma' | 'asignar' | 'entrada'
+export type Payload = VencimientoMermaPayload | VencimientoAsignarPayload | VencimientoEntradaPayload | VencimientoConciliarPayload
+export type TipoDeEscritura = 'merma' | 'asignar' | 'entrada' | 'conciliar'
 
 /** Un intento de escritura cuyo resultado no se conoce. `firma` es la del DESTINO (ver `firmaDeMerma` y `firmaDeAsignacion`). */
 export type Pendiente = { firma: string; tipo: TipoDeEscritura; cuerpo: Payload; creado: number }
@@ -41,11 +41,17 @@ export function firmaDeEntrada(l: { producto_id: number; deposito_id: number; va
   return JSON.stringify(['entrada', l.producto_id, l.deposito_id, l.variante_id, l.lote, l.vence])
 }
 
+/** La firma de una conciliación: consume el saldo «sin lote» de (producto, depósito, variante), como la asignación, pero en el otro sentido (`conciliar_sin_lote`: el saldo
+ *  negativo se reparte entre los lotes que lo respaldan). Sin el reparto ni la nota: cambiarlos no es otra operación, gasta el mismo saldo. */
+export function firmaDeConciliacion(s: { producto_id: number; deposito_id: number; variante_id: number | null }): string {
+  return JSON.stringify(['conciliar', s.producto_id, s.deposito_id, s.variante_id])
+}
+
 function esPendiente(v: unknown): v is Pendiente {
   if (!v || typeof v !== 'object') return false
   const p = v as Partial<Pendiente>
   const c = p.cuerpo as Partial<Payload> | undefined
-  return typeof p.firma === 'string' && (p.tipo === 'merma' || p.tipo === 'asignar' || p.tipo === 'entrada') && typeof p.creado === 'number'
+  return typeof p.firma === 'string' && (p.tipo === 'merma' || p.tipo === 'asignar' || p.tipo === 'entrada' || p.tipo === 'conciliar') && typeof p.creado === 'number'
     && !!c && typeof c.clave_operacion === 'string' && typeof c.producto_id === 'number'
 }
 

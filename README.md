@@ -434,6 +434,7 @@ Las dos tarjetas usan el recuadro del título de pantalla (`data-slot="icono-til
 | `porCobrar` | `Hourglass` | Lo que todavía no se cobró |
 | `margen` | `TrendingUp` | Margen y rentabilidad; el resultado del período de Caja |
 | `costo` | `PackageOpen` | Lo que costó lo que se vendió (Margen y rotación) |
+| `mermas` | `PackageX` | Lo que se perdió por mermas (Mermas) |
 | `stockBajo` | `PackageMinus` | Productos por debajo de su mínimo |
 | `tiempo` | `Timer` | Horas invertidas, tiempos de comanda |
 | `recordatorios` | `Bell` | Recordatorios enviados |

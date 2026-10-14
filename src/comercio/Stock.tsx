@@ -51,6 +51,8 @@ import {
 } from '@/components/ui/dialog'
 import { formatEntero } from '@/lib/utils'
 import { formatoCantidad } from '../formatos'
+import { ImporteDeMerma } from './importe-de-merma'
+import { importeDeMovimiento, traeImportes } from './importes-de-merma'
 
 export const TIPO_BADGE: Record<string, { tono: TonoEstado; icon: typeof ArrowDownToLine }> = {
   entrada: { tono: 'ok', icon: ArrowDownToLine },
@@ -102,6 +104,8 @@ export type StockProps = {
 
 /** Bajo este ancho el historial de movimientos pasa de tabla a lista (con las columnas que hacen wrap la tabla entra desde ahí). */
 const ANCHO_MINIMO_HISTORIAL = 720
+/** Lo que suma la columna «Importe» (ADR-063) cuando el backend manda los importes de las mermas: la tabla del historial necesita ese ancho más. */
+const ANCHO_DE_LA_COLUMNA_IMPORTE = 110
 
 type OrdenTarjetas = 'producto' | 'total-asc' | 'total-desc'
 
@@ -408,7 +412,9 @@ export function Stock({
     if (orden === 'producto') return orden_.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
     return orden_.sort((a, b) => (orden === 'total-asc' ? a.stock_actual - b.stock_actual : b.stock_actual - a.stock_actual))
   }, [visibles, orden])
-  const historialEnLista = anchoHistorial > 0 && anchoHistorial < ANCHO_MINIMO_HISTORIAL
+  // El importe de las mermas se muestra sólo si el backend lo manda (ADR-063): sin las claves, el historial es el de siempre.
+  const conImporte = useMemo(() => traeImportes(movimientos), [movimientos])
+  const historialEnLista = anchoHistorial > 0 && anchoHistorial < ANCHO_MINIMO_HISTORIAL + (conImporte ? ANCHO_DE_LA_COLUMNA_IMPORTE : 0)
 
   const movColumns = useMemo<ColumnDef<MovimientoStock>[]>(() => [
     { accessorKey: 'fecha', header: 'Fecha', cell: ({ row }) => formatearFecha(row.original.fecha) },
@@ -438,9 +444,13 @@ export function Stock({
         <span className="text-muted-foreground">{depositos.find((d) => d.id === row.original.deposito_id)?.nombre ?? '—'}</span>
       ),
     } as ColumnDef<MovimientoStock>] : []),
+    ...(conImporte ? [{
+      id: 'importe', header: () => <div className="text-right">Importe</div>,
+      cell: ({ row }: { row: { original: MovimientoStock } }) => <div className="text-right"><ImporteDeMerma movimiento={row.original} /></div>,
+    } as ColumnDef<MovimientoStock>] : []),
     { accessorKey: 'referencia', header: 'Referencia', meta: { className: 'whitespace-normal [overflow-wrap:anywhere]' }, cell: ({ row }) => <span className="text-muted-foreground">{row.original.referencia || '—'}</span> },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [depositos])
+  ], [depositos, conImporte])
 
   const etiquetaCantidad = modo === 'absoluto'
     ? `Stock nuevo (${editing?.unidad ?? ''})`
@@ -662,6 +672,7 @@ export function Stock({
                           <span className={m.cantidad >= 0 ? 'font-semibold text-exito' : 'font-semibold text-destructive'}>
                             {m.cantidad >= 0 ? '+' : ''}{formatEntero(m.cantidad)}
                           </span>
+                          {conImporte && importeDeMovimiento(m) && <span className="text-xs">Importe: <ImporteDeMerma movimiento={m} /></span>}
                         </div>
                         <button type="button" className="text-left font-semibold [overflow-wrap:anywhere] hover:underline" onClick={() => verMovimientos(m.producto_id)}>{m.producto_nombre}</button>
                         <p className="text-xs text-muted-foreground [overflow-wrap:anywhere]">
