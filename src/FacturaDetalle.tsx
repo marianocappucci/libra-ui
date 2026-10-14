@@ -8,6 +8,7 @@
 // así que el `useAuth` de este paquete NO es el mismo contexto que el del
 // producto y leerlo desde acá daría siempre vacío. Por eso el rol entra como
 // prop y no se importa.
+import { EnviosEmailCard, type EnvioEmail } from './envios-email'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { api, ApiError } from './api-client'
@@ -278,8 +279,14 @@ export function FacturaDetalle({
     try {
       await api.post(`/api/facturas/${facturaId}/enviar-email`, { email: emailTo })
       setEmailOpen(false)
+      await cargar()
     } catch (err) {
       setError(describeError(err))
+      // Un envío fallido también deja rastro. Se relee sólo la lista: `cargar()` borraría el error
+      // y el destinatario que el usuario tiene que ver para corregirlo.
+      await api.get<EnvioEmail[]>(`/api/facturas/${facturaId}/envios`)
+        .then((envios) => { if (Array.isArray(envios)) setDetalle((d) => d && { ...d, envios_email: envios }) })
+        .catch(() => undefined)
     } finally {
       setSaving(false)
     }
@@ -453,6 +460,8 @@ export function FacturaDetalle({
               </div>
             ) : null
           )}
+
+          <EnviosEmailCard envios={detalle.envios_email} />
 
           {detalle.cobros.length > 0 && (
             <Card className="border-l-4 border-l-exito">

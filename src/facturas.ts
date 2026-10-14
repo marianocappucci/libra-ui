@@ -1,3 +1,4 @@
+import type { EnvioEmail, ResumenEnvioEmail } from './envios-email'
 // Dominio de facturación compartido por los productos que emiten comprobantes:
 // Contalibra, Restolibra y —desde el 2026-08-27— LibraClub, que montó las dos
 // pantallas del kit. Los otros tres verticales facturan desde el turno o desde
@@ -93,6 +94,8 @@ export type Factura = {
   fch_serv_desde?: string
   fch_serv_hasta?: string
   fch_vto_pago?: string
+  /** El resumen de sus envíos por mail (motor ≥ ADR-044); `null` si nunca se mandó. */
+  envio_email?: ResumenEnvioEmail
 }
 
 export type FacturaDetalle = {
@@ -107,6 +110,7 @@ export type FacturaDetalle = {
   total_cobrado: number
   pendiente: number
   cliente_email: string
+  envios_email?: EnvioEmail[]
 }
 
 // Borrador para emitir una copia de un comprobante (POST
@@ -197,4 +201,8 @@ export type Presupuesto = {
   observations: string
   /** El remito al que se convirtió, si se convirtió. */
   remito_id: number | null
+  /** Resumen de sus envíos por mail en el listado; `null` si nunca se mandó. */
+  envio_email?: ResumenEnvioEmail
+  /** Cada intento, en el detalle. */
+  envios_email?: EnvioEmail[]
 }

@@ -23,6 +23,7 @@
 // con la reserva—, así que mostrar «Sin cobrar» diría eso de todo lo cobrado en
 // efectivo. Es la misma decisión que ya se había tomado para la columna de
 // cobrado el 2026-08-27.
+import { IndicadorEnvioEmail } from './envios-email'
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
@@ -287,6 +288,14 @@ export function Facturas({
         if (cobrado > 0) return <BadgeEstado tono="atencion"><Hourglass />Parcial</BadgeEstado>
         return <BadgeEstado tono="neutro"><Hourglass />Sin cobrar</BadgeEstado>
       },
+    })
+
+    cols.push({
+      id: 'mail',
+      header: 'Mail',
+      size: 100,
+      minSize: 90,
+      cell: ({ row }) => (estaAutorizada(row.original) ? <IndicadorEnvioEmail resumen={row.original.envio_email} /> : null),
     })
 
     cols.push({

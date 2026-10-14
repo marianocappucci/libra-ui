@@ -6,6 +6,7 @@
 // que son otra implementación (13-40 % de similitud) y no se tocan.
 //
 // De paso: el «Limpiar» recargaba con el closure viejo, igual que en Remitos.
+import { IndicadorEnvioEmail } from './envios-email'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { ColumnDef } from './data-table'
@@ -85,6 +86,7 @@ export function Presupuestos({ urlDelPdf = (id: number) => `/presupuestos/${id}/
       minSize: 90,
       cell: ({ row }) => <BadgeEstado tono={ESTADO_TONO[row.original.status] ?? 'neutro'}>{ESTADO_LABELS[row.original.status] ?? row.original.status}</BadgeEstado>,
     },
+    { id: 'mail', header: 'Mail', size: 100, minSize: 90, cell: ({ row }) => <IndicadorEnvioEmail resumen={row.original.envio_email} /> },
     { accessorKey: 'valid_until', header: 'Válido hasta', size: 115, minSize: 90, cell: ({ row }) => fecha(row.original.valid_until) || '—' },
     { accessorKey: 'total', header: () => <div className="text-right">Total</div>, size: 130, minSize: 100, cell: ({ row }) => <div className="truncate text-right font-medium">{formatoMoneda(row.original.total)}</div> },
     {

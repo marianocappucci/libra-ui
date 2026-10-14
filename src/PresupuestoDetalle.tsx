@@ -22,6 +22,7 @@ import { ArrowLeft, CheckCheck, CheckCircle2, FileDown, Mail, Pencil, Receipt, R
 import { TituloPantalla } from './titulo-pantalla'
 import { ICONOS } from './iconos-identidad'
 import { fecha } from './fechas'
+import { EnviosEmailCard, type EnvioEmail } from './envios-email'
 import { formatoMoneda } from './formatos'
 
 const ESTADO_TONO: Record<string, TonoEstado> = {
@@ -104,6 +105,11 @@ export function PresupuestoDetalle({
       await cargar()
     } catch (err) {
       setError(describeError(err))
+      // Un envío fallido también deja rastro. Se relee sólo la lista: `cargar()` borraría el error
+      // y el destinatario que el usuario tiene que ver para corregirlo.
+      await api.get<EnvioEmail[]>(`/api/presupuestos/${presId}/envios`)
+        .then((envios) => { if (Array.isArray(envios)) setP((x) => x && { ...x, envios_email: envios }) })
+        .catch(() => undefined)
     } finally {
       setSaving(false)
     }
@@ -236,6 +242,8 @@ export function PresupuestoDetalle({
                   </table>
                 </CardContent>
               </Card>
+
+              <EnviosEmailCard envios={p.envios_email} />
 
               {st !== 'facturado' && (
                 <Card>
