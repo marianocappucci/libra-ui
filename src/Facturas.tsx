@@ -110,7 +110,7 @@ export function Facturas({
   const [q, setQ] = useState('')
   const [desde, setDesde] = useState('')
   const [hasta, setHasta] = useState('')
-  // Filtro por el rastro de envíos por mail (libracore ≥ v1.165.0, ADR-051 del motor).
+  // Filtro por el rastro de envíos por mail (libracore ≥ v1.166.0, ADR-051 del motor).
   const [envio, setEnvio] = useState<FiltroEnvio>('todas')
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState<number | null>(null)
