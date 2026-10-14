@@ -1391,3 +1391,17 @@ No hay helper `precios-distintos` ni código que lea ese 409 (`grep precios.dist
 **Cómo se adopta.** Subir el pin a 0.147.0 junto con libracommerce 0.59.0. VentaLibra: `<ListaPrecioDetalle conVigencias conSucursal />`; `CompraDetalle` y `Reposicion` no necesitan props (los botones salen con `puedeEscribir`, que ya pasa, y el interruptor con el eco del motor); su diálogo de devolución muestra el `detail` del 503; y el POS manda `sucursal_id` en la cotización y en `POST /api/ventas` (ADR-058 del motor).
 
 **Lo que no cubre.** Los campos del diálogo de promociones miden 36 px en el celular (como los que ya tenía, incluido el select nuevo). No hay «reabrir» una orden cancelada (tampoco en el motor). Un producto con el kit nuevo y el motor anterior verá «Enviar al proveedor» y «Cancelar orden» y un mensaje claro al usarlos (no hay cómo detectarlo antes). No se probó en un celular real ni en Safari.
+
+## ADR-060 — Una venta devuelta en parte sigue ofreciendo «Devolver» (0.148.0)
+
+**Estado:** aceptada (2026-10-14). Pedido del humano, a partir de un hallazgo de la documentación de uso de VentaLibra.
+
+**El defecto.** `VentaDetalle` sólo dibujaba el bloque de acciones (y con él `accionesExtra`, por donde el producto monta «Devolver») cuando `detalle.estado` era `cobrada` o `parcial`. Una devolución parcial deja la venta en `devuelta_parcial` (en el motor la nuance vive en `sales.status_detail`), así que **el botón desaparecía justo después de la primera devolución**. Y esa venta no tiene otra salida: el motor admite devoluciones sucesivas a propósito (ADR-040 de libracommerce: cada una escribe su egreso de caja, y el tope de cada línea descuenta lo ya devuelto), pero **se niega a anularla** («La venta tiene devoluciones: no se puede anular; devolvé el resto de las líneas»). Resultado: una venta sin forma de seguir desde la pantalla, con un mensaje del servidor que manda a hacer algo que la pantalla no permite.
+
+**Qué se hizo.** Con `estado === 'devuelta_parcial'` se renderiza un bloque aparte que contiene **sólo `accionesExtra`**. No se agregó `devuelta_parcial` a la condición del bloque existente, a propósito: ese bloque trae «Generar factura», «Generar remito», «Emitir nota de crédito» y «Anular venta», que son de una venta todavía sin devolver. Anular daría 409 y, de las otras, ninguna corresponde a una venta ya devuelta en parte. Sin `accionesExtra` no se dibuja nada (no queda un bloque vacío con su borde).
+
+**Qué no cambia.** `devuelta` (todo devuelto) no ofrece nada porque no queda qué devolver. El kit no calcula lo que queda por devolver: eso lo decide el diálogo del producto y lo valida el servidor por línea. El de VentaLibra ya consulta `/ventas/{id}/devuelto` y descuenta lo devuelto, así que con este cambio ofrece sólo lo que falta.
+
+**Tests.** 3 en `test/comercio-ventas.test.tsx`: el botón aparece y no aparecen anular, factura ni nota (falla contra `main`); `devuelta` no ofrece devolver; sin `accionesExtra` no hay bloque vacío.
+
+**Cómo se adopta.** Subir el pin a 0.148.0; el producto que monte `accionesExtra` no cambia nada. VentaLibra deja de tener que decirles a sus usuarios que carguen todo en una sola devolución.
