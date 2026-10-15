@@ -25,12 +25,12 @@
 import { Fragment, useMemo, useState, type ReactNode } from 'react'
 import { BuscadorDeTabla, DataTable, type DataTableSearch } from './data-table'
 import { anchoMinimoDeColumnas, type ColumnDef, type RowData } from './tabla'
-import { TACTIL, useAncho } from './use-ancho'
+import { TACTIL, TACTIL_CON_TEXTO, useAncho } from './use-ancho'
 import { cn, coincideBusqueda } from './utils'
 
 /** Una fila como tarjeta: el dato principal arriba (con su estado a la derecha), unos pocos datos secundarios rotulados y las acciones a 44 px. Pensada para ser lo que devuelve `tarjeta` de `TablaOTarjetas`. */
 export function TarjetaDeFila({
-  titulo, subtitulo, estado, datos, acciones, className,
+  titulo, subtitulo, estado, datos, acciones, accionesConTexto, className,
 }: {
   /** El dato principal: el nombre, el número. Un link al detalle si la tabla lo tiene. Parte la línea si es largo. */
   titulo: ReactNode
@@ -42,6 +42,8 @@ export function TarjetaDeFila({
   datos?: { etiqueta: string; valor: ReactNode }[]
   /** Los mismos botones de la columna de acciones de la tabla. */
   acciones?: ReactNode
+  /** Botones **con rótulo** («Conciliar», «Asignar vencimiento»): no entran en el cuadrado de 44 px de `acciones`, así que van en una fila que se parte, de ancho libre y 44 px de alto (ADR-065). */
+  accionesConTexto?: ReactNode
   className?: string
 }) {
   return (
@@ -64,6 +66,7 @@ export function TarjetaDeFila({
         </dl>
       )}
       {acciones != null && <div className={TACTIL}>{acciones}</div>}
+      {accionesConTexto != null && <div className={TACTIL_CON_TEXTO}>{accionesConTexto}</div>}
     </li>
   )
 }
