@@ -22,7 +22,8 @@ salida se versiona**: el consumidor instala el tag desde git y no corre ningún 
 |---|---|
 | `definirConfig(overrides?)` | La config base: Chromium, 1 worker, retries 0 (1 si `NOCTURNO`), trace y screenshot al fallar, reporte JSON (`test-results/resultado.json`), `baseURL` de `E2E_BASE_URL`/`SMOKE_BASE_URL`/`http://localhost:8000`. Proyectos `smoke`, `setup`, `e2e`. `use` se mezcla; lo demás se pisa. |
 | `tildarCaptcha(page)` | Tilda «No soy un robot» (por el label, no por el checkbox) y espera «Ingresar» habilitado. |
-| `aceptarTerminos(page)` | Si `GET /terminos` dice `pendiente`, atraviesa el gate como un cliente nuevo; si no, nada. |
+| `aceptarTerminos(page)` | Si `GET /terminos` dice `pendiente`, atraviesa el gate como un cliente nuevo; si no, nada. Además descarta con «Más tarde» el aviso de la próxima versión (0.153.0) si está. |
+| `descartarAvisoDeProximaVersion(page)` | «Más tarde» en ese aviso, sin aceptar nada; si no está, no hace nada. |
 | `entrarComo(page, {usuario, clave})` | `/login` completo + Términos + espera el sidebar. |
 | `prepararSesiones({rol: {usuario, clave}})` | Para un `e2e/auth.setup.ts`: un test por rol que entra y deja `.auth/<rol>.json`. |
 | `test`, `expect` | El `test` de Playwright con la opción `rol` (`test.use({ rol: 'cajero' })`, defecto `admin`, `null` = sin sesión) que pone el `storageState`, y las fixtures `api` (request con la sesión del rol) y `apiDe(rol)` (la de otro rol). |

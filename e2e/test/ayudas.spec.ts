@@ -3,7 +3,7 @@ import path from 'node:path'
 import { expect } from '@playwright/test'
 // Se prueba lo COMPILADO (`dist/`), que es lo que importa el consumidor, no el fuente.
 import {
-  aceptarTerminos, definirConfig, entrarComo, esperarApi, ponerModo, prepararSesiones, redDeSeguridad, rutaAuth, sinDesborde, sinTextoIlegible,
+  aceptarTerminos, definirConfig, descartarAvisoDeProximaVersion, entrarComo, esperarApi, ponerModo, prepararSesiones, redDeSeguridad, rutaAuth, sinDesborde, sinTextoIlegible,
   test as testDeLaLibreria,
 } from '../dist/index.js'
 import { levantarServidor, type Servidor } from './servidor.js'
@@ -17,7 +17,7 @@ const test = testDeLaLibreria.extend<{ repuesto: void }, { srv: Servidor }>({
     await s.cerrar()
   }, { scope: 'worker' }],
   baseURL: async ({ srv }, use) => { await use(srv.url) },
-  repuesto: [async ({ srv }, use) => { srv.estado.terminosPendientes = false; await use() }, { auto: true }],
+  repuesto: [async ({ srv }, use) => { srv.estado.terminosPendientes = false; srv.estado.avisoProxima = false; await use() }, { auto: true }],
   rol: [null, { option: true }],
 })
 
@@ -70,6 +70,20 @@ test.describe('login', () => {
     await entrarComo(page, { usuario: 'ana', clave: 'x' })
     expect(srv.estado.terminosPendientes).toBe(false)
     await expect(page.getByRole('heading', { name: /Términos y Condiciones/ })).toBeHidden()
+  })
+
+  test('entrarComo descarta con «Más tarde» el aviso de la próxima versión, también tras aceptar el gate', async ({ page, srv }) => {
+    srv.estado.avisoProxima = true
+    srv.estado.terminosPendientes = true
+    await entrarComo(page, { usuario: 'ana', clave: 'x' })
+    await expect(page.getByRole('region', { name: /Nueva versión de los Términos/ })).toBeHidden()
+    // Descartar no acepta nada.
+    expect(srv.estado.avisoProxima).toBe(true)
+  })
+
+  test('descartarAvisoDeProximaVersion no falla si el aviso no está', async ({ page }) => {
+    await entrarComo(page, { usuario: 'ana', clave: 'x' })
+    await descartarAvisoDeProximaVersion(page)
   })
 
   test('aceptarTerminos no hace nada si ya estaban aceptados', async ({ page, srv }) => {
