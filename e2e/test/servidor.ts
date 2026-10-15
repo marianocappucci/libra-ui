@@ -33,8 +33,17 @@ const APP = PAGINA(`
   <label><input type="checkbox" id="ok"> Leí y acepto</label>
   <button id="acepto">Aceptar y continuar</button>
 </div>
+<section id="aviso" role="region" aria-label="Nueva versión de los Términos y Condiciones" hidden style="position:fixed;right:16px;bottom:16px">
+  <p>Desde el 09-11-2026 rige la versión 1.1.</p>
+  <button id="mas-tarde">Más tarde</button>
+</section>
 <script>
-  fetch('/terminos').then((r) => r.json()).then((e) => { document.getElementById('gate').hidden = !e.pendiente })
+  fetch('/terminos').then((r) => r.json()).then((e) => {
+    document.getElementById('gate').hidden = !e.pendiente
+    // Como libra-ui: sólo para quien puede aceptar y mientras la próxima no esté aceptada.
+    document.getElementById('aviso').hidden = !(e.puede_aceptar && e.proxima && !e.proxima.aceptada)
+  })
+  document.getElementById('mas-tarde').addEventListener('click', () => { document.getElementById('aviso').hidden = true })
   document.getElementById('acepto').addEventListener('click', async () => {
     await fetch('/terminos/aceptar', { method: 'POST' }); location.reload()
   })
@@ -77,10 +86,10 @@ const OSCURO_MAL = PAGINA(`${MODO}
 <div id="logo" style="color:#2d2d2d">Logo sobre papel</div>
 <div style="background-image:linear-gradient(#fff,#eee);color:#fff">Sobre un degradé</div>`)
 
-export type Servidor = { url: string; cerrar: () => Promise<void>; estado: { terminosPendientes: boolean; sesiones: number } }
+export type Servidor = { url: string; cerrar: () => Promise<void>; estado: { terminosPendientes: boolean; avisoProxima: boolean; sesiones: number } }
 
 export async function levantarServidor(): Promise<Servidor> {
-  const estado = { terminosPendientes: false, sesiones: 0 }
+  const estado = { terminosPendientes: false, avisoProxima: false, sesiones: 0 }
   const json = (res: http.ServerResponse, cuerpo: unknown, cabeceras: Record<string, string> = {}) => {
     res.writeHead(200, { 'Content-Type': 'application/json', ...cabeceras })
     res.end(JSON.stringify(cuerpo))
@@ -105,7 +114,13 @@ export async function levantarServidor(): Promise<Servidor> {
       // Como libraauth: la cookie de sesión siempre es `Secure`.
       return json(res, { ok: true }, { 'Set-Cookie': 'sesion=de-prueba; Path=/; HttpOnly; Secure; SameSite=Lax' })
     }
-    if (clave === 'GET /terminos') return json(res, { pendiente: estado.terminosPendientes })
+    if (clave === 'GET /terminos') {
+      return json(res, {
+        pendiente: estado.terminosPendientes,
+        puede_aceptar: true,
+        proxima: estado.avisoProxima ? { version: '1.1', vigente_desde: '09-11-2026', aceptada: false } : null,
+      })
+    }
     if (clave === 'POST /terminos/aceptar') { estado.terminosPendientes = false; return json(res, { pendiente: false }) }
     if (ruta === '/api/cosas') return json(res, { metodo: req.method })
     if (clave === 'GET /api/yo') return json(res, { cookie: req.headers.cookie ?? null })
