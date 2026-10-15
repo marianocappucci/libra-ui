@@ -135,6 +135,18 @@ describe('TarjetaDeFila', () => {
     expect(li.querySelector('dl')).toBeNull()
     expect(li.children).toHaveLength(1)
   })
+
+  it('`accionesConTexto` (ADR-065): botones con rótulo en una fila que se parte, de 44 px de alto y ancho libre; sin ellos no hay contenedor', () => {
+    render(<ul><TarjetaDeFila titulo="Ana" accionesConTexto={<><button type="button">Conciliar</button><button type="button">Asignar vencimiento</button></>} /></ul>)
+    const contenedor = screen.getByRole('button', { name: 'Conciliar' }).parentElement!
+    expect(contenedor).toBe(screen.getByRole('button', { name: 'Asignar vencimiento' }).parentElement)
+    expect(contenedor.className.split(/\s+/)).toEqual(expect.arrayContaining(['flex', 'flex-wrap', 'gap-2', '[&_button]:min-h-11', '[&_a]:min-h-11']))
+    // No es el cuadrado de `TACTIL`: con `size-11` el rótulo se saldría de un botón de 44 px de ancho.
+    expect(contenedor.className).not.toContain('size-11')
+    cleanup()
+    render(<ul><TarjetaDeFila titulo="Sola" /></ul>)
+    expect(screen.getByRole('listitem').children).toHaveLength(1)
+  })
 })
 
 describe('useBajoLg: la frontera de `max-lg` de Tailwind', () => {

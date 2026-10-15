@@ -19,6 +19,9 @@ export function useAncho(): [(el: HTMLElement | null) => void, number] {
 /** Los botones de las tarjetas (la vista de los anchos angostos, donde se usa el dedo) miden 44 px, el objetivo táctil de WCAG 2.5.5. ADR-021. */
 export const TACTIL = '[&_a]:size-11 [&_button]:size-11'
 
+/** Los botones **con texto** de una tarjeta (`accionesConTexto` de `TarjetaDeFila`, ADR-065): la misma altura de 44 px, pero el ancho es el del rótulo (con `TACTIL` serían un cuadrado de 44 px y el texto se saldría) y la fila se parte si no entran juntos. */
+export const TACTIL_CON_TEXTO = 'flex flex-wrap gap-2 [&_a]:min-h-11 [&_button]:min-h-11'
+
 /** Lo mismo para los botones de la **columna de acciones de una tabla**: 44 px bajo `lg` (1024 px, la frontera que ya usa el detalle de venta, ADR-022) y los 36 de siempre desde ahí. Va en el contenedor
  *  de los botones de la celda (`<div className="flex justify-end gap-1 …">`), no en cada uno. El ancho de la columna lo sigue el `DataTable` midiéndola, y `anchoColumnaAcciones(n, bajoLg)` da el
  *  mismo número para quien necesita el ancho antes de pintar (el umbral de las tarjetas). ADR-057. */

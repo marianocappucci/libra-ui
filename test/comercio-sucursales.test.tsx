@@ -5,7 +5,7 @@ import { cleanup, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { Sucursales, mensajeDeLimite } from '../src/comercio/Sucursales'
+import { Sucursales } from '../src/comercio/Sucursales'
 import { SucursalDetalle } from '../src/comercio/SucursalDetalle'
 import type { Deposito, Sucursal } from '../src/comercio/tipos'
 import { cuerpoDe, montar, pedidas, prepararFetch, responder } from './helpers-pantallas'
@@ -223,6 +223,9 @@ describe('Sucursales contratadas', () => {
     '/api/sucursales': [CENTRO, NORTE, SUR],
     'POST /api/sucursales': NORTE,
   }
+  // Los textos del tope son los que manda el motor (libracore.limites.mensaje_de_limite); el kit no los escribe.
+  const TOPE_1 = 'Tu plan incluye 1 sucursal. Para sumar otra, comunicate con nosotros.'
+  const TOPE_2 = 'Tu plan incluye 2 sucursales. Para sumar otra, comunicate con nosotros.'
   const nueva = () => screen.getByRole('button', { name: /Nueva sucursal/ })
   const sinAvisos = () => {
     expect(screen.queryByText(/contratadas?$/)).toBeNull()
@@ -255,12 +258,12 @@ describe('Sucursales contratadas', () => {
     expect(screen.queryByText(/comunicate con nosotros/)).toBeNull()
   })
 
-  it('en el tope deshabilita «Nueva sucursal» y dice por qué con el texto del backend', async () => {
-    responder({ ...base, [RUTA]: { contratadas: 2, activas: 2 } })
+  it('en el tope deshabilita «Nueva sucursal» y dice por qué con el texto del motor', async () => {
+    responder({ ...base, [RUTA]: { contratadas: 2, activas: 2, mensaje_de_limite: TOPE_2 } })
     const user = userEvent.setup()
     montar('/sucursales', <Sucursales rutaDelLimite={RUTA} />)
     expect(await screen.findByText('2 de 2 sucursales contratadas')).toBeTruthy()
-    expect(await screen.findByText('Tu plan incluye 2 sucursales. Para sumar otra, comunicate con nosotros.')).toBeTruthy()
+    expect(await screen.findByText(TOPE_2)).toBeTruthy()
     expect(nueva()).toBeDisabled()
     expect(nueva()).toHaveAttribute('aria-describedby', 'sucursales-limite')
     await user.click(nueva())
@@ -270,10 +273,10 @@ describe('Sucursales contratadas', () => {
   })
 
   it('pasado del tope (se bajó lo contratado) también deshabilita, y con una sola contratada habla en singular', async () => {
-    responder({ ...base, [RUTA]: { contratadas: 1, activas: 3 } })
+    responder({ ...base, [RUTA]: { contratadas: 1, activas: 3, mensaje_de_limite: TOPE_1 } })
     montar('/sucursales', <Sucursales rutaDelLimite={RUTA} />)
     expect(await screen.findByText('3 de 1 sucursal contratada')).toBeTruthy()
-    expect(screen.getByText('Tu plan incluye 1 sucursal. Para sumar otra, comunicate con nosotros.')).toBeTruthy()
+    expect(screen.getByText(TOPE_1)).toBeTruthy()
     expect(nueva()).toBeDisabled()
   })
 
@@ -284,25 +287,29 @@ describe('Sucursales contratadas', () => {
     responder({ ...base, [RUTA]: { contratadas: 2, activas: 2, mensaje_de_limite: DEL_MOTOR } })
     montar('/sucursales', <Sucursales rutaDelLimite={RUTA} />)
     expect(await screen.findByText(DEL_MOTOR)).toBeTruthy()
-    expect(screen.queryByText(mensajeDeLimite(2))).toBeNull()
+    expect(screen.queryByText(TOPE_2)).toBeNull()
     expect(nueva()).toBeDisabled()
   })
 
   it('con cupo no muestra el texto del tope aunque el motor lo mande (es el motivo de un botón deshabilitado)', async () => {
-    responder({ ...base, [RUTA]: { contratadas: 3, activas: 2, mensaje_de_limite: mensajeDeLimite(3) } })
+    responder({ ...base, [RUTA]: { contratadas: 3, activas: 2, mensaje_de_limite: 'Tu plan incluye 3 sucursales. Para sumar otra, comunicate con nosotros.' } })
     montar('/sucursales', <Sucursales rutaDelLimite={RUTA} />)
     expect(await screen.findByText('2 de 3 sucursales contratadas')).toBeTruthy()
     expect(screen.queryByText(/comunicate con nosotros/)).toBeNull()
     expect(nueva()).toBeEnabled()
   })
 
-  it('un motor que todavía no manda el texto (o lo manda vacío o con otra forma) deja el de respaldo: nunca queda sin motivo', async () => {
+  // Sin respaldo (0.152.1, ADR-065): toda la suite está en libracore >= v1.167.0, así que la pantalla muestra sólo el texto del motor. Si no viene (ausente, vacío o con otra forma) no se inventa una
+  // frase: el alta sigue deshabilitada y queda el «N de M contratadas».
+  it('sin `mensaje_de_limite` (ausente, vacío o con otra forma) no se inventa un texto: queda el cupo y el botón deshabilitado', async () => {
     for (const rareza of [undefined, '', '   ', null, 42]) {
       cleanup()
       prepararFetch()
       responder({ ...base, [RUTA]: { contratadas: 2, activas: 2, ...(rareza === undefined ? {} : { mensaje_de_limite: rareza }) } })
       montar('/sucursales', <Sucursales rutaDelLimite={RUTA} />)
-      expect(await screen.findByText(mensajeDeLimite(2))).toBeTruthy()
+      expect(await screen.findByText('2 de 2 sucursales contratadas')).toBeTruthy()
+      expect(screen.queryByText(/Tu plan incluye/)).toBeNull()
+      expect(screen.queryByText(/comunicate con nosotros/)).toBeNull()
       expect(nueva()).toBeDisabled()
     }
   })
@@ -327,7 +334,7 @@ describe('Sucursales contratadas', () => {
 
   it('si el alta igual da 409 muestra el detail del backend en el formulario y relee el límite', async () => {
     let lecturas = 0
-    const MENSAJE = mensajeDeLimite(3)
+    const MENSAJE = 'Tu plan incluye 3 sucursales. Para sumar otra, comunicate con nosotros.'
     responder({
       ...base,
       [RUTA]: () => (++lecturas === 1 ? { contratadas: 3, activas: 2 } : { contratadas: 3, activas: 3 }),
@@ -367,11 +374,6 @@ describe('Sucursales contratadas', () => {
     expect(await screen.findByText('2 de 2 sucursales contratadas')).toBeTruthy()
     expect(screen.queryByText(/comunicate con nosotros/)).toBeNull()
     expect(screen.queryByRole('button', { name: /Nueva/ })).toBeNull()
-  })
-
-  it('el texto de respaldo es el de libracore.limites.mensaje_de_limite (para un motor anterior a v1.167.0)', () => {
-    expect(mensajeDeLimite(1)).toBe('Tu plan incluye 1 sucursal. Para sumar otra, comunicate con nosotros.')
-    expect(mensajeDeLimite(4)).toBe('Tu plan incluye 4 sucursales. Para sumar otra, comunicate con nosotros.')
   })
 })
 

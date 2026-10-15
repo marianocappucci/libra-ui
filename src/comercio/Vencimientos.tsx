@@ -68,6 +68,8 @@ import type {
   VencimientosData, VencimientoSituacion,
 } from './tipos'
 import { formatoCantidad, formatoMoneda } from '../formatos'
+import { TarjetaDeFila } from '../tabla-o-tarjetas'
+import { useAncho } from '../use-ancho'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -90,6 +92,11 @@ const MAX_LARGO_LOTE = 64
 
 /** Bajo `lg` (1024 px) los botones y campos que se tocan con el dedo miden 44 px (ADR-057). Sólo los del diálogo y el botón «Conciliar», que son nuevos. */
 const TACTIL_BAJO_LG = 'max-lg:h-11'
+/** Lo que necesita cada tabla para no scrollear de costado (ADR-065): con menos ancho que esto en su contenedor la lista pasa a tarjetas. Son tablas escritas a mano (no `DataTable`), sin `size` por columna que
+ *  sumar, de layout automático: el umbral es un número, el ancho mínimo que la tabla pide con datos anchos (medido en Chromium: 878 y 725 px con códigos y saldos cortos; 1039 y 841 con códigos EAN-13, lotes
+ *  de diez caracteres y saldos de millones). El número cubre el caso ancho: el costo de equivocarse es una tarjeta de más, no un scroll. */
+const ANCHO_TABLA_LOTES = 1040
+const ANCHO_TABLA_SIN_LOTE = 845
 /** Tolerancia para comparar sumas de cantidades decimales (0,1 + 0,2 no es 0,3 en punto flotante). */
 const EPSILON = 1e-9
 
@@ -1169,6 +1176,11 @@ export function Vencimientos({ puedeMover = true, puedeMermar = puedeMover, pued
   }
 
   const lotes = useMemo(() => ordenar(data?.lotes ?? [], orden), [data, orden])
+  // Cada lista mide su contenedor: si la tabla no entra, son tarjetas (sin ancho medido —sin `ResizeObserver`— se queda la tabla).
+  const [medidaDeLotes, anchoDeLotes] = useAncho()
+  const [medidaDeSinLote, anchoDeSinLote] = useAncho()
+  const lotesEnTarjetas = anchoDeLotes > 0 && anchoDeLotes < ANCHO_TABLA_LOTES
+  const sinLoteEnTarjetas = anchoDeSinLote > 0 && anchoDeSinLote < ANCHO_TABLA_SIN_LOTE
 
   function listo(texto: string) {
     setAMermar(null)
@@ -1210,6 +1222,38 @@ export function Vencimientos({ puedeMover = true, puedeMermar = puedeMover, pued
   // Las cargas de stock sin confirmar: no tienen fila en el reporte (el stock todavía puede no estar), así que se listan acá.
   const entradasSinConfirmar = pendientesDeAhora.filter((p) => p.tipo === 'entrada')
   const reporteVacio = !!data && data.lotes.length === 0 && data.sin_lote.length === 0
+
+  // Los botones de una fila son los mismos en la tabla y en la tarjeta (ADR-065).
+  const botonDeBaja = (l: VencimientoLote) => (
+    <Button size="sm" variant="outline" aria-label={`Dar de baja (merma) ${l.nombre}, lote ${l.lote ?? 'sin código'}`} onClick={() => { setAviso(null); setAMermar(l) }}>
+      <Trash2 />Dar de baja (merma)
+    </Button>
+  )
+  // Sólo hay qué asignar con saldo positivo (un negativo son salidas, no stock) y sólo hay qué conciliar con saldo negativo (son las salidas que no bajaron ningún lote).
+  const puedeAsignarFila = (s: VencimientoSinLote) => puedeMover && s.situacion === 'sin_fecha'
+  const puedeConciliarFila = (s: VencimientoSinLote) => puedeConciliar && s.situacion === 'salidas_sin_lote'
+  const botonesDeSinLote = (s: VencimientoSinLote) => (
+    <>
+      {puedeAsignarFila(s) && (
+        <Button size="sm" variant="outline" aria-label={`Asignar vencimiento ${s.nombre}${s.variante ? ` (${s.variante})` : ''}, ${ubicacion(s)}`} onClick={() => { setAviso(null); setAAsignar(s) }}>
+          <CalendarPlus />Asignar vencimiento
+        </Button>
+      )}
+      {puedeConciliarFila(s) && (
+        <Button size="sm" variant="outline" className={TACTIL_BAJO_LG} aria-label={`Conciliar ${s.nombre}${s.variante ? ` (${s.variante})` : ''}, ${ubicacion(s)}`} onClick={() => { setAviso(null); setAConciliar(s) }}>
+          <Scale />Conciliar
+        </Button>
+      )}
+    </>
+  )
+  const badgeDeSituacion = (s: VencimientoSinLote) => (
+    <Badge
+      variant="outline" data-situacion={s.situacion}
+      className={`whitespace-normal ${s.situacion === 'salidas_sin_lote' ? 'border-amber-500/50 text-amber-600 dark:text-amber-400' : ''}`}
+    >
+      {SITUACION[s.situacion].etiqueta}
+    </Badge>
+  )
 
   return (
     <div className="grid gap-4">
@@ -1354,56 +1398,73 @@ export function Vencimientos({ puedeMover = true, puedeMermar = puedeMover, pued
                   )}
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="border-b text-muted-foreground">
-                      <tr>
-                        {COLUMNAS.map((c) => (
-                          <th
-                            key={c.orden}
-                            scope="col"
-                            aria-sort={c.orden === orden?.clave ? (orden.sentido === 1 ? 'ascending' : 'descending') : 'none'}
-                            className={`p-3 font-medium ${c.alinea === 'right' ? 'text-right' : 'text-left'}`}
-                          >
-                            <button type="button" onClick={() => ordenarPor(c.orden)} className="font-medium hover:text-foreground">
-                              {c.titulo}{c.orden === orden?.clave ? (orden.sentido === 1 ? ' ▲' : ' ▼') : ''}
-                            </button>
-                          </th>
-                        ))}
-                        {puedeMermar && <th scope="col" className="p-3 text-right font-medium">Acciones</th>}
-                      </tr>
-                    </thead>
-                    <tbody>
+                <div ref={medidaDeLotes} className="min-w-0">
+                  {lotesEnTarjetas ? (
+                    <ul aria-label="Lotes por vencer" className="grid gap-3 px-3 pb-3">
                       {lotes.map((l) => (
-                        <tr key={claveDeFila(l)} className="border-b last:border-0">
-                          <td className="p-3">
-                            <span className="font-medium">{l.nombre}</span>
-                            {l.variante && <span className="ml-2 text-xs text-muted-foreground">{l.variante}</span>}
-                            {l.categoria && <span className="ml-2 text-xs text-muted-foreground">{l.categoria}</span>}
-                            {pendienteDeLote(pendientesDeAhora, l) && <MarcaSinConfirmar />}
-                          </td>
-                          <td className="p-3">{l.codigo || '—'}</td>
-                          <td className="p-3">
-                            {ubicacion(l)}
-                            {!l.deposito_activo && <Badge variant="outline" className="ml-2">Depósito inactivo</Badge>}
-                          </td>
-                          <td className="p-3">{l.lote ?? '—'}</td>
-                          <td className="p-3">{fecha(l.vence)}</td>
-                          <td className="p-3"><BadgeDeDias dias={l.dias_para_vencer} /></td>
-                          <td className="p-3 text-right">
-                            {formatoCantidad(l.saldo)}{l.unidad && <> <span className="text-xs text-muted-foreground">{l.unidad}</span></>}
-                          </td>
-                          {puedeMermar && (
-                            <td className="p-3 text-right">
-                              <Button size="sm" variant="outline" aria-label={`Dar de baja (merma) ${l.nombre}, lote ${l.lote ?? 'sin código'}`} onClick={() => { setAviso(null); setAMermar(l) }}>
-                                <Trash2 />Dar de baja (merma)
-                              </Button>
-                            </td>
-                          )}
-                        </tr>
+                        <TarjetaDeFila
+                          key={claveDeFila(l)}
+                          titulo={<>{l.nombre}{pendienteDeLote(pendientesDeAhora, l) && <MarcaSinConfirmar />}</>}
+                          subtitulo={[l.variante, l.categoria].filter(Boolean).join(' · ') || undefined}
+                          estado={<BadgeDeDias dias={l.dias_para_vencer} />}
+                          datos={[
+                            { etiqueta: 'Código', valor: l.codigo || '—' },
+                            { etiqueta: 'Sucursal / depósito', valor: <>{ubicacion(l)}{!l.deposito_activo && <Badge variant="outline" className="ml-2">Depósito inactivo</Badge>}</> },
+                            { etiqueta: 'Lote', valor: l.lote ?? '—' },
+                            { etiqueta: 'Vence', valor: fecha(l.vence) },
+                            { etiqueta: 'Saldo', valor: <>{formatoCantidad(l.saldo)}{l.unidad && <> <span className="text-xs text-muted-foreground">{l.unidad}</span></>}</> },
+                          ]}
+                          accionesConTexto={puedeMermar ? botonDeBaja(l) : undefined}
+                        />
                       ))}
-                    </tbody>
-                  </table>
+                    </ul>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="border-b text-muted-foreground">
+                          <tr>
+                            {COLUMNAS.map((c) => (
+                              <th
+                                key={c.orden}
+                                scope="col"
+                                aria-sort={c.orden === orden?.clave ? (orden.sentido === 1 ? 'ascending' : 'descending') : 'none'}
+                                className={`p-3 font-medium ${c.alinea === 'right' ? 'text-right' : 'text-left'}`}
+                              >
+                                <button type="button" onClick={() => ordenarPor(c.orden)} className="font-medium hover:text-foreground">
+                                  {c.titulo}{c.orden === orden?.clave ? (orden.sentido === 1 ? ' ▲' : ' ▼') : ''}
+                                </button>
+                              </th>
+                            ))}
+                            {puedeMermar && <th scope="col" className="p-3 text-right font-medium">Acciones</th>}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {lotes.map((l) => (
+                            <tr key={claveDeFila(l)} className="border-b last:border-0">
+                              <td className="p-3">
+                                <span className="font-medium">{l.nombre}</span>
+                                {l.variante && <span className="ml-2 text-xs text-muted-foreground">{l.variante}</span>}
+                                {l.categoria && <span className="ml-2 text-xs text-muted-foreground">{l.categoria}</span>}
+                                {pendienteDeLote(pendientesDeAhora, l) && <MarcaSinConfirmar />}
+                              </td>
+                              <td className="p-3">{l.codigo || '—'}</td>
+                              <td className="p-3">
+                                {ubicacion(l)}
+                                {!l.deposito_activo && <Badge variant="outline" className="ml-2">Depósito inactivo</Badge>}
+                              </td>
+                              <td className="p-3">{l.lote ?? '—'}</td>
+                              <td className="p-3">{fecha(l.vence)}</td>
+                              <td className="p-3"><BadgeDeDias dias={l.dias_para_vencer} /></td>
+                              <td className="p-3 text-right">
+                                {formatoCantidad(l.saldo)}{l.unidad && <> <span className="text-xs text-muted-foreground">{l.unidad}</span></>}
+                              </td>
+                              {puedeMermar && <td className="p-3 text-right">{botonDeBaja(l)}</td>}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -1430,63 +1491,65 @@ export function Vencimientos({ puedeMover = true, puedeMermar = puedeMover, pued
                   No hay stock sin lote en los productos marcados
                 </p>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="border-b text-muted-foreground">
-                      <tr>
-                        <th scope="col" className="p-3 text-left font-medium">Producto</th>
-                        <th scope="col" className="p-3 text-left font-medium">Código</th>
-                        <th scope="col" className="p-3 text-left font-medium">Sucursal / depósito</th>
-                        <th scope="col" className="p-3 text-right font-medium">Saldo sin lote</th>
-                        <th scope="col" className="p-3 text-left font-medium">Situación</th>
-                        {(puedeMover || puedeConciliar) && <th scope="col" className="p-3 text-right font-medium">Acciones</th>}
-                      </tr>
-                    </thead>
-                    <tbody>
+                <div ref={medidaDeSinLote} className="min-w-0">
+                  {sinLoteEnTarjetas ? (
+                    <ul aria-label="Sin lote o sin fecha" className="grid gap-3 px-3 pb-3">
                       {data.sin_lote.map((s) => (
-                        <tr key={claveDeFila(s)} className="border-b last:border-0">
-                          <td className="p-3">
-                            <span className="font-medium">{s.nombre}</span>
-                            {s.variante && <span className="ml-2 text-xs text-muted-foreground">{s.variante}</span>}
-                            {s.categoria && <span className="ml-2 text-xs text-muted-foreground">{s.categoria}</span>}
-                            {pendienteDeSinLote(pendientesDeAhora, s) && <MarcaSinConfirmar />}
-                          </td>
-                          <td className="p-3">{s.codigo || '—'}</td>
-                          <td className="p-3">
-                            {ubicacion(s)}
-                            {!s.deposito_activo && <Badge variant="outline" className="ml-2">Depósito inactivo</Badge>}
-                          </td>
-                          <td className={`p-3 text-right ${s.saldo < 0 ? 'text-destructive' : ''}`}>
-                            {formatoCantidad(s.saldo)}{s.unidad && <> <span className="text-xs text-muted-foreground">{s.unidad}</span></>}
-                          </td>
-                          <td className="p-3">
-                            <Badge
-                              variant="outline" data-situacion={s.situacion}
-                              className={`whitespace-normal ${s.situacion === 'salidas_sin_lote' ? 'border-amber-500/50 text-amber-600 dark:text-amber-400' : ''}`}
-                            >
-                              {SITUACION[s.situacion].etiqueta}
-                            </Badge>
-                          </td>
-                          {(puedeMover || puedeConciliar) && (
-                            <td className="p-3 text-right">
-                              {/* Sólo hay qué asignar con saldo positivo: un negativo son salidas, no stock. */}
-                              {puedeMover && s.situacion === 'sin_fecha' && (
-                                <Button size="sm" variant="outline" aria-label={`Asignar vencimiento ${s.nombre}${s.variante ? ` (${s.variante})` : ''}, ${ubicacion(s)}`} onClick={() => { setAviso(null); setAAsignar(s) }}>
-                                  <CalendarPlus />Asignar vencimiento
-                                </Button>
-                              )}
-                              {/* Y sólo hay qué conciliar con saldo negativo: son las salidas que no bajaron ningún lote. */}
-                              {puedeConciliar && s.situacion === 'salidas_sin_lote' && (
-                                <Button size="sm" variant="outline" className={TACTIL_BAJO_LG} aria-label={`Conciliar ${s.nombre}${s.variante ? ` (${s.variante})` : ''}, ${ubicacion(s)}`} onClick={() => { setAviso(null); setAConciliar(s) }}>
-                                  <Scale />Conciliar
-                                </Button>
-                              )}
-                            </td>
-                          )}
-                        </tr>
+                        <TarjetaDeFila
+                          key={claveDeFila(s)}
+                          titulo={<>{s.nombre}{pendienteDeSinLote(pendientesDeAhora, s) && <MarcaSinConfirmar />}</>}
+                          subtitulo={[s.variante, s.categoria].filter(Boolean).join(' · ') || undefined}
+                          estado={badgeDeSituacion(s)}
+                          datos={[
+                            { etiqueta: 'Código', valor: s.codigo || '—' },
+                            { etiqueta: 'Sucursal / depósito', valor: <>{ubicacion(s)}{!s.deposito_activo && <Badge variant="outline" className="ml-2">Depósito inactivo</Badge>}</> },
+                            {
+                              etiqueta: 'Saldo sin lote',
+                              valor: <span className={s.saldo < 0 ? 'text-destructive' : ''}>{formatoCantidad(s.saldo)}{s.unidad && <> <span className="text-xs text-muted-foreground">{s.unidad}</span></>}</span>,
+                            },
+                          ]}
+                          accionesConTexto={puedeAsignarFila(s) || puedeConciliarFila(s) ? botonesDeSinLote(s) : undefined}
+                        />
                       ))}
-                    </tbody>
-                  </table>
+                    </ul>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="border-b text-muted-foreground">
+                          <tr>
+                            <th scope="col" className="p-3 text-left font-medium">Producto</th>
+                            <th scope="col" className="p-3 text-left font-medium">Código</th>
+                            <th scope="col" className="p-3 text-left font-medium">Sucursal / depósito</th>
+                            <th scope="col" className="p-3 text-right font-medium">Saldo sin lote</th>
+                            <th scope="col" className="p-3 text-left font-medium">Situación</th>
+                            {(puedeMover || puedeConciliar) && <th scope="col" className="p-3 text-right font-medium">Acciones</th>}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data.sin_lote.map((s) => (
+                            <tr key={claveDeFila(s)} className="border-b last:border-0">
+                              <td className="p-3">
+                                <span className="font-medium">{s.nombre}</span>
+                                {s.variante && <span className="ml-2 text-xs text-muted-foreground">{s.variante}</span>}
+                                {s.categoria && <span className="ml-2 text-xs text-muted-foreground">{s.categoria}</span>}
+                                {pendienteDeSinLote(pendientesDeAhora, s) && <MarcaSinConfirmar />}
+                              </td>
+                              <td className="p-3">{s.codigo || '—'}</td>
+                              <td className="p-3">
+                                {ubicacion(s)}
+                                {!s.deposito_activo && <Badge variant="outline" className="ml-2">Depósito inactivo</Badge>}
+                              </td>
+                              <td className={`p-3 text-right ${s.saldo < 0 ? 'text-destructive' : ''}`}>
+                                {formatoCantidad(s.saldo)}{s.unidad && <> <span className="text-xs text-muted-foreground">{s.unidad}</span></>}
+                              </td>
+                              <td className="p-3">{badgeDeSituacion(s)}</td>
+                              {(puedeMover || puedeConciliar) && <td className="p-3 text-right">{botonesDeSinLote(s)}</td>}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>
