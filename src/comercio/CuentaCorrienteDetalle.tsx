@@ -26,7 +26,7 @@ import { Badge } from '@/components/ui/badge'
 import { BadgeEstado } from '../badge-estado'
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose,
-} from '@/components/ui/dialog'
+} from '../ui/dialog'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { anchoColumnaAcciones, DataTable } from '../data-table'
 import {

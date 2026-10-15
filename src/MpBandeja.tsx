@@ -32,7 +32,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import {
   Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle,
-} from '@/components/ui/dialog'
+} from './ui/dialog'
 import { BadgeEstado } from './badge-estado'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,

@@ -30,7 +30,7 @@ import {
 } from '@/components/ui/form'
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose,
-} from '@/components/ui/dialog'
+} from '../ui/dialog'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { ArrowLeft, ArrowLeftRight, BarChart3, CheckCircle2, Eye, Inbox, Loader2, Pencil, Plus, Search, Trash2, Undo2, XCircle } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'

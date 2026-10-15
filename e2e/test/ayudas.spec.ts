@@ -3,7 +3,7 @@ import path from 'node:path'
 import { expect } from '@playwright/test'
 // Se prueba lo COMPILADO (`dist/`), que es lo que importa el consumidor, no el fuente.
 import {
-  aceptarTerminos, definirConfig, entrarComo, esperarApi, prepararSesiones, redDeSeguridad, rutaAuth, sinDesborde,
+  aceptarTerminos, definirConfig, entrarComo, esperarApi, ponerModo, prepararSesiones, redDeSeguridad, rutaAuth, sinDesborde, sinTextoIlegible,
   test as testDeLaLibreria,
 } from '../dist/index.js'
 import { levantarServidor, type Servidor } from './servidor.js'
@@ -94,6 +94,59 @@ test.describe('sinDesborde', () => {
     expect(falla).toContain('ancha')
     // A 1280 cabe: el primer ancho no es el que falló.
     expect(falla).not.toContain('a 1280 px')
+  })
+})
+
+test.describe('sinTextoIlegible (el modo oscuro)', () => {
+  test('ponerModo arranca la app en oscuro desde el primer cuadro, y en claro si se pide', async ({ page }) => {
+    await ponerModo(page, 'oscuro')
+    await page.goto('/oscuro-bien')
+    await expect(page.locator('html')).toHaveClass(/dark/)
+    await ponerModo(page, 'claro')
+    await page.goto('/oscuro-bien')
+    await expect(page.locator('html')).not.toHaveClass(/dark/)
+  })
+
+  test('pasa con una pantalla legible: colores en oklch, una tarjeta translúcida y texto sólo para lectores de pantalla', async ({ page }) => {
+    await ponerModo(page, 'oscuro')
+    await page.goto('/oscuro-bien')
+    await sinTextoIlegible(page)
+  })
+
+  test('falla diciendo qué elemento, qué texto y cuánto contraste: el gris fijo y el blanco casi transparente', async ({ page }) => {
+    await ponerModo(page, 'oscuro')
+    await page.goto('/oscuro-mal')
+    const falla = await sinTextoIlegible(page).then(() => null, (e: Error) => e.message)
+    expect(falla).toContain('p#wordmark «VentaLibra»')
+    expect(falla).toContain('p#translucido «Casi transparente»')
+    // El gris #2d2d2d sobre el fondo oscuro: 1,44:1 (la misma cifra que midió la pasada a mano del 2026-10-02).
+    expect(falla).toContain('p#wordmark «VentaLibra» 1,44:1 < 4,5:1 (rgb(45, 45, 45) sobre rgb(10, 10, 10))')
+    // Lo que no se mide: el texto grande a 3,4:1 (pasa con el umbral de 3), el deshabilitado y el que está sobre un degradé.
+    expect(falla).not.toContain('Texto grande')
+    expect(falla).not.toContain('Deshabilitado')
+    expect(falla).not.toContain('degradé')
+  })
+
+  test('el texto grande exige 3:1 y se puede subir; `ignorar` saca un bloque con su razón', async ({ page }) => {
+    await ponerModo(page, 'oscuro')
+    await page.goto('/oscuro-mal')
+    const sinGrande = await sinTextoIlegible(page, { minimoGrande: 4.5, ignorar: '#wordmark, #translucido, #logo' }).then(() => null, (e: Error) => e.message)
+    expect(sinGrande).toContain('«Texto grande a 3,4:1»')
+    expect(sinGrande).not.toContain('VentaLibra')
+    await sinTextoIlegible(page, { ignorar: '#wordmark, #translucido, #logo' })
+  })
+
+  test('🔴 no pasa en vacío: si el modo pedido no está aplicado, falla antes de medir', async ({ page }) => {
+    await page.goto('/oscuro-mal')   // sin ponerModo: la página está en claro
+    const falla = await sinTextoIlegible(page).then(() => null, (e: Error) => e.message)
+    expect(falla).toContain('no tiene la clase "dark"')
+    expect(falla).toContain("ponerModo(page, 'oscuro')")
+  })
+
+  test('en modo claro la misma pantalla de juguete se mide contra su fondo claro', async ({ page }) => {
+    await ponerModo(page, 'claro')
+    await page.goto('/oscuro-bien')
+    await sinTextoIlegible(page, { modo: 'claro' })
   })
 })
 

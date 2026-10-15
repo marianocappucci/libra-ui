@@ -51,6 +51,32 @@ const ESCRIBE = PAGINA(`
   leer.onclick = async () => { r.textContent = await ir('GET', '/api/cosas') }
 </script>`)
 
+// Una pantalla que se pinta como la suite: la clase `dark` en <html> sale de `localStorage['libra.modo']` (lo que hace `libra-ui/modo` al arrancar) y los colores van
+// en `oklch()`, que es como los escribe `tema.css` y lo que `getComputedStyle` devuelve sin convertir.
+const MODO = `<script>
+  try { if (localStorage.getItem('libra.modo') === 'oscuro') document.documentElement.classList.add('dark') } catch (e) {}
+</script>
+<style>
+  body { background: oklch(1 0 0); color: oklch(0.145 0 0) }
+  html.dark body { background: oklch(0.145 0 0); color: oklch(0.985 0 0) }
+  .atenuado { color: oklch(0.45 0 0) }
+  html.dark .atenuado { color: oklch(0.708 0 0) }
+  .tarjeta { background: oklch(1 0 0 / 0.08); padding: 8px }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden }
+</style>`
+const OSCURO_BIEN = PAGINA(`${MODO}
+<h1>Título</h1><div class="tarjeta"><p>Texto sobre una tarjeta translúcida</p></div>
+<p class="atenuado">Texto atenuado que todavía se lee</p>
+<span class="sr-only" style="color:#222">sólo para lectores</span>`)
+const OSCURO_MAL = PAGINA(`${MODO}
+<h1>Título</h1>
+<p id="wordmark" style="color:#2d2d2d">VentaLibra</p>
+<p id="translucido" style="color: rgba(255,255,255,0.2)">Casi transparente</p>
+<p id="grande" style="color:#6b6b6b;font-size:28px">Texto grande a 3,4:1</p>
+<button disabled style="background:#111;color:#333">Deshabilitado</button>
+<div id="logo" style="color:#2d2d2d">Logo sobre papel</div>
+<div style="background-image:linear-gradient(#fff,#eee);color:#fff">Sobre un degradé</div>`)
+
 export type Servidor = { url: string; cerrar: () => Promise<void>; estado: { terminosPendientes: boolean; sesiones: number } }
 
 export async function levantarServidor(): Promise<Servidor> {
@@ -72,6 +98,8 @@ export async function levantarServidor(): Promise<Servidor> {
     if (clave === 'GET /scroll-propio') return html(res, SCROLL_PROPIO)
     if (clave === 'GET /flexible') return html(res, FLEXIBLE)
     if (clave === 'GET /escribe') return html(res, ESCRIBE)
+    if (clave === 'GET /oscuro-bien') return html(res, OSCURO_BIEN)
+    if (clave === 'GET /oscuro-mal') return html(res, OSCURO_MAL)
     if (clave === 'POST /auth/login') {
       estado.sesiones += 1
       // Como libraauth: la cookie de sesión siempre es `Secure`.

@@ -1430,7 +1430,7 @@ No hay helper `precios-distintos` ni código que lea ese 409 (`grep precios.dist
 
 ## ADR-063 — Las mermas se valoran y el «sin lote» negativo se concilia: lo que el kit adopta de libracommerce 0.60.0 (0.151.0)
 
-**Estado:** propuesta (2026-10-14). Pedido del humano a través de libracommerce (PR #225, ADR-059 y ADR-060 del motor); el kit sólo muestra y pide, la cuenta es del motor.
+**Estado:** aceptada (2026-10-15; el ancho `lg` y el alcance del modo oscuro, decisiones del humano) (2026-10-14). Pedido del humano a través de libracommerce (PR #225, ADR-059 y ADR-060 del motor); el kit sólo muestra y pide, la cuenta es del motor.
 
 **Qué trae el motor.** (1) Cada merma guarda el costo vigente (`stock_movements.unit_cost`), y lo devuelve: `POST /api/vencimientos/merma` suma `costo_unitario`, `costo_total` y `sin_costo`; `GET /api/stock/movimientos` (si el producto lo prende) suma las mismas tres claves a cada fila, llenas sólo en las mermas; `GET /api/reportes/mermas` (y `/export`, CSV) agrupa por producto. El importe es un **piso**: lo que no tiene costo no suma y se cuenta aparte. (2) `GET /api/vencimientos/conciliacion` y `POST /api/vencimientos/conciliar` reparten el saldo «sin lote» negativo (el que dejaron las salidas anteriores a A-4) entre los lotes que lo respaldan; el stock total no cambia.
 
@@ -1451,3 +1451,89 @@ No hay helper `precios-distintos` ni código que lea ese 409 (`grep precios.dist
 **Tests.** `test/comercio-vencimientos-conciliar.test.tsx` (30): la baja con importe, «sin costo cargado», sin claves (nada) y repetida; conciliar opt-in (sin la prop no hay botón ni pedido; con ella sólo en «Salidas sin lote»; sin `puedeMover`; 44 px); el diálogo (pedido con y sin variante, propuesta editable, cuerpo exacto, lote sólo con fecha, validaciones, coma flotante, `sin_cubrir`, sin lotes, nada que conciliar, error de la vista previa); la clave (misma tras un 409, otra al cambiar datos o reabrir, `repetida`, doble clic); y el intento incierto (guardado, bloqueado, marca en la fila, reenvío igual, descartar con confirmación, destinos independientes). `test/comercio-mermas.test.tsx` (20): `Mermas` (pedido, aviso de piso en plural y singular, errores, fechas, depósito, producto, CSV, tabla/tarjetas, orden, 44 px) y la columna «Importe» de `StockMovimientos` y de `Stock` con y sin las claves. `test/iconos-indicador.test.tsx` (el concepto `mermas`) e `indicadores-por-catalogo` (Mermas cubierta por el guard).
 
 **Cómo se adopta.** Subir el pin a 0.151.0 junto con libracommerce 0.60.0 (contra un motor anterior las claves no llegan y no cambia nada). VentaLibra: en la página de Vencimientos pasar `puedeConciliar` a quien tiene el permiso de movimientos; sumar la página de Mermas (`libra-ui/comercio/Mermas`) detrás de `costos.ver`, con `INDICADORES.mermas` como ícono del menú; el historial de movimientos no necesita nada (la columna se decide sola por lo que mande el filtro de costos).
+
+## ADR-064 — Lo que quedaba del kit tras la tanda móvil y roles (0.152.0): `dialog` propio, las cantidades de Stock sin redondear, el texto del tope desde el motor y el modo oscuro en los e2e
+
+Los cuatro pendientes que el humano dejó «a lo último» al cerrar la tanda 0.145.0 a 0.147.0 (VentaLibra, 2026-10-13). Cada uno con su origen y su sección. **Qué ya existe** (se miró antes de tocar, `reglas/producto.md`): `formatoCantidad` (ADR-050), el patrón de `libra-ui/ui/tabs` (ADR-058 §6), `mensaje_de_limite` de libracore (ADR-041) y `sinDesborde` de `libra-ui/e2e`.
+
+### 1. Las cantidades del resto de Stock salen con sus decimales
+
+**Origen.** ADR-057 («Lo que NO se tocó, y es el mismo defecto»): el diálogo de ajuste pasó a `formatoCantidad` y el resto siguió con `formatEntero` de `@/lib/utils`, que los productos escriben `String(Math.round(value))` (VentaLibra, Contalibra y Restolibra; los otros cinco no consumen estas pantallas). Un producto por peso con 1,5 kg decía «2» en la tabla y «1,5» en el diálogo. El ADR-057 dejó la decisión abierta («pasar todas a `formatoCantidad` o dejar el redondeo a propósito donde la lista es un vistazo»); el humano lo anotó como pendiente a arreglar, y no hay una lista de Stock donde un redondeo sea lo que se quiere: el motor ya redondea a la escala de la unidad (0 decimales para unidades, 3 para kilos), así que para una unidad entera `formatoCantidad` da lo mismo que `formatEntero`.
+
+**Decisión.** Las 16 llamadas a `formatEntero` de `Stock` (celdas de mínimo, depósitos y total, tarjetas, aviso de stock bajo y su `title`, historial en tabla y en lista), `Productos` («Stock total», tabla y tarjeta), `DepositoDetalle` y `StockMovimientos` pasan a `formatoCantidad`. **Ninguna pantalla del kit importa ya `formatEntero`**: se saca del stub de los tests (si vuelve a aparecer, el `typecheck` lo marca) y deja de ser algo que el producto tenga que proveer.
+
+**Qué cambia lo que se ve.** Sólo con decimales: 1,5 en vez de 2; un descuento de 0,25 en el historial dice «-0,25» y no «-0»; 1.250 lleva el separador de miles (el `String(Math.round(1250))` no lo llevaba). Las cantidades enteras se ven igual.
+
+**Por qué los tests lo ven ahora y antes no.** El stub de `formatEntero` del paquete no redondeaba, así que ningún test de pantalla podía reproducirlo; `comercio-stock-cantidades-resto` lo reemplaza con el redondeo del producto (`vi.mock('@/lib/utils')`) y es el que habría fallado. Contra `origin/main` fallan sus **8 tests** (tabla, tarjetas, aviso, historial en tabla y en lista, `StockMovimientos`, `DepositoDetalle`, `Productos`); con el cambio pasan.
+
+**Cómo se adopta.** Subir el pin; nada más. Los productos pueden borrar `formatEntero` de su `lib/utils.ts` (VentaLibra, Contalibra, Restolibra) cuando quieran: nadie más lo usa.
+
+### 2. El texto del tope de sucursales sale del motor
+
+**Origen.** ADR-048 («Lo que no cubre»: «el texto de `mensajeDeLimite` está duplicado a mano con el del motor (el endpoint no lo devuelve)»). `Sucursales` armaba a mano la frase que el 409 del alta ya trae del motor.
+
+**Decisión.** libracore v1.167.0 (ADR-052 del motor) suma `mensaje_de_limite` a la lectura de `/api/limites/sucursales`. `Sucursales` la muestra tal cual cuando el alta se frena. `LimiteDeSucursales` suma `mensaje_de_limite?: string`; una clave que no es un texto, o viene vacía, se ignora (como el resto de la lectura: nunca esconde el tope).
+
+**El respaldo (a borrar).** `mensajeDeLimite(n)` sigue exportada, como respaldo para un motor anterior a v1.167.0: sin ella un producto con el pin viejo del motor y el kit nuevo dejaría el botón deshabilitado **sin decir por qué**. Es la misma política que ADR-059 («un producto con un motor anterior ve la pantalla de siempre»). Se borra, junto con sus tests de respaldo, cuando VentaLibra (el único que pasa `rutaDelLimite`) suba el pin de libracore.
+
+**Tests.** `comercio-sucursales` (3 nuevos, de 41 a 44): el texto del motor se muestra y la frase propia no aparece (se usa a propósito una frase distinta de la del kit), con cupo no se muestra aunque el motor lo mande, y las formas raras (`undefined`, `''`, `'   '`, `null`, `42`) caen al respaldo. El primero falla contra `origin/main`.
+
+**Cómo se adopta.** Subir libracore a v1.167.0 y el kit a 0.152.0 en VentaLibra, en cualquier orden (el respaldo cubre el hueco).
+
+### 3. `dialog` al kit: `libra-ui/ui/dialog`
+
+**Origen.** ADR-058 §6 («`dialog` queda para otro lote»). Las pestañas eran idénticas en los ocho productos; **el diálogo no**. Relevado en `origin/develop`: cinco variantes (contenido sin comentarios):
+
+| Variante | Productos | Diferencias con la de Contalibra |
+|---|---|---|
+| Contalibra | Contalibra | (la base) `sm:max-w-lg`, margen de 1 rem en el celular, `max-h-[85vh] overflow-y-auto`, X de 16 px llamada «Cerrar», `data-slot="dialog-close"` y reglas de `svg` en la X |
+| Restolibra | Restolibra | `max-h-[calc(100svh-2rem)]` en lugar de `85vh` |
+| LibraDesk | LibraDesk, LibraCargo, LibraClub | `sm:max-w-md` y sin margen en el celular, X «Close» sin `data-slot` ni reglas de `svg` |
+| GestioLibra | GestioLibra, MedLibra | igual que la anterior |
+| VentaLibra | VentaLibra | la anterior más la X de 44 px bajo `lg` (ADR-057) |
+
+Las ocho ya traían el tope de alto con scroll; lo que cambia de verdad es el ancho (`lg` en dos, `md` en seis), el margen del celular, la X y su nombre.
+
+**Decisión.** `src/ui/dialog.tsx`, exportado como `libra-ui/ui/dialog`, con **la unión de lo que arregla un defecto** y la base de Contalibra y Restolibra (que es la de shadcn/ui actual) para lo que es de gusto:
+
+- tope de alto con scroll: `max-h-[calc(100svh-2rem)] overflow-y-auto` (el de Restolibra, que no se corta bajo la barra del navegador del celular; los demás tenían `85vh`);
+- X de 44 px bajo `lg` (la de VentaLibra);
+- nombre accesible de la X en castellano: **«Cerrar ventana»**, y no «Cerrar» ni «Close». «Cerrar» chocaba con los botones «Cerrar» que muchos diálogos tienen en el pie: tres tests del kit (`CambiarPassword` 2, `qr-de-la-caja`) fallaron con «Found multiple elements with the role button and name Cerrar» apenas corrieron contra Radix de verdad;
+- ancho: `sm:max-w-lg` con 1 rem de margen en el celular (Contalibra, Restolibra y shadcn).
+
+Las 37 pantallas del kit que importaban `@/components/ui/dialog` (50 `DialogContent`) importan el propio, y el stub `test/stubs/components/ui/dialog.tsx` se borra: **toda la suite corre ahora contra el Dialog real de Radix**.
+
+**Qué cambia en cada producto al adoptarlo** (el kit ya no usa el de su `components/ui/dialog.tsx`, así que esto vale para **las pantallas del kit** apenas suben el pin, aunque el producto no toque su archivo):
+
+| | LibraDesk, LibraCargo, LibraClub, GestioLibra, MedLibra | VentaLibra | Contalibra, Restolibra |
+|---|---|---|---|
+| Ancho por defecto | 🔴 **+4 rem** (`md` → `lg`) y 1 rem de margen en el celular | ídem | igual |
+| Alto máximo | `85vh` → `100svh − 2rem` (un poco más alto en el celular) | ídem | Restolibra igual; Contalibra ídem |
+| X de cerrar | 16 px → 44 px bajo `lg`; «Close» → «Cerrar ventana» | «Close» → «Cerrar ventana» | «Cerrar» → «Cerrar ventana»; 44 px bajo `lg` |
+
+🔴 **Lo único que se ve distinto en una pantalla de ancho por defecto es el ancho (`md` → `lg`) en seis productos.** Las pantallas del kit se extrajeron de Contalibra y Restolibra, que ya usaban `lg`; 33 de los 50 `DialogContent` del kit usan el ancho por defecto; los otros 17 piden el suyo con `className` y no cambian. **No se midió en un navegador** (los tests corren en jsdom, que no hace layout): conviene mirar en Chromium un diálogo de cada producto antes de desplegar, sobre todo los que tienen dos columnas. Si el humano prefiere conservar `md` para esos seis, es una línea (`sm:max-w-md` en `DialogContent`) y los dos productos que hoy usan `lg` pasarían a `md`: se pide una decisión, no se adivina.
+
+**Cómo reemplaza cada producto su copia:** `frontend/src/components/ui/dialog.tsx` → `export * from 'libra-ui/ui/dialog'`, en el mismo cambio que sube el pin. Sus propias pantallas siguen importando `@/components/ui/dialog` y reciben el del kit. Los tests o e2e de un producto que busquen la X por `name: 'Close'` (VentaLibra: `ventas-devolucion.test.tsx`) pasan a `'Cerrar ventana'`.
+
+**Tests de la suite al pasar a Radix de verdad** (14 fallaban en 7 archivos; 6 por el nombre de la X, ya resueltos arriba; los 8 restantes eran del DOM real y no de un cambio de comportamiento): un diálogo abierto marca `aria-hidden` todo lo de afuera, así que `vencimientos` (5) busca las tablas y los avisos de la página con `hidden: true`; `ArcaPedido` (1) busca el diálogo por su título (con Radix, `aria-labelledby` gana al `aria-label`); y el stub de `ConfirmDialog` (2 tests: el pago suelto de la cuenta corriente y borrar una lista de precios) deja de ser un `<div role="alertdialog">` suelto y usa el `AlertDialog` real, como el producto, porque una confirmación abierta desde adentro de un diálogo tiene que ser de Radix para ser accesible. `comercio-productos-foco` ya no reemplaza el diálogo (lo hacía para tener el real). `ui-dialog` (9 tests nuevos): data-slots, tope de alto, ancho, `className` que le gana, la X de 44 px y su nombre, `showCloseButton`, Escape con el foco de vuelta, y el guard de que ningún fuente importa `@/components/ui/dialog`.
+
+### 4. El modo oscuro, en los e2e
+
+**Origen.** La pasada visual del 2026-10-02 («hacé la pasada visual en modo oscuro») se hizo a mano con un Chromium y un script descartable (0 textos bajo 4,5:1 en ~80 pantallas; el nombre del producto a 1,44:1 y el éxito a 4,28:1 antes de arreglarlos) y el wiki la dejó como pendiente de automatizar. **El texto exacto de la decisión no está escrito** en el ADR de ningún repo ni en la bitácora (sólo «decidido, sin hacer» en la lista de pendientes): lo que sigue es la lectura más chica de «automatizado en los e2e», y es lo que hay que confirmar con el humano.
+
+**Decisión.** `libra-ui/e2e` suma dos ayudas, hermanas de `sinDesborde`:
+
+- `ponerModo(page, 'oscuro' | 'claro')`: fija `libra.modo` en `localStorage` con `addInitScript`, antes del primer cuadro, igual que quien lo elige con el botón sol/luna (`libra-ui/modo` lo lee al arrancar).
+- `sinTextoIlegible(page, { modo?, minimo?, minimoGrande?, ignorar? })`: por cada elemento con texto propio y visible, mide el contraste WCAG del texto contra el fondo que resulta de apilar los `background-color` de sus ancestros (los colores con alfa se componen y los `oklch()` de `tema.css` se convierten con un canvas, porque `getComputedStyle` los devuelve sin pasarlos a RGB). 4,5:1 (3:1 el texto grande: 24 px, o 18,66 px en negrita). **Falla antes de medir** si `<html>` no tiene (o tiene) la clase `dark` según el modo pedido: sin esa guarda un modo que no se aplicó dejaría pasar todo en verde. El mensaje dice el elemento, el texto, la cifra y los dos colores.
+
+**Qué no mide, dicho en la docstring:** bordes, íconos ni gráficos; el valor de un `<input>`; un fondo con imagen o degradé (se saltea ese texto, no se inventa un fondo); ni `opacity` (un texto atenuado por opacidad se mide como si no lo estuviera). Se eximen los controles deshabilitados (WCAG), el texto `sr-only` y lo que el spec pase en `ignorar`, con su razón escrita ahí.
+
+**Tests** (`e2e/test/ayudas.spec.ts`, de 16 a 22, contra el servidor de juguete en un Chromium): `ponerModo` en los dos sentidos; una pantalla legible con colores `oklch()`, una tarjeta translúcida y texto `sr-only` pasa; la pantalla mala falla nombrando `p#wordmark «VentaLibra» 1,44:1 < 4,5:1 (rgb(45, 45, 45) sobre rgb(10, 10, 10))` (la misma cifra que midió la pasada a mano) y el blanco al 20% de opacidad, sin nombrar el texto grande a 3,4:1, el deshabilitado ni el del degradé; `minimoGrande` e `ignorar`; **sin `ponerModo` falla con un mensaje que lo dice** (el control de que no pasa en vacío); y el modo claro de la misma pantalla.
+
+**El spec de VentaLibra** (`frontend/e2e/modo-oscuro.e2e.ts`, en su worktree) recorre las 29 rutas del menú del admin y el POS con una línea, como `navegacion-y-ancho`. **Necesita el pin de libra-ui 0.152.0** (las ayudas no existen antes) y **no se corrió contra la app**: lo que mide hoy es una pregunta abierta, y un primer rojo puede ser un defecto real o un falso positivo de la medición (un fondo que el método no ve). Por eso conviene correrlo primero con `workflow_dispatch` y `repetir`, y decidir con lo que salga si queda requerido o con `ignorar`.
+
+**Cómo se adopta.** Subir el pin a 0.152.0, sumar el spec, y correrlo en el CI. Los demás productos con `frontend/e2e` (hoy sólo VentaLibra) lo copian con su propia lista de rutas.
+
+### Tests y verificación
+
+**2.809 → 2.829 tests** (111 → 113 archivos, 2 omitidos igual que antes): `comercio-stock-cantidades-resto` (8), `ui-dialog` (9), `comercio-sucursales` (+3). **Contra `origin/main` (los mismos archivos copiados a un árbol de `origin/main`) fallan 9 de los 11 que cargan** —los 8 de cantidades y el del texto del motor; los otros 2 de Sucursales son del respaldo y tienen que pasar— y `ui-dialog` (9) no carga: el archivo no existe. Suite completa con cobertura (líneas 99,2 %, ramas 92,93 %, funciones 96,85 %: sobre los pisos de 96/90/95), `typecheck` limpio y `lint` con los mismos 46 avisos y 0 errores. Aparte, los tests de las ayudas de e2e (`npm run test:e2e`, Chromium): 22 de 22 (eran 16).

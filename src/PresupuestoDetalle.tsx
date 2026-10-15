@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label'
 import { BadgeEstado, type TonoEstado } from './badge-estado'
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose,
-} from '@/components/ui/dialog'
+} from './ui/dialog'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { ArrowLeft, CheckCheck, CheckCircle2, FileDown, Mail, Pencil, Receipt, RefreshCw, Send, Trash2, Undo2, XCircle } from 'lucide-react'
 import { TituloPantalla } from './titulo-pantalla'

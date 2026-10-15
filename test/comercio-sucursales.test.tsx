@@ -277,6 +277,36 @@ describe('Sucursales contratadas', () => {
     expect(nueva()).toBeDisabled()
   })
 
+  // El texto del tope sale del motor (0.152.0, ADR-064; libracore v1.167.0, ADR-052): la lectura trae `mensaje_de_limite` y la pantalla lo muestra tal cual. Una frase
+  // DISTINTA a la que el kit escribía es la prueba: si la pantalla siguiera armando la suya, este texto no aparecería.
+  it('en el tope muestra el `mensaje_de_limite` que manda el motor, no una frase propia', async () => {
+    const DEL_MOTOR = 'Contrataste 2 sucursales; para abrir otra escribinos a soporte.'
+    responder({ ...base, [RUTA]: { contratadas: 2, activas: 2, mensaje_de_limite: DEL_MOTOR } })
+    montar('/sucursales', <Sucursales rutaDelLimite={RUTA} />)
+    expect(await screen.findByText(DEL_MOTOR)).toBeTruthy()
+    expect(screen.queryByText(mensajeDeLimite(2))).toBeNull()
+    expect(nueva()).toBeDisabled()
+  })
+
+  it('con cupo no muestra el texto del tope aunque el motor lo mande (es el motivo de un botón deshabilitado)', async () => {
+    responder({ ...base, [RUTA]: { contratadas: 3, activas: 2, mensaje_de_limite: mensajeDeLimite(3) } })
+    montar('/sucursales', <Sucursales rutaDelLimite={RUTA} />)
+    expect(await screen.findByText('2 de 3 sucursales contratadas')).toBeTruthy()
+    expect(screen.queryByText(/comunicate con nosotros/)).toBeNull()
+    expect(nueva()).toBeEnabled()
+  })
+
+  it('un motor que todavía no manda el texto (o lo manda vacío o con otra forma) deja el de respaldo: nunca queda sin motivo', async () => {
+    for (const rareza of [undefined, '', '   ', null, 42]) {
+      cleanup()
+      prepararFetch()
+      responder({ ...base, [RUTA]: { contratadas: 2, activas: 2, ...(rareza === undefined ? {} : { mensaje_de_limite: rareza }) } })
+      montar('/sucursales', <Sucursales rutaDelLimite={RUTA} />)
+      expect(await screen.findByText(mensajeDeLimite(2))).toBeTruthy()
+      expect(nueva()).toBeDisabled()
+    }
+  })
+
   it('🔴 una lectura que falla (403, 500, red caída o forma rara) deja la pantalla como hoy: nunca bloquea', async () => {
     for (const lectura of [
       { status: 403, detail: 'forbidden' }, { status: 500, detail: 'Falla interna.' }, '!caida',
@@ -339,7 +369,7 @@ describe('Sucursales contratadas', () => {
     expect(screen.queryByRole('button', { name: /Nueva/ })).toBeNull()
   })
 
-  it('el texto del tope es el de libracore.limites.mensaje_de_limite', () => {
+  it('el texto de respaldo es el de libracore.limites.mensaje_de_limite (para un motor anterior a v1.167.0)', () => {
     expect(mensajeDeLimite(1)).toBe('Tu plan incluye 1 sucursal. Para sumar otra, comunicate con nosotros.')
     expect(mensajeDeLimite(4)).toBe('Tu plan incluye 4 sucursales. Para sumar otra, comunicate con nosotros.')
   })

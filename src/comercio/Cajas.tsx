@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/badge'
 import { BadgeEstado } from '../badge-estado'
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogClose,
-} from '@/components/ui/dialog'
+} from '../ui/dialog'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Plus, Eye, Pencil, Trash2, Star, Check, Power, PowerOff } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'

@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/select'
 import {
   Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
-} from '@/components/ui/dialog'
+} from '../ui/dialog'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 
 /** Un tipo de ubicación de un producto con sucursales y depósitos: `valor` es el código que guarda el backend y

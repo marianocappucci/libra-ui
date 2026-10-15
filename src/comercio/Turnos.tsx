@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label'
 import { BadgeEstado } from '../badge-estado'
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose,
-} from '@/components/ui/dialog'
+} from '../ui/dialog'
 import { anchoColumnaAcciones, sortableHeader } from '../data-table'
 import { TablaOTarjetas, TarjetaDeFila } from '../tabla-o-tarjetas'
 import { PlayCircle, StopCircle, Eye, ArrowUpCircle, ArrowDownCircle, CheckCircle2 } from 'lucide-react'

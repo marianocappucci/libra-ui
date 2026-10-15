@@ -17,7 +17,7 @@ import { BadgeEstado } from '../badge-estado'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose,
-} from '@/components/ui/dialog'
+} from '../ui/dialog'
 import { DataTable } from '../data-table'
 import {
   Plus, Pencil, List, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, ArrowDownCircle, ArrowUpCircle, Check,

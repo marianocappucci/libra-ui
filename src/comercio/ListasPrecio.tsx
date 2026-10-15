@@ -27,7 +27,7 @@ import {
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
   Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
-} from '@/components/ui/dialog'
+} from '../ui/dialog'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { SelectBuscable } from '../SelectBuscable'
 

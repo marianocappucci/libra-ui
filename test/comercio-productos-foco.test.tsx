@@ -1,31 +1,15 @@
 // El foco al cerrar el diálogo de edición de Productos (0.111.0, ADR-013). Con `conAlta={false}` ya no hay `DialogTrigger` y el diálogo se abre por el `onClick` del botón de
 // la fila: Radix devolvía el foco a un trigger que no existe y quien navega con teclado quedaba en el principio de la página.
 //
-// Va aparte, con el **Dialog REAL de Radix**: el stub de `test/stubs/components/ui/dialog.tsx` no mueve el foco (no puede probar esto).
+// Va aparte porque el foco es lo que un stub no puede probar. Desde 0.152.0 (ADR-064) el diálogo del kit es el real de Radix en toda la suite, así que ya no hace falta
+// reemplazar nada; el archivo queda por lo que mide, no por cómo se arma.
 import { cleanup, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 
 import { Productos } from '../src/comercio/Productos'
 import type { Producto } from '../src/comercio/tipos'
 import { fetchMock, montar, pedidas, prepararFetch, responder } from './helpers-pantallas'
-
-vi.mock('@/components/ui/dialog', async () => {
-  const React = await import('react')
-  const { Dialog: P } = await import('radix-ui')
-  const caja = (props: Record<string, unknown>) => React.createElement('div', props)
-  return {
-    Dialog: P.Root,
-    DialogTrigger: P.Trigger,
-    DialogClose: P.Close,
-    DialogContent: (props: Record<string, unknown>) =>
-      React.createElement(P.Portal, null, React.createElement(P.Overlay), React.createElement(P.Content, props)),
-    DialogHeader: caja,
-    DialogFooter: caja,
-    DialogTitle: P.Title,
-    DialogDescription: P.Description,
-  }
-})
 
 const producto = (id: number, nombre: string): Producto => ({
   id, codigo: `P${id}`, nombre, descripcion: '', precio_venta: 100, precio_costo: 60, unidad: 'u', categoria: '', stock_minimo: 0,

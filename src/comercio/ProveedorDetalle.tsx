@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/form'
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose,
-} from '@/components/ui/dialog'
+} from '../ui/dialog'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { DataTable, sortableHeader } from '../data-table'
 import { Pencil, ArrowLeft, Plus, Inbox, Trash2 } from 'lucide-react'

@@ -8,8 +8,6 @@
 // todavia; lo delato el chequeo de tipos.
 export { cn } from '../../../src/utils'
 
-// `formatEntero` lo exporta cada consumidor desde `@/lib/utils` (los ocho lo
-// tienen). Las pantallas de stock lo usan para las cantidades.
-export function formatEntero(value: number): string {
-  return new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 }).format(value)
-}
+// `formatEntero` (que cada consumidor exporta desde `@/lib/utils` y redondea a entero) ya no lo usa ninguna pantalla del kit: las cantidades pasan por
+// `formatoCantidad` (ADR-064). Se sacó del stub para que, si alguna vuelve a importarlo, el chequeo de tipos lo marque. Los tests que quieren reproducir el
+// redondeo del producto lo agregan con `vi.mock('@/lib/utils')` (`comercio-stock-cantidades*.test.tsx`).

@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
+} from './ui/dialog'
 import { Label } from '@/components/ui/label'
 import { PasswordInput } from './PasswordInput'
 import { api } from './api-client'

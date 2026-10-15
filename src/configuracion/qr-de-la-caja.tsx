@@ -33,7 +33,7 @@ import { Button } from '@/components/ui/button'
 import {
   Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader,
   DialogTitle, DialogTrigger,
-} from '@/components/ui/dialog'
+} from '../ui/dialog'
 
 /** Lo que devuelve `GET {basePath}/qr`. */
 export type QrDeCaja = {

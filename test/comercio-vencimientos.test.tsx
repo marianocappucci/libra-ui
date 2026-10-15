@@ -89,9 +89,10 @@ const ultimaConsulta = () => pedidasAlReporte().at(-1)
 /** Sin espacios raros ni saltos. */
 const texto = (el: HTMLElement | null) => (el?.textContent ?? '').replace(/\s+/g, ' ')
 /** Las tablas: la de lotes y la de «sin lote». */
-const tablaDeLotes = () => screen.getAllByRole('table')[0]
+// `hidden: true`: con un diálogo abierto (el Dialog real de Radix, 0.152.0) todo lo que queda afuera es `aria-hidden`, y las tablas de la página siguen ahí.
+const tablaDeLotes = () => screen.getAllByRole('table', { hidden: true })[0]
 const fila = (nombre: string) => within(tablaDeLotes()).getByText(nombre).closest('tr')!
-const filaSinLote = (nombre: string, n = 0) => within(screen.getAllByRole('table')[1]).getAllByText(nombre)[n].closest('tr')!
+const filaSinLote = (nombre: string, n = 0) => within(screen.getAllByRole('table', { hidden: true })[1]).getAllByText(nombre)[n].closest('tr')!
 const nombresEnTabla = () => within(tablaDeLotes()).getAllByRole('row').slice(1)
   .map((tr) => tr.querySelector('td span.font-medium')?.textContent)
 
@@ -489,7 +490,7 @@ describe('Vencimientos: dar de baja (merma)', () => {
     await abrir()
     await abrirMerma(user)
     // El aviso de la página y el del diálogo.
-    expect(screen.getAllByRole('note')).toHaveLength(2)
+    expect(screen.getAllByRole('note', { hidden: true })).toHaveLength(2)
     expect(texto(within(dialogo()).getByRole('note'))).toContain('el saldo de cada lote puede ser MAYOR al real')
     expect(texto(dialogo())).toContain('Yerba')
     expect(texto(dialogo())).toContain('lote L1')
@@ -771,7 +772,7 @@ describe('Vencimientos: asignar vencimiento', () => {
     const user = userEvent.setup()
     await abrir()
     await abrirAsignar(user)
-    expect(screen.getAllByRole('note')).toHaveLength(2)
+    expect(screen.getAllByRole('note', { hidden: true })).toHaveLength(2)
     expect(texto(within(dialogo()).getByRole('note'))).toContain('el saldo de cada lote puede ser MAYOR al real')
     const fechaInput = within(dialogo()).getByLabelText('Fecha de vencimiento') as HTMLInputElement
     expect(fechaInput.type).toBe('date')
@@ -1631,7 +1632,7 @@ describe('Vencimientos: cargar stock con lote (entrada)', () => {
     const user = userEvent.setup()
     await abrir(TODO_ENTRADA)
     await user.click(screen.getByRole('button', { name: 'Cargar stock con lote' }))
-    expect(screen.getAllByRole('note')).toHaveLength(2)
+    expect(screen.getAllByRole('note', { hidden: true })).toHaveLength(2)
     expect(texto(within(dialogo()).getByRole('note'))).toContain('el saldo de cada lote puede ser MAYOR al real')
     await user.click(within(dialogo()).getByRole('combobox', { name: 'Producto' }))
     expect(within(screen.getByRole('listbox')).getAllByRole('option').map((o) => o.textContent))

@@ -18,7 +18,7 @@ import { opcionesProducto, type MovimientoStock, type Producto } from './tipos'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { formatEntero } from '@/lib/utils'
+import { formatoCantidad } from '../formatos'
 import { fecha } from '../fechas'
 
 export type StockMovimientosProps = {
@@ -110,7 +110,7 @@ export function StockMovimientos({
       header: () => <div className="text-center">Cantidad</div>,
       cell: ({ row }) => {
         const c = row.original.cantidad
-        return <div className={`text-center font-semibold ${c > 0 ? 'text-exito' : 'text-destructive'}`}>{c > 0 ? '+' : ''}{formatEntero(c)}</div>
+        return <div className={`text-center font-semibold ${c > 0 ? 'text-exito' : 'text-destructive'}`}>{c > 0 ? '+' : ''}{formatoCantidad(c)}</div>
       },
     },
     ...(conImporte ? [{
