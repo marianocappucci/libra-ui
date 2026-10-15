@@ -20,7 +20,7 @@ import { formatoCantidad, formatoMoneda } from '../formatos'
 import { Button } from '@/components/ui/button'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
-} from '@/components/ui/dialog'
+} from '../ui/dialog'
 import { AlertTriangle, FilePlus2 } from 'lucide-react'
 
 const RUTA_ORDENES = '/api/reportes/reposicion/ordenes'

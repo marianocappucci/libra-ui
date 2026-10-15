@@ -17,8 +17,8 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import {
   Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
-} from '@/components/ui/dialog'
-import { formatEntero } from '@/lib/utils'
+} from '../ui/dialog'
+import { formatoCantidad } from '../formatos'
 
 function estadoStock(s: StockItem): { label: string; tono: TonoEstado } {
   if (s.stock_actual <= 0) return { label: 'Sin stock', tono: 'negativo' }
@@ -162,8 +162,8 @@ export function DepositoDetalle({
                             <td className="p-3 font-medium">{s.nombre}</td>
                             <td className="p-3 text-muted-foreground">{s.categoria || '—'}</td>
                             <td className="p-3 text-center">{s.unidad}</td>
-                            <td className="p-3 text-right font-semibold">{formatEntero(s.stock_actual)}</td>
-                            <td className="p-3 text-right text-muted-foreground">{formatEntero(s.stock_minimo)}</td>
+                            <td className="p-3 text-right font-semibold">{formatoCantidad(s.stock_actual)}</td>
+                            <td className="p-3 text-right text-muted-foreground">{formatoCantidad(s.stock_minimo)}</td>
                             <td className="p-3 text-center"><BadgeEstado tono={estado.tono}>{estado.label}</BadgeEstado></td>
                           </tr>
                         )

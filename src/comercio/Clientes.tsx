@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/form'
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose,
-} from '@/components/ui/dialog'
+} from '../ui/dialog'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { TACTIL_BAJO_LG, useBajoLg } from '../use-ancho'
 import { anchoColumnaAcciones, sortableHeader } from '../data-table'

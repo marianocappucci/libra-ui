@@ -48,8 +48,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle,
-} from '@/components/ui/dialog'
-import { formatEntero } from '@/lib/utils'
+} from '../ui/dialog'
 import { formatoCantidad } from '../formatos'
 import { ImporteDeMerma } from './importe-de-merma'
 import { importeDeMovimiento, traeImportes } from './importes-de-merma'
@@ -126,17 +125,17 @@ function TarjetaDeStock({ p, depositos, acciones }: { p: StockItem; depositos: D
         <BadgeEstado tono={e.tono}>{e.label}</BadgeEstado>
       </div>
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm">
-        <span>{depositos.length > 0 ? 'Total' : 'Stock'}: <strong className={`text-base tabular-nums ${clase}`}>{formatEntero(p.stock_actual)}</strong> <span className="text-muted-foreground">{p.unidad}</span></span>
-        {p.stock_minimo > 0 && <span className="text-muted-foreground">Mínimo: {formatEntero(p.stock_minimo)}</span>}
+        <span>{depositos.length > 0 ? 'Total' : 'Stock'}: <strong className={`text-base tabular-nums ${clase}`}>{formatoCantidad(p.stock_actual)}</strong> <span className="text-muted-foreground">{p.unidad}</span></span>
+        {p.stock_minimo > 0 && <span className="text-muted-foreground">Mínimo: {formatoCantidad(p.stock_minimo)}</span>}
       </div>
       {depositos.length > 0 && (
         <ul className="flex flex-wrap gap-1.5" aria-label="Stock por depósito">
           {depositos.map((d) => {
             const n = p.por_deposito?.[String(d.id)] ?? 0
             return (
-              <li key={d.id} className="flex min-w-0 max-w-full items-baseline gap-1 rounded-md border px-2 py-0.5 text-xs" title={`${d.nombre}: ${formatEntero(n)}`}>
+              <li key={d.id} className="flex min-w-0 max-w-full items-baseline gap-1 rounded-md border px-2 py-0.5 text-xs" title={`${d.nombre}: ${formatoCantidad(n)}`}>
                 <span className="truncate">{d.nombre}:</span>
-                <span className={`shrink-0 tabular-nums ${claseDeCantidad(n)}`}>{formatEntero(n)}</span>
+                <span className={`shrink-0 tabular-nums ${claseDeCantidad(n)}`}>{formatoCantidad(n)}</span>
               </li>
             )
           })}
@@ -358,7 +357,7 @@ export function Stock({
     },
     { accessorKey: 'categoria', header: 'Categoría', size: 120, minSize: 90, cell: ({ row }) => <span className="block truncate text-muted-foreground" title={row.original.categoria ?? undefined}>{row.original.categoria || '—'}</span> },
     { accessorKey: 'unidad', header: () => <div className="text-center">Unidad</div>, size: 85, minSize: 70, cell: ({ row }) => <div className="truncate text-center text-muted-foreground">{row.original.unidad}</div> },
-    { accessorKey: 'stock_minimo', header: () => <div className="text-center">Mínimo</div>, size: 100, minSize: 85, cell: ({ row }) => <div className="truncate text-center text-muted-foreground">{row.original.stock_minimo > 0 ? formatEntero(row.original.stock_minimo) : '—'}</div> },
+    { accessorKey: 'stock_minimo', header: () => <div className="text-center">Mínimo</div>, size: 100, minSize: 85, cell: ({ row }) => <div className="truncate text-center text-muted-foreground">{row.original.stock_minimo > 0 ? formatoCantidad(row.original.stock_minimo) : '—'}</div> },
     ...depositos.map((d): ColumnDef<StockItem> => ({
       id: `deposito-${d.id}`,
       // Hasta dos líneas antes del «…» (ADR-057): con varios depósitos de nombre largo, uno solo no alcanzaba para distinguirlos.
@@ -369,7 +368,7 @@ export function Stock({
       accessorFn: (p) => p.por_deposito?.[String(d.id)] ?? 0,
       cell: ({ row }) => {
         const n = row.original.por_deposito?.[String(d.id)] ?? 0
-        return <div className={`truncate text-center tabular-nums ${n < 0 ? 'font-medium text-destructive' : n === 0 ? 'text-muted-foreground' : ''}`}>{formatEntero(n)}</div>
+        return <div className={`truncate text-center tabular-nums ${n < 0 ? 'font-medium text-destructive' : n === 0 ? 'text-muted-foreground' : ''}`}>{formatoCantidad(n)}</div>
       },
     })),
     {
@@ -380,7 +379,7 @@ export function Stock({
       cell: ({ row }) => {
         const p = row.original
         const cls = p.stock_actual <= 0 ? 'text-destructive' : (p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo) ? 'text-amber-800 dark:text-amber-400' : 'text-exito'
-        return <div className={`truncate text-center text-base font-bold ${cls}`}>{formatEntero(p.stock_actual)}</div>
+        return <div className={`truncate text-center text-base font-bold ${cls}`}>{formatoCantidad(p.stock_actual)}</div>
       },
     },
     {
@@ -434,7 +433,7 @@ export function Stock({
       header: 'Cantidad',
       cell: ({ row }) => (
         <span className={row.original.cantidad >= 0 ? 'font-semibold text-exito' : 'font-semibold text-destructive'}>
-          {row.original.cantidad >= 0 ? '+' : ''}{formatEntero(row.original.cantidad)}
+          {row.original.cantidad >= 0 ? '+' : ''}{formatoCantidad(row.original.cantidad)}
         </span>
       ),
     },
@@ -478,8 +477,8 @@ export function Stock({
           <div className="min-w-0">
             <strong>{alertas.length} producto{alertas.length > 1 ? 's' : ''} con stock bajo mínimo:</strong>{' '}
             {alertas.map((a) => (
-              <BadgeEstado key={a.id} tono="atencion" className="ml-1 max-w-full" title={`${a.nombre} (${formatEntero(a.stock_actual)} ${a.unidad})`}>
-                <span className="truncate">{a.nombre} ({formatEntero(a.stock_actual)} {a.unidad})</span>
+              <BadgeEstado key={a.id} tono="atencion" className="ml-1 max-w-full" title={`${a.nombre} (${formatoCantidad(a.stock_actual)} ${a.unidad})`}>
+                <span className="truncate">{a.nombre} ({formatoCantidad(a.stock_actual)} {a.unidad})</span>
               </BadgeEstado>
             ))}
           </div>
@@ -670,7 +669,7 @@ export function Stock({
                           <span className="text-xs text-muted-foreground">{formatearFecha(m.fecha)}</span>
                           <TipoBadge tipo={m.tipo} />
                           <span className={m.cantidad >= 0 ? 'font-semibold text-exito' : 'font-semibold text-destructive'}>
-                            {m.cantidad >= 0 ? '+' : ''}{formatEntero(m.cantidad)}
+                            {m.cantidad >= 0 ? '+' : ''}{formatoCantidad(m.cantidad)}
                           </span>
                           {conImporte && importeDeMovimiento(m) && <span className="text-xs">Importe: <ImporteDeMerma movimiento={m} /></span>}
                         </div>

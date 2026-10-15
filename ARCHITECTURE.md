@@ -45,9 +45,11 @@ Por eso las dependencias del stack son `peerDependencies`, no `dependencies`
 
 Tres capas, de más genérico a más específico:
 
-- **`src/ui/` — las 17 primitivas shadcn** (`button`, `input`, `label`, `select`,
+- **`src/ui/` — las primitivas shadcn** (`button`, `input`, `label`, `select`,
   `card`, `table`, `form`, `sheet`, `sidebar`, `tooltip`, `dropdown-menu`,
-  `alert-dialog`, `avatar`, `badge`, `separator`, `skeleton`, `switch`). Se
+  `alert-dialog`, `avatar`, `badge`, `separator`, `skeleton`, `switch`, y desde
+  `v0.146.0` / `v0.152.0` también `tabs` y `dialog`, que las pantallas del kit
+  ya importan propias y no del consumidor). Se
   centralizaron acá en `v0.59.0` (E4 de la auditoría): antes cada producto tenía
   su propia copia generada por el CLI de shadcn. Son la base sobre la que se
   construyen las pantallas. `vitest` las excluye de su corrida

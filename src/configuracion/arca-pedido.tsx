@@ -34,7 +34,7 @@ import { Button } from '@/components/ui/button'
 import {
   Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
+} from '../ui/dialog'
 
 /** Lo que `ParDeCredenciales` necesita saber para ofrecer el pedido de **un** ambiente. */
 export type ConfigPedido = {

@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
-} from '@/components/ui/dialog'
+} from './ui/dialog'
 import { PasswordInput } from './PasswordInput'
 import { CodigoPorDigitos } from './CodigoPorDigitos'
 import type { ProductLogo } from './branding'

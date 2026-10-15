@@ -23,7 +23,7 @@ import {
 import { Switch } from '@/components/ui/switch'
 import {
   Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle,
-} from '@/components/ui/dialog'
+} from '../ui/dialog'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { formatoMoneda } from '../formatos'
 

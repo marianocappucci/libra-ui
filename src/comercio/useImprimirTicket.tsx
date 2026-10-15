@@ -10,7 +10,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
-} from '@/components/ui/dialog'
+} from '../ui/dialog'
 
 const MENSAJE_GENERICO = 'No se pudo abrir el ticket.'
 const MENSAJE_NO_ENCONTRADA = 'No se encontró la venta.'

@@ -39,7 +39,6 @@ import { ICONOS } from '../iconos-identidad'
 import { UNIDADES, type CategoriaProducto, type Estacion, type MinimosPorSucursal, type Producto, type Proveedor } from './tipos'
 import { ProductoCodigosVariantes } from './ProductoCodigosVariantes'
 import { describeErrorHttp } from './errores-http'
-import { formatEntero } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -52,7 +51,7 @@ import {
 import { Switch } from '@/components/ui/switch'
 import {
   Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
-} from '@/components/ui/dialog'
+} from '../ui/dialog'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { SelectBuscable } from '../SelectBuscable'
 import { formatoCantidad, formatoMoneda } from '../formatos'
@@ -792,7 +791,7 @@ export function Productos({
         cell: ({ row }: { row: { original: Producto } }) => {
           const n = stockTotal[row.original.id]
           if (n === undefined) return <span className="text-muted-foreground">—</span>
-          return <span className={`tabular-nums ${n < 0 ? 'font-medium text-destructive' : n === 0 ? 'text-muted-foreground' : ''}`}>{formatEntero(n)}</span>
+          return <span className={`tabular-nums ${n < 0 ? 'font-medium text-destructive' : n === 0 ? 'text-muted-foreground' : ''}`}>{formatoCantidad(n)}</span>
         },
       } as ColumnDef<Producto>] : []),
       {
@@ -1244,7 +1243,7 @@ export function Productos({
                       ...(conEstacion ? [{ etiqueta: 'Estación', valor: estacion && estacion.value ? estacion.label : '—' }] : []),
                       { etiqueta: 'Precio venta', valor: p.unidad ? `${formatoMoneda(p.precio_venta)} / ${p.unidad}` : formatoMoneda(p.precio_venta) },
                       ...(sinCosto ? [] : [{ etiqueta: 'Precio costo', valor: formatoMoneda(p.precio_costo) }]),
-                      ...(conStockTotal ? [{ etiqueta: 'Stock total', valor: stock === undefined ? '—' : `${formatEntero(stock)} ${p.unidad}`.trim() }] : []),
+                      ...(conStockTotal ? [{ etiqueta: 'Stock total', valor: stock === undefined ? '—' : `${formatoCantidad(stock)} ${p.unidad}`.trim() }] : []),
                     ]}
                     acciones={botonesDeFila(p)}
                   />

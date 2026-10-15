@@ -432,7 +432,9 @@ describe('ARCA — el pedido de un servicio que no es la facturación', () => {
       name: 'Generar pedido de certificado — CTG y Carta de Porte — Producción',
     })
     await usuario.click(boton)
-    const dialogo = await screen.findByRole('dialog', { name: /CTG y Carta de Porte/ })
+    // Con el Dialog real de Radix (0.152.0) el nombre accesible es el del título (`aria-labelledby` gana al `aria-label`); a qué servicio pertenece lo dice la descripción.
+    const dialogo = await screen.findByRole('dialog', { name: 'Generar pedido de certificado' })
+    expect(dialogo).toHaveTextContent('CTG y Carta de Porte — Producción')
     expect(within(dialogo).getByLabelText('Alias')).toHaveValue('libracargowscpeprod')
     await usuario.click(within(dialogo).getByRole('button', { name: 'Generar pedido' }))
 

@@ -6,6 +6,7 @@
 // **Sucursales contratadas (ADR-048, 0.136.0).** Con `rutaDelLimite` la pantalla lee «activas vs contratadas»
 // (`libracore.limites`, ADR-041 del motor) y, si hay tope, lo muestra; al llegar al tope deshabilita el alta y dice por qué. Es una ayuda:
 // el que corta es el backend (409), cuyo mensaje se muestra en el formulario. Sin la prop, sin tope o con la lectura caída no cambia nada.
+// El texto del tope lo manda el motor en la misma lectura (`mensaje_de_limite`, 0.152.0, ADR-064): la pantalla ya no escribe su propia frase.
 //
 // **Alta no habilitada (ADR-052).** Con `motivoSinAlta` el producto avisa que esta instancia no puede sumar otra sucursal (le falta
 // un módulo, por ejemplo): «Nueva sucursal» queda deshabilitada y el motivo ocupa el lugar del mensaje del tope, sin repetirlo. También es una
@@ -26,12 +27,14 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import {
   Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
-} from '@/components/ui/dialog'
+} from '../ui/dialog'
 
-/** Lo que contesta `GET /api/limites/sucursales` del motor: `contratadas` es `null` cuando la instancia no tiene tope. */
-export type LimiteDeSucursales = { contratadas: number | null; activas: number }
+/** Lo que contesta `GET /api/limites/sucursales` del motor: `contratadas` es `null` cuando la instancia no tiene tope. `mensaje_de_limite` es el texto del
+ *  tope (el mismo que el 409 del alta); lo manda libracore desde la v1.167.0 (ADR-052 del motor), y antes no venía. */
+export type LimiteDeSucursales = { contratadas: number | null; activas: number; mensaje_de_limite?: string }
 
-/** El mismo texto que `libracore.limites.mensaje_de_limite` (el que da el 409 del alta): si cambia allá, cambia acá. */
+/** Sólo de respaldo para un motor anterior a libracore v1.167.0, que no manda `mensaje_de_limite` en la lectura (ADR-064): el texto sale de allá y no de
+ *  acá. Es el mismo que `libracore.limites.mensaje_de_limite`. Se borra cuando los productos que usan `rutaDelLimite` suban ese pin. */
 export function mensajeDeLimite(contratadas: number): string {
   const plural = contratadas === 1 ? 'sucursal' : 'sucursales'
   return `Tu plan incluye ${contratadas} ${plural}. Para sumar otra, comunicate con nosotros.`
@@ -42,7 +45,9 @@ function limiteLeido(dato: unknown): LimiteDeSucursales | null {
   const d = dato as Partial<LimiteDeSucursales> | null
   if (!d || typeof d.contratadas !== 'number' || !Number.isInteger(d.contratadas) || d.contratadas < 1) return null
   if (typeof d.activas !== 'number' || !Number.isFinite(d.activas)) return null
-  return { contratadas: d.contratadas, activas: d.activas }
+  // Una clave que no es un texto (o viene vacía) se ignora: nunca esconde el tope ni rompe la pantalla.
+  const mensaje = typeof d.mensaje_de_limite === 'string' && d.mensaje_de_limite.trim() ? d.mensaje_de_limite : undefined
+  return { contratadas: d.contratadas, activas: d.activas, ...(mensaje ? { mensaje_de_limite: mensaje } : {}) }
 }
 
 export type SucursalesProps = {
@@ -206,7 +211,7 @@ export function Sucursales({
             {limite?.contratadas != null && (
               <p>{limite.activas} de {limite.contratadas} {limite.contratadas === 1 ? 'sucursal contratada' : 'sucursales contratadas'}</p>
             )}
-            {sinAlta ? <p>{motivoSinAlta}</p> : alLimite && limite?.contratadas != null && <p>{mensajeDeLimite(limite.contratadas)}</p>}
+            {sinAlta ? <p>{motivoSinAlta}</p> : alLimite && limite?.contratadas != null && <p>{limite.mensaje_de_limite ?? mensajeDeLimite(limite.contratadas)}</p>}
           </div>
         )}
 
