@@ -89,7 +89,7 @@ export function sinComentarios(fuente: string): string {
 
 /** Dónde termina el `>` que cierra una etiqueta de apertura que empieza en `desde`. Respeta las llaves y las comillas: el `=>` de una flecha y el `>`
  *  de un `a > b` dentro de `{…}` no la cierran. `-1` si no se cierra. */
-function finDeEtiqueta(texto: string, desde: number): number {
+export function finDeEtiqueta(texto: string, desde: number): number {
   let llaves = 0
   let comilla: string | null = null
   for (let i = desde; i < texto.length; i++) {
@@ -222,7 +222,7 @@ export function leerOpciones(hijos: string): { literales: number; datos: boolean
 }
 
 /** El texto de una etiqueta de campo (`<Label>`, `<FormLabel>`, `<label>`) que está justo antes de `pos`, para saber qué elige el desplegable. */
-function etiquetaDeAlLado(texto: string, pos: number): string {
+export function etiquetaDeAlLado(texto: string, pos: number): string {
   const desde = Math.max(0, pos - 600)
   const ventana = texto.slice(desde, pos)
   let ultima = ''
@@ -280,7 +280,7 @@ export function esFuenteAuditable(nombre: string): boolean {
   return /\.tsx?$/.test(nombre) && !/\.(test|spec|stories)\.tsx?$/.test(nombre) && !/\.d\.ts$/.test(nombre)
 }
 
-function fuentes(dir: string): string[] {
+export function fuentes(dir: string): string[] {
   return readdirSync(dir).flatMap((nombre) => {
     if (nombre === 'node_modules' || nombre === 'ui' || nombre === 'assets' || nombre === '__tests__') return []
     const ruta = join(dir, nombre)

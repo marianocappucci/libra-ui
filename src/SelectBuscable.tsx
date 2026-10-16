@@ -52,7 +52,7 @@ export type OpcionSelect = {
   disabled?: boolean
 }
 
-type Props = {
+export type SelectBuscableProps = {
   value: string
   onChange: (value: string) => void
   opciones: OpcionSelect[]
@@ -114,7 +114,7 @@ type Props = {
   'aria-invalid'?: boolean | 'true' | 'false'
 }
 
-export function SelectBuscable(props: Props) {
+export function SelectBuscable(props: SelectBuscableProps) {
   return props.buscarEscribiendo === false ? <SelectDeBoton {...props} /> : <SelectDeCampo {...props} />
 }
 
@@ -201,7 +201,7 @@ function SelectDeBoton({
   value, onChange, opciones, placeholder = 'Elegí una opción…',
   emptyMessage = 'Sin resultados.', disabled, required, className, ariaLabel, title, lineasEnMovil,
   id, 'aria-describedby': describedBy, 'aria-invalid': invalido,
-}: Props) {
+}: SelectBuscableProps) {
   const dosLineas = lineasEnMovil === 2
   const [abierto, setAbierto] = useState(false)
   const [consulta, setConsulta] = useState('')
@@ -345,7 +345,7 @@ function SelectDeCampo({
   value, onChange, opciones, placeholder = 'Buscar…',
   emptyMessage = 'Sin resultados.', disabled, required, limpiable, className, ariaLabel, title, lineasEnMovil,
   id, 'aria-describedby': describedBy, 'aria-invalid': invalido,
-}: Props) {
+}: SelectBuscableProps) {
   const dosLineas = lineasEnMovil === 2
   const [abierto, setAbierto] = useState(false)
   const [consulta, setConsulta] = useState<string | null>(null)
