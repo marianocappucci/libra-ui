@@ -1689,3 +1689,14 @@ Las 37 pantallas del kit que importaban `@/components/ui/dialog` (50 `DialogCont
   - **Esconder las acreditadas del listado:** siguen siendo comprobantes; sólo salen de la vista «Sin cobrar», que ya filtra el motor.
 - Consecuencias: MINOR, sin cambio de contrato para el producto (las props no cambian). Cambia lo que se ve: «Acreditada» (nuevo), el monto del tablero (lo que falta), y el texto del panel de cobro. **Pantallas propias de un producto que resten `cobrado < total` a mano** quedan con la semántica vieja: reemplazarlas por `puedeCobrar`/`estadoDeCobro`/`pendienteDe` (Contalibra: `frontend/src/pages/Dashboard.tsx`; ver el diff propuesto en el reporte). Para la factura al contado cobrada y después acreditada el motor no asienta nada (devolver la plata es una decisión de producto abierta, ADR-059 §«Cuando la nota supera lo pendiente»): la pantalla sólo la rotula «Acreditada» y no promete un saldo a favor.
 - Tests: `test/estado-de-cobro.test.ts` (21: nueve casos de la tabla del motor, el respaldo sin los campos nuevos, la tolerancia), y los casos de `Facturas`, `FacturaDetalle` y `comercio-dashboard`. Contra `origin/main` (los cuatro archivos de test copiados a un árbol sin el cambio) fallan los 10 casos de rótulo, detalle y tablero y el archivo del módulo no carga; pasan los de respaldo (motor viejo), que son el control.
+
+## ADR-069 — El error de la consulta de CUIT que se arregla en Configuración lleva al tutorial de Padrón A13 (0.156.0)
+
+**Estado:** aceptada (2026-10-16; pedido del humano: «hay que sumar la pantalla que explica que hay que habilitar el padrón A13»).
+
+**Contexto.** El botón «Consultar en ARCA» de `comercio/Clientes` y `comercio/ClienteDetalle` muestra el error del motor (`libracore.consultar_cuit_router`): 503 «Configurá los certificados ARCA…» o 403 «El certificado no tiene acceso al servicio de Padrón (ws_sr_padron_a13)…». El tutorial que explica cómo habilitarlo ya existía (`TutorialArcaPadron`, en la tarjeta de ARCA de Configuración), pero desde el error no había forma de llegar.
+
+**Decisión.** `src/configuracion/arca-tutorial.ts` exporta `ID_TUTORIAL_PADRON`, `URL_TUTORIAL_PADRON` (`/configuracion?seccion=integraciones&integracion=arca#tutorial-padron-a13`) y `errorQueSeArreglaEnConfiguracion(status, cuerpo)` (403 o 503 con cuerpo `{error}`; un 403 de permisos con `{detail}` no califica). `Clientes` y `ClienteDetalle` reciben `urlTutorialPadron` (por defecto `URL_TUTORIAL_PADRON`; `null` lo apaga) y agregan «Cómo habilitarlo» junto al error. `Tutorial` acepta `id` y se abre solo, con `scrollIntoView`, si la URL trae su ancla.
+
+**Consecuencias.** Sin cambios en los productos que usan el kit. LibraCargo, LibraClub y GestioLibra (botón propio) apuntan a la misma URL. 7 tests nuevos.
+
