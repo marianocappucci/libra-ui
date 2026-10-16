@@ -21,17 +21,27 @@
  *  *Contalibra* — que es peor que no tener el tutorial, porque parece
  *  correcto.
  */
-import type { ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { ChevronDown, ExternalLink, Info } from 'lucide-react'
+
+import { ID_TUTORIAL_PADRON } from './arca-tutorial'
 
 /** El acordeón. Es un `<details>` nativo y no un componente de shadcn a
  *  propósito: no hay un primitivo de acordeón vendorizado en los ocho
  *  productos, y `<details>` abre y cierra sin JavaScript. */
-export function Tutorial({ badge, badgeClassName, title, children }: {
-  badge: string; badgeClassName: string; title: string; children: ReactNode
+export function Tutorial({ id, badge, badgeClassName, title, children }: {
+  /** Con `id`, el tutorial se abre solo (y se muestra) cuando la URL trae `#<id>`: es a donde apuntan los enlaces
+   *  desde los formularios que dependen de él. */
+  id?: string; badge: string; badgeClassName: string; title: string; children: ReactNode
 }) {
+  const ref = useRef<HTMLDetailsElement>(null)
+  useEffect(() => {
+    if (!id || typeof window === 'undefined' || window.location.hash !== `#${id}`) return
+    ref.current?.setAttribute('open', '')
+    ref.current?.scrollIntoView?.({ block: 'start' })
+  }, [id])
   return (
-    <details className="group mb-4 rounded-md border bg-muted/30 px-4 py-3 text-sm">
+    <details ref={ref} id={id} className="group mb-4 scroll-mt-4 rounded-md border bg-muted/30 px-4 py-3 text-sm">
       <summary className="flex cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden">
         <span className={`rounded px-2 py-0.5 text-xs font-semibold text-white ${badgeClassName}`}>{badge}</span>
         <span className="font-medium">{title}</span>
@@ -170,7 +180,7 @@ export function TutorialArcaCertificado({ conPedido = false }: { conPedido?: boo
  *  certificado que se configuró en **este** sistema. */
 export function TutorialArcaPadron({ producto }: { producto: string }) {
   return (
-    <Tutorial badge="ARCA / AFIP" badgeClassName={AZUL_ARCA} title="¿Qué servicio debo habilitar para consultar datos de clientes por CUIT?">
+    <Tutorial id={ID_TUTORIAL_PADRON} badge="ARCA / AFIP" badgeClassName={AZUL_ARCA} title="¿Qué servicio debo habilitar para consultar datos de clientes por CUIT?">
       <p className="text-sm text-muted-foreground">
         El botón <strong>&quot;Consultar ARCA&quot;</strong> en el formulario de clientes completa automáticamente nombre, domicilio y condición de IVA a partir del CUIT.
         Para que funcione, tu certificado debe tener acceso al webservice de Padrón Alcance 13.

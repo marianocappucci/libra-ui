@@ -34,6 +34,7 @@ import {
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { ArrowLeft, ArrowLeftRight, BarChart3, CheckCircle2, Eye, Inbox, Loader2, Pencil, Plus, Search, Trash2, Undo2, XCircle } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
+import { errorQueSeArreglaEnConfiguracion, URL_TUTORIAL_PADRON } from '../configuracion/arca-tutorial'
 import { ICONOS } from '../iconos-identidad'
 import { fecha } from '../fechas'
 import { SelectBuscable } from '../SelectBuscable'
@@ -94,10 +95,15 @@ export type VariantesClienteDetalle = {
   conComprobantes?: boolean
   /** El botón de consulta del CUIT en ARCA (`/api/consultar-cuit/:cuit`). */
   conConsultaCuit?: boolean
+  /** A dónde lleva el enlace del error «sin certificados» / «sin acceso a Padrón»; `null` lo saca. */
+  urlTutorialPadron?: string | null
 }
 
 export function ClienteDetalle(
-  { conListaDePrecio = false, conMercadoPago = true, conComprobantes = true, conConsultaCuit = true }: VariantesClienteDetalle = {},
+  {
+    conListaDePrecio = false, conMercadoPago = true, conComprobantes = true, conConsultaCuit = true,
+    urlTutorialPadron = URL_TUTORIAL_PADRON,
+  }: VariantesClienteDetalle = {},
 ) {
   const { id } = useParams<{ id: string }>()
   const clienteId = Number(id)
@@ -124,7 +130,7 @@ export function ClienteDetalle(
   const [guardando, setGuardando] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [consultando, setConsultando] = useState(false)
-  const [consultaMsg, setConsultaMsg] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null)
+  const [consultaMsg, setConsultaMsg] = useState<{ tipo: 'ok' | 'error'; texto: string; tutorial?: boolean } | null>(null)
 
   const form = useForm<ClienteFormValues>({
     resolver: zodResolver(clienteSchema),
@@ -295,7 +301,10 @@ export function ClienteDetalle(
       const resp = await fetch(`/api/consultar-cuit/${cuit}`, { credentials: 'include' })
       const data = await resp.json()
       if (!resp.ok || data.error) {
-        setConsultaMsg({ tipo: 'error', texto: data.error || 'Error al consultar ARCA.' })
+        setConsultaMsg({
+          tipo: 'error', texto: data.error || 'Error al consultar ARCA.',
+          tutorial: errorQueSeArreglaEnConfiguracion(resp.status, data),
+        })
       } else {
         if (data.nombre) form.setValue('name', data.nombre)
         if (data.domicilio) form.setValue('address', data.domicilio)
@@ -450,6 +459,11 @@ export function ClienteDetalle(
                       <p className={`flex w-full items-center gap-1.5 text-sm ${consultaMsg.tipo === 'ok' ? 'text-exito' : 'text-destructive'}`}>
                         {consultaMsg.tipo === 'ok' ? <CheckCircle2 className="size-4 shrink-0" /> : <XCircle className="size-4 shrink-0" />}
                         {consultaMsg.texto}
+                        {consultaMsg.tutorial && urlTutorialPadron && (
+                          <a href={urlTutorialPadron} target="_blank" rel="noreferrer" className="font-medium underline">
+                            Cómo habilitarlo
+                          </a>
+                        )}
                       </p>
                     )}
                     <DialogFooter className="w-full">
