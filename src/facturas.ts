@@ -32,6 +32,11 @@ export const IVA_CONDITIONS = [
   'IVA No Responsable',
 ] as const
 
+/** De la condición frente al IVA que informa el padrón de ARCA («Responsable Inscripto»…) a la que guarda el
+ *  formulario de cliente; `undefined` si ARCA informa una que no está en `IVA_CONDITIONS` (no se toca el campo). */
+export const condicionDeIvaDeArca = (condicionDeArca: string): string | undefined =>
+  (IVA_CONDITIONS as readonly string[]).includes(condicionDeArca) ? condicionDeArca : undefined
+
 export type Caja = {
   id: number
   nombre: string

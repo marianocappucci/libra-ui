@@ -94,19 +94,19 @@ describe('Clientes', () => {
     expect(await within(dialogo).findByRole('alert')).toHaveTextContent('El nombre es obligatorio')
 
     // Un CUIT corto no consulta; uno válido completa el formulario.
-    await user.click(within(dialogo).getByTitle('Consultar datos en ARCA'))
+    await user.click(within(dialogo).getByRole('button', { name: 'Consultar en ARCA' }))
     expect(dialogo.textContent).toContain('Ingresá un CUIT de 11 dígitos antes de consultar.')
     fireEvent.change(within(dialogo).getByLabelText('CUIT/DNI'), { target: { value: '20-12345678-9' } })
-    await user.click(within(dialogo).getByTitle('Consultar datos en ARCA'))
+    await user.click(within(dialogo).getByRole('button', { name: 'Consultar en ARCA' }))
     await waitFor(() => expect(dialogo.textContent).toContain('Datos importados desde ARCA — Estado: ACTIVO.'))
     expect((within(dialogo).getByLabelText('Nombre') as HTMLInputElement).value).toBe('ACME SA')
     expect((within(dialogo).getByLabelText('Dirección') as HTMLInputElement).value).toBe('Ruta 8')
     // Lo que ARCA no conoce, y la caída.
     fireEvent.change(within(dialogo).getByLabelText('CUIT/DNI'), { target: { value: '20999999999' } })
-    await user.click(within(dialogo).getByTitle('Consultar datos en ARCA'))
+    await user.click(within(dialogo).getByRole('button', { name: 'Consultar en ARCA' }))
     await waitFor(() => expect(dialogo.textContent).toContain('CUIT inexistente'))
     fireEvent.change(within(dialogo).getByLabelText('CUIT/DNI'), { target: { value: '20111111111' } })
-    await user.click(within(dialogo).getByTitle('Consultar datos en ARCA'))
+    await user.click(within(dialogo).getByRole('button', { name: 'Consultar en ARCA' }))
     await waitFor(() => expect(dialogo.textContent).toContain('No se pudo conectar con ARCA.'))
 
     fireEvent.change(within(dialogo).getByLabelText('Email'), { target: { value: 'acme@x.com' } })
@@ -117,6 +117,30 @@ describe('Clientes', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   })
 
+  it('el alta no pisa lo que ya se escribió (ADR-070): completa lo vacío y ofrece reemplazar el resto', async () => {
+    responder({
+      '/api/clientes': [ANA],
+      'GET /api/consultar-cuit/20123456789': { nombre: 'ACME SA', domicilio: 'Ruta 8', iva_condition: IVA_CONDITIONS[0], estado: 'ACTIVO' },
+    })
+    const user = userEvent.setup()
+    montar('/clientes', <Clientes />)
+    await screen.findByText('Ana')
+    await user.click(screen.getByRole('button', { name: 'Nuevo cliente' }))
+    const dialogo = screen.getByRole('dialog')
+    fireEvent.change(within(dialogo).getByLabelText('Nombre'), { target: { value: 'Mi cliente' } })
+    fireEvent.change(within(dialogo).getByLabelText('CUIT/DNI'), { target: { value: '20-12345678-9' } })
+    await user.click(within(dialogo).getByRole('button', { name: 'Consultar en ARCA' }))
+
+    const distintos = await within(dialogo).findByRole('group', { name: /distintos de los cargados/ })
+    expect(distintos.textContent).toContain('Nombre: ACME SA')
+    expect((within(dialogo).getByLabelText('Nombre') as HTMLInputElement).value).toBe('Mi cliente')
+    expect((within(dialogo).getByLabelText('Dirección') as HTMLInputElement).value).toBe('Ruta 8')
+    expect((within(dialogo).getByLabelText('Condición de IVA') as HTMLSelectElement).value).toBe(IVA_CONDITIONS[0])
+
+    await user.click(within(dialogo).getByRole('button', { name: 'Reemplazar con los de ARCA' }))
+    expect((within(dialogo).getByLabelText('Nombre') as HTMLInputElement).value).toBe('ACME SA')
+  })
+
   it('sin `conConsultaCuit` el alta no ofrece consultar el CUIT en ARCA', async () => {
     responder({ '/api/clientes': [ANA] })
     const user = userEvent.setup()
@@ -124,7 +148,7 @@ describe('Clientes', () => {
     await screen.findByText('Ana')
     await user.click(screen.getByRole('button', { name: /Nuevo cliente/ }))
     await screen.findByRole('dialog')
-    expect(screen.queryByTitle('Consultar datos en ARCA')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Consultar en ARCA' })).toBeNull()
   })
 
   it('muestra el detalle del error de la API al crear, y el de conexión al cargar', async () => {
@@ -195,7 +219,7 @@ describe('ClienteDetalle', () => {
     await screen.findByText('Datos del cliente')
     await user.click(screen.getByRole('button', { name: /Editar/ }))
     await screen.findByRole('dialog')
-    expect(screen.queryByTitle('Consultar datos en ARCA')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Consultar en ARCA' })).toBeNull()
   })
 
   it('los alias: agrega, quita con confirmación, y muestra el error', async () => {
@@ -252,6 +276,7 @@ describe('ClienteDetalle', () => {
       '/api/clientes/1': () => ficha,
       'POST /api/clientes/1/toggle-auto-facturar': () => { ficha = { ...ficha, auto_facturar: 1 }; return {} },
       'PUT /api/clientes/1': () => { ficha = { ...ficha, name: 'Ana Editada' }; return {} },
+      'GET /api/consultar-cuit/20123456789': { nombre: 'ACME SA', domicilio: 'Ruta 8', iva_condition: IVA_CONDITIONS[1], estado: 'ACTIVO' },
       'POST /api/clientes/1/desactivar': {},
     })
     const user = userEvent.setup()
@@ -265,9 +290,15 @@ describe('ClienteDetalle', () => {
     const dialogo = screen.getByRole('dialog')
     expect((within(dialogo).getByLabelText('Nombre') as HTMLInputElement).value).toBe('Ana')
     fireEvent.change(within(dialogo).getByLabelText('Nombre'), { target: { value: 'Ana Editada' } })
-    // El CUIT precargado es válido: la consulta sale, y acá nadie contesta.
-    await user.click(within(dialogo).getByTitle('Consultar datos en ARCA'))
-    await waitFor(() => expect(dialogo.textContent).toContain('Error al consultar ARCA.'))
+    // El CUIT precargado es válido: la consulta sale y ARCA informa otros datos, pero lo ya cargado no se pisa sin
+    // preguntar (ADR-070): se muestra lo distinto y el usuario elige.
+    await user.click(within(dialogo).getByRole('button', { name: 'Consultar en ARCA' }))
+    const distintos = await within(dialogo).findByRole('group', { name: /distintos de los cargados/ })
+    expect(distintos.textContent).toContain('Nombre: ACME SA')
+    expect(distintos.textContent).toContain(`Condición de IVA: ${IVA_CONDITIONS[1]}`)
+    expect((within(dialogo).getByLabelText('Nombre') as HTMLInputElement).value).toBe('Ana Editada')
+    await user.click(within(dialogo).getByRole('button', { name: 'Dejar los míos' }))
+    expect((within(dialogo).getByLabelText('Nombre') as HTMLInputElement).value).toBe('Ana Editada')
     await user.click(within(dialogo).getByRole('button', { name: 'Guardar cambios' }))
     await waitFor(() => expect(cuerpoDe('PUT /api/clientes/1')).toMatchObject({ name: 'Ana Editada', auto_facturar: true }))
     expect(await screen.findByRole('heading', { name: /Ana Editada/ })).toBeTruthy()
