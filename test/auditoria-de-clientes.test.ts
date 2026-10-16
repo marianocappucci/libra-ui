@@ -40,6 +40,10 @@ describe('qué cuenta como campo de cliente', () => {
     expect(campos('<Label>Ubicación</Label>\n<SelectBuscable value={field.value || DEL_CLIENTE} onChange={f} opciones={o} />')).toEqual([])
   })
 
+  it('🔴 el texto de una opción que nombra al cliente no lo convierte en campo de cliente', () => {
+    expect(campos("<Label>Es de un tercero</Label>\n<SelectBuscable value={proveedorId} onChange={f} opciones={[{ value: '', label: 'No, es del cliente' }, ...ps]} />")).toEqual([])
+  })
+
   it('las palabras y los envoltorios propios los pone el producto', () => {
     expect(campos('<Label>Paciente</Label>\n<SelectBuscable value={v} onChange={f} opciones={o} />')).toEqual([])
     expect(campos('<Label>Paciente</Label>\n<SelectBuscable value={v} onChange={f} opciones={o} />', ['client', 'paciente'])).toHaveLength(1)
