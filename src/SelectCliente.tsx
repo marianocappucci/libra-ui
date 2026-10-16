@@ -14,7 +14,7 @@
  *
  *  **El recién creado se elige solo** y queda en la lista aunque el consumidor todavía no lo haya agregado a la suya: si `crear` no actualiza la
  *  lista del producto, el campo igual muestra el nombre en vez de quedar en blanco con un id elegido. */
-import { useId, useState, type KeyboardEvent } from 'react'
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import { UserPlus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -59,7 +59,7 @@ export type SelectClienteProps = Omit<SelectBuscableProps, 'buscarEscribiendo'> 
   etiqueta?: string
   /** Clase del buscador (su ancho: `w-52`). Por defecto ocupa lo que haya al lado del botón. */
   classNameSelect?: string
-  /** Se avisa al abrir y cerrar el panel (para un consumidor que necesita saberlo, p. ej. para no cerrar su modal con Escape). */
+  /** Se avisa al abrir y cerrar el panel (para un consumidor que necesita saberlo). */
   onPanelChange?: (abierto: boolean) => void
 }
 
@@ -85,6 +85,9 @@ export function AltaDeCliente({
   crear, campos = CAMPOS_POR_DEFECTO, entidad = 'cliente', etiquetaDocumento = 'CUIT/DNI', onCreado, onCancelar, nombreInicial = '', className,
 }: AltaDeClienteProps) {
   const id = useId()
+  const panel = useRef<HTMLDivElement>(null)
+  const cancelar = useRef(onCancelar)
+  cancelar.current = onCancelar
   const [nuevo, setNuevo] = useState<ClienteNuevo>({ ...VACIO, nombre: nombreInicial })
   const [creando, setCreando] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -106,11 +109,24 @@ export function AltaDeCliente({
     }
   }
 
+  // 🔴 Escape cierra el panel y nada más, y para eso no alcanza el `onKeyDown` de React: el `Dialog` de Radix escucha Escape en el `document` en
+  // fase de CAPTURA (`DismissableLayer`), antes de que el evento llegue al panel, así que un `stopPropagation` acá llegaba tarde y el modal se
+  // cerraba entero con todo lo cargado (lo midió el POS de VentaLibra, 2026-10-16). Se escucha en `window`, también en captura, que corre ANTES
+  // que el `document`: el evento se corta ahí y Radix no se entera.
+  useEffect(() => {
+    const alEscape = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== 'Escape' || !panel.current?.contains(e.target as Node)) return
+      e.preventDefault()
+      e.stopPropagation()
+      cancelar.current()
+    }
+    window.addEventListener('keydown', alEscape, true)
+    return () => window.removeEventListener('keydown', alEscape, true)
+  }, [])
+
   function teclas(e: KeyboardEvent<HTMLDivElement>) {
     // Enter en un campo de texto crea; no manda el formulario de afuera (no hay `<form>` propio: casi siempre estamos dentro de otro).
     if (e.key === 'Enter' && (e.target as HTMLElement).tagName === 'INPUT') { e.preventDefault(); e.stopPropagation(); void guardar() }
-    // Escape cierra el panel y nada más: sin esto, dentro de un modal lo cerraba entero con todo lo cargado.
-    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onCancelar() }
   }
 
   const campo = (c: CampoDeAlta) => {
@@ -144,7 +160,7 @@ export function AltaDeCliente({
   }
 
   return (
-    <div role="group" aria-label={`Nuevo ${entidad}`} className={cn('grid gap-3 rounded-md border bg-muted/30 p-3', className)} onKeyDown={teclas}>
+    <div ref={panel} role="group" aria-label={`Nuevo ${entidad}`} className={cn('grid gap-3 rounded-md border bg-muted/30 p-3', className)} onKeyDown={teclas}>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="grid gap-2">
           <Label htmlFor={`${id}-nombre`}>Nombre *</Label>

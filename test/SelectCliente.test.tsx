@@ -59,6 +59,24 @@ describe('SelectCliente', () => {
     expect(alEnviar).not.toHaveBeenCalled()
   })
 
+  it('🔴 Escape cierra sólo el panel: un listener de captura en el document (el de Radix Dialog) no se entera', async () => {
+    // Radix `DismissableLayer` escucha Escape en el document en fase de captura; con un `stopPropagation` de React el modal se cerraba igual.
+    const modal = vi.fn()
+    document.addEventListener('keydown', modal, true)
+    try {
+      render(<Campo />)
+      abrirPanel()
+      fireEvent.keyDown(screen.getByLabelText('Nombre *'), { key: 'Escape' })
+      expect(screen.queryByRole('group', { name: 'Nuevo cliente' })).not.toBeInTheDocument()
+      expect(modal).not.toHaveBeenCalled()
+      // Fuera del panel, Escape sigue siendo del modal.
+      fireEvent.keyDown(document.body, { key: 'Escape' })
+      expect(modal).toHaveBeenCalledTimes(1)
+    } finally {
+      document.removeEventListener('keydown', modal, true)
+    }
+  })
+
   it('sin nombre no deja crear', () => {
     render(<Campo />)
     abrirPanel()
