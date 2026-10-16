@@ -1734,3 +1734,13 @@ Las 37 pantallas del kit que importaban `@/components/ui/dialog` (50 `DialogCont
 **Consecuencias.** En Ventas el panel pasa a un grupo «Nuevo cliente» con la etiqueta «Condición frente al IVA» (antes «Condición IVA») y el error del alta se ve dentro del panel; un error sin respuesta dice «Error de conexión.», como el resto. Presupuesto y Remito del kit (Contalibra, Restolibra) ganan el alta. Los productos reemplazan cada campo por `SelectCliente`, agregan el test del guard y suben el pin a `v0.158.0` (regla del tag). `SelectBuscable` exporta su tipo de props (`SelectBuscableProps`) y `auditoria-de-selects` exporta `finDeEtiqueta`, `etiquetaDeAlLado` y `fuentes` para que el guard nuevo no los copie.
 
 **Corrección 0.158.1 (2026-10-16).** Escape dentro del panel cerraba igual el `Dialog` de Radix que lo contiene: Radix escucha Escape en el `document` en fase de captura, antes de que el `onKeyDown` del panel pudiera cortarlo. El panel ahora escucha Escape en `window` en captura (corre antes que el `document`) y sólo cuando el foco está adentro. Un consumidor ya no necesita su propio `onEscapeKeyDown` para eso. Y el guard deja de contar el texto de las opciones (`label: 'No, es del cliente'`) como si el campo eligiera un cliente: en LibraDesk marcaba selects de proveedor y de depósito.
+
+## ADR-072 — «IVA No Responsable» deja de ofrecerse (0.158.2)
+
+**Estado:** aceptada (2026-10-16; decisión del humano: «IVA No Responsable sacalo»).
+
+**Contexto.** `IVA_CONDITIONS` ofrecía seis condiciones; el backend de LibraDesk conoce cinco (sin «IVA No Responsable», una categoría que ARCA ya no asigna), y por eso el alta en el lugar de LibraDesk (ADR-071) no podía pedir la condición. El motor (`libracore.clientes_router`) la sigue aceptando y la factura como «No Alcanzado», y puede haber fichas cargadas con ella.
+
+**Decisión.** Sale de `IVA_CONDITIONS`: no se ofrece en ninguna alta (`SelectCliente`, bandeja de MP, Clientes, Proveedores). `condicionesIvaPara(actual)` es la lista de los formularios que **editan**: si la ficha guarda una condición que ya no se ofrece, la suma al final para que el campo no se vea vacío ni se pise al guardar. El motor no cambia (sigue leyendo las fichas viejas); si ARCA la informa, `condicionDeIvaDeArca` no toca el campo.
+
+**Consecuencias.** Los productos suben el pin; LibraDesk puede pedir CUIT y condición en el alta de sus pantallas fiscales. El mapeo de LibraCargo deja de listarla.

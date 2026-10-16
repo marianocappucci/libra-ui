@@ -29,8 +29,14 @@ export const IVA_CONDITIONS = [
   'IVA Exento',
   'Consumidor Final',
   'No Alcanzado',
-  'IVA No Responsable',
 ] as const
+
+/** Las condiciones para el desplegable de un formulario que EDITA: las de `IVA_CONDITIONS` y, si la ficha guarda otra que ya no se ofrece
+ *  («IVA No Responsable», retirada en 0.158.2), también esa, al final. Sin esto el campo de un cliente viejo se vería vacío y guardarlo sin
+ *  tocarlo podría pisar la condición. Un alta usa `IVA_CONDITIONS` a secas. */
+export function condicionesIvaPara(actual?: string | null): readonly string[] {
+  return actual && !(IVA_CONDITIONS as readonly string[]).includes(actual) ? [...IVA_CONDITIONS, actual] : IVA_CONDITIONS
+}
 
 /** De la condición frente al IVA que informa el padrón de ARCA («Responsable Inscripto»…) a la que guarda el
  *  formulario de cliente; `undefined` si ARCA informa una que no está en `IVA_CONDITIONS` (no se toca el campo). */
