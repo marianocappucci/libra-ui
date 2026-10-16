@@ -635,6 +635,68 @@ describe('sin cruce de cobros', () => {
 })
 
 
+describe('el estado de cobro con notas de crédito (ADR-059 del motor)', () => {
+  const COBRO = (monto: number, id = 1) => ({ id, fecha: '2026-08-04', medio_pago: 'efectivo', monto, referencia: '' })
+
+  it('acreditada por completo, sin cobros: «Acreditada por nota de crédito», no «Pendiente de cobro» ni botón', async () => {
+    // El caso que motivó el cambio: antes decía «Pendiente de cobro — $ 1.000,00» y el botón daba 409.
+    montar({ ...CON_CAE, total_cobrado: 0, total_acreditado: 1000, pendiente: 0 })
+    expect(await screen.findByText('Acreditada por nota de crédito')).toBeInTheDocument()
+    expect(screen.getByText(/\$\s?1\.000,00/, { selector: 'span' })).toBeInTheDocument()
+    expect(screen.queryByText(/Pendiente de cobro/)).toBeNull()
+    expect(screen.queryByText(/Cobrado completo/)).toBeNull()
+    expect(screen.queryByRole('button', { name: /Registrar cobro/ })).toBeNull()
+  })
+
+  it('cobrada y después acreditada: «Acreditada por nota de crédito» y lo cobrado, en vez de «Cobrado completo»', async () => {
+    montar({ ...CON_CAE, cobros: [COBRO(1000)], total_cobrado: 1000, total_acreditado: 1000, pendiente: 0 })
+    expect(await screen.findByText('Acreditada por nota de crédito')).toBeInTheDocument()
+    expect(screen.getByText(/Cobrado: \$\s?1\.000,00/)).toBeInTheDocument()
+    expect(screen.queryByText(/Cobrado completo/)).toBeNull()
+    expect(screen.queryByRole('button', { name: /Registrar cobro/ })).toBeNull()
+  })
+
+  it('nota parcial sin cobros: lo que falta (no el total), lo acreditado, y el botón', async () => {
+    montar({ ...CON_CAE, total_cobrado: 0, total_acreditado: 400, pendiente: 600 })
+    expect(await screen.findByText('Pendiente de cobro')).toBeInTheDocument()
+    expect(screen.getByText(/Pendiente de cobro/).parentElement).toHaveTextContent(/\$\s?600,00.*Acreditado por notas de crédito: \$\s?400,00/)
+    expect(screen.queryByText('Acreditada por nota de crédito')).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: /Registrar cobro/ }))
+    // El diálogo precarga lo que falta, descontada la nota.
+    expect(await screen.findByDisplayValue('600')).toBeInTheDocument()
+  })
+
+  it('nota parcial y cobrado el resto: «Cobrado completo», con lo acreditado al lado y sin botón', async () => {
+    montar({ ...CON_CAE, cobros: [COBRO(600)], total_cobrado: 600, total_acreditado: 400, pendiente: 0 })
+    expect(await screen.findByText('Cobrado completo')).toBeInTheDocument()
+    expect(screen.getByText('Cobrado completo').parentElement).toHaveTextContent(/\$\s?600,00.*Acreditado por notas de crédito: \$\s?400,00/)
+    expect(screen.queryByText('Acreditada por nota de crédito')).toBeNull()
+    expect(screen.queryByRole('button', { name: /Registrar cobro/ })).toBeNull()
+  })
+
+  it('nota parcial y pago parcial: cobrado, acreditado y lo que falta', async () => {
+    montar({ ...CON_CAE, cobros: [COBRO(200)], total_cobrado: 200, total_acreditado: 400, pendiente: 400 })
+    expect(await screen.findByText('Pago parcial')).toBeInTheDocument()
+    expect(screen.getByText('Pago parcial').parentElement).toHaveTextContent(
+      /Cobrado: \$\s?200,00.*Acreditado por notas de crédito: \$\s?400,00.*Pendiente: \$\s?400,00/,
+    )
+    expect(screen.getByRole('button', { name: /Registrar cobro/ })).toBeInTheDocument()
+  })
+
+  it('sin `total_acreditado` (motor viejo) dice lo de siempre y nunca «Acreditada»', async () => {
+    montar({ ...CON_CAE, cobros: [COBRO(1000)], total_cobrado: 1000, pendiente: 0 })
+    expect(await screen.findByText('Cobrado completo')).toBeInTheDocument()
+    expect(screen.queryByText(/Acreditad/)).toBeNull()
+  })
+
+  it('sin cruce de cobros y sin cobros, la acreditada no dibuja el bloque de cobro', async () => {
+    montar({ ...CON_CAE, total_cobrado: 0, total_acreditado: 1000, pendiente: 0 }, { muestraCobros: false })
+    await screen.findByRole('button', { name: /Duplicar/ })
+    expect(screen.queryByText('Acreditada por nota de crédito')).toBeNull()
+    expect(screen.queryByText(/Pendiente de cobro/)).toBeNull()
+  })
+})
+
 describe('las rutas de los documentos', () => {
   // 🔴 Estaban hardcodeadas sin `/api`, porque en Contalibra y Restolibra las
   // sirve su router Jinja2 viejo. En LibraClub —que no lo tiene— «Ver PDF»

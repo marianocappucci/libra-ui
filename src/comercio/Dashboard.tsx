@@ -23,6 +23,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { fecha } from '../fechas'
 import { formatoMonedaEntera } from '../formatos'
+import { MEDIO_CENTAVO, pendienteDe } from '../estado-de-cobro'
 
 const ACCIONES_DEFAULT = [
   { label: '+ Nueva Factura', to: '/facturas/nueva' },
@@ -140,7 +141,12 @@ export function Dashboard({
                           <p className="truncate text-muted-foreground">{f.cliente_razon} — {fecha(f.fecha)}</p>
                         </div>
                         <div className="flex shrink-0 items-center gap-3">
-                          <span className="font-medium">{formatoMonedaEntera(f.total)}</span>
+                          {/* Lo que FALTA cobrar, no el total (ADR-059 del motor): una factura cobrada a medias o con una nota
+                              de crédito parcial figura por lo que se debe, y el total va debajo. Sin `pendiente` (motor viejo), el total. */}
+                          <div className="text-right">
+                            <span className="font-medium">{formatoMonedaEntera(pendienteDe(f))}</span>
+                            {f.total - pendienteDe(f) > MEDIO_CENTAVO && <p className="text-xs text-muted-foreground">de {formatoMonedaEntera(f.total)}</p>}
+                          </div>
                           {rutaDeFactura && <Button asChild size="sm" variant="outline"><Link to={rutaDeFactura(f.id)}>Ver</Link></Button>}
                         </div>
                       </li>

@@ -88,6 +88,12 @@ export type Factura = {
   observaciones: string
   condicion_venta: string
   total_cobrado?: number
+  /** Lo que restan las notas de crédito con CAE (libracore ≥ v1.172.0, ADR-059 del motor). Sólo en las facturas del
+   *  listado; un motor viejo no lo manda y se cuenta como 0 (`estado-de-cobro.ts`). */
+  total_acreditado?: number
+  /** Lo que falta cobrar: `total − cobrado − acreditado`, nunca negativo (ADR-059 del motor). Sólo en las
+   *  facturas del listado; sin él se calcula `total − cobrado`. */
+  pendiente?: number
   cbte_asoc_tipo?: number
   cbte_asoc_pv?: number
   cbte_asoc_nro?: number
@@ -108,6 +114,10 @@ export type FacturaDetalle = {
   factura_original: Factura | null
   cobros: { id: number; monto: number; medio_pago: string; fecha: string; referencia: string }[]
   total_cobrado: number
+  /** Lo que restan las notas de crédito **con CAE** de esta factura (ADR-059 del motor, libracore ≥ v1.172.0).
+   *  Opcional: un motor viejo no lo manda y se cuenta como 0. */
+  total_acreditado?: number
+  /** Lo que falta cobrar: `total − cobrado − acreditado`, nunca negativo. */
   pendiente: number
   cliente_email: string
   envios_email?: EnvioEmail[]
