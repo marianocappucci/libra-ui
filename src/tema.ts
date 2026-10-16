@@ -91,8 +91,10 @@ export const COLORES_DE_TEMA: readonly DefinicionDeColor[] = [
     etiqueta: 'Color de éxito',
     ayuda: 'Montos a favor, estados «cobrada» o «pagada» y el botón de confirmar. Tiene que verse sobre fondo claro y oscuro.',
     variable: '--libra-exito',
-    porDefecto: '#059669',
-    textoSobre: { variable: '--libra-exito-texto', contrasteMinimo: 3, prefiereBlanco: true },
+    // Texto blanco mientras llegue a 4,5:1 (AA), no a 3: el botón «Registrar pago» lleva texto chico sobre este color (ADR-067). Un verde claro, que
+    // no admite blanco a 4,5, no se rechaza: se le calcula texto oscuro, igual que a cualquier otro fondo claro.
+    porDefecto: '#047857',
+    textoSobre: { variable: '--libra-exito-texto', contrasteMinimo: 4.5, prefiereBlanco: true },
     legibleSobrePagina: 3,
     comoTexto: { claro: '--libra-exito-como-texto-claro', oscuro: '--libra-exito-como-texto-oscuro' },
   },

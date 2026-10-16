@@ -19,6 +19,7 @@ import {
   Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from '../ui/dialog'
 import { formatoCantidad } from '../formatos'
+import { Table } from '../ui/table'
 
 function estadoStock(s: StockItem): { label: string; tono: TonoEstado } {
   if (s.stock_actual <= 0) return { label: 'Sin stock', tono: 'negativo' }
@@ -141,7 +142,7 @@ export function DepositoDetalle({
                 {stock.length === 0 ? (
                   <p className="py-6 text-center text-sm text-muted-foreground">Este depósito no tiene stock registrado.</p>
                 ) : (
-                  <table className="w-full text-sm">
+                  <Table>
                     <thead className="border-b text-muted-foreground">
                       <tr>
                         <th className="p-3 text-left font-medium">Código</th>
@@ -169,7 +170,7 @@ export function DepositoDetalle({
                         )
                       })}
                     </tbody>
-                  </table>
+                  </Table>
                 )}
               </CardContent>
             </Card>

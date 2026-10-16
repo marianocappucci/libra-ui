@@ -120,46 +120,51 @@ export function RemitoNuevo() {
             <div className="grid gap-2 flex-1"><Label>Observaciones</Label><Input value={observations} onChange={(e) => setObservations(e.target.value)} /></div>
           </div>
 
-          <div className="rounded-md border">
+          <div className="min-w-0 rounded-md border">
             <div className="flex items-center justify-between border-b p-3">
               <Label>Ítems</Label>
               <Button size="sm" variant="outline" onClick={addItem}><Plus />Agregar ítem</Button>
             </div>
-            <table className="w-full text-sm">
-              <thead className="border-b text-muted-foreground">
-                <tr>
-                  <th className="p-2 text-left font-medium">Descripción</th>
-                  <th className="w-24 p-2 text-left font-medium">Cantidad</th>
-                  <th className="w-10 p-2"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((row, i) => (
-                  <tr key={i} className="border-b last:border-0">
-                    <td className="relative p-2">
-                      <Input value={row.description} onChange={(e) => buscarProducto(i, e.target.value)} placeholder="Descripción o producto…" />
-                      {sugerencias?.index === i && sugerencias.items.length > 0 && (
-                        <div className="absolute left-2 top-11 z-10 w-64 rounded-md border bg-popover shadow-md">
-                          {sugerencias.items.map((p) => (
-                            <button
-                              key={p.id} type="button"
-                              className="block w-full px-3 py-1.5 text-left text-sm hover:bg-accent"
-                              onClick={() => elegirProducto(i, p)}
-                            >
-                              {p.nombre}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </td>
-                    <td className="p-2"><Input type="number" step="0.01" value={row.qty} onChange={(e) => updateItem(i, 'qty', e.target.value)} /></td>
-                    <td className="p-2 text-right">
-                      <Button size="icon" variant="ghost" onClick={() => removeItem(i)}><Trash2 /></Button>
-                    </td>
+            {/* Bajo `sm` la tabla scrollea por dentro y no ensancha la página (ADR-067): mide 295 px y a 320 px no entra en la tarjeta (271). El marco
+                lleva `min-w-0`: sin él la grilla de la tarjeta crece al mínimo de la tabla. Sólo bajo `sm`; ahí el desplegable de sugerencias deja de ser
+                `absolute` (el `overflow-x-auto` lo recortaría y lo scrollearía adentro) y va en el flujo de la celda, con tope de alto. */}
+            <div className="max-sm:overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b text-muted-foreground">
+                  <tr>
+                    <th className="p-2 text-left font-medium">Descripción</th>
+                    <th className="w-24 p-2 text-left font-medium">Cantidad</th>
+                    <th className="w-10 p-2"></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {items.map((row, i) => (
+                    <tr key={i} className="border-b last:border-0">
+                      <td className="relative p-2">
+                        <Input value={row.description} onChange={(e) => buscarProducto(i, e.target.value)} placeholder="Descripción o producto…" />
+                        {sugerencias?.index === i && sugerencias.items.length > 0 && (
+                          <div className="absolute left-2 top-11 z-10 w-64 rounded-md border bg-popover shadow-md max-sm:static max-sm:mt-1 max-sm:max-h-48 max-sm:w-full max-sm:overflow-y-auto">
+                            {sugerencias.items.map((p) => (
+                              <button
+                                key={p.id} type="button"
+                                className="block w-full px-3 py-1.5 text-left text-sm hover:bg-accent"
+                                onClick={() => elegirProducto(i, p)}
+                              >
+                                {p.nombre}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                      <td className="p-2"><Input type="number" step="0.01" value={row.qty} onChange={(e) => updateItem(i, 'qty', e.target.value)} /></td>
+                      <td className="p-2 text-right">
+                        <Button size="icon" variant="ghost" onClick={() => removeItem(i)}><Trash2 /></Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <div className="flex gap-2">

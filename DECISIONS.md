@@ -1598,3 +1598,71 @@ Las 37 pantallas del kit que importaban `@/components/ui/dialog` (50 `DialogCont
 **2.839 → 2.860 tests** (114 → 115 archivos, 2 omitidos igual que antes): `TerminosProxima` (21, nuevo). **Contra `origin/main` (los tests copiados al `Terminos.tsx` anterior) fallan 13 de 21**: el aviso con su texto, sin resumen, «Aceptar» con la versión próxima y en `/api/terminos`, el error al registrar, el callback, los tres de «Más tarde», los tres de «Leer» y el cableado por `AuthProvider`; los 8 que pasan en los dos árboles son los controles negativos (no aparece con la próxima aceptada, sin `proxima`, con backend anterior, sin poder aceptar, con la vigente pendiente, con error, sin sesión, con `sinGateDeTerminos`). Además, 4 mutaciones del código nuevo ponen rojos los tests esperados (mandar `1.0` en vez de la próxima; ignorar `puede_aceptar`/`aceptada`; no olvidar al cerrar sesión; no respetar `pendiente`). Suite completa con cobertura (líneas 99,21 %, ramas 92,93 %, funciones 96,87 %: sobre los pisos de 96/90/95), `typecheck` limpio y `lint` con los mismos 45 avisos y 0 errores. Ayudas e2e en Chromium: **24 de 24** (eran 22; +2: el aviso se descarta aun tras aceptar el gate, y no falla si no está).
 
 **Cómo se adopta.** Subir el pin a 0.153.0 junto con libraauth v0.51.0; no hay props nuevas obligatorias ni cambia ninguna. Con el pin del kit sin el del backend (o al revés) no pasa nada: sin `proxima` no se ve el aviso, y con `proxima` y un kit anterior el backend la ofrece y nadie la muestra.
+
+## ADR-067 — Los desbordes a 390 px y los contrastes de insignias que midió el e2e de Contalibra (0.154.0)
+
+**Origen (2026-10-16).** El primer corrido de los e2e de dominio de Contalibra (`navegacion-y-ancho.e2e.ts` y `modo-oscuro.e2e.ts`, `develop` @ 23f04dc, kit 0.152.1) dejó dos tablas de defectos conocidos del kit, en `fixme`: `DESBORDE_A_390` (ocho pantallas cuyo documento mide más que la ventana de un celular y no a 1280 px) y `CONTRASTE_CONOCIDO` (texto blanco sobre un fondo que no llega a 4,5:1, WCAG AA; los colores no cambian entre claro y oscuro, así que el defecto está en los dos). El pedido: arreglarlos **de fondo en el kit** y que cualquier pantalla lo herede.
+
+**Qué ya existe** (se miró antes de tocar, `reglas/producto.md`): `TabsList` con `className="h-auto flex-wrap"` ya lo pasaban a mano seis pantallas (Configuración, Logs de `src/`, Presupuestos, Libros IVA, Ventas, la tarjeta de ARCA) y tres no (Comprobantes, la bandeja de MercadoPago, Logs de `comercio/`); el primitivo `libra-ui/ui/table` ya trae `overflow-x-auto` y las pantallas de lista lo envuelven a mano (`<div className="overflow-x-auto">`, 14 lugares; ADR-057 §6, ADR-058); `libra-ui/tema` ya trae `luminancia`, `contraste`, `mezclar` y `ajustarContraste` (ADR-009, 0.104.0); `badge-estado` ya usa los tonos `-700` con texto del mismo tono (ADR de 2026-08-21: «no emparejar sin volver a medir»). Lo nuevo es llevar esas tres cosas al componente base, y un guard.
+
+### Medido antes (Chromium, ContaLibra local con el kit 0.153.0, las dos tablas vaciadas)
+
+`navegacion-y-ancho` + `modo-oscuro`: **11 fallan de 72** (3 de contraste y 8 de desborde), con las mismas cifras que el e2e: `/facturas` 579 px, `/mp-bandeja` 670, `/logs` 394, `/libros-iva` 415, `/facturas/nueva` 405, `/presupuestos/nuevo` 405, `/facturas/:id` 429, `/turnos/:id` 487; «FC» 2,71:1, «Factura» 1,96, «Turno» 2,57, «Presupuesto» 2,13, «Registrar pago» 3,77.
+
+### Desbordes: cuatro causas, y la fila `flex-1` NO era una
+
+| Pantalla | Causa (medida) | Arreglo | Dónde |
+|---|---|---|---|
+| `/facturas`, `/mp-bandeja`, `/logs` | `TabsList` era `h-9 w-fit` sin wrap y cada pestaña es `whitespace-nowrap`: las pestañas suman 579, 670 y 394 px y la grilla de la pantalla crece al mínimo de su contenido | `TabsList` = `inline-flex min-h-9 w-fit max-w-full flex-wrap items-center … gap-y-0.5`: se parte en renglones | **componente base** (`src/ui/tabs.tsx`); lo heredan todas; las seis que lo pasaban a mano siguen igual |
+| `/libros-iva`, `/facturas/:id`, `/turnos/:id` | `<table className="w-full text-sm">` suelta, sin contenedor con scroll | `<Table>` de `libra-ui/ui/table`, que ya trae `overflow-x-auto` (mismas clases de tabla) | el primitivo ya lo traía; se usa en las **nueve** tablas sueltas de siete pantallas (las tres de arriba y `PresupuestoDetalle`, `RemitoDetalle`, las tres de `ClienteDetalle` y `DepositoDetalle`), no sólo en las tres medidas; los dos formularios de ítems, aparte (siguiente fila) |
+| `/presupuestos/nuevo` | la tabla de ítems mide **362 px** (columnas fijas de cantidad, precio y subtotal) y la tarjeta tiene ~340 a 390 px; la grilla de la tarjeta (`grid`, columna `auto`) crece al mínimo de la tabla y arrastra a todas las filas, que son las que el e2e vio pasarse | el marco de la tabla lleva `min-w-0` (sin él un scroll adentro no tiene de qué ser: la columna igual crece) y la tabla un `max-sm:overflow-x-auto`; bajo `sm` el desplegable de sugerencias deja de ser `absolute` (el scroll lo recortaría) y va en el flujo de la celda, con tope de alto | `PresupuestoForm` y, por el mismo patrón, `RemitoNuevo` |
+| `/facturas/nueva` | **es de Contalibra, no del kit** (`frontend/src/pages/FacturaNueva.tsx`): una copia del mismo formulario, con la misma tabla de 362 px | el mismo parche; queda como diff para Contalibra (no se toca desde acá) | Contalibra |
+
+**Corrección al diagnóstico del e2e.** Las filas `flex flex-wrap items-end` con un campo `flex-1` que se listaban como culpables **no lo eran**: con la tabla contenida (el arreglo de arriba) esas filas miden lo que la tarjeta y la página no se pasa a 390 px. Se pasaban porque la columna de la tarjeta ya medía 405, arrastrada por la tabla.
+
+**Guard.** `test/desborde-390-tabs-y-tablas.test.tsx`: `TabsList` hace wrap por defecto y conserva el wrap si la pantalla pasa su `className`; ninguna pantalla pasa `flex-nowrap`, `h-9` ni `overflow-hidden`; **toda `<table` de `src/` va dentro de `<Table>` o justo debajo de un `overflow-x-auto`** (salvo dos a propósito: el detalle de venta, que bajo `lg` son tarjetas, y «Cambios» de Logs, que vive dentro de una tabla que ya scrollea); `Libros IVA` y el formulario con sus clases.
+
+### Contraste: el color manda el texto, no al revés
+
+- **Tipo de comprobante (`Facturas`).** `bg-sky-500 text-white` (2,71:1) → `bg-sky-700 text-white` (5,9:1), mismo matiz. Es el mismo tono `-700` que `badge-estado` ya usa para «en curso». Las notas de crédito, `bg-destructive text-white`, **en oscuro daban 2,89:1** (el `destructive` oscuro de shadcn es un rojo claro, medido: blanco sobre rgb(255, 100, 103)) y no estaban en la lista porque la semilla no tiene notas: pasan a `dark:bg-destructive/60` (el patrón del `Badge` destructivo de shadcn: 6,0:1 sobre la tarjeta oscura).
+- **Tipo de evento (`Logs`, de `comercio/` y de `src/`).** El color lo manda el motor (`TIPO_META`, la paleta de Bootstrap: `#0dcaf0`, `#fd7e14`, `#20c997`…), y el motor no sabe de contraste. **`libra-ui/color-de-insignia`** (`fondoDeInsignia`, `estiloDeInsignia`): el texto sigue blanco y el fondo se oscurece lo justo —`ajustarContraste`, que mezcla con negro de a poco y no cambia el matiz— hasta 4,5:1. Un color que ya llega (azul `#0d6efd`, verde `#198754`, violeta, gris, rosa, rojo) queda **exactamente** como lo mandó el motor; los tres que no: Factura `#0dcaf0` → `#087990` (1,96 → 5,1:1), Turno `#fd7e14` → `#b1580e` (2,57 → 4,9:1), Presupuesto `#20c997` → `#158362` (2,13 → 4,7:1). Un valor que no es un color (o ninguno) da un gris pizarra `#475569` en vez de un fondo que el navegador ignora con texto blanco encima (en oscuro, `bg-primary` es casi blanco).
+- **«Registrar pago» (`CuentaCorrienteDetalle`).** `bg-exito text-exito-foreground` con el éxito en `#059669` = 3,77:1. El arreglo es del **token**: `--libra-exito` pasa a `#047857` (emerald-700, 5,5:1), que ya era el éxito como texto en claro (`--libra-exito-como-texto-claro`), así que `text-exito` y `bg-exito` coinciden. Y el piso del texto sobre el éxito en `COLORES_DE_TEMA` sube de 3 a 4,5: un verde más claro, elegido en el backoffice, ya no se queda con texto blanco chico a 3,8:1: se le calcula uno oscuro (nunca se rechaza: el mejor de blanco u oscuro siempre llega a 4,58). **Cambia lo que se ve** en todo `bg-exito` (barras de «Reportes» y «Caja por medio de cobro», el punto de «Turno abierto», el botón de Tesorería): un verde un paso más oscuro en los dos modos.
+
+### Otras insignias con el mismo defecto (relevadas con `git grep`, no medidas por el e2e: no están en los datos de su semilla)
+
+| Dónde | Antes | Ahora |
+|---|---|---|
+| `MpBandeja` (`OrigenBadge`) «Cuenta MP» | `bg-sky-500` 2,71:1 | `bg-sky-700` |
+| `MpBandeja` «Tarjeta de crédito» | `bg-emerald-600` (Tailwind 4: 3,65) | `bg-emerald-700` |
+| `MpBandeja` «Tarjeta de débito» | `bg-cyan-600` 3,6 | `bg-cyan-700` |
+| `MpBandeja` «Efectivo» | `bg-amber-500` 2,1 | `bg-amber-700` |
+| `Logs` y `comercio/Logs` «Ingreso»/«Login» | `bg-emerald-600` | `bg-emerald-700` |
+| ídem «Salida»/«Logout» | `bg-muted-foreground`: 4,7 en claro, **2,6 en oscuro** | `bg-slate-600` (7,6; el tono «neutro» de `badge-estado`) |
+| ídem «Intento fallido» | `bg-destructive`: 4,8 en claro, **2,9 en oscuro** | `+ dark:bg-destructive/60` |
+| Notas de crédito de `Facturas` (NCA/NCB/NCC) | ídem destructive | `+ dark:bg-destructive/60` |
+| Tutorial «MercadoPago» (`configuracion/tutoriales`) | `bg-[#009ee3]` con `text-xs`: 3,0:1 | `bg-[#007eb6]` (4,5:1) |
+| Tutorial «Gmail» | `bg-destructive`, en oscuro 2,9 | `+ dark:bg-destructive/60` |
+
+**Guard** (`test/contraste-de-insignias.test.ts`): `fondoDeInsignia` llega a 4,5:1 para cada color de `TIPO_META` (v1.170.0), no cambia el matiz (±4°) y deja intacto el que ya llega; el éxito por defecto lleva blanco a 4,5:1 y `tema.css` declara el mismo valor que el catálogo; y un escaneo del código: **ninguna clase `bg-<color>-<tono> … text-white`, `bg-[#hex] … text-white` ni `bg-destructive`/`bg-muted-foreground … text-white` sin variante `dark:` del kit queda bajo 4,5:1** (la paleta de Tailwind 4 va escrita en el test; un tono que no está se pide, no se da por bueno).
+
+### Lo que cambia visualmente
+
+- Pestañas que se parten en dos o tres renglones bajo ~600 px (`/facturas`, `/mp-bandeja`, `/logs`); con una insignia de contador adentro de una pestaña la barra pasa de 36 a 38 px, como ya eran las seis que la partían.
+- Insignias un paso más oscuras (mismo matiz) en Comprobantes, Logs y la bandeja de MercadoPago, y verde de éxito más oscuro.
+- Bajo `sm` los formularios de ítems scrollean la tabla de costado dentro de su marco y el desplegable de sugerencias sale en el flujo de la celda.
+
+### No resuelve (y queda a la vista)
+
+- **El resto de los formularios de Contalibra no hereda el kit:** `FacturaNueva` es de Contalibra; y un producto que sigue con su propio `components/ui/tabs.tsx` no hereda el `TabsList`.
+- **`RemitoNuevo` a 320 px** todavía se pasa ~33 px (a 390 y a 360 px pasa). No es la tabla (ya scrollea adentro) y, medido ocultando de a uno los campos de la fila de cliente, fecha y observaciones, tampoco el `flex-1` solo; no estaba en las tablas de defectos y no se siguió.
+- **El desplegable de sugerencias de escritorio** no tiene tope de alto (20 resultados miden ~1.040 px). Pre-existente; sólo se acotó bajo `sm`, que es donde el scroll lo habría recortado.
+- **Contraste con `opacity`:** las píldoras de tipo de evento no elegidas bajan a 0,4 de opacidad a propósito y el medidor del e2e no mira la opacidad.
+- El encabezado del POS (`--libra-pos-encabezado-texto`) conserva su piso de 3:1 (franja con degradé, texto grande): no se tocó.
+
+### Tests y verificación
+
+**2.862 → 2.889 tests** (115 → 117 archivos): `contraste-de-insignias` (19) y `desborde-390-tabs-y-tablas` (8); cambian el test del éxito de `tema` (el piso es 4,5) y el snapshot de `ArcaServicios` (sólo la clase de la barra de pestañas). **Contra `origin/main` (los tests copiados a un árbol sin el cambio) fallan 7 de 43** (pestañas, tablas sueltas, formulario, éxito, snapshot) y, con sólo `color-de-insignia.ts` copiado, **3 de 19** del contraste: el guard encuentra 19 líneas del kit con texto blanco sobre un fondo que no se lee. Suite completa con cobertura (líneas 99,21 %, ramas 92,93 %, funciones 96,88 %: sobre los pisos de 96/90/95), `typecheck` limpio y `lint` con los mismos 45 avisos y 0 errores.
+
+**Medido en Chromium, contra Contalibra `develop` @ 7ade644 corriendo local con este kit** (PostgreSQL propio, `seed_demo`, las dos tablas de defectos vaciadas): **11 de 72 fallaban con el kit 0.153.0 y pasan los 72 con éste**; el e2e completo de Contalibra: 84 pasan y 3 se omiten (otros `fixme` suyos, ajenos). A 390 y 1280 px, en claro y en oscuro: el documento mide 375 px (390 menos los 15 de `scrollbar-gutter`) en las tres pantallas de pestañas. Con el medidor real de `libra-ui/e2e` (`sinTextoIlegible`) en claro y en oscuro: las insignias y botones tocados, los dos tabs de Logs (Actividad y Accesos) y un muestrario con cada combinación de clases nueva, sin textos ilegibles; el mismo medidor sobre las clases de antes (`bg-destructive text-white`, `#059669`, `#00a6f4`) en oscuro marca 2,89, 3,77 y 2,71.
+
+**Cómo se adopta.** Subir el pin a 0.154.0. Contalibra: vaciar `DESBORDE_A_390` y `CONTRASTE_CONOCIDO` en sus specs (con el kit 0.154.0 pasan las 72) y aplicar el parche de `FacturaNueva` (el marco `min-w-0`, el `max-sm:overflow-x-auto` y el desplegable `max-sm:static`) para sacar `/facturas/nueva`. Los demás productos: nada que cambiar; si tienen su propio `components/ui/tabs.tsx`, reemplazarlo por `export * from 'libra-ui/ui/tabs'`.

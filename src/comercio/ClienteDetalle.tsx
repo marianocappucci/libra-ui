@@ -38,6 +38,7 @@ import { ICONOS } from '../iconos-identidad'
 import { fecha } from '../fechas'
 import { SelectBuscable } from '../SelectBuscable'
 import { formatoMoneda } from '../formatos'
+import { Table } from '../ui/table'
 
 const TIPO_LABELS: Record<number, string> = {
   1: 'Factura A', 6: 'Factura B', 11: 'Factura C',
@@ -620,7 +621,7 @@ export function ClienteDetalle(
                     <Button asChild size="sm" variant="outline"><Link to="/facturas/nueva"><Plus />Nueva factura</Link></Button>
                   </CardHeader>
                   <CardContent className="p-0">
-                    <table className="w-full text-sm">
+                    <Table>
                       <thead className="border-b text-muted-foreground">
                         <tr>
                           <th className="p-3 text-left font-medium">Tipo</th>
@@ -651,7 +652,7 @@ export function ClienteDetalle(
                           </tr>
                         ))}
                       </tbody>
-                    </table>
+                    </Table>
                   </CardContent>
                 </Card>
               )}
@@ -662,7 +663,7 @@ export function ClienteDetalle(
                     <CardTitle className="flex items-center gap-2 text-base"><ICONOS.presupuestos className="size-4" />Presupuestos</CardTitle>
                   </CardHeader>
                   <CardContent className="p-0">
-                    <table className="w-full text-sm">
+                    <Table>
                       <thead className="border-b text-muted-foreground">
                         <tr>
                           <th className="p-3 text-left font-medium">N°</th>
@@ -691,7 +692,7 @@ export function ClienteDetalle(
                           </tr>
                         ))}
                       </tbody>
-                    </table>
+                    </Table>
                   </CardContent>
                 </Card>
               )}
@@ -702,7 +703,7 @@ export function ClienteDetalle(
                     <CardTitle className="flex items-center gap-2 text-base"><ICONOS.remitos className="size-4" />Remitos</CardTitle>
                   </CardHeader>
                   <CardContent className="p-0">
-                    <table className="w-full text-sm">
+                    <Table>
                       <thead className="border-b text-muted-foreground">
                         <tr>
                           <th className="p-3 text-left font-medium">N°</th>
@@ -723,7 +724,7 @@ export function ClienteDetalle(
                           </tr>
                         ))}
                       </tbody>
-                    </table>
+                    </Table>
                   </CardContent>
                 </Card>
               )}

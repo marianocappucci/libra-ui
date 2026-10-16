@@ -35,6 +35,7 @@ import {
 import { hoyISO } from './fechas'
 import { SelectBuscable } from './SelectBuscable'
 import { formatoMoneda } from './formatos'
+import { Table } from './ui/table'
 
 function labelComprobante(f: Factura): string {
   const letra = ({ 1: 'A', 6: 'B', 11: 'C', 3: 'NC-A', 8: 'NC-B', 13: 'NC-C', 2: 'ND-A', 7: 'ND-B', 12: 'ND-C' } as Record<number, string>)[f.tipo] ?? '?'
@@ -539,7 +540,7 @@ export function FacturaDetalle({
           <Card>
             <CardHeader><CardTitle className="text-base">Ítems</CardTitle></CardHeader>
             <CardContent className="p-0">
-              <table className="w-full text-sm">
+              <Table>
                 <thead className="border-b text-muted-foreground">
                   <tr>
                     <th className="p-3 text-left font-medium">Descripción</th>
@@ -567,7 +568,7 @@ export function FacturaDetalle({
                   )}
                   <tr className="text-base"><td colSpan={3} className="p-3 text-right font-semibold">TOTAL</td><td className="p-3 text-right font-semibold text-primary">{formatoMoneda(detalle.factura.total)}</td></tr>
                 </tfoot>
-              </table>
+              </Table>
             </CardContent>
           </Card>
 

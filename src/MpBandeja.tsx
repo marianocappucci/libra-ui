@@ -62,10 +62,10 @@ function OrigenBadge({ tipo }: { tipo: string | null }) {
   if (!tipo) return <span className="text-muted-foreground">—</span>
   const t = tipo.toLowerCase()
   const map: Record<string, { label: string; icon: typeof Wallet; className: string }> = {
-    account_money: { label: 'Cuenta MP', icon: Wallet, className: 'bg-sky-500 text-white' },
-    credit_card: { label: 'Tarjeta de crédito', icon: CreditCard, className: 'bg-emerald-600 text-white' },
-    debit_card: { label: 'Tarjeta de débito', icon: CreditCard, className: 'bg-cyan-600 text-white' },
-    ticket: { label: 'Efectivo', icon: Banknote, className: 'bg-amber-500 text-white' },
+    account_money: { label: 'Cuenta MP', icon: Wallet, className: 'bg-sky-700 text-white' },
+    credit_card: { label: 'Tarjeta de crédito', icon: CreditCard, className: 'bg-emerald-700 text-white' },
+    debit_card: { label: 'Tarjeta de débito', icon: CreditCard, className: 'bg-cyan-700 text-white' },
+    ticket: { label: 'Efectivo', icon: Banknote, className: 'bg-amber-700 text-white' },
     bank_transfer: { label: 'Transferencia', icon: Landmark, className: 'bg-secondary text-secondary-foreground' },
   }
   const conf = map[t] ?? { label: legible(tipo), icon: CreditCard, className: 'bg-muted text-foreground' }

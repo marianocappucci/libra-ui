@@ -27,6 +27,11 @@ function Tabs({
   )
 }
 
+// 🔴 La fila de pestañas se PARTE en renglones cuando no entra (`flex-wrap`, `min-h-9` en vez de `h-9`, `max-w-full`), ADR-067. Antes era
+// `h-9 w-fit` sin wrap y cada `TabsTrigger` es `whitespace-nowrap`: las pestañas de Comprobantes, de la bandeja de MercadoPago y de Logs
+// medían 579, 670 y 394 px a 390 px de ventana y ensanchaban la página entera (la grilla de la pantalla crece al mínimo de su
+// contenido). Seis pantallas lo arreglaban una por una con `className="h-auto flex-wrap"`; las otras no. En un solo renglón mide lo de
+// siempre, 36 px (3 + 30 de pestaña + 3); con una insignia de contador adentro de una pestaña son 38, como ya eran en esas seis.
 function TabsList({
   className,
   ...props
@@ -35,7 +40,7 @@ function TabsList({
     <TabsPrimitive.List
       data-slot="tabs-list"
       className={cn(
-        "inline-flex h-9 w-fit items-center justify-center rounded-lg bg-muted p-[3px] text-muted-foreground",
+        "inline-flex min-h-9 w-fit max-w-full flex-wrap items-center justify-center gap-y-0.5 rounded-lg bg-muted p-[3px] text-muted-foreground",
         className
       )}
       {...props}
