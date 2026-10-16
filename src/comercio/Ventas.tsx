@@ -16,7 +16,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import type { ColumnDef } from '../data-table'
 import {
-  Ban, CheckCircle2, Eye, FileCheck, ListChecks, Plus, Printer, ReceiptText, UserPlus, X,
+  Ban, CheckCircle2, Eye, FileCheck, ListChecks, Plus, Printer, ReceiptText, X,
 } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
@@ -25,9 +25,10 @@ import { BadgeEstado } from '../badge-estado'
 import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
 import { SelectBuscable } from '../SelectBuscable'
+import { SelectCliente } from '../SelectCliente'
+import { CAMPOS_CLIENTE_DEL_MOTOR, crearYSumar } from './alta-de-cliente'
 import { anchoMinimoDeColumnas } from '../tabla'
 import { TACTIL, TACTIL_BAJO_LG, useAncho, useBajoLg } from '../use-ancho'
-import { IVA_CONDITIONS } from '../facturas'
 import { hoyISO, fecha } from '../fechas'
 import { useMediosPago } from './medios-pago'
 import { useImprimirTicket } from './useImprimirTicket'
@@ -43,7 +44,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger } from '../ui/tabs'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from '../ui/dialog'
@@ -120,13 +120,6 @@ export function Ventas({
   const [savingVenta, setSavingVenta] = useState(false)
   const [sugerencias, setSugerencias] = useState<{ index: number; items: ProductoBusqueda[] } | null>(null)
 
-  const [nuevoCliente, setNuevoCliente] = useState(false)
-  const [ncNombre, setNcNombre] = useState('')
-  const [ncCuit, setNcCuit] = useState('')
-  const [ncIva, setNcIva] = useState('')
-  const [ncEmail, setNcEmail] = useState('')
-  const [ncPhone, setNcPhone] = useState('')
-  const [ncSaving, setNcSaving] = useState(false)
 
   useEffect(() => {
     load()
@@ -176,8 +169,6 @@ export function Ventas({
     setItems([{ ...EMPTY_ITEM }])
     setPagos([lineaVacia()])
     setClienteId(''); setListaPrecioId(''); setDescuento('0'); setObservaciones('')
-    setNuevoCliente(false)
-    setNcNombre(''); setNcCuit(''); setNcIva(''); setNcEmail(''); setNcPhone('')
     setSugerencias(null)
     setError(null)
     api.get<ClienteDeVenta[]>('/api/clientes').then((c) => setClientes(c.filter((x) => x.activo))).catch(() => {})
@@ -265,25 +256,6 @@ export function Ventas({
       setError(describeError(err))
     } finally {
       setSavingVenta(false)
-    }
-  }
-
-  async function crearClienteRapido() {
-    if (!ncNombre.trim()) return
-    setNcSaving(true)
-    setError(null)
-    try {
-      const nuevo = await api.post<ClienteDeVenta>('/api/clientes', {
-        name: ncNombre.trim(), cuit_dni: ncCuit.trim(), iva_condition: ncIva, email: ncEmail.trim(), phone: ncPhone.trim(),
-      })
-      setClientes((prev) => [...prev, nuevo])
-      setClienteId(String(nuevo.id))
-      setNuevoCliente(false)
-      setNcNombre(''); setNcCuit(''); setNcIva(''); setNcEmail(''); setNcPhone('')
-    } catch (err) {
-      setError(describeError(err))
-    } finally {
-      setNcSaving(false)
     }
   }
 
@@ -394,22 +366,17 @@ export function Ventas({
 
             <div className="grid gap-4">
               <div className="flex flex-wrap items-end gap-3">
-                <div className="grid gap-2">
-                  <Label>Cliente</Label>
-                  <div className="flex items-center gap-1">
-                    <SelectBuscable
-                      value={clienteId}
-                      onChange={setClienteId}
-                      opciones={opcionesCliente(clientes)}
-                      placeholder="Consumidor Final"
-                      ariaLabel="Cliente"
-                      className="w-52"
-                    />
-                    <Button type="button" size="icon" variant="outline" title="Agregar nuevo cliente" aria-label="Agregar nuevo cliente" onClick={() => setNuevoCliente((v) => !v)}>
-                      <UserPlus />
-                    </Button>
-                  </div>
-                </div>
+                <SelectCliente
+                  etiqueta="Cliente"
+                  value={clienteId}
+                  onChange={setClienteId}
+                  opciones={opcionesCliente(clientes)}
+                  placeholder="Consumidor Final"
+                  ariaLabel="Cliente"
+                  classNameSelect="w-52"
+                  crear={crearYSumar<ClienteDeVenta>((c) => setClientes((prev) => [...prev, c]))}
+                  campos={CAMPOS_CLIENTE_DEL_MOTOR}
+                />
                 {listasPrecio.length > 0 && (
                   <div className="grid gap-2">
                     <Label htmlFor="venta-lista">Lista de precios</Label>
@@ -429,28 +396,6 @@ export function Ventas({
                 )}
                 <div className="grid gap-2"><Label htmlFor="venta-obs">Observaciones</Label><Input id="venta-obs" value={observaciones} onChange={(e) => setObservaciones(e.target.value)} className="w-64" /></div>
               </div>
-
-              {nuevoCliente && (
-                <div className="flex flex-wrap items-end gap-3 rounded-md border bg-muted/30 p-3">
-                  <div className="grid gap-2"><Label htmlFor="nc-nombre">Nombre *</Label><Input id="nc-nombre" value={ncNombre} onChange={(e) => setNcNombre(e.target.value)} className="w-44" /></div>
-                  <div className="grid gap-2"><Label htmlFor="nc-cuit">CUIT/DNI</Label><Input id="nc-cuit" value={ncCuit} onChange={(e) => setNcCuit(e.target.value)} className="w-32" /></div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="nc-iva">Condición IVA</Label>
-                    {/* select-cerrado: las condiciones frente al IVA son un catálogo cerrado de ARCA, fijo en el código (`IVA_CONDITIONS`) */}
-                    <Select value={ncIva || '__none__'} onValueChange={(v) => setNcIva(v === '__none__' ? '' : v)}>
-                      <SelectTrigger id="nc-iva" aria-label="Condición IVA" className="w-44"><SelectValue placeholder="— Sin especificar —" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">— Sin especificar —</SelectItem>
-                        {IVA_CONDITIONS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid gap-2"><Label htmlFor="nc-email">Email</Label><Input id="nc-email" type="email" value={ncEmail} onChange={(e) => setNcEmail(e.target.value)} className="w-44" /></div>
-                  <div className="grid gap-2"><Label htmlFor="nc-phone">Teléfono</Label><Input id="nc-phone" value={ncPhone} onChange={(e) => setNcPhone(e.target.value)} className="w-36" /></div>
-                  <Button size="sm" disabled={ncSaving || !ncNombre.trim()} onClick={crearClienteRapido}><UserPlus />{ncSaving ? 'Guardando…' : 'Crear cliente'}</Button>
-                  <Button size="sm" type="button" variant="ghost" onClick={() => setNuevoCliente(false)}>Cancelar</Button>
-                </div>
-              )}
 
               <div className="grid gap-2">
                 <Label>Ítems</Label>

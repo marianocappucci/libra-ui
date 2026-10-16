@@ -440,7 +440,7 @@ describe('Ventas', () => {
     expect(within(dialogo).getByRole('button', { name: /Crear cliente/ })).toBeDisabled()
     fireEvent.change(within(dialogo).getByLabelText('Nombre *'), { target: { value: 'Nuevo' } })
     fireEvent.change(within(dialogo).getByLabelText('CUIT/DNI'), { target: { value: '20' } })
-    await user.selectOptions(within(dialogo).getByRole('combobox', { name: 'Condición IVA' }), 'Monotributista')
+    await user.selectOptions(within(dialogo).getByRole('combobox', { name: 'Condición frente al IVA' }), 'Monotributista')
     fireEvent.change(within(dialogo).getByLabelText('Email'), { target: { value: 'a@b.c' } })
     fireEvent.change(within(dialogo).getByLabelText('Teléfono'), { target: { value: '11' } })
     await user.click(within(dialogo).getByRole('button', { name: /Crear cliente/ }))
