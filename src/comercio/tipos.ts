@@ -1118,6 +1118,9 @@ export type FacturaSinCobrar = {
   fecha: string
   cliente_razon: string
   total: number
+  /** Lo que falta cobrar de la factura: `total − cobrado − acreditado por notas de crédito` (ADR-059 del motor,
+   *  libracore ≥ v1.172.0). Opcional: un motor viejo no lo manda y el tablero muestra el `total`. */
+  pendiente?: number
   letra: string
   label_numero: string
 }

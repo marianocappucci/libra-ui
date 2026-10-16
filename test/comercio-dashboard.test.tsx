@@ -1,7 +1,7 @@
 // El tablero (fase 13, 2026-09-27): extraído de Contalibra, el único de los tres productos con
 // pantalla propia. Lo que cada producto agrega o apaga son props aditivas -- acá se prueba el default
 // (Contalibra) y una variante sin documentos que otro producto no tiene (VentaLibra).
-import { screen } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { Dashboard } from '../src/comercio/Dashboard'
@@ -72,6 +72,36 @@ describe('Dashboard: default (Contalibra)', () => {
     responder({ '/api/dashboard': { status: 403, detail: "modulo 'dashboard' no incluido en el plan actual" } })
     montar('/dashboard', <Dashboard />)
     expect(await screen.findByText("modulo 'dashboard' no incluido en el plan actual")).toBeTruthy()
+  })
+})
+
+describe('Dashboard: lo que falta cobrar (ADR-059 del motor)', () => {
+  const FILA = DATA.facturas_sin_cobrar[0]
+
+  it('muestra lo que FALTA, no el total, y el total debajo cuando difiere', async () => {
+    // Cobrada a medias o con una nota de crédito parcial: 5.000 de total, faltan 3.000.
+    responder({ '/api/dashboard': { ...DATA, facturas_sin_cobrar: [{ ...FILA, pendiente: 3000 }] } })
+    montar('/dashboard', <Dashboard />)
+    const fila = (await screen.findByText('0005-00000042')).closest('li') as HTMLElement
+    expect(within(fila).getByText(/3\.000/)).toBeTruthy()
+    expect(within(fila).getByText(/^de .*5\.000/)).toBeTruthy()
+    expect(within(fila).queryByText(/^\$\s?5\.000$/)).toBeNull()
+  })
+
+  it('con todo pendiente muestra el monto una sola vez, sin «de …»', async () => {
+    responder({ '/api/dashboard': { ...DATA, facturas_sin_cobrar: [{ ...FILA, pendiente: 5000 }] } })
+    montar('/dashboard', <Dashboard />)
+    const fila = (await screen.findByText('0005-00000042')).closest('li') as HTMLElement
+    expect(within(fila).getByText(/5\.000/)).toBeTruthy()
+    expect(within(fila).queryByText(/^de /)).toBeNull()
+  })
+
+  it('sin `pendiente` (motor viejo) muestra el total, como antes', async () => {
+    responder({ '/api/dashboard': DATA })
+    montar('/dashboard', <Dashboard />)
+    const fila = (await screen.findByText('0005-00000042')).closest('li') as HTMLElement
+    expect(within(fila).getByText(/5\.000/)).toBeTruthy()
+    expect(within(fila).queryByText(/^de /)).toBeNull()
   })
 })
 

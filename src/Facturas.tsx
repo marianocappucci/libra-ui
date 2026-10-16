@@ -17,7 +17,7 @@
 //
 // Casi todo cuelga de **una** pregunta: ¿este producto lleva los cobros contra
 // el comprobante? De ahí salen la pestaña «Sin cobrar», los estados
-// Cobrada/Parcial/Sin cobrar y el botón de registrar cobro. En LibraClub la
+// Cobrada/Parcial/Acreditada/Sin cobrar y el botón de registrar cobro. En LibraClub la
 // respuesta es **no**: el cruce `caja_movimientos.factura_id` sólo lo llena el
 // cobro por QR —el efectivo se carga como monto y concepto libre, sin vínculo
 // con la reserva—, así que mostrar «Sin cobrar» diría eso de todo lo cobrado en
@@ -46,6 +46,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs'
 import { formatoMoneda } from './formatos'
+import { acreditadoDe, estadoDeCobro, pendienteDe, puedeCobrar } from './estado-de-cobro'
 
 // Etiquetas cortas (FA/FB/FC, NCA…, NDA…) para que la columna Tipo ocupe lo
 // mínimo — el nombre completo queda en el `title` de cada badge.
@@ -75,7 +76,7 @@ export type FacturasProps = {
    *  LibraClub desde su API (`/api/facturas/{id}/pdf`). */
   urlDelPdf: (id: number) => string
   /** 🔑 Si este producto cruza los cobros contra el comprobante. Con `false` se
-   *  van la pestaña «Sin cobrar», los estados Cobrada/Parcial y el botón de
+   *  van la pestaña «Sin cobrar», los estados Cobrada/Parcial/Acreditada y el botón de
    *  cobro: sin ese cruce, todos dirían «Sin cobrar» aunque esté cobrado. */
   muestraCobros?: boolean
   /** A dónde lleva el botón «Ver comprobante». **Sin esto no se dibuja**, ni
@@ -290,10 +291,23 @@ export function Facturas({
         if (esNota || !muestraCobros) {
           return <BadgeEstado tono="ok"><CheckCircle2 />Autorizada</BadgeEstado>
         }
-        const cobrado = f.total_cobrado ?? 0
-        if (cobrado >= f.total) return <BadgeEstado tono="ok"><CheckCircle2 />Cobrada</BadgeEstado>
-        if (cobrado > 0) return <BadgeEstado tono="atencion"><Hourglass />Parcial</BadgeEstado>
-        return <BadgeEstado tono="neutro"><Hourglass />Sin cobrar</BadgeEstado>
+        // La cuenta es la del motor (`pendiente`, `total_acreditado`: ADR-059) y se lee en `estado-de-cobro.ts`,
+        // no se resta acá. «Acreditada» no es «Cobrada»: las notas de crédito la dejaron en cero sin que nadie
+        // pague, y no se puede cobrar.
+        const estado = estadoDeCobro(f)
+        if (estado === 'acreditada') {
+          return (
+            <span title={`Acreditada por notas de crédito: ${formatoMoneda(acreditadoDe(f))}`}>
+              <BadgeEstado tono="neutro"><FileMinus />Acreditada</BadgeEstado>
+            </span>
+          )
+        }
+        if (estado === 'cobrada') return <BadgeEstado tono="ok"><CheckCircle2 />Cobrada</BadgeEstado>
+        // Con una nota parcial, lo que falta ya no es el total menos lo cobrado: el `title` dice cuánto.
+        const conNota = acreditadoDe(f) > 0
+        const ayuda = conNota ? `Falta ${formatoMoneda(pendienteDe(f))} (acreditado por notas de crédito: ${formatoMoneda(acreditadoDe(f))})` : undefined
+        if (estado === 'parcial') return <span title={ayuda}><BadgeEstado tono="atencion"><Hourglass />Parcial</BadgeEstado></span>
+        return <span title={ayuda}><BadgeEstado tono="neutro"><Hourglass />Sin cobrar</BadgeEstado></span>
       },
     })
 
@@ -316,12 +330,11 @@ export function Facturas({
       minSize: anchoColumnaAcciones(cuantosBotones),
       cell: ({ row }) => {
         const f = row.original
-        const cobrado = f.total_cobrado ?? 0
-        const puedeCobrar = Boolean(rutaDelDetalle) && muestraCobros && !esNota
-          && estaAutorizada(f) && cobrado < f.total
+        const sePuedeCobrar = Boolean(rutaDelDetalle) && muestraCobros && !esNota
+          && estaAutorizada(f) && puedeCobrar(f)
         return (
           <div className={`flex justify-end gap-1 ${TACTIL_BAJO_LG}`}>
-            {puedeCobrar && rutaDelDetalle && (
+            {sePuedeCobrar && rutaDelDetalle && (
               <Button asChild size="icon" variant="outline" title="Registrar cobro">
                 <Link to={rutaDelDetalle(f.id)} aria-label="Registrar cobro"><CircleDollarSign /></Link>
               </Button>

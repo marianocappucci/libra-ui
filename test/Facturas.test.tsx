@@ -130,6 +130,78 @@ describe('los cobros', () => {
   })
 })
 
+describe('el estado de cobro con notas de crédito (ADR-059 del motor)', () => {
+  /** Una factura del listado con lo que mande el motor, y la pantalla montada con cobros y detalle. */
+  async function conFila(resto: Partial<Factura>) {
+    responder([{ ...AUTORIZADA, ...resto }])
+    montar({ muestraCobros: true, rutaDelDetalle: (id) => `/facturas/${id}` })
+    await screen.findByText('Ana Perez')
+  }
+  const rotulo = (texto: string) => screen.getByText(texto, { selector: '[data-tono]' })
+
+  it('acreditada por completo: «Acreditada», con la plata acreditada de ayuda, y sin botón de cobrar', async () => {
+    await conFila({ total_cobrado: 0, total_acreditado: 14000, pendiente: 0 })
+    expect(rotulo('Acreditada').dataset.tono).toBe('neutro')
+    expect(rotulo('Acreditada').parentElement).toHaveAttribute('title', expect.stringContaining('14.000'))
+    expect(screen.queryByText('Sin cobrar', { selector: '[data-tono]' })).toBeNull()
+    expect(screen.queryByLabelText('Registrar cobro')).toBeNull()
+    expect(screen.getByLabelText('Ver comprobante')).toBeInTheDocument()
+  })
+
+  it('cobrada y después acreditada también es «Acreditada»', async () => {
+    await conFila({ total_cobrado: 14000, total_acreditado: 14000, pendiente: 0 })
+    expect(rotulo('Acreditada')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Registrar cobro')).toBeNull()
+  })
+
+  it('cobrada: «Cobrada» en verde y sin botón', async () => {
+    await conFila({ total_cobrado: 14000, total_acreditado: 0, pendiente: 0 })
+    expect(rotulo('Cobrada').dataset.tono).toBe('ok')
+    expect(screen.queryByLabelText('Registrar cobro')).toBeNull()
+  })
+
+  it('una nota parcial más lo cobrado que completa el resto: «Cobrada»', async () => {
+    await conFila({ total_cobrado: 9000, total_acreditado: 5000, pendiente: 0 })
+    expect(rotulo('Cobrada')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Registrar cobro')).toBeNull()
+  })
+
+  it('una nota parcial sin cobros: «Sin cobrar», con lo que falta de ayuda, y se puede cobrar', async () => {
+    await conFila({ total_cobrado: 0, total_acreditado: 5000, pendiente: 9000 })
+    expect(rotulo('Sin cobrar').parentElement).toHaveAttribute('title', expect.stringContaining('9.000'))
+    expect(screen.getByLabelText('Registrar cobro')).toBeInTheDocument()
+  })
+
+  it('cobrada a medias: «Parcial» y se puede cobrar', async () => {
+    await conFila({ total_cobrado: 4000, total_acreditado: 0, pendiente: 10000 })
+    expect(rotulo('Parcial').dataset.tono).toBe('atencion')
+    expect(screen.getByLabelText('Registrar cobro')).toBeInTheDocument()
+  })
+
+  it('sin sus campos nuevos (motor viejo) rotula como siempre: total − cobrado', async () => {
+    // Cobrado entero, sin `pendiente` ni `total_acreditado`.
+    await conFila({ total_cobrado: 14000 })
+    expect(rotulo('Cobrada')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Registrar cobro')).toBeNull()
+    cleanup()
+    await conFila({ total_cobrado: 4000 })
+    expect(rotulo('Parcial')).toBeInTheDocument()
+    expect(screen.getByLabelText('Registrar cobro')).toBeInTheDocument()
+    cleanup()
+    await conFila({ total_cobrado: 0 })
+    expect(rotulo('Sin cobrar')).toBeInTheDocument()
+    expect(screen.getByLabelText('Registrar cobro')).toBeInTheDocument()
+  })
+
+  it('sin cruce de cobros no se dice «Acreditada»: el listado no sabe de cobros', async () => {
+    responder([{ ...AUTORIZADA, total_cobrado: 0, total_acreditado: 14000, pendiente: 0 }])
+    montar({ muestraCobros: false, rutaDelDetalle: (id) => `/facturas/${id}` })
+    await screen.findByText('Ana Perez')
+    expect(screen.getByText('Autorizada')).toBeInTheDocument()
+    expect(screen.queryByText('Acreditada')).toBeNull()
+  })
+})
+
 describe('el estado del comprobante', () => {
   it('sin CAE no es un error: es que ARCA todavía no lo autorizó', async () => {
     responder([SIN_CAE])

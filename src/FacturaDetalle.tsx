@@ -35,6 +35,7 @@ import {
 import { hoyISO } from './fechas'
 import { SelectBuscable } from './SelectBuscable'
 import { formatoMoneda } from './formatos'
+import { acreditadoDe, cuentaDelDetalle, estaAcreditadaPorCompleto, pendienteDe, tienePendiente } from './estado-de-cobro'
 import { Table } from './ui/table'
 
 function labelComprobante(f: Factura): string {
@@ -85,6 +86,72 @@ function notaLabel(kind: 'nota-credito' | 'nota-debito'): string {
 
 function notaRelacion(kind: 'nota-credito' | 'nota-debito'): string {
   return kind === 'nota-credito' ? 'anula' : 'está asociada a'
+}
+
+/** El estado de cobro de una factura (A, B o C), con la cuenta del motor (`pendiente`, `total_acreditado`: ADR-059).
+ *
+ * Una factura **acreditada por completo** no es «Cobrada»: las notas de crédito la dejaron en cero sin que nadie
+ * pague, y no se puede cobrar (el motor da 409). Por eso dice «Acreditada por nota de crédito» y no ofrece el
+ * botón, también cuando nunca tuvo un cobro. Con un motor viejo falta `total_acreditado`, vale 0 y el panel dice
+ * lo de siempre. */
+function PanelDeCobro({ detalle, muestraCobros, onCobrar }: { detalle: FacturaDetalleType; muestraCobros: boolean; onCobrar: () => void }) {
+  const cuenta = cuentaDelDetalle(detalle)
+  const acreditado = acreditadoDe(cuenta)
+  const pendiente = pendienteDe(cuenta)
+  const hayPendiente = tienePendiente(cuenta)
+  const hayCobros = detalle.cobros.length > 0
+  const botonDeCobro = hayPendiente && muestraCobros
+    ? <Button size="sm" onClick={onCobrar}><CircleDollarSign />Registrar cobro</Button>
+    : null
+  const notasDeCredito = acreditado > 0
+    ? <span className="text-muted-foreground"> · Acreditado por notas de crédito: {formatoMoneda(acreditado)}</span>
+    : null
+
+  if (estaAcreditadaPorCompleto(cuenta)) {
+    // Sin cruce de cobros (`muestraCobros={false}`) y sin cobros, no hay nada que decir de cobrar: lo de antes.
+    if (!hayCobros && !(estaAutorizada(detalle.factura) && muestraCobros)) return null
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/40 p-3 text-sm">
+        <span className="flex items-center gap-2">
+          <FileMinus className="size-4 shrink-0 text-muted-foreground" />
+          <span>
+            <strong>Acreditada por nota de crédito</strong> — {formatoMoneda(acreditado)}
+            {hayCobros && <span className="text-muted-foreground"> · Cobrado: {formatoMoneda(detalle.total_cobrado)}</span>}
+          </span>
+        </span>
+      </div>
+    )
+  }
+
+  if (hayCobros) {
+    return (
+      <div className={`flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm ${!hayPendiente ? 'border-exito/40 bg-exito/10' : 'border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40'}`}>
+        <span className="flex items-center gap-2">
+          {!hayPendiente ? <CheckCircle2 className="size-4 shrink-0 text-exito" /> : <CircleDollarSign className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />}
+          {!hayPendiente ? (
+            <span><strong>Cobrado completo</strong> — {formatoMoneda(detalle.total_cobrado)}{detalle.cobros.length > 1 && <span className="text-muted-foreground"> ({detalle.cobros.length} pagos)</span>}{notasDeCredito}</span>
+          ) : (
+            <span><strong>Pago parcial</strong> — Cobrado: {formatoMoneda(detalle.total_cobrado)}{notasDeCredito} <span className="font-medium text-destructive">Pendiente: {formatoMoneda(pendiente)}</span></span>
+          )}
+        </span>
+        {botonDeCobro}
+      </div>
+    )
+  }
+
+  if (estaAutorizada(detalle.factura) && muestraCobros) {
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm">
+        <span className="flex items-center gap-2">
+          <Hourglass className="size-4 shrink-0 text-muted-foreground" />
+          <span><strong>Pendiente de cobro</strong> — {formatoMoneda(pendiente)}{notasDeCredito}</span>
+        </span>
+        {botonDeCobro}
+      </div>
+    )
+  }
+
+  return null
 }
 
 /** `esAdmin` gatea generar notas de crédito/débito y eliminar un comprobante
@@ -439,27 +506,7 @@ export function FacturaDetalle({
           )}
 
           {[1, 6, 11].includes(detalle.factura.tipo) && (
-            detalle.cobros.length > 0 ? (
-              <div className={`flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm ${detalle.pendiente <= 0 ? 'border-exito/40 bg-exito/10' : 'border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40'}`}>
-                <span className="flex items-center gap-2">
-                  {detalle.pendiente <= 0 ? <CheckCircle2 className="size-4 shrink-0 text-exito" /> : <CircleDollarSign className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />}
-                  {detalle.pendiente <= 0 ? (
-                    <span><strong>Cobrado completo</strong> — {formatoMoneda(detalle.total_cobrado)}{detalle.cobros.length > 1 && <span className="text-muted-foreground"> ({detalle.cobros.length} pagos)</span>}</span>
-                  ) : (
-                    <span><strong>Pago parcial</strong> — Cobrado: {formatoMoneda(detalle.total_cobrado)} <span className="font-medium text-destructive">Pendiente: {formatoMoneda(detalle.pendiente)}</span></span>
-                  )}
-                </span>
-                {detalle.pendiente > 0 && muestraCobros && <Button size="sm" onClick={() => setCobroOpen(true)}><CircleDollarSign />Registrar cobro</Button>}
-              </div>
-            ) : estaAutorizada(detalle.factura) && muestraCobros ? (
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm">
-                <span className="flex items-center gap-2">
-                  <Hourglass className="size-4 shrink-0 text-muted-foreground" />
-                  <strong>Pendiente de cobro</strong> — {formatoMoneda(detalle.factura.total)}
-                </span>
-                <Button size="sm" onClick={() => setCobroOpen(true)}><CircleDollarSign />Registrar cobro</Button>
-              </div>
-            ) : null
+            <PanelDeCobro detalle={detalle} muestraCobros={muestraCobros} onCobrar={() => setCobroOpen(true)} />
           )}
 
           <EnviosEmailCard envios={detalle.envios_email} />
