@@ -60,6 +60,11 @@ function marcaCerca(original: string, linea: number): string | undefined {
   return undefined
 }
 
+/** Las cadenas literales de una expresión, vaciadas: lo que dicen es texto para la pantalla, no qué elige el campo. */
+function sinCadenas(expr: string): string {
+  return expr.replace(/'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`/g, "''")
+}
+
 /** Los campos de cliente de un fuente. Pura.
  *
  *  Se mira el **código** (`value`, `onChange`, `opciones`) y el **texto** (`aria-label`, la etiqueta de al lado) por separado, porque se equivocan
@@ -83,7 +88,9 @@ export function camposDeClienteEn(
     const apertura = limpio.slice(ini, fin + 1)
     const codigo = ['value', 'opciones', 'onValueChange', 'onChange', 'name'].map((a) => atributo(apertura, a))
     const texto = [atributo(apertura, 'aria-label'), atributo(apertura, 'ariaLabel'), atributo(apertura, 'label'), etiquetaDeAlLado(limpio, ini)]
-    const pista = codigo.find((c) => c && enCodigo.test(c)) ?? texto.find((c) => c && enTexto.test(c))
+    // En el código no cuentan las cadenas: `opciones={[{ label: 'No, es del cliente' }]}` elige un proveedor, no un cliente (falso positivo
+    // medido en LibraDesk, 0.158.1).
+    const pista = codigo.map(sinCadenas).find((c) => c && enCodigo.test(c)) ?? texto.find((c) => c && enTexto.test(c))
     if (!pista) continue
     const linea = limpio.slice(0, ini).split('\n').length
     hallados.push({ archivo, linea, componente: m[1], pista: pista.replace(/\s+/g, ' ').slice(0, 60), marca: marcaCerca(fuente, linea) })
