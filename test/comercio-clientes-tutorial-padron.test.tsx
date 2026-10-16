@@ -45,8 +45,8 @@ describe('Clientes · enlace al tutorial de Padrón A13', () => {
   it('503 (sin certificados): el mensaje enlaza a la pestaña de ARCA de Configuración, con el ancla del tutorial', async () => {
     const { user, dialogo } = await consultarEnElAlta()
     padron(503, { error: 'Configurá los certificados ARCA en Configuración para habilitar la consulta de CUIT.' })
-    await user.click(within(dialogo).getByTitle('Consultar datos en ARCA'))
-    const enlace = await within(dialogo).findByRole('link', { name: 'Cómo habilitarlo' })
+    await user.click(within(dialogo).getByRole('button', { name: 'Consultar en ARCA' }))
+    const enlace = await within(dialogo).findByRole('link', { name: 'Cómo habilitar el servicio de Padrón en ARCA' })
     expect(enlace).toHaveAttribute('href', URL_TUTORIAL_PADRON)
     expect(URL_TUTORIAL_PADRON).toBe('/configuracion?seccion=integraciones&integracion=arca#tutorial-padron-a13')
   })
@@ -54,19 +54,19 @@ describe('Clientes · enlace al tutorial de Padrón A13', () => {
   it('403 del motor (el certificado no tiene acceso a Padrón): también enlaza', async () => {
     const { user, dialogo } = await consultarEnElAlta()
     padron(403, { error: 'El certificado no tiene acceso al servicio de Padrón (ws_sr_padron_a13).' })
-    await user.click(within(dialogo).getByTitle('Consultar datos en ARCA'))
-    expect(await within(dialogo).findByRole('link', { name: 'Cómo habilitarlo' })).toBeTruthy()
+    await user.click(within(dialogo).getByRole('button', { name: 'Consultar en ARCA' }))
+    expect(await within(dialogo).findByRole('link', { name: 'Cómo habilitar el servicio de Padrón en ARCA' })).toBeTruthy()
   })
 
   it('un 403 de permisos (`{detail}`), un 404 del padrón o la caída de la red no enlazan: el tutorial no los arregla', async () => {
     const { user, dialogo } = await consultarEnElAlta()
     padron(403, { detail: 'Módulo no habilitado' })
-    await user.click(within(dialogo).getByTitle('Consultar datos en ARCA'))
-    await within(dialogo).findByText('Error al consultar ARCA.')
+    await user.click(within(dialogo).getByRole('button', { name: 'Consultar en ARCA' }))
+    await within(dialogo).findByText('Módulo no habilitado')
     expect(within(dialogo).queryByRole('link')).toBeNull()
 
     padron(404, { error: 'CUIT no encontrado en el padrón de ARCA.' })
-    await user.click(within(dialogo).getByTitle('Consultar datos en ARCA'))
+    await user.click(within(dialogo).getByRole('button', { name: 'Consultar en ARCA' }))
     await within(dialogo).findByText('CUIT no encontrado en el padrón de ARCA.')
     expect(within(dialogo).queryByRole('link')).toBeNull()
   })
@@ -74,15 +74,15 @@ describe('Clientes · enlace al tutorial de Padrón A13', () => {
   it('`urlTutorialPadron={null}` saca el enlace, y una URL propia lo redirige', async () => {
     const sin = await consultarEnElAlta({ urlTutorialPadron: null })
     padron(503, { error: 'Configurá los certificados ARCA…' })
-    await sin.user.click(within(sin.dialogo).getByTitle('Consultar datos en ARCA'))
+    await sin.user.click(within(sin.dialogo).getByRole('button', { name: 'Consultar en ARCA' }))
     await within(sin.dialogo).findByText(/Configurá los certificados ARCA/)
     expect(within(sin.dialogo).queryByRole('link')).toBeNull()
 
     cleanup()
     const propia = await consultarEnElAlta({ urlTutorialPadron: '/config#arca' })
     padron(503, { error: 'Configurá los certificados ARCA…' })
-    await propia.user.click(within(propia.dialogo).getByTitle('Consultar datos en ARCA'))
-    expect(await within(propia.dialogo).findByRole('link', { name: 'Cómo habilitarlo' })).toHaveAttribute('href', '/config#arca')
+    await propia.user.click(within(propia.dialogo).getByRole('button', { name: 'Consultar en ARCA' }))
+    expect(await within(propia.dialogo).findByRole('link', { name: 'Cómo habilitar el servicio de Padrón en ARCA' })).toHaveAttribute('href', '/config#arca')
   })
 })
 
@@ -95,8 +95,8 @@ describe('ClienteDetalle · enlace al tutorial de Padrón A13', () => {
     await user.click(screen.getByRole('button', { name: /Editar/ }))
     await screen.findByRole('dialog')
     padron(503, { error: 'Configurá los certificados ARCA en Configuración para habilitar la consulta de CUIT.' })
-    await user.click(screen.getByTitle('Consultar datos en ARCA'))
-    expect(await screen.findByRole('link', { name: 'Cómo habilitarlo' })).toHaveAttribute('href', URL_TUTORIAL_PADRON)
+    await user.click(screen.getByRole('button', { name: 'Consultar en ARCA' }))
+    expect(await screen.findByRole('link', { name: 'Cómo habilitar el servicio de Padrón en ARCA' })).toHaveAttribute('href', URL_TUTORIAL_PADRON)
   })
 })
 

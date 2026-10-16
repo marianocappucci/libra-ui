@@ -1700,3 +1700,18 @@ Las 37 pantallas del kit que importaban `@/components/ui/dialog` (50 `DialogCont
 
 **Consecuencias.** Sin cambios en los productos que usan el kit. LibraCargo, LibraClub y GestioLibra (botón propio) apuntan a la misma URL. 7 tests nuevos.
 
+
+## ADR-070 — «Consultar en ARCA» sube al kit: un solo botón que no pisa lo escrito (0.157.0)
+
+**Estado:** aceptada (2026-10-16; pedido del humano: subir al kit el botón que hoy copian tres productos y exportar la URL del tutorial de Padrón A13).
+
+**Contexto.** LibraCargo (`components/ConsultarEnArca.tsx` + `api/consultar-cuit.ts`), LibraClub y GestioLibra (`components/ConsultarEnArca.tsx` + `lib/consultar-cuit.ts`) tenían cada uno su copia del botón «Consultar en ARCA», y las tres copias de la lógica de consulta eran **idénticas** al byte (de los tres `consultar-cuit.ts`, sólo cambiaba la carpeta). Los componentes sólo diferían en una palabra del comentario y en el `import`; los tests, en los datos (el valor de la condición de IVA de cada producto). Además copiaban a mano la URL del tutorial de Padrón A13 que el kit ya tenía en `configuracion/arca-tutorial.ts` (ADR-069) pero no exportaba. Y el botón del kit (el ícono de `comercio/Clientes` y `ClienteDetalle`) **pisaba** nombre, dirección y condición de IVA aunque el usuario ya los hubiera escrito; el de los productos pregunta.
+
+**Decisión.**
+- `package.json` exporta `./configuracion/arca-tutorial` (`URL_TUTORIAL_PADRON`, `ID_TUTORIAL_PADRON`, `errorQueSeArreglaEnConfiguracion`), `./configuracion/consultar-cuit` (`consultarCuit`, `soloDigitos`, `DatosDeArca`, `ResultadoDeConsulta`, `ConsultaDeCuit`) y `./configuracion/ConsultarEnArca`.
+- `ConsultarEnArca` es el componente de los productos tal cual (`cuit`, `valores`, `destino`, `ivaDe`, `porDefecto`, `alAplicar`), más dos props opcionales: `consulta` (otra función de consulta si el producto llega al padrón por otro camino; por defecto `consultarCuit`: `GET /api/consultar-cuit/:cuit` con `credentials: 'include'`) y `urlTutorial` (por defecto `URL_TUTORIAL_PADRON`; `null` saca el enlace). Usa `@/components/ui/button` del consumidor, como el resto de `configuracion/`.
+- `consultarCuit` decide `pideElTutorial` con `errorQueSeArreglaEnConfiguracion`, la misma regla de ADR-069 en un solo lugar.
+- `comercio/Clientes` y `comercio/ClienteDetalle` **adoptan el componente**: dejan de pisar lo escrito (lo vacío se completa, lo distinto se pregunta). Mantienen `conConsultaCuit` y `urlTutorialPadron` (que pasa a `urlTutorial`). La condición de IVA se traduce con `condicionDeIvaDeArca` (nuevo en `facturas.ts`: el texto de ARCA si está en `IVA_CONDITIONS`, si no el campo no se toca).
+- Los productos borran su copia y su test e importan del kit.
+
+**Consecuencias.** Cambia lo que ve el usuario de `Clientes`/`ClienteDetalle` en los productos que los montan: el ícono con lupa junto al CUIT pasa a un botón «Consultar en ARCA» en su propia línea al pie del formulario, el enlace del error dice «Cómo habilitar el servicio de Padrón en ARCA» (antes «Cómo habilitarlo») y un 403 con `{detail}` (falta de permiso, módulo apagado) muestra ese detalle en vez de «Error al consultar ARCA.». Un test que busque el botón por `title="Consultar datos en ARCA"` hay que pasarlo a `getByRole('button', { name: 'Consultar en ARCA' })`. El formulario que usa el componente con react-hook-form pasa `valores={form.watch()}` (re-renderiza en cada tecla, como ya hacía GestioLibra). Tres componentes, tres tests y tres `consultar-cuit.ts` menos en los productos; el pin sube a `v0.157.0` en LibraCargo, LibraClub y GestioLibra (que dejan de copiar la URL) y en todos los consumidores (regla del tag).

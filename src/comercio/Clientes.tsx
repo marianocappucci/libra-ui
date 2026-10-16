@@ -10,7 +10,7 @@ import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import type { ColumnDef } from '../data-table'
 import { api, ApiError } from '../api-client'
-import { IVA_CONDITIONS } from '../facturas'
+import { condicionDeIvaDeArca, IVA_CONDITIONS } from '../facturas'
 import { type Cliente } from '../mp'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -30,10 +30,11 @@ import { TACTIL_BAJO_LG, useBajoLg } from '../use-ancho'
 import { anchoColumnaAcciones, sortableHeader } from '../data-table'
 import { TablaOTarjetas, TarjetaDeFila } from '../tabla-o-tarjetas'
 import {
-  Plus, Pencil, Eye, Trash2, Undo2, Search, Loader2, CheckCircle2, XCircle,
+  Plus, Pencil, Eye, Trash2, Undo2,
 } from 'lucide-react'
 import { TituloPantalla } from '../titulo-pantalla'
-import { errorQueSeArreglaEnConfiguracion, URL_TUTORIAL_PADRON } from '../configuracion/arca-tutorial'
+import { URL_TUTORIAL_PADRON } from '../configuracion/arca-tutorial'
+import { ConsultarEnArca } from '../configuracion/ConsultarEnArca'
 import { ICONOS } from '../iconos-identidad'
 
 const clienteSchema = z.object({
@@ -53,7 +54,7 @@ const EMPTY_VALUES: ClienteFormValues = {
 }
 
 /** Variantes del listado: `conConsultaCuit` (default `true`) muestra el botón que consulta el CUIT
- *  en ARCA (`/api/consultar-cuit/:cuit`); un producto sin ese endpoint lo apaga. */
+ *  en ARCA (`/api/consultar-cuit/:cuit`, ADR-070); un producto sin ese endpoint lo apaga. */
 export function Clientes({ conConsultaCuit = true, urlTutorialPadron = URL_TUTORIAL_PADRON }: {
   conConsultaCuit?: boolean
   /** A dónde lleva el enlace del error «sin certificados» / «sin acceso a Padrón»; `null` lo saca. */
@@ -70,8 +71,6 @@ export function Clientes({ conConsultaCuit = true, urlTutorialPadron = URL_TUTOR
   const [nuevoOpen, setNuevoOpen] = useState(false)
   const [creando, setCreando] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
-  const [consultando, setConsultando] = useState(false)
-  const [consultaMsg, setConsultaMsg] = useState<{ tipo: 'ok' | 'error'; texto: string; tutorial?: boolean } | null>(null)
 
   const form = useForm<ClienteFormValues>({
     resolver: zodResolver(clienteSchema),
@@ -119,7 +118,6 @@ export function Clientes({ conConsultaCuit = true, urlTutorialPadron = URL_TUTOR
   function abrirNuevo() {
     form.reset(EMPTY_VALUES)
     setFormError(null)
-    setConsultaMsg(null)
     setNuevoOpen(true)
   }
 
@@ -143,43 +141,6 @@ export function Clientes({ conConsultaCuit = true, urlTutorialPadron = URL_TUTOR
       setFormError(describeError(err))
     } finally {
       setCreando(false)
-    }
-  }
-
-  // Restaurado desde web/templates/clientes/form.html (btn-consultar): trae
-  // nombre/domicilio/condición IVA desde ARCA por CUIT y completa el
-  // formulario. El endpoint devuelve {error} en vez de {detail} en fallas,
-  // por eso no se usa api.get acá -- se parsea la respuesta a mano igual
-  // que hacía el script vanilla original.
-  async function consultarCuit() {
-    const cuit = (form.getValues('cuit_dni') || '').replace(/\D/g, '')
-    if (cuit.length !== 11) {
-      setConsultaMsg({ tipo: 'error', texto: 'Ingresá un CUIT de 11 dígitos antes de consultar.' })
-      return
-    }
-    setConsultando(true)
-    setConsultaMsg(null)
-    try {
-      const resp = await fetch(`/api/consultar-cuit/${cuit}`, { credentials: 'include' })
-      const data = await resp.json()
-      if (!resp.ok || data.error) {
-        setConsultaMsg({
-          tipo: 'error', texto: data.error || 'Error al consultar ARCA.',
-          tutorial: errorQueSeArreglaEnConfiguracion(resp.status, data),
-        })
-      } else {
-        if (data.nombre) form.setValue('name', data.nombre)
-        if (data.domicilio) form.setValue('address', data.domicilio)
-        if (data.iva_condition && (IVA_CONDITIONS as readonly string[]).includes(data.iva_condition)) {
-          form.setValue('iva_condition', data.iva_condition)
-        }
-        const estado = data.estado ? ` — Estado: ${data.estado}` : ''
-        setConsultaMsg({ tipo: 'ok', texto: `Datos importados desde ARCA${estado}.` })
-      }
-    } catch {
-      setConsultaMsg({ tipo: 'error', texto: 'No se pudo conectar con ARCA.' })
-    } finally {
-      setConsultando(false)
     }
   }
 
@@ -267,19 +228,9 @@ export function Clientes({ conConsultaCuit = true, urlTutorialPadron = URL_TUTOR
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>CUIT/DNI</FormLabel>
-                      <div className="flex gap-1.5">
-                        <FormControl>
-                          <Input {...field} className="w-36" placeholder="20-12345678-9" />
-                        </FormControl>
-                        {conConsultaCuit && (
-                          <Button
-                            type="button" size="sm" variant="outline" disabled={consultando}
-                            onClick={consultarCuit} title="Consultar datos en ARCA"
-                          >
-                            {consultando ? <Loader2 className="animate-spin" /> : <Search />}
-                          </Button>
-                        )}
-                      </div>
+                      <FormControl>
+                        <Input {...field} className="w-36" placeholder="20-12345678-9" />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -344,16 +295,27 @@ export function Clientes({ conConsultaCuit = true, urlTutorialPadron = URL_TUTOR
                     </FormItem>
                   )}
                 />
-                {consultaMsg && (
-                  <p className={`flex w-full items-center gap-1.5 text-sm ${consultaMsg.tipo === 'ok' ? 'text-exito' : 'text-destructive'}`}>
-                    {consultaMsg.tipo === 'ok' ? <CheckCircle2 className="size-4 shrink-0" /> : <XCircle className="size-4 shrink-0" />}
-                    {consultaMsg.texto}
-                    {consultaMsg.tutorial && urlTutorialPadron && (
-                      <a href={urlTutorialPadron} target="_blank" rel="noreferrer" className="font-medium underline">
-                        Cómo habilitarlo
-                      </a>
-                    )}
-                  </p>
+                {/* «Consultar en ARCA» (ADR-070): completa nombre, dirección y condición de IVA con el padrón, sin pisar lo ya
+                    escrito sin preguntar. Va en su propia línea: el mensaje y el aviso de «datos distintos» son más anchos que un campo. */}
+                {conConsultaCuit && (
+                  <div className="basis-full">
+                    <ConsultarEnArca
+                      cuit={form.watch('cuit_dni')}
+                      valores={form.watch()}
+                      destino={{
+                        nombre: { campo: 'name', etiqueta: 'Nombre' },
+                        domicilio: { campo: 'address', etiqueta: 'Dirección' },
+                        iva: { campo: 'iva_condition', etiqueta: 'Condición de IVA' },
+                      }}
+                      ivaDe={condicionDeIvaDeArca}
+                      urlTutorial={urlTutorialPadron}
+                      alAplicar={(cambios) => {
+                        for (const [campo, valor] of Object.entries(cambios)) {
+                          form.setValue(campo as keyof ClienteFormValues, valor, { shouldDirty: true, shouldValidate: true })
+                        }
+                      }}
+                    />
+                  </div>
                 )}
                 <DialogFooter className="w-full">
                   <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
