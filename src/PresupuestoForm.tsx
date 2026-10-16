@@ -260,77 +260,83 @@ export function PresupuestoForm({ conSelectorDeLista = false, conQuiebres = fals
               )}
             </div>
 
-            <div className="rounded-md border">
+            <div className="min-w-0 rounded-md border">
               <div className="flex items-center justify-between border-b p-3">
                 <Label>Ítems</Label>
                 <Button size="sm" variant="outline" onClick={addItem}>+ Agregar ítem</Button>
               </div>
-              <table className="w-full text-sm">
-                <thead className="border-b text-muted-foreground">
-                  <tr>
-                    <th className="p-2 text-left font-medium">Descripción</th>
-                    <th className="w-24 p-2 text-left font-medium">Cantidad</th>
-                    <th className="w-32 p-2 text-left font-medium">Precio unit.</th>
-                    <th className="w-28 p-2 text-right font-medium">Subtotal</th>
-                    <th className="w-10 p-2"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((row, i) => (
-                    <tr key={i} className="border-b last:border-0">
-                      <td className="relative p-2 align-top">
-                        <Input value={row.description} onChange={(e) => buscarProducto(i, e.target.value)} placeholder="Descripción o producto…" />
-                        {/* El detalle del renglón. Se dibuja debajo, más chico y
-                            más claro, igual que va a salir en el PDF: lo que se
-                            ve acá es lo que imprime `_draw_items_table`. */}
-                        <Input
-                          value={row.detalle}
-                          onChange={(e) => updateItem(i, 'detalle', e.target.value)}
-                          placeholder="Detalle (opcional)…"
-                          aria-label={`Detalle del ítem ${i + 1}`}
-                          className="mt-1 h-8 border-dashed text-xs text-muted-foreground placeholder:text-xs"
-                        />
-                        {sugerencias?.index === i && sugerencias.items.length > 0 && (
-                          <div className="absolute left-2 top-11 z-10 w-64 rounded-md border bg-popover shadow-md">
-                            {sugerencias.items.map((p) => (
-                              <button
-                                key={p.id} type="button"
-                                className="block w-full px-3 py-1.5 text-left text-sm hover:bg-accent"
-                                onClick={() => elegirProducto(i, p)}
-                              >
-                                {p.nombre} — {formatoMoneda(p.precio_venta)}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </td>
-                      <td className="p-2 align-top"><Input type="number" step="0.01" value={row.qty} onChange={(e) => cambiarCantidad(i, e.target.value, row.producto_id)} /></td>
-                      <td className="p-2 align-top"><Input type="number" step="0.01" value={row.unit_price} onChange={(e) => updateItem(i, 'unit_price', e.target.value)} /></td>
-                      <td className="p-2 pt-4 text-right align-top font-medium">{formatoMoneda((Number(row.qty) || 0) * (Number(row.unit_price) || 0))}</td>
-                      <td className="p-2 text-right align-top">
-                        <Button size="icon" variant="ghost" onClick={() => removeItem(i)}><Trash2 /></Button>
-                      </td>
+              {/* Bajo `sm` la tabla scrollea por dentro y no ensancha la página (ADR-067): con las columnas fijas de cantidad, precio y subtotal
+                  mide 362 px y no entra en los ~340 de la tarjeta a 390 px (la página medía 405). El marco lleva `min-w-0`: sin él la grilla de la tarjeta
+                  crece al mínimo de la tabla y el scroll no tiene de qué ser. Sólo bajo `sm`; ahí el desplegable de sugerencias deja de ser `absolute` (el
+                  `overflow-x-auto` lo recortaría y lo scrollearía adentro) y va en el flujo de la celda, con tope de alto. */}
+              <div className="max-sm:overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="border-b text-muted-foreground">
+                    <tr>
+                      <th className="p-2 text-left font-medium">Descripción</th>
+                      <th className="w-24 p-2 text-left font-medium">Cantidad</th>
+                      <th className="w-32 p-2 text-left font-medium">Precio unit.</th>
+                      <th className="w-28 p-2 text-right font-medium">Subtotal</th>
+                      <th className="w-10 p-2"></th>
                     </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <td colSpan={3} className="p-2 text-right font-medium text-muted-foreground">Subtotal</td>
-                    <td className="p-2 text-right font-medium">{formatoMoneda(subtotalCalc)}</td>
-                    <td></td>
-                  </tr>
-                  <tr>
-                    <td colSpan={3} className="p-2 text-right font-medium text-muted-foreground">IVA ({Math.round((Number(taxRate) || 0) * 100)}%)</td>
-                    <td className="p-2 text-right font-medium">{formatoMoneda(ivaCalc)}</td>
-                    <td></td>
-                  </tr>
-                  <tr>
-                    <td colSpan={3} className="p-2 text-right text-base font-bold">TOTAL</td>
-                    <td className="p-2 text-right text-base font-bold text-primary">{formatoMoneda(subtotalCalc + ivaCalc)}</td>
-                    <td></td>
-                  </tr>
-                </tfoot>
-              </table>
+                  </thead>
+                  <tbody>
+                    {items.map((row, i) => (
+                      <tr key={i} className="border-b last:border-0">
+                        <td className="relative p-2 align-top">
+                          <Input value={row.description} onChange={(e) => buscarProducto(i, e.target.value)} placeholder="Descripción o producto…" />
+                          {/* El detalle del renglón. Se dibuja debajo, más chico y
+                              más claro, igual que va a salir en el PDF: lo que se
+                              ve acá es lo que imprime `_draw_items_table`. */}
+                          <Input
+                            value={row.detalle}
+                            onChange={(e) => updateItem(i, 'detalle', e.target.value)}
+                            placeholder="Detalle (opcional)…"
+                            aria-label={`Detalle del ítem ${i + 1}`}
+                            className="mt-1 h-8 border-dashed text-xs text-muted-foreground placeholder:text-xs"
+                          />
+                          {sugerencias?.index === i && sugerencias.items.length > 0 && (
+                            <div className="absolute left-2 top-11 z-10 w-64 rounded-md border bg-popover shadow-md max-sm:static max-sm:mt-1 max-sm:max-h-48 max-sm:w-full max-sm:overflow-y-auto">
+                              {sugerencias.items.map((p) => (
+                                <button
+                                  key={p.id} type="button"
+                                  className="block w-full px-3 py-1.5 text-left text-sm hover:bg-accent"
+                                  onClick={() => elegirProducto(i, p)}
+                                >
+                                  {p.nombre} — {formatoMoneda(p.precio_venta)}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-2 align-top"><Input type="number" step="0.01" value={row.qty} onChange={(e) => cambiarCantidad(i, e.target.value, row.producto_id)} /></td>
+                        <td className="p-2 align-top"><Input type="number" step="0.01" value={row.unit_price} onChange={(e) => updateItem(i, 'unit_price', e.target.value)} /></td>
+                        <td className="p-2 pt-4 text-right align-top font-medium">{formatoMoneda((Number(row.qty) || 0) * (Number(row.unit_price) || 0))}</td>
+                        <td className="p-2 text-right align-top">
+                          <Button size="icon" variant="ghost" onClick={() => removeItem(i)}><Trash2 /></Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td colSpan={3} className="p-2 text-right font-medium text-muted-foreground">Subtotal</td>
+                      <td className="p-2 text-right font-medium">{formatoMoneda(subtotalCalc)}</td>
+                      <td></td>
+                    </tr>
+                    <tr>
+                      <td colSpan={3} className="p-2 text-right font-medium text-muted-foreground">IVA ({Math.round((Number(taxRate) || 0) * 100)}%)</td>
+                      <td className="p-2 text-right font-medium">{formatoMoneda(ivaCalc)}</td>
+                      <td></td>
+                    </tr>
+                    <tr>
+                      <td colSpan={3} className="p-2 text-right text-base font-bold">TOTAL</td>
+                      <td className="p-2 text-right text-base font-bold text-primary">{formatoMoneda(subtotalCalc + ivaCalc)}</td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
             </div>
 
             {/* Del presupuesto ENTERO, y una sola. La aclaración de un renglón

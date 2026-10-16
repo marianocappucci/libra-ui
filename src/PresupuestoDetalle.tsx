@@ -24,6 +24,7 @@ import { ICONOS } from './iconos-identidad'
 import { fecha } from './fechas'
 import { EnviosEmailCard, type EnvioEmail } from './envios-email'
 import { formatoMoneda } from './formatos'
+import { Table } from './ui/table'
 
 const ESTADO_TONO: Record<string, TonoEstado> = {
   aceptado: 'ok', enviado: 'curso', borrador: 'neutro', rechazado: 'negativo', vencido: 'negativo', facturado: 'ok',
@@ -208,7 +209,7 @@ export function PresupuestoDetalle({
               <Card>
                 <CardHeader><CardTitle className="text-base">Ítems</CardTitle></CardHeader>
                 <CardContent className="p-0">
-                  <table className="w-full text-sm">
+                  <Table>
                     <thead className="border-b text-muted-foreground">
                       <tr>
                         <th className="p-3 text-left font-medium">Descripción</th>
@@ -239,7 +240,7 @@ export function PresupuestoDetalle({
                       <tr><td colSpan={3} className="p-3 text-right text-muted-foreground">IVA {Math.round(p.tax_rate * 100)}%</td><td className="p-3 text-right">{formatoMoneda(p.tax_amount)}</td></tr>
                       <tr className="text-base"><td colSpan={3} className="p-3 text-right font-semibold">TOTAL</td><td className="p-3 text-right font-semibold text-primary">{formatoMoneda(p.total)}</td></tr>
                     </tfoot>
-                  </table>
+                  </Table>
                 </CardContent>
               </Card>
 

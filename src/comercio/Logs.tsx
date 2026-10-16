@@ -24,6 +24,7 @@ import { ICONOS } from '../iconos-identidad'
 import { fecha, fechaHora, horaConSegundos } from '../fechas'
 import { SelectBuscable } from '../SelectBuscable'
 import { formatoMoneda } from '../formatos'
+import { estiloDeInsignia } from '../color-de-insignia'
 
 // Orden y set canonico de tipos -- coincide con TIPO_META de
 // web/api/logs.py (que a su vez preserva el dict del router Jinja2 viejo,
@@ -56,9 +57,9 @@ const VER_PATHS: Record<string, string> = {
 }
 
 const EVENTO_META: Record<string, { label: string; icon: typeof LogIn; className: string }> = {
-  login: { label: 'Login', icon: LogIn, className: 'bg-emerald-600 text-white hover:bg-emerald-600' },
-  logout: { label: 'Logout', icon: LogOut, className: 'bg-muted-foreground text-white hover:bg-muted-foreground' },
-  login_fallido: { label: 'Intento fallido', icon: XCircle, className: 'bg-destructive text-white hover:bg-destructive' },
+  login: { label: 'Login', icon: LogIn, className: 'bg-emerald-700 text-white hover:bg-emerald-700' },
+  logout: { label: 'Logout', icon: LogOut, className: 'bg-slate-600 text-white hover:bg-slate-600' },
+  login_fallido: { label: 'Intento fallido', icon: XCircle, className: 'bg-destructive text-white hover:bg-destructive dark:bg-destructive/60 dark:hover:bg-destructive/60' },
 }
 
 // La version Jinja2 vieja mostraba la hora (HH:MM:SS) de cada evento en la
@@ -198,7 +199,7 @@ export function Logs() {
                         className="rounded-full transition-opacity"
                         style={{ opacity: checked ? 1 : 0.4 }}
                       >
-                        <Badge style={{ backgroundColor: meta?.color }} className="cursor-pointer gap-1 text-white hover:opacity-90">
+                        <Badge style={estiloDeInsignia(meta?.color)} className="cursor-pointer gap-1 hover:opacity-90">
                           <Icon className="size-3.5" />{meta?.label ?? t}
                         </Badge>
                       </button>
@@ -284,7 +285,7 @@ export function Logs() {
                                   <tr key={`${g.fecha}-${i}`} className="border-b last:border-0 hover:bg-muted/30">
                                     <td className="p-3 font-mono text-xs text-muted-foreground">{horaDe(r.ts)}</td>
                                     <td className="p-3">
-                                      <Badge style={{ backgroundColor: meta?.color }} className="gap-1 text-white">
+                                      <Badge style={estiloDeInsignia(meta?.color)} className="gap-1">
                                         <Icon className="size-3.5" />{meta?.label ?? r.tipo}
                                       </Badge>
                                     </td>

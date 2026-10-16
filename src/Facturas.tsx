@@ -52,13 +52,13 @@ import { formatoMoneda } from './formatos'
 const TIPO_BADGE: Record<number, { label: string; titulo: string; className: string }> = {
   1: { label: 'FA', titulo: 'Factura A', className: 'bg-primary text-primary-foreground' },
   6: { label: 'FB', titulo: 'Factura B', className: 'bg-secondary text-secondary-foreground' },
-  11: { label: 'FC', titulo: 'Factura C', className: 'bg-sky-500 text-white' },
-  3: { label: 'NCA', titulo: 'Nota de Crédito A', className: 'bg-destructive text-white' },
-  8: { label: 'NCB', titulo: 'Nota de Crédito B', className: 'bg-destructive text-white' },
-  13: { label: 'NCC', titulo: 'Nota de Crédito C', className: 'bg-destructive text-white' },
+  11: { label: 'FC', titulo: 'Factura C', className: 'bg-sky-700 text-white' },
+  3: { label: 'NCA', titulo: 'Nota de Crédito A', className: 'bg-destructive text-white dark:bg-destructive/60' },
+  8: { label: 'NCB', titulo: 'Nota de Crédito B', className: 'bg-destructive text-white dark:bg-destructive/60' },
+  13: { label: 'NCC', titulo: 'Nota de Crédito C', className: 'bg-destructive text-white dark:bg-destructive/60' },
   2: { label: 'NDA', titulo: 'Nota de Débito A', className: 'bg-primary text-primary-foreground' },
   7: { label: 'NDB', titulo: 'Nota de Débito B', className: 'bg-secondary text-secondary-foreground' },
-  12: { label: 'NDC', titulo: 'Nota de Débito C', className: 'bg-sky-500 text-white' },
+  12: { label: 'NDC', titulo: 'Nota de Débito C', className: 'bg-sky-700 text-white' },
 }
 
 /** Una factura **sin CAE no es un error**: existe, tiene número, y lo que falta

@@ -81,7 +81,8 @@ export function TutorialNote({ tone = 'info', children }: { tone?: 'info' | 'war
   )
 }
 
-const AZUL_MERCADOPAGO = 'bg-[#009ee3]'
+// El azul de MercadoPago oscurecido lo justo (#009ee3 → #007eb6): blanco sobre el original da 3,0:1 y el texto es `text-xs` (WCAG AA pide 4,5:1; ADR-067).
+const AZUL_MERCADOPAGO = 'bg-[#007eb6]'
 const AZUL_ARCA = 'bg-[#1a3a5c]'
 
 /** Cómo sacar las cuatro credenciales de MercadoPago. */
@@ -197,7 +198,7 @@ export function TutorialArcaPadron({ producto }: { producto: string }) {
  *  de la cuenta. */
 export function TutorialGmail({ producto }: { producto: string }) {
   return (
-    <Tutorial badge="Gmail" badgeClassName="bg-destructive" title="¿Cómo configurar Gmail con una contraseña de aplicación?">
+    <Tutorial badge="Gmail" badgeClassName="bg-destructive dark:bg-destructive/60" title="¿Cómo configurar Gmail con una contraseña de aplicación?">
       <p className="text-sm text-muted-foreground">
         Gmail <strong>no permite usar tu contraseña normal</strong> para enviar emails desde apps externas.
         Necesitás generar una <strong>contraseña de aplicación</strong> de 16 caracteres. Seguí estos pasos:

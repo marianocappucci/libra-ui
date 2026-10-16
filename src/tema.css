@@ -81,8 +81,11 @@ html {
 
 /* Éxito y encabezado del POS tienen defecto acá. El acento (`--primary`) NO: su defecto es el de cada producto (lo fija `aplicarIdentidad`) y
    `aplicarTema` sólo lo pisa cuando se elige uno. La barra lateral SÍ lo tiene desde ADR-042: ver el bloque de abajo. */
+/* 🔴 El éxito pleno es emerald-700 (#047857), no emerald-600 (#059669): el botón «Registrar pago» y todo `bg-exito text-exito-foreground` llevan texto
+   blanco chico, y blanco sobre #059669 da 3,77:1 (el e2e de Contalibra, WCAG AA pide 4,5:1); sobre #047857 da 5,5:1. Es el mismo verde que ya era el
+   éxito como texto en claro, así que `text-exito` y `bg-exito` coinciden. ADR-067. */
 :root {
-  --libra-exito: #059669;
+  --libra-exito: #047857;
   --libra-exito-texto: #ffffff;
   /* El éxito usado como TEXTO, ajustado por modo a 4,5:1 (el defecto es emerald-700 en claro y emerald-400 en oscuro, como antes de ADR-009). */
   --libra-exito-como-texto-claro: #047857;

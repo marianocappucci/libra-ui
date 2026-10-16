@@ -14,6 +14,7 @@ import { ArrowDownCircle, ArrowLeft, ArrowUpCircle, CheckCircle2, Receipt, StopC
 import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
 import { fechaHora } from '../fechas'
+import { Table } from '../ui/table'
 
 function DiferenciaBadge({ esperado, declarado }: { esperado: number | null; declarado: number | null }) {
   if (esperado === null || declarado === null) return <span className="text-muted-foreground">—</span>
@@ -137,7 +138,7 @@ export function TurnoDetalle() {
               {resumen.ventas.length === 0 ? (
                 <p className="p-4 text-center text-sm text-muted-foreground">No hay ventas en este turno todavía.</p>
               ) : (
-                <table className="w-full text-sm">
+                <Table>
                   <thead className="border-b text-muted-foreground">
                     <tr>
                       <th className="p-3 text-left font-medium">N°</th>
@@ -158,7 +159,7 @@ export function TurnoDetalle() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </Table>
               )}
             </CardContent>
           </Card>

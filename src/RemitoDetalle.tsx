@@ -15,6 +15,7 @@ import { ArrowLeft, FileDown, Trash2 } from 'lucide-react'
 import { TituloPantalla } from './titulo-pantalla'
 import { ICONOS } from './iconos-identidad'
 import { fecha } from './fechas'
+import { Table } from './ui/table'
 
 export function RemitoDetalle({ urlDelPdf = (id: number) => `/remitos/${id}/pdf` }: {
   urlDelPdf?: (id: number) => string
@@ -101,7 +102,7 @@ export function RemitoDetalle({ urlDelPdf = (id: number) => `/remitos/${id}/pdf`
           <Card>
             <CardHeader><CardTitle className="text-base">Ítems</CardTitle></CardHeader>
             <CardContent className="p-0">
-              <table className="w-full text-sm">
+              <Table>
                 <thead className="border-b text-muted-foreground">
                   <tr>
                     <th className="p-3 text-left font-medium">Descripción</th>
@@ -116,7 +117,7 @@ export function RemitoDetalle({ urlDelPdf = (id: number) => `/remitos/${id}/pdf`
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </Table>
             </CardContent>
           </Card>
 

@@ -62,6 +62,7 @@ import type { ComponentType, ReactNode } from 'react'
 import { TituloPantalla } from './titulo-pantalla'
 import { ICONOS } from './iconos-identidad'
 import { SelectBuscable } from './SelectBuscable'
+import { estiloDeInsignia } from './color-de-insignia'
 
 const TODOS = '__todos__'
 
@@ -102,9 +103,9 @@ export type LogsData = {
  *  una etiqueta ("qué pasó"), y en una lista sin columnas un icono a secas se
  *  pierde entre el nombre de usuario y la IP. */
 const EVENTO_META: Record<string, { label: string; icon: typeof LogIn; className: string }> = {
-  login: { label: 'Ingreso', icon: LogIn, className: 'bg-emerald-600 text-white hover:bg-emerald-600' },
-  logout: { label: 'Salida', icon: LogOut, className: 'bg-muted-foreground text-white hover:bg-muted-foreground' },
-  login_fallido: { label: 'Intento fallido', icon: ShieldAlert, className: 'bg-destructive text-white hover:bg-destructive' },
+  login: { label: 'Ingreso', icon: LogIn, className: 'bg-emerald-700 text-white hover:bg-emerald-700' },
+  logout: { label: 'Salida', icon: LogOut, className: 'bg-slate-600 text-white hover:bg-slate-600' },
+  login_fallido: { label: 'Intento fallido', icon: ShieldAlert, className: 'bg-destructive text-white hover:bg-destructive dark:bg-destructive/60 dark:hover:bg-destructive/60' },
 }
 
 /** `2026-08-05 14:32:10` → `["05-08-2026", "14:32:10"]`.
@@ -303,7 +304,7 @@ export function Logs({ basePath = '/logs', icono = ICONOS.logDeActividad }: {
                         className="rounded-full transition-opacity"
                         style={{ opacity: elegida ? 1 : 0.4 }}
                       >
-                        <Badge style={{ backgroundColor: meta.color }} className="cursor-pointer gap-1 text-white hover:opacity-90">
+                        <Badge style={estiloDeInsignia(meta.color)} className="cursor-pointer gap-1 hover:opacity-90">
                           {meta.label}
                         </Badge>
                       </button>
@@ -432,8 +433,7 @@ export function Logs({ basePath = '/logs', icono = ICONOS.logDeActividad }: {
                                     {partirTs(fila.ts).hora}
                                   </td>
                                   <td className="p-3">
-                                    <Badge style={meta ? { backgroundColor: meta.color } : undefined}
-                                      className={meta ? 'text-white' : undefined}
+                                    <Badge style={meta ? estiloDeInsignia(meta.color) : undefined}
                                       variant={meta ? undefined : 'outline'}>
                                       {meta?.label ?? fila.accion}
                                     </Badge>

@@ -20,6 +20,7 @@ import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
 import { hoyISO, primerDiaDelMesISO, fecha } from '../fechas'
 import { formatoMoneda } from '../formatos'
+import { Table } from '../ui/table'
 
 /** Alícuota de una compra, en puntos (21, no 0.21).
  *
@@ -56,7 +57,7 @@ function ResumenPorTasa({ resumen, ivaColorClass }: { resumen: ResumenIva; ivaCo
     <Card>
       <CardHeader><CardTitle className="text-base">Resumen por alícuota</CardTitle></CardHeader>
       <CardContent className="p-0">
-        <table className="w-full text-sm">
+        <Table>
           <thead className="border-b text-muted-foreground">
             <tr>
               <th className="p-3 text-left font-medium">Alícuota IVA</th>
@@ -82,7 +83,7 @@ function ResumenPorTasa({ resumen, ivaColorClass }: { resumen: ResumenIva; ivaCo
               <td className={`p-3 text-right ${ivaColorClass}`}>{formatoMoneda(resumen.iva)}</td>
             </tr>
           </tfoot>
-        </table>
+        </Table>
       </CardContent>
     </Card>
   )

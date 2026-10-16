@@ -224,10 +224,16 @@ describe('los colores ampliados (ADR-009)', () => {
     expect(luminancia(el.style.getPropertyValue('--sidebar-border'))).toBeGreaterThan(luminancia(el.style.getPropertyValue('--sidebar-accent')))
   })
 
-  it('el éxito conserva el texto blanco mientras llegue a 3:1 y se rechaza si se pierde en un modo', () => {
+  it('el éxito conserva el texto blanco mientras llegue a 4,5:1 (AA, ADR-067) y se rechaza si se pierde en un modo', () => {
     const el = limpio()
-    aplicarTema({ exito: '#059669' }, el)
+    aplicarTema({ exito: '#047857' }, el)
     expect(el.style.getPropertyValue('--libra-exito-texto')).toBe('#ffffff')
+    // El verde de antes (#059669) daba 3,77:1 con blanco —el «Registrar pago» que midió el e2e de Contalibra—: elegido a mano ya no lleva blanco,
+    // se le calcula un texto oscuro que sí llega.
+    aplicarTema({ exito: '#059669' }, el)
+    const texto = el.style.getPropertyValue('--libra-exito-texto')
+    expect(texto).not.toBe('#ffffff')
+    expect(contraste('#059669', texto)).toBeGreaterThanOrEqual(4.5)
     expect(validarTema({ exito: '#bbf7d0' }).errores.exito).toBeTruthy()
     expect(validarTema({ exito: '#052e16' }).errores.exito).toBeTruthy()
   })
