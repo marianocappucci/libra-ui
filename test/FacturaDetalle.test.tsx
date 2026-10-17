@@ -697,6 +697,64 @@ describe('el estado de cobro con notas de crédito (ADR-059 del motor)', () => {
   })
 })
 
+describe('lo cobrable: facturas, FCE y notas de débito (ADR-074)', () => {
+  const conTipo = (tipo: number, resto: Partial<FacturaDetalleType> = {}): FacturaDetalleType =>
+    ({ ...CON_CAE, factura: { ...CON_CAE.factura, tipo }, ...resto })
+
+  it('una nota de débito ofrece «Registrar cobro» y dice lo que falta', async () => {
+    montar(conTipo(12, { tipo_label: 'NOTA DE DÉBITO C', pendiente: 1000, factura_original: { ...CON_CAE.factura, id: 9, numero: 7 } }))
+    expect(await screen.findByText('Pendiente de cobro')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /Registrar cobro/ }))
+    expect(await screen.findByDisplayValue('1000')).toBeInTheDocument()
+  })
+
+  it('una nota de débito cobrada por completo dice «Cobrado completo»', async () => {
+    montar(conTipo(12, {
+      cobros: [{ id: 1, monto: 1000, medio_pago: 'efectivo', fecha: '2026-08-04', referencia: '' }], total_cobrado: 1000, pendiente: 0,
+    }))
+    expect(await screen.findByText('Cobrado completo')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Registrar cobro/ })).toBeNull()
+  })
+
+  it('una Factura de Crédito Electrónica (FCE) ofrece «Registrar cobro»', async () => {
+    montar(conTipo(211, { tipo_label: 'FCE MIPYME C' }))
+    expect(await screen.findByRole('button', { name: /Registrar cobro/ })).toBeInTheDocument()
+  })
+
+  it('una nota de crédito no se cobra: no hay panel de cobro', async () => {
+    montar(conTipo(13, { tipo_label: 'NOTA DE CRÉDITO C' }))
+    await screen.findByRole('button', { name: /Duplicar/ })
+    expect(screen.queryByText(/Pendiente de cobro/)).toBeNull()
+    expect(screen.queryByRole('button', { name: /Registrar cobro/ })).toBeNull()
+  })
+
+  it('emitir una nota sigue siendo de las facturas (también la FCE), no de lo cobrable: sobre una nota de débito no se ofrece', async () => {
+    montar(conTipo(211), { esAdmin: true })
+    expect(await screen.findByRole('button', { name: /Nota de Crédito/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Nota de Débito/ })).toBeInTheDocument()
+    cleanup()
+    montar(conTipo(12), { esAdmin: true })
+    await screen.findByRole('button', { name: /Registrar cobro/ })
+    expect(screen.queryByRole('button', { name: /Nota de Crédito/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Nota de Débito/ })).toBeNull()
+  })
+
+  it('la pregunta de qué hacer con la plata de la nota la hace una FCE cobrada, no una nota de débito cobrada', async () => {
+    const cobrada = (tipo: number) => conTipo(tipo, {
+      cobros: [{ id: 1, monto: 1000, medio_pago: 'efectivo', fecha: '2026-08-03', referencia: '' }], total_cobrado: 1000, pendiente: 0,
+    })
+    const pidioElDestino = () => fetchMock.mock.calls.some((c) => String(c[0]).includes('/nota-credito/destino'))
+    montar(cobrada(211), { esAdmin: true })
+    await screen.findByRole('button', { name: /Nota de Crédito/ })
+    await waitFor(() => expect(pidioElDestino()).toBe(true))
+    cleanup()
+    fetchMock.mockClear()
+    montar(cobrada(12), { esAdmin: true })
+    await screen.findByText('Cobrado completo')
+    expect(pidioElDestino()).toBe(false)
+  })
+})
+
 describe('las rutas de los documentos', () => {
   // 🔴 Estaban hardcodeadas sin `/api`, porque en Contalibra y Restolibra las
   // sirve su router Jinja2 viejo. En LibraClub —que no lo tiene— «Ver PDF»

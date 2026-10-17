@@ -47,6 +47,7 @@ import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs'
 import { formatoMoneda } from './formatos'
 import { acreditadoDe, estadoDeCobro, pendienteDe, puedeCobrar } from './estado-de-cobro'
+import { esCobrable } from './tipos-de-comprobante'
 
 // Etiquetas cortas (FA/FB/FC, NCA…, NDA…) para que la columna Tipo ocupe lo
 // mínimo — el nombre completo queda en el `title` de cada badge.
@@ -190,10 +191,13 @@ export function Facturas({
   }
 
   const esNota = vista === 'nc' || vista === 'nd'
+  // Se cobra lo cobrable (ADR-074): las facturas y las notas de débito, no las de crédito. Lo decide el tipo de cada fila, con la lista del
+  // kit (`tipos-de-comprobante`); la vista sólo dice si hay alguna fila que se cobre, para dimensionar la columna de acciones.
+  const hayCobrables = vista !== 'nc'
 
   // El PDF está siempre; el detalle y el cobro dependen del producto.
   const cuantosBotones = 1 + (rutaDelDetalle ? 1 : 0)
-    + (rutaDelDetalle && muestraCobros && !esNota ? 1 : 0)
+    + (rutaDelDetalle && muestraCobros && hayCobrables ? 1 : 0)
 
   const columns = useMemo<ColumnDef<Factura>[]>(() => {
     const cols: ColumnDef<Factura>[] = [
@@ -288,7 +292,7 @@ export function Facturas({
         }
         // Sin cruce de cobros no se puede decir más que «autorizada»: inventar
         // un «Sin cobrar» sería mentirle al que ya cobró en efectivo.
-        if (esNota || !muestraCobros) {
+        if (!esCobrable(f.tipo) || !muestraCobros) {
           return <BadgeEstado tono="ok"><CheckCircle2 />Autorizada</BadgeEstado>
         }
         // La cuenta es la del motor (`pendiente`, `total_acreditado`: ADR-059) y se lee en `estado-de-cobro.ts`,
@@ -330,7 +334,7 @@ export function Facturas({
       minSize: anchoColumnaAcciones(cuantosBotones),
       cell: ({ row }) => {
         const f = row.original
-        const sePuedeCobrar = Boolean(rutaDelDetalle) && muestraCobros && !esNota
+        const sePuedeCobrar = Boolean(rutaDelDetalle) && muestraCobros && esCobrable(f.tipo)
           && estaAutorizada(f) && puedeCobrar(f)
         return (
           <div className={`flex justify-end gap-1 ${TACTIL_BAJO_LG}`}>
