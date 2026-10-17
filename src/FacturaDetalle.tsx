@@ -16,6 +16,11 @@ import {
   type BorradorDuplicado, type Caja, type Factura,
   type FacturaDetalle as FacturaDetalleType,
 } from './facturas'
+import { DestinoDeNotaDeCredito } from './DestinoDeNotaDeCredito'
+import {
+  SIN_ELEGIR, avisoDeReintegro, cuerpoDeDestino, faltaElegirDestino, useOfertaDeDestino,
+  type DestinoElegido,
+} from './destino-de-nota'
 import { etiqueta } from './medios-pago'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -23,7 +28,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import {
-  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose,
 } from './ui/dialog'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import {
@@ -231,6 +236,8 @@ export function FacturaDetalle({
   const [mediosDelMotor, setMediosDelMotor] = useState<{ id: string; label: string }[]>([])
   const [confirmNota, setConfirmNota] = useState<'nota-credito' | 'nota-debito' | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  // Qué hacer con la plata si la factura es al contado y ya se cobró (ADR-073): el motor dice si hay algo que preguntar.
+  const [destinoElegido, setDestinoElegido] = useState<DestinoElegido>(SIN_ELEGIR)
 
   useEffect(() => {
     // 🔴 **Se comprueba la forma, igual que abajo con los medios.** El producto
@@ -360,13 +367,30 @@ export function FacturaDetalle({
     }
   }
 
+  // El motor dice si la nota de crédito de esta factura deja plata cobrada de más. Sólo tiene sentido en una factura al contado
+  // que ya se cobró; en cualquier otra no se pregunta nada y la pantalla es la de siempre.
+  const preguntaDestino = esAdmin && detalle !== null && [1, 6, 11].includes(detalle.factura.tipo)
+    && detalle.factura.condicion_venta !== 'Cuenta Corriente' && detalle.total_cobrado > 0
+  const { oferta: ofertaDeDestino, cargando: cargandoOferta } = useOfertaDeDestino(
+    preguntaDestino ? `/api/facturas/${facturaId}/nota-credito/destino` : null, null)
+
   async function crearNota(kind: 'nota-credito' | 'nota-debito') {
     if (!detalle) return
     setSaving(true)
     setError(null)
     try {
-      const nueva = await api.post<Factura>(`/api/facturas/${facturaId}/${kind}`)
-      navigate(`/facturas/${nueva.id}`)
+      const destino = kind === 'nota-credito' ? cuerpoDeDestino(ofertaDeDestino, destinoElegido) : {}
+      const nueva = Object.keys(destino).length > 0
+        ? await api.post<Factura>(`/api/facturas/${facturaId}/${kind}`, destino)
+        : await api.post<Factura>(`/api/facturas/${facturaId}/${kind}`)
+      // Sin CAE la nota queda, pero la plata no se movió: se queda en la factura para que se lea el aviso del motor.
+      const aviso = avisoDeReintegro(nueva)
+      if (aviso) {
+        await cargar()
+        setError(aviso)
+      } else {
+        navigate(`/facturas/${nueva.id}`)
+      }
     } catch (err) {
       setError(describeError(err))
     } finally {
@@ -623,7 +647,7 @@ export function FacturaDetalle({
             {esAdmin && [1, 6, 11].includes(detalle.factura.tipo) && (
               <>
                 <Button size="sm" variant="outline" disabled={saving} onClick={() => setConfirmNota('nota-debito')}><FilePlus />Nota de Débito</Button>
-                <Button size="sm" variant="outline" disabled={saving} onClick={() => setConfirmNota('nota-credito')}><FileMinus />Nota de Crédito</Button>
+                <Button size="sm" variant="outline" disabled={saving || cargandoOferta} onClick={() => { setDestinoElegido(SIN_ELEGIR); setConfirmNota('nota-credito') }}><FileMinus />Nota de Crédito</Button>
               </>
             )}
             <Button size="sm" variant="outline" onClick={duplicar}><Copy />Duplicar</Button>
@@ -674,18 +698,43 @@ export function FacturaDetalle({
             </DialogContent>
           </Dialog>
 
-          <ConfirmDialog
-            open={confirmNota !== null}
-            onOpenChange={(o) => !o && setConfirmNota(null)}
-            title={`¿Generar ${confirmNota ? notaLabel(confirmNota) : ''}?`}
-            description={confirmNota ? (
+          {(() => {
+            const descripcion = confirmNota ? (
               `Estás por generar una ${notaLabel(confirmNota)} que ${notaRelacion(confirmNota)} el comprobante `
               + `${labelComprobante(detalle.factura)} (${detalle.factura.cliente_razon}) por ${formatoMoneda(detalle.factura.total)}. `
               + 'Esta acción no se puede deshacer y enviará el comprobante a ARCA para su autorización.'
-            ) : undefined}
-            confirmLabel="Generar"
-            onConfirm={() => { if (confirmNota) crearNota(confirmNota); setConfirmNota(null) }}
-          />
+            ) : undefined
+            // Con plata que mover la confirmación lleva la elección: es un diálogo común, que no se cierra solo al apretar «Generar».
+            const conDestino = confirmNota === 'nota-credito' && ofertaDeDestino !== null
+            return (
+              <>
+                <ConfirmDialog
+                  open={confirmNota !== null && !conDestino}
+                  onOpenChange={(o) => !o && setConfirmNota(null)}
+                  title={`¿Generar ${confirmNota ? notaLabel(confirmNota) : ''}?`}
+                  description={descripcion}
+                  confirmLabel="Generar"
+                  onConfirm={() => { if (confirmNota) crearNota(confirmNota); setConfirmNota(null) }}
+                />
+                {conDestino && (
+                  <Dialog open onOpenChange={(o) => !o && setConfirmNota(null)}>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>¿Generar Nota de Crédito?</DialogTitle>
+                        <DialogDescription>{descripcion}</DialogDescription>
+                      </DialogHeader>
+                      <DestinoDeNotaDeCredito oferta={ofertaDeDestino} elegido={destinoElegido} onChange={setDestinoElegido} />
+                      <DialogFooter>
+                        <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
+                        <Button disabled={saving || faltaElegirDestino(ofertaDeDestino, destinoElegido)}
+                                onClick={() => { crearNota('nota-credito'); setConfirmNota(null) }}>Generar</Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                )}
+              </>
+            )
+          })()}
 
           <ConfirmDialog
             open={confirmDelete}

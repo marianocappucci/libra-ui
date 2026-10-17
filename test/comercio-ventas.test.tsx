@@ -576,7 +576,7 @@ describe('VentaDetalle', () => {
       montarDetalle(21, { puedeAnular: true, puedeEmitirNota: true })
       await user.click(await screen.findByRole('button', { name: /Emitir nota de crédito/ }))
       await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancelar' }))
-      expect(pedidas().filter((p) => p.includes('nota-credito'))).toHaveLength(0)
+      expect(pedidas().filter((p) => p.startsWith('POST') && p.includes('nota-credito'))).toHaveLength(0)
       await user.click(screen.getByRole('button', { name: /Emitir nota de crédito/ }))
       await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Emitir nota' }))
       expect((await screen.findByRole('note')).textContent).toMatch(/ya podés anular la venta/)
@@ -701,10 +701,11 @@ describe('VentaDetalle', () => {
           expect(dialogo.getByRole('alert').textContent).toMatch(/no más que el saldo/)
         }
         fireEvent.change(campo, { target: { value: '45,50' } })
-        expect(emitir).toBeEnabled()
+        // Con un importe nuevo el botón espera la respuesta del motor sobre el destino de la plata (ADR-073).
+        await waitFor(() => expect(emitir).toBeEnabled())
         await user.click(emitir)
         await waitFor(() => expect(pedidas()).toContain('POST /api/facturas/55/nota-credito'))
-        const llamada = fetchMock.mock.calls.find((c) => String(c[0]).includes('/nota-credito'))!
+        const llamada = fetchMock.mock.calls.find((c) => (c[1] as RequestInit | undefined)?.method === 'POST' && String(c[0]).includes('/nota-credito'))!
         expect(JSON.parse(String((llamada[1] as RequestInit).body))).toEqual({ importe: 45.5 })
       })
 
@@ -740,6 +741,139 @@ describe('VentaDetalle', () => {
         expect(aviso.textContent).toMatch(/130,00/)
         expect(aviso.textContent).toMatch(/administrador/)
         expect(screen.queryByRole('button', { name: /Emitir nota de crédito/ })).toBeNull()
+      })
+
+      // ── Qué pasa con la plata de una factura al contado cobrada (libracore v1.176.0, ADR-065; kit ADR-073) ──
+      describe('el destino de la plata', () => {
+        const OFERTA = {
+          aplica: true, monto: 180, excedente: 0, medios: [{ id: 'efectivo', label: 'Efectivo' }, { id: 'transferencia', label: 'Transferencia' }],
+          medio_sugerido: 'efectivo', cliente_identificado: true, sin_turno: false,
+        }
+        const URL_DESTINO = '/api/facturas/55/nota-credito/destino'
+
+        function cuerpoDelPost(): unknown {
+          const llamada = fetchMock.mock.calls.find((c) => (c[1] as RequestInit | undefined)?.method === 'POST' && String(c[0]).includes('/nota-credito'))
+          return llamada ? JSON.parse(String((llamada[1] as RequestInit).body ?? 'null')) : undefined
+        }
+
+        it('con plata que mover pregunta, no deja emitir sin elegir y manda «devolver» con el medio sugerido', async () => {
+          responder({ ...BASE, '/api/ventas/21': CON_SALDO, [URL_DESTINO]: OFERTA, 'POST /api/facturas/55/nota-credito': {} })
+          const user = userEvent.setup()
+          montarDetalle(21, { puedeAnular: true, puedeEmitirNota: true })
+          const dialogo = await abrirDialogo(user)
+          const emitir = dialogo.getByRole('button', { name: 'Emitir nota' })
+          await dialogo.findByText('¿Qué pasa con la plata?')
+          expect(emitir).toBeDisabled()
+          expect(dialogo.getByText(/Elegí una opción/)).toBeTruthy()
+          await user.click(dialogo.getByLabelText(/Devolver/))
+          await waitFor(() => expect(emitir).toBeEnabled())
+          await user.click(emitir)
+          await waitFor(() => expect(pedidas()).toContain('POST /api/facturas/55/nota-credito'))
+          expect(cuerpoDelPost()).toEqual({ destino: 'devolver', medio_pago: 'efectivo' })
+        })
+
+        it('«Dejar a favor del cliente» manda sólo el destino', async () => {
+          responder({ ...BASE, '/api/ventas/21': CON_SALDO, [URL_DESTINO]: OFERTA, 'POST /api/facturas/55/nota-credito': {} })
+          const user = userEvent.setup()
+          montarDetalle(21, { puedeAnular: true, puedeEmitirNota: true })
+          const dialogo = await abrirDialogo(user)
+          await user.click(await dialogo.findByLabelText('Dejar a favor del cliente'))
+          await user.click(dialogo.getByRole('button', { name: 'Emitir nota' }))
+          await waitFor(() => expect(pedidas()).toContain('POST /api/facturas/55/nota-credito'))
+          expect(cuerpoDelPost()).toEqual({ destino: 'a_favor' })
+        })
+
+        it('sin cliente identificado «a favor» está deshabilitada y dice por qué', async () => {
+          responder({ ...BASE, '/api/ventas/21': CON_SALDO, [URL_DESTINO]: { ...OFERTA, cliente_identificado: false } })
+          const user = userEvent.setup()
+          montarDetalle(21, { puedeAnular: true, puedeEmitirNota: true })
+          const dialogo = await abrirDialogo(user)
+          expect(await dialogo.findByLabelText('Dejar a favor del cliente')).toBeDisabled()
+          expect(dialogo.getByText(/no tiene un cliente identificado/)).toBeTruthy()
+        })
+
+        it('si se cobró con varios medios hay que elegir cuál; el elegido viaja como medio_pago', async () => {
+          responder({
+            ...BASE, '/api/ventas/21': CON_SALDO, [URL_DESTINO]: { ...OFERTA, medio_sugerido: null },
+            'POST /api/facturas/55/nota-credito': {},
+          })
+          const user = userEvent.setup()
+          montarDetalle(21, { puedeAnular: true, puedeEmitirNota: true })
+          const dialogo = await abrirDialogo(user)
+          await user.click(await dialogo.findByLabelText(/Devolver/))
+          const emitir = dialogo.getByRole('button', { name: 'Emitir nota' })
+          expect(emitir).toBeDisabled()
+          expect(dialogo.getByText(/más de un medio/)).toBeTruthy()
+          await elegirEnBuscable(user, dialogo.getByRole('combobox', { name: 'Medio con el que se devuelve' }), 'Transferencia')
+          await waitFor(() => expect(emitir).toBeEnabled())
+          await user.click(emitir)
+          await waitFor(() => expect(pedidas()).toContain('POST /api/facturas/55/nota-credito'))
+          expect(cuerpoDelPost()).toEqual({ destino: 'devolver', medio_pago: 'transferencia' })
+        })
+
+        it('sin turno abierto «Devolver» no se puede y el aviso lo dice', async () => {
+          responder({ ...BASE, '/api/ventas/21': CON_SALDO, [URL_DESTINO]: { ...OFERTA, sin_turno: true } })
+          const user = userEvent.setup()
+          montarDetalle(21, { puedeAnular: true, puedeEmitirNota: true })
+          const dialogo = await abrirDialogo(user)
+          expect(await dialogo.findByLabelText(/Devolver/)).toBeDisabled()
+          expect(dialogo.getByRole('alert').textContent).toBe('No hay una caja abierta. Abrí el turno antes de devolver.')
+        })
+
+        it('con una nota por un importe pregunta por ESE importe y lo manda junto con el destino', async () => {
+          let importePreguntado = ''
+          responder({
+            ...BASE, '/api/ventas/21': CON_SALDO,
+            [URL_DESTINO]: OFERTA, 'POST /api/facturas/55/nota-credito': {},
+          })
+          const previo = fetchMock.getMockImplementation()!
+          fetchMock.mockImplementation((entrada: RequestInfo | URL, init?: RequestInit) => {
+            if (String(entrada).startsWith(`${URL_DESTINO}?importe=`)) {
+              importePreguntado = String(entrada).split('=')[1]
+              return Promise.resolve(json({ ...OFERTA, monto: 45.5 }))
+            }
+            return previo(entrada, init)
+          })
+          const user = userEvent.setup()
+          montarDetalle(21, { puedeAnular: true, puedeEmitirNota: true })
+          const dialogo = await abrirDialogo(user)
+          await user.click(dialogo.getByLabelText('Por un importe'))
+          fireEvent.change(dialogo.getByLabelText(/Importe a acreditar/), { target: { value: '45,50' } })
+          await waitFor(() => expect(importePreguntado).toBe('45.5'))
+          await user.click(await dialogo.findByLabelText('Dejar a favor del cliente'))
+          const emitir = dialogo.getByRole('button', { name: 'Emitir nota' })
+          await waitFor(() => expect(emitir).toBeEnabled())
+          await user.click(emitir)
+          await waitFor(() => expect(pedidas()).toContain('POST /api/facturas/55/nota-credito'))
+          expect(cuerpoDelPost()).toEqual({ importe: 45.5, destino: 'a_favor' })
+        })
+
+        it('si la nota sale sin CAE (la plata no se movió) el aviso del motor se muestra', async () => {
+          const AVISO = 'La nota todavía no tiene CAE, así que la plata no se movió: autorizala y hacé el movimiento a mano.'
+          responder({
+            ...BASE, '/api/ventas/21': CON_SALDO, [URL_DESTINO]: OFERTA,
+            'POST /api/facturas/55/nota-credito': { id: 9, reintegro: { movido: false, motivo: AVISO } },
+          })
+          const user = userEvent.setup()
+          montarDetalle(21, { puedeAnular: true, puedeEmitirNota: true })
+          const dialogo = await abrirDialogo(user)
+          await user.click(await dialogo.findByLabelText(/Devolver/))
+          await user.click(dialogo.getByRole('button', { name: 'Emitir nota' }))
+          expect((await screen.findByRole('alert')).textContent).toContain('la plata no se movió')
+        })
+
+        it('un motor que no ofrece la ruta (o no hay plata que mover) deja el diálogo como estaba', async () => {
+          responder({ ...BASE, '/api/ventas/21': CON_SALDO, [URL_DESTINO]: { ...OFERTA, aplica: false }, 'POST /api/facturas/55/nota-credito': {} })
+          const user = userEvent.setup()
+          montarDetalle(21, { puedeAnular: true, puedeEmitirNota: true })
+          const dialogo = await abrirDialogo(user)
+          const emitir = dialogo.getByRole('button', { name: 'Emitir nota' })
+          await waitFor(() => expect(emitir).toBeEnabled())
+          expect(dialogo.queryByText('¿Qué pasa con la plata?')).toBeNull()
+          await user.click(emitir)
+          await waitFor(() => expect(pedidas()).toContain('POST /api/facturas/55/nota-credito'))
+          expect(cuerpoDelPost()).toEqual({})   // sin cuerpo útil: la nota total de siempre
+        })
       })
 
       it('un servidor sin el saldo (motor anterior) sigue ofreciendo sólo la nota total', async () => {

@@ -804,3 +804,106 @@ describe('envíos por mail', () => {
     expect(await screen.findByText('Todavía no se envió por mail.')).toBeTruthy()
   })
 })
+
+// ── Qué pasa con la plata de una factura al contado cobrada (libracore v1.176.0, ADR-065; kit ADR-073) ──
+describe('la nota de crédito de una factura cobrada pregunta qué hacer con la plata', () => {
+  const COBRADA: FacturaDetalleType = {
+    ...CON_CAE,
+    cobros: [{ id: 1, monto: 1000, medio_pago: 'efectivo', fecha: '2026-08-03', referencia: '' }],
+    total_cobrado: 1000, pendiente: 0,
+  }
+  const OFERTA = {
+    aplica: true, monto: 1000, excedente: 0, medios: [{ id: 'efectivo', label: 'Efectivo' }, { id: 'transferencia', label: 'Transferencia' }],
+    medio_sugerido: 'efectivo', cliente_identificado: true, sin_turno: false,
+  }
+
+  function montarConOferta(detalle: FacturaDetalleType, oferta: unknown, respuestaNota: unknown = { id: 9 }) {
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      const u = String(url)
+      if (u.endsWith('/nota-credito/destino')) return Promise.resolve(oferta === '!caida' ? json({ detail: 'no' }, 404) : json(oferta))
+      if (init?.method === 'POST' && u.endsWith('/nota-credito')) return Promise.resolve(json(respuestaNota))
+      return Promise.resolve(respuestaComun(u, []) ?? json(detalle))
+    })
+    render(
+      <MemoryRouter initialEntries={['/facturas/1']}>
+        <Routes>
+          <Route path="/facturas/:id" element={<FacturaDetalle esAdmin />} />
+          <Route path="/facturas/9" element={<p>La nota nueva</p>} />
+        </Routes>
+      </MemoryRouter>,
+    )
+  }
+
+  function cuerpoDelPost(): unknown {
+    const llamada = fetchMock.mock.calls.find((c) => (c[1] as RequestInit | undefined)?.method === 'POST' && String(c[0]).endsWith('/nota-credito'))
+    return llamada ? JSON.parse(String((llamada[1] as RequestInit).body)) : undefined
+  }
+
+  it('hay que elegir antes de generar, y «Devolver» manda el destino con el medio con el que se cobró', async () => {
+    montarConOferta(COBRADA, OFERTA)
+    await userEvent.click(await screen.findByRole('button', { name: /Nota de Crédito/ }))
+
+    const dialogo = within(await screen.findByRole('dialog'))
+    const generar = dialogo.getByRole('button', { name: 'Generar' })
+    expect(dialogo.getByText('¿Qué pasa con la plata?')).toBeInTheDocument()
+    expect(generar).toBeDisabled()
+    await userEvent.click(dialogo.getByLabelText(/Devolver/))
+    expect(generar).toBeEnabled()
+    await userEvent.click(generar)
+
+    expect(await screen.findByText('La nota nueva')).toBeInTheDocument()
+    expect(cuerpoDelPost()).toEqual({ destino: 'devolver', medio_pago: 'efectivo' })
+  })
+
+  it('«Dejar a favor del cliente» manda sólo el destino, sin medio', async () => {
+    montarConOferta(COBRADA, OFERTA)
+    await userEvent.click(await screen.findByRole('button', { name: /Nota de Crédito/ }))
+    const dialogo = within(await screen.findByRole('dialog'))
+    await userEvent.click(dialogo.getByLabelText('Dejar a favor del cliente'))
+    await userEvent.click(dialogo.getByRole('button', { name: 'Generar' }))
+    await screen.findByText('La nota nueva')
+    expect(cuerpoDelPost()).toEqual({ destino: 'a_favor' })
+  })
+
+  it('sin cliente identificado «a favor» no se puede elegir', async () => {
+    montarConOferta(COBRADA, { ...OFERTA, cliente_identificado: false })
+    await userEvent.click(await screen.findByRole('button', { name: /Nota de Crédito/ }))
+    const dialogo = within(await screen.findByRole('dialog'))
+    expect(dialogo.getByLabelText('Dejar a favor del cliente')).toBeDisabled()
+    expect(dialogo.getByText(/no tiene un cliente identificado/)).toBeInTheDocument()
+  })
+
+  it('cancelar no genera nada', async () => {
+    montarConOferta(COBRADA, OFERTA)
+    await userEvent.click(await screen.findByRole('button', { name: /Nota de Crédito/ }))
+    await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancelar' }))
+    expect(cuerpoDelPost()).toBeUndefined()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('si la nota sale sin CAE, se queda en la factura y muestra el aviso del motor', async () => {
+    montarConOferta(COBRADA, OFERTA, { id: 9, reintegro: { movido: false, motivo: 'La plata no se movió: la nota no tiene CAE.' } })
+    await userEvent.click(await screen.findByRole('button', { name: /Nota de Crédito/ }))
+    const dialogo = within(await screen.findByRole('dialog'))
+    await userEvent.click(dialogo.getByLabelText(/Devolver/))
+    await userEvent.click(dialogo.getByRole('button', { name: 'Generar' }))
+    expect(await screen.findByText(/La plata no se movió/)).toBeInTheDocument()
+    expect(screen.queryByText('La nota nueva')).not.toBeInTheDocument()
+  })
+
+  it('un motor que no ofrece la ruta deja la confirmación de siempre', async () => {
+    montarConOferta(COBRADA, '!caida')
+    await userEvent.click(await screen.findByRole('button', { name: /Nota de Crédito/ }))
+    const confirmacion = await screen.findByRole('alertdialog')
+    expect(within(confirmacion).queryByText('¿Qué pasa con la plata?')).not.toBeInTheDocument()
+    await userEvent.click(within(confirmacion).getByRole('button', { name: 'Generar' }))
+    await screen.findByText('La nota nueva')
+    expect(cuerpoDelPost()).toEqual({})
+  })
+
+  it('una factura sin cobrar o a cuenta corriente ni pregunta', async () => {
+    montarConOferta(CON_CAE, OFERTA)
+    await screen.findByRole('button', { name: /Nota de Crédito/ })
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).includes('/nota-credito/destino'))).toBe(false)
+  })
+})

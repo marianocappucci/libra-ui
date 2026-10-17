@@ -19,6 +19,11 @@ import {
 
 import { api, ApiError } from '../api-client'
 import { BadgeEstado } from '../badge-estado'
+import { DestinoDeNotaDeCredito } from '../DestinoDeNotaDeCredito'
+import {
+  SIN_ELEGIR, avisoDeReintegro, cuerpoDeDestino, faltaElegirDestino, useOfertaDeDestino,
+  type DestinoElegido,
+} from '../destino-de-nota'
 import { esElectronico } from '../medios-pago'
 import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
@@ -158,6 +163,8 @@ export function VentaDetalle({
   const [notaParcial, setNotaParcial] = useState(false)
   const [importeNota, setImporteNota] = useState('')
   const [emitiendoNota, setEmitiendoNota] = useState(false)
+  // Qué hacer con la plata de una factura al contado ya cobrada (ADR-073): el motor dice si hay algo que preguntar.
+  const [destinoElegido, setDestinoElegido] = useState<DestinoElegido>(SIN_ELEGIR)
   // Respaldo para un motor que todavía no manda `nota_credito_display` (ADR-035 de libracommerce): con él la nota se lee del detalle y sobrevive a recargar la venta.
   const [notaEmitidaLocal, setNotaEmitidaLocal] = useState(false)
   const errorRef = useRef<HTMLParagraphElement | null>(null)
@@ -216,13 +223,21 @@ export function VentaDetalle({
     setError(null)
     setEmitiendoNota(true)
     try {
-      // Sin cuerpo la nota es TOTAL (como siempre); con `importe`, parcial (libracore v1.130.0).
-      if (notaParcial && importeValido !== null) await api.post(rutaDeNotaDeCredito(detalle.factura_id), { importe: importeValido })
-      else await api.post(rutaDeNotaDeCredito(detalle.factura_id))
+      // Sin cuerpo la nota es TOTAL (como siempre); con `importe`, parcial (libracore v1.130.0). Con plata que mover va también
+      // el destino (libracore v1.176.0, ADR-065).
+      const destino = cuerpoDeDestino(ofertaDeDestino, destinoElegido)
+      const respuesta = notaParcial && importeValido !== null
+        ? await api.post(rutaDeNotaDeCredito(detalle.factura_id), { importe: importeValido, ...destino })
+        : Object.keys(destino).length > 0
+          ? await api.post(rutaDeNotaDeCredito(detalle.factura_id), destino)
+          : await api.post(rutaDeNotaDeCredito(detalle.factura_id))
       setNotaEmitidaLocal(true)
       setConfirmNota(false)
       // Se recarga el detalle: trae la nota emitida (`nota_credito_display`) y deja la pantalla igual a como la vería quien la abra de nuevo.
       await cargar()
+      // La nota salió pero sin CAE: la plata no se movió y hay que hacerlo a mano (el motor dice cómo).
+      const aviso = avisoDeReintegro(respuesta)
+      if (aviso) setError(aviso)
     } catch (err) {
       setError(describeError(err))
       setConfirmNota(false)
@@ -336,7 +351,15 @@ export function VentaDetalle({
     && (!conSaldo || importeTecleado <= saldo + 0.004)
       ? Math.round(importeTecleado * 100) / 100 : null
 
+  // El motor dice si esta nota (total o por ese importe) deja plata cobrada de más; sólo se pregunta mientras el diálogo está abierto.
+  const { oferta: ofertaDeDestino, cargando: cargandoOferta } = useOfertaDeDestino(
+    confirmNota && detalle?.factura_id ? `${rutaDeNotaDeCredito(detalle.factura_id)}/destino` : null,
+    notaParcial ? importeValido : null,
+  )
+  const faltaDestino = faltaElegirDestino(ofertaDeDestino, destinoElegido)
+
   function abrirNota() {
+    setDestinoElegido(SIN_ELEGIR)
     // Con notas ya emitidas la total no corresponde (copia la factura entera): arranca por el saldo.
     setNotaParcial(hayNotas)
     setImporteNota(conSaldo && hayNotas ? String(saldo) : '')
@@ -579,9 +602,12 @@ export function VentaDetalle({
               )}
             </div>
           )}
+          {ofertaDeDestino && !(notaParcial && importeValido === null) && (
+            <DestinoDeNotaDeCredito oferta={ofertaDeDestino} elegido={destinoElegido} onChange={setDestinoElegido} />
+          )}
           <DialogFooter>
             <Button variant="ghost" className={BOTON_TACTIL} onClick={() => setConfirmNota(false)}>Cancelar</Button>
-            <Button className={BOTON_TACTIL} disabled={emitiendoNota || (notaParcial && importeValido === null)} onClick={emitirNota}>
+            <Button className={BOTON_TACTIL} disabled={emitiendoNota || (notaParcial && importeValido === null) || cargandoOferta || faltaDestino} onClick={emitirNota}>
               {emitiendoNota ? 'Emitiendo…' : 'Emitir nota'}
             </Button>
           </DialogFooter>

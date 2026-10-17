@@ -1744,3 +1744,21 @@ Las 37 pantallas del kit que importaban `@/components/ui/dialog` (50 `DialogCont
 **Decisión.** Sale de `IVA_CONDITIONS`: no se ofrece en ninguna alta (`SelectCliente`, bandeja de MP, Clientes, Proveedores). `condicionesIvaPara(actual)` es la lista de los formularios que **editan**: si la ficha guarda una condición que ya no se ofrece, la suma al final para que el campo no se vea vacío ni se pise al guardar. El motor no cambia (sigue leyendo las fichas viejas); si ARCA la informa, `condicionDeIvaDeArca` no toca el campo.
 
 **Consecuencias.** Los productos suben el pin; LibraDesk puede pedir CUIT y condición en el alta de sus pantallas fiscales. El mapeo de LibraCargo deja de listarla.
+
+## ADR-073 — La nota de crédito de una factura al contado cobrada pregunta qué hacer con la plata (0.159.0)
+
+**Estado:** propuesta (2026-10-16; decisión del humano: «Preguntar al emitir»; el motor es el ADR-065 de libracore v1.176.0).
+
+**Contexto.** La nota de una factura al contado cobrada no movía plata. El motor ahora acepta `destino` (`devolver` | `a_favor`) y `medio_pago` en `POST /api/facturas/{id}/nota-credito`, y contesta `GET …/nota-credito/destino?importe=` con lo que hay que preguntar: si hay plata cobrada de más para ese importe (`aplica`, `monto`, `excedente`), con qué medios, si la factura tiene cliente identificado y si falta abrir el turno. Los dos diálogos del kit que emiten la nota (`FacturaDetalle`, total; `comercio/VentaDetalle`, total o por un importe) no sabían nada de eso.
+
+**Decisión.**
+- `destino-de-nota` (tipos, cuentas chicas y `useOfertaDeDestino(url, importe)`, que pide la oferta; con un importe que cambia espera 250 ms entre teclas y una respuesta vieja nunca pisa a una nueva) y `DestinoDeNotaDeCredito` (la elección, con componentes del kit: radios nativos como el resto del diálogo y `SelectBuscable` para el medio). **No hay opción preseleccionada**: «preguntar» es preguntar, y el botón de emitir queda deshabilitado hasta elegir (y, devolviendo, hasta tener el medio). «Dejar a favor del cliente» sale deshabilitada, con la explicación, si no hay cliente identificado; «Devolver» también, con el aviso del motor, si el producto exige turno y no hay uno abierto.
+- **La cuenta es del motor, no del kit**: la pantalla no repite `reintegrable`. Así vale en todo producto con sólo subir el pin, sin que le mande más datos a la pantalla.
+- **El botón de emitir espera la respuesta del motor** (`cargando`): una nota que sale antes de saber si hay que preguntar saldría sin destino y la plata no se movería, en silencio.
+- Compatible hacia los dos lados: si la oferta no llega (motor anterior, ruta ausente, `aplica: false`, cuerpo que no tiene la forma) no se pregunta nada y el POST es el de siempre; `cuerpoDeDestino` es vacío sin oferta, así que nunca se manda un destino que el motor no pidió.
+- `FacturaDetalle` sólo pregunta en una factura A/B/C que no es a cuenta corriente y tiene cobros; en las demás sigue el `ConfirmDialog` y no hace ningún pedido nuevo. Con plata que mover la confirmación es un `Dialog` común (el `AlertDialog` cierra solo al aceptar).
+- Si el motor contesta `reintegro.movido: false` con `motivo` (la nota salió sin CAE y la plata no se movió), la pantalla lo muestra y, en `FacturaDetalle`, se queda en la factura en vez de ir a la nota.
+
+**Consecuencias.** MINOR, sin cambios obligatorios en los productos. Dos tests existentes de `VentaDetalle` cambian: buscar la llamada a la nota con `POST` (ahora también hay un `GET …/destino`) y esperar a que el botón se habilite tras tipear un importe. 🔴 Un producto con `anular_venta` de libracommerce no debe subir libra-ui v0.159.0 junto con libracore v1.176.0 hasta que libracommerce reste lo que la nota ya devolvió de lo que revierte de la caja (ADR-065 del motor): la pantalla ofrece devolver apenas el motor lo ofrece.
+
+**Tests.** `test/destino-de-nota.test.tsx` (cuentas), `test/FacturaDetalle.test.tsx` (+7) y `test/comercio-ventas.test.tsx` (+7).
