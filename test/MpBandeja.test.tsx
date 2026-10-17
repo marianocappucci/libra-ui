@@ -247,8 +247,8 @@ describe('la bandeja compartida', () => {
     const tarjeta = alta.closest('div')!.parentElement!
     expect(within(tarjeta).getByRole('option', { name: 'Responsable Inscripto' }))
       .toBeInTheDocument()
-    expect(within(tarjeta).getByRole('option', { name: 'IVA No Responsable' }))
-      .toBeInTheDocument()
+    // «IVA No Responsable» se retiró de lo que se ofrece (0.158.2, decisión del humano).
+    expect(within(tarjeta).queryByRole('option', { name: 'IVA No Responsable' })).toBeNull()
   })
 
   it('dar de alta un cliente manda los datos tipeados, a ESE movimiento', async () => {

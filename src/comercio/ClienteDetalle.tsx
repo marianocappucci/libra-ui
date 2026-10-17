@@ -14,7 +14,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { api, ApiError } from '../api-client'
-import { condicionDeIvaDeArca, IVA_CONDITIONS } from '../facturas'
+import { condicionDeIvaDeArca, condicionesIvaPara } from '../facturas'
 import { type Cliente } from '../mp'
 import { type AliasFacturacion, type ClienteConAlias, type ListaPrecio } from './tipos'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -381,7 +381,7 @@ export function ClienteDetalle(
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {IVA_CONDITIONS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                              {condicionesIvaPara(field.value).map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                             </SelectContent>
                           </Select>
                           <FormMessage />

@@ -10,7 +10,7 @@ import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import type { ColumnDef } from '../data-table'
 import { api, ApiError } from '../api-client'
-import { condicionDeIvaDeArca, IVA_CONDITIONS } from '../facturas'
+import { condicionDeIvaDeArca, condicionesIvaPara } from '../facturas'
 import { type Cliente } from '../mp'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -288,7 +288,7 @@ export function Clientes({ conConsultaCuit = true, urlTutorialPadron = URL_TUTOR
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {IVA_CONDITIONS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                          {condicionesIvaPara(field.value).map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                         </SelectContent>
                       </Select>
                       <FormMessage />

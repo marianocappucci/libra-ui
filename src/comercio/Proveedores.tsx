@@ -10,7 +10,7 @@ import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import type { ColumnDef } from '../data-table'
 import { api, ApiError } from '../api-client'
-import { IVA_CONDITIONS } from '../facturas'
+import { condicionesIvaPara } from '../facturas'
 import { type Proveedor } from './tipos'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -246,7 +246,7 @@ export function Proveedores() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {IVA_CONDITIONS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                          {condicionesIvaPara(field.value).map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                         </SelectContent>
                       </Select>
                       <FormMessage />
