@@ -1780,3 +1780,23 @@ Las 37 pantallas del kit que importaban `@/components/ui/dialog` (50 `DialogCont
 **Consecuencias.** MINOR, sin cambios obligatorios en los productos; un test que busque el título «Facturas sin cobrar» del tablero o su vacío hay que pasarlo a los textos nuevos. 🔴 **Subir esta versión sólo junto con libracore ≥ v1.178.0**: con un motor anterior, el listado de notas de débito manda `pendiente: 0` y la pantalla las rotularía «Cobrada» (antes decía «Autorizada»), y su detalle diría «Cobrado completo» sin que nadie haya cobrado. Con el motor nuevo la cuenta es la de las facturas (`estado-de-cobro`, ADR-068). Las FCE ganan los botones de emitir nota en el detalle.
 
 **Tests.** `test/tipos-de-comprobante.test.ts` (la tabla), `test/FacturaDetalle.test.tsx` (+6: nota de débito pendiente y cobrada, FCE, nota de crédito sin panel, emitir nota sólo sobre facturas y FCE, la pregunta de destino), `test/Facturas.test.tsx` (+5: nota de débito cobrable, cobrada, sin cruce de cobros, nota de crédito, FCE) y `test/comercio-dashboard.test.tsx` (+3: título, `tipo_label` y el respaldo con la letra).
+
+## ADR-075 — Los rótulos y la letra de un comprobante salen de `tipos-de-comprobante`, con las FCE (0.161.0)
+
+**Estado:** propuesta (2026-10-18; sigue al ADR-074).
+
+**Contexto.** El ADR-074 puso en un solo lugar *qué se cobra*, pero los rótulos seguían en tablas sueltas que no conocían las Factura de Crédito Electrónica MiPyME (201/206/211 y sus notas 202/207/212 y 203/208/213): `labelComprobante` de `FacturaDetalle` (el número de la nota y de la factura que anula), `TIPO_BADGE` de `Facturas`, `TIPO_LABELS` de `ClienteDetalle` y de `LibrosIva`. Una FCE salía «?» en el detalle y en el listado, «Cbte.» en la ficha del cliente y el número pelado («211») en el libro IVA. Peor: 🔴 `FacturaDetalle` decidía si discriminar el IVA con `tipo !== 11`, y una FCE C (211) y sus notas (212, 213) —clase C, sin alícuotas (`tipos.C` del motor)— mostraban «Subtotal» e «IVA 21 %» si el comprobante traía `iva_amount > 0`, mientras el PDF del motor no los tiene.
+
+**Qué ya existe** (se miró antes). El motor tiene `LETRA` y `NOMBRE` en `libracore/tipos_comprobante.py` (los usa `tipo_label` del tablero) y `C` para la clase; el kit tenía cuatro copias de la mitad de eso.
+
+**Decisión.** `tipos-de-comprobante` suma la copia TypeScript de `LETRA` y `NOMBRE` del motor (los nombres, palabra por palabra: «FCE MiPyME A», «Nota de Débito FCE B») y las funciones que las pantallas necesitan; ninguna vuelve a escribir una tabla de tipos:
+- `letraDe(tipo)` (`'A' | 'B' | 'C'`, `undefined` si no se conoce) y `esFce(tipo)`.
+- `discriminaIva(tipo)`: `letraDe(tipo) !== 'C'`. Un tipo desconocido discrimina, como con `tipo !== 11`. `FacturaDetalle` pregunta acá.
+- `nombreDe(tipo)` (el del motor; desconocido, «Comprobante»), `siglaDe(tipo)` (la del badge del listado: `FA`, `NCB`, `NDC`; la FCE lleva una `E`: `FEA`, `NDEB`, `NCEC`), `rotuloDe(tipo)` (el de las tablas anchas: `FAC A`, `ND B`, `NC C`; FCE: `FCE A`, `ND FCE B`, `NC FCE C`) y `prefijoDe(tipo)` (el del número en el detalle: `A`, `NC-B`, `ND-C`; FCE: `FCE-A`, `ND-FCE-B`, `NC-FCE-C`).
+- Los rótulos de los nueve tipos de siempre **no cambian** (un test los fija); `Facturas` conserva su color por letra y el rojo de la nota de crédito, que no es información del tipo.
+- `ClienteDetalle` muestra la factura con su nombre y las notas en corto, como hasta ahora; el tipo desconocido sigue siendo «Cbte.» allí, «?» en el listado y el detalle, y el número en el libro IVA.
+
+**Consecuencias.** PATCH de comportamiento, MINOR por la API nueva; sin cambios en los productos. Un producto que tenga su propia tabla de rótulos o su `tipo !== 11` **la reemplaza por estas funciones**. Una FCE C con `iva_amount > 0` deja de mostrar «Subtotal» e «IVA» en el detalle (el total es el mismo). Las siglas de las FCE (`FEA`…) son de este kit: el motor sólo fija `NOMBRE`, que va en el `title` del badge.
+
+**Tests.** `test/tipos-de-comprobante.test.ts` (+6: letras, IVA, nombres del motor, ninguno «?», sin repetidos, los de siempre no cambian), `test/FacturaDetalle.test.tsx` (+10: IVA por clase en nueve tipos y el número de una nota sobre FCE), `test/Facturas.test.tsx` (+11: el badge de las nueve FCE, el desconocido, los de siempre), `test/comercio-informes.test.tsx` (+1) y `test/comercio-clientes.test.tsx` (+1).
+

@@ -47,20 +47,25 @@ import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs'
 import { formatoMoneda } from './formatos'
 import { acreditadoDe, estadoDeCobro, pendienteDe, puedeCobrar } from './estado-de-cobro'
-import { esCobrable } from './tipos-de-comprobante'
+import { NC, esCobrable, letraDe, nombreDe, siglaDe } from './tipos-de-comprobante'
 
-// Etiquetas cortas (FA/FB/FC, NCA…, NDA…) para que la columna Tipo ocupe lo
-// mínimo — el nombre completo queda en el `title` de cada badge.
-const TIPO_BADGE: Record<number, { label: string; titulo: string; className: string }> = {
-  1: { label: 'FA', titulo: 'Factura A', className: 'bg-primary text-primary-foreground' },
-  6: { label: 'FB', titulo: 'Factura B', className: 'bg-secondary text-secondary-foreground' },
-  11: { label: 'FC', titulo: 'Factura C', className: 'bg-sky-700 text-white' },
-  3: { label: 'NCA', titulo: 'Nota de Crédito A', className: 'bg-destructive text-white dark:bg-destructive/60' },
-  8: { label: 'NCB', titulo: 'Nota de Crédito B', className: 'bg-destructive text-white dark:bg-destructive/60' },
-  13: { label: 'NCC', titulo: 'Nota de Crédito C', className: 'bg-destructive text-white dark:bg-destructive/60' },
-  2: { label: 'NDA', titulo: 'Nota de Débito A', className: 'bg-primary text-primary-foreground' },
-  7: { label: 'NDB', titulo: 'Nota de Débito B', className: 'bg-secondary text-secondary-foreground' },
-  12: { label: 'NDC', titulo: 'Nota de Débito C', className: 'bg-sky-700 text-white' },
+// Etiquetas cortas (FA/FB/FC, NCA…, NDA…, FEA… para las FCE) para que la columna Tipo ocupe lo mínimo — el nombre completo queda en el `title`
+// de cada badge. La sigla y el nombre salen de `tipos-de-comprobante`; acá sólo el color, que depende de la letra y de si es nota de crédito.
+const COLOR_POR_LETRA = {
+  A: 'bg-primary text-primary-foreground',
+  B: 'bg-secondary text-secondary-foreground',
+  C: 'bg-sky-700 text-white',
+} as const
+const COLOR_NOTA_DE_CREDITO = 'bg-destructive text-white dark:bg-destructive/60'
+
+function badgeDeTipo(tipo: number): { label: string; titulo: string; className: string } {
+  const letra = letraDe(tipo)
+  if (!letra) return { label: '?', titulo: 'Comprobante', className: 'bg-secondary text-secondary-foreground' }
+  return {
+    label: siglaDe(tipo),
+    titulo: nombreDe(tipo),
+    className: NC.includes(tipo) ? COLOR_NOTA_DE_CREDITO : COLOR_POR_LETRA[letra],
+  }
 }
 
 /** Una factura **sin CAE no es un error**: existe, tiene número, y lo que falta
@@ -221,8 +226,7 @@ export function Facturas({
         size: 70,
         minSize: 55,
         cell: ({ row }) => {
-          const b = TIPO_BADGE[row.original.tipo]
-            ?? { label: '?', titulo: 'Comprobante', className: 'bg-secondary text-secondary-foreground' }
+          const b = badgeDeTipo(row.original.tipo)
           return <Badge className={b.className} title={b.titulo}>{b.label}</Badge>
         },
       },

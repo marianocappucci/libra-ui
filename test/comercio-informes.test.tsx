@@ -72,6 +72,17 @@ beforeEach(() => {
 // ── LibrosIva ────────────────────────────────────────────────────────────
 
 describe('LibrosIva', () => {
+  it('rotula las FCE y sus notas, no con el número pelado (ADR-075)', async () => {
+    const fila = (id: number, tipo: number) => ({ id, tipo, punto_venta: 5, numero: id, fecha: '2026-09-01', cliente_razon: 'Ana', cliente_cuit: '', subtotal: 100, iva_amount: 0, total: 100 })
+    responder({ '/api/libros-iva': { ...LIBROS, facturas: [fila(1, 201), fila(2, 211), fila(3, 212), fila(4, 203)] } })
+    montar('/libros-iva', <LibrosIva />)
+    expect(await screen.findByText('FCE A')).toBeTruthy()
+    expect(screen.getByText('FCE C')).toBeTruthy()
+    expect(screen.getByText('ND FCE C')).toBeTruthy()
+    expect(screen.getByText('NC FCE A')).toBeTruthy()
+    for (const crudo of ['201', '211', '212', '203']) expect(screen.queryByText(crudo)).toBeNull()
+  })
+
   it('muestra ventas y compras con sus resúmenes, el CUIT formateado y los cuatro exports', async () => {
     responder({ '/api/libros-iva': LIBROS })
     const user = userEvent.setup()

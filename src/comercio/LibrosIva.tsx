@@ -21,6 +21,7 @@ import { ICONOS } from '../iconos-identidad'
 import { hoyISO, primerDiaDelMesISO, fecha } from '../fechas'
 import { formatoMoneda } from '../formatos'
 import { Table } from '../ui/table'
+import { rotuloDe } from '../tipos-de-comprobante'
 
 /** Alícuota de una compra, en puntos (21, no 0.21).
  *
@@ -39,12 +40,6 @@ function formatCuit(cuit?: string | null): string {
   const d = cuit.replace(/\D/g, '')
   if (d.length !== 11) return cuit
   return `${d.slice(0, 2)}-${d.slice(2, 10)}-${d.slice(10)}`
-}
-
-const TIPO_LABELS: Record<number, string> = {
-  1: 'FAC A', 2: 'ND A', 3: 'NC A',
-  6: 'FAC B', 7: 'ND B', 8: 'NC B',
-  11: 'FAC C', 12: 'ND C', 13: 'NC C',
 }
 
 /** Los botones REGINFO (`REGINFO_VENTAS_ALICUOTAS` mide 254 px) topan en el ancho de su fila y parten el nombre si hace falta: a 320 px la tarjeta deja 240 y un botón de `nowrap` ensanchaba la página. `min-h-8` conserva el alto de `size="sm"` cuando entra en una línea. */
@@ -116,7 +111,7 @@ export function LibrosIva() {
 
   const columnasVentas = useMemo<ColumnDef<LibroIvaFactura>[]>(() => [
     { accessorKey: 'fecha', header: sortableHeader('Fecha'), size: 95, minSize: 85, cell: ({ row }) => fecha(row.original.fecha) },
-    { accessorKey: 'tipo', header: 'Tipo', size: 80, minSize: 70, cell: ({ row }) => <Badge variant="outline">{TIPO_LABELS[row.original.tipo] ?? row.original.tipo}</Badge> },
+    { accessorKey: 'tipo', header: 'Tipo', size: 80, minSize: 70, cell: ({ row }) => <Badge variant="outline">{rotuloDe(row.original.tipo)}</Badge> },
     {
       id: 'pv_nro', header: 'PV-Nro',
       size: 120,

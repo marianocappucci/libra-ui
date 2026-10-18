@@ -965,3 +965,38 @@ describe('la nota de crédito de una factura cobrada pregunta qué hacer con la 
     expect(fetchMock.mock.calls.some((c) => String(c[0]).includes('/nota-credito/destino'))).toBe(false)
   })
 })
+
+// 🔴 `tipo !== 11` decidía si se discrimina el IVA: una FCE C (211) y sus notas (212/213) discriminaban un IVA que una clase C no tiene (ADR-075).
+describe('el IVA se discrimina por la clase, no por el código 11 (ADR-075)', () => {
+  const conIva = (tipo: number): FacturaDetalleType =>
+    ({ ...CON_CAE, factura: { ...CON_CAE.factura, tipo, subtotal: 1000, iva_amount: 210, total: 1210 }, pendiente: 1210 })
+
+  it.each([[11, 'Factura C'], [211, 'FCE C'], [212, 'ND FCE C'], [213, 'NC FCE C']])(
+    'el tipo %i (%s) es clase C: no hay renglones de Subtotal ni de IVA', async (tipo) => {
+      montar(conIva(tipo))
+      await screen.findByText('TOTAL')
+      // «Subtotal» también es el encabezado de la columna de los ítems: el renglón del pie es el segundo.
+      expect(screen.getAllByText('Subtotal')).toHaveLength(1)
+      expect(screen.queryByText(/^IVA \d+%$/)).toBeNull()
+    },
+  )
+
+  it.each([[1, 'Factura A'], [6, 'Factura B'], [201, 'FCE A'], [206, 'FCE B'], [202, 'ND FCE A']])(
+    'el tipo %i (%s) discrimina: Subtotal e IVA 21%', async (tipo) => {
+      montar(conIva(tipo))
+      expect(await screen.findByText('IVA 21%')).toBeInTheDocument()
+      expect(screen.getAllByText('Subtotal')).toHaveLength(2)
+    },
+  )
+
+  it('el número de una nota sobre una FCE se rotula con su clase («NC-FCE-C»), no «?»', async () => {
+    montar({
+      ...CON_CAE,
+      factura: { ...CON_CAE.factura, tipo: 211 },
+      notas_credito: [{ ...CON_CAE.factura, id: 2, tipo: 213, numero: 2 }],
+    })
+    const enlace = await screen.findByRole('link', { name: /NC-FCE-C 0005-00000002/ })
+    expect(enlace).toHaveAttribute('href', '/facturas/2')
+    expect(screen.queryByText(/^\? \d{4}-/)).toBeNull()
+  })
+})

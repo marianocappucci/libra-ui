@@ -41,12 +41,10 @@ import { fecha } from '../fechas'
 import { SelectBuscable } from '../SelectBuscable'
 import { formatoMoneda } from '../formatos'
 import { Table } from '../ui/table'
+import { esFactura, letraDe, nombreDe, rotuloDe } from '../tipos-de-comprobante'
 
-const TIPO_LABELS: Record<number, string> = {
-  1: 'Factura A', 6: 'Factura B', 11: 'Factura C',
-  2: 'ND A', 7: 'ND B', 12: 'ND C',
-  3: 'NC A', 8: 'NC B', 13: 'NC C',
-}
+/** La factura con su nombre («Factura A», «FCE MiPyME A»); las notas, en corto («ND A», «NC FCE A»). */
+const rotuloDeTipo = (tipo: number): string => (esFactura(tipo) ? nombreDe(tipo) : rotuloDe(tipo))
 
 const ESTADO_PRESUPUESTO_TONO: Record<string, TonoEstado> = {
   aprobado: 'ok', aceptado: 'ok', rechazado: 'negativo',
@@ -611,7 +609,7 @@ export function ClienteDetalle(
                       <tbody>
                         {cliente.facturas.map((f) => (
                           <tr key={f.id} className="border-b last:border-0">
-                            <td className="p-3"><Badge variant="secondary">{TIPO_LABELS[f.tipo] ?? 'Cbte.'}</Badge></td>
+                            <td className="p-3"><Badge variant="secondary">{letraDe(f.tipo) ? rotuloDeTipo(f.tipo) : 'Cbte.'}</Badge></td>
                             <td className="p-3 font-mono text-xs">{String(f.punto_venta).padStart(4, '0')}-{String(f.numero).padStart(8, '0')}</td>
                             <td className="p-3 text-muted-foreground">{fecha(f.fecha)}</td>
                             <td className="p-3 text-right font-medium">{formatoMoneda(f.total)}</td>

@@ -171,6 +171,17 @@ describe('Clientes', () => {
 // ── ClienteDetalle ───────────────────────────────────────────────────────
 
 describe('ClienteDetalle', () => {
+  it('rotula las FCE y sus notas, no «Cbte.» (ADR-075)', async () => {
+    const f = (id: number, tipo: number) => ({ ...FICHA.facturas[0], id, tipo, numero: id })
+    responder({ '/api/clientes/1': { ...FICHA, facturas: [f(61, 201), f(62, 211), f(63, 212), f(64, 203)] } })
+    montar('/clientes/1', <ClienteDetalle />)
+    expect(await screen.findByText('FCE MiPyME A')).toBeTruthy()
+    expect(screen.getByText('FCE MiPyME C')).toBeTruthy()
+    expect(screen.getByText('ND FCE C')).toBeTruthy()
+    expect(screen.getByText('NC FCE A')).toBeTruthy()
+    expect(screen.queryByText('Cbte.')).toBeNull()
+  })
+
   it('muestra la ficha, el resumen y las tres tablas de comprobantes', async () => {
     responder({ '/api/clientes/1': FICHA })
     montar('/clientes/1', <ClienteDetalle />)
