@@ -1800,3 +1800,35 @@ Las 37 pantallas del kit que importaban `@/components/ui/dialog` (50 `DialogCont
 
 **Tests.** `test/tipos-de-comprobante.test.ts` (+6: letras, IVA, nombres del motor, ninguno «?», sin repetidos, los de siempre no cambian), `test/FacturaDetalle.test.tsx` (+10: IVA por clase en nueve tipos y el número de una nota sobre FCE), `test/Facturas.test.tsx` (+11: el badge de las nueve FCE, el desconocido, los de siempre), `test/comercio-informes.test.tsx` (+1) y `test/comercio-clientes.test.tsx` (+1).
 
+
+## ADR-076 — `radio-group` y `textarea` suben al kit; `lib/fechas.ts` de los productos ya estaba (0.162.0)
+
+**Estado:** propuesta (2026-10-18; sigue al ADR-075).
+
+**Contexto.** La auditoría de independencia de RestoLibra respecto de Contalibra (`wiki/analyses/restolibra-independencia-de-contalibra.md`, §3.1 y §4) listó como duplicación real entre los dos productos: `lib/fechas.ts` (122 líneas), `ui/tabs.tsx`, `ui/radio-group.tsx` y `ui/textarea.tsx`. **Relevado en `origin/develop` de los dos (2026-10-18)**, la mitad de eso ya estaba resuelta en el kit y el wiki lo daba por pendiente:
+
+| Archivo de los productos | ¿Está en el kit? |
+|---|---|
+| `lib/fechas.ts` | **Sí, desde 0.146.0** (ADR-058 §4): `libra-ui/fechas` exporta `fecha`, `fechaHora`, `hora`, `horaConSegundos`, `fechaDeTexto`, `fechaHoraDeTexto` y `hoyISO`. La copia de los productos es la variante «A» de ese ADR, y el kit tiene **tres correcciones** que ella no (`hourCycle: 'h23'` y no `hour12: false`, que escribe «24:05» en algunos motores; `Intl.DateTimeFormat` construido una vez; `horaConSegundos` que convierte un `Date` o un ISO con zona en vez de mostrar la hora UTC). El wiki decía «el kit exporta aritmética y el producto formateo»: eso era cierto hasta 0.145.0. |
+| `ui/tabs.tsx` | **Sí, desde 0.146.0** (ADR-058 §6), con el `flex-wrap` de 0.154.0 (ADR-067). |
+| `ui/radio-group.tsx` | No. |
+| `ui/textarea.tsx` | No. |
+
+**Qué ya existe** (se miró antes de escribir): `src/ui/` con sus 19 primitivas (ADR-006), el mapa `exports` y su guard (`test/exports-del-paquete.test.ts`), y el precedente de `tabs` y `dialog` (ADR-058 §6, ADR-064). **No se crea un módulo `fechas-de-pantalla`**: sería la tercera copia de lo que `libra-ui/fechas` ya exporta.
+
+**Decisión.**
+1. **`src/ui/radio-group.tsx`** (`RadioGroup`, `RadioGroupItem`) y **`src/ui/textarea.tsx`** (`Textarea`), exportados como `libra-ui/ui/radio-group` y `libra-ui/ui/textarea`. El cuerpo es el de las copias de Contalibra y RestoLibra, **idénticas entre sí** desde `import * as React` (verificado con `diff`); cambia el `cn`, que sale de `../utils`, como en el resto de `src/ui/`.
+2. **El kit NO cambia sus propios imports todavía.** `Depositos`, `DepositoDetalle`, `SucursalDetalle`, `Vencimientos` y `Egresos` siguen importando `@/components/ui/textarea`, y `ListasPrecio` `@/components/ui/radio-group`. Con `tabs` se pasó a lo propio porque se habían relevado los ocho productos (idénticos); acá sólo se compararon dos. Si alguno de los otros seis tiene un `textarea` o un `radio-group` distinto, pasar a lo propio le cambia el aspecto a esa pantalla. Queda anotado en «Lo que no cubre».
+3. **El guard de exports mira `src/ui/`.** Hasta ahora `test/exports-del-paquete.test.ts` sólo miraba los módulos de la raíz de `src/`: una primitiva sin su línea en `exports` salía en verde de este repo. Ahora falla si algún `src/ui/<x>` no está exportado como `./ui/<x>`.
+4. **No se tocan los productos** (se adopta con el pin).
+
+**Cómo lo adopta cada producto** (Contalibra y RestoLibra, en el mismo cambio que sube el pin a 0.162.0):
+- `components/ui/radio-group.tsx` → `export * from 'libra-ui/ui/radio-group'`; `components/ui/textarea.tsx` → `export * from 'libra-ui/ui/textarea'`. Es seguro: el cuerpo es el mismo.
+- `components/ui/tabs.tsx` → `export * from 'libra-ui/ui/tabs'` (ya se podía desde 0.146.0). 🔴 **Las copias de Contalibra y RestoLibra no tienen el `flex-wrap` de `TabsList` (ADR-067)**: al reemplazarlas, la fila de pestañas se parte en renglones cuando no entra en el celular, en vez de ensanchar la página.
+- `lib/fechas.ts` → `export * from 'libra-ui/fechas'` (o borrarlo). Fuera de sus tests, **Contalibra la importa en un solo lugar** (`ComprobantesPendientes`, `fecha`) y **RestoLibra en ninguno**; `TZ` no lo importa nadie fuera del archivo (en el kit se llama `ZONA_AR`). Los 13 tests de `test/fechas.test.ts` del producto **pasan contra `libra-ui/fechas`** (medido el 2026-10-18 apuntando su import al `src/fechas.ts` del kit), así que el reexport los deja valiendo. Cambia, para bien, la hora de la medianoche en los motores que escribían «24:xx» y la columna Hora de un `Date`.
+
+**Consecuencias.** MINOR (dos exports nuevos), sin cambios obligatorios en los productos. Ninguna pantalla del kit cambia.
+
+**Tests.** `test/ui-radio-group.test.tsx` (5: el grupo y el marcado inicial, click en la etiqueta, flechas, `disabled`, `data-slot` e indicador) y `test/ui-textarea.test.tsx` (4: escribir, props nativas y `ref`, `disabled`, `className` y `aria-invalid`), contra Radix de verdad y no contra los stubs; más 1 en `test/exports-del-paquete.test.ts` (que se pone rojo sin las dos líneas de `package.json`). Una nota del teclado: Radix marca un radio al recibir el foco sólo si la flecha **sigue apretada** (`isArrowKeyPressed`) y mueve el foco con un `setTimeout`; con `{ArrowDown}` suelto de `user-event` el `keyup` llega antes y no se marca nada, por eso el test sostiene la tecla (`{ArrowDown>}` … `{/ArrowDown}`).
+
+**Lo que no cubre.** (a) Los seis imports propios del kit (punto 2). (b) El e2e en un navegador: no se midieron las dos primitivas a 390 px; son las mismas clases que ya tienen los productos. (c) `confirm-dialog.tsx`, `vite.config.ts` y `main.tsx`, que la auditoría también nombra, no son primitivas del kit y no entran acá.

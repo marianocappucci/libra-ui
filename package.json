@@ -1,6 +1,6 @@
 {
   "name": "libra-ui",
-  "version": "0.161.0",
+  "version": "0.162.0",
   "private": true,
   "type": "module",
   "description": "Paquete de frontend compartido para los verticales de la familia Libra sin backoffice server-rendered propio (Gestiolibra, MedLibra, VentaLibra).",
@@ -137,6 +137,7 @@
     "./ui/form": "./src/ui/form.tsx",
     "./ui/input": "./src/ui/input.tsx",
     "./ui/label": "./src/ui/label.tsx",
+    "./ui/radio-group": "./src/ui/radio-group.tsx",
     "./ui/select": "./src/ui/select.tsx",
     "./ui/separator": "./src/ui/separator.tsx",
     "./ui/sheet": "./src/ui/sheet.tsx",
@@ -145,6 +146,7 @@
     "./ui/switch": "./src/ui/switch.tsx",
     "./ui/table": "./src/ui/table.tsx",
     "./ui/tabs": "./src/ui/tabs.tsx",
+    "./ui/textarea": "./src/ui/textarea.tsx",
     "./ui/tooltip": "./src/ui/tooltip.tsx",
     "./use-ancho": "./src/use-ancho.ts",
     "./use-mobile": "./src/use-mobile.ts",
