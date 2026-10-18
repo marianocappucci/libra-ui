@@ -1,4 +1,4 @@
-// El tablero: KPIs del mes, accesos rápidos, facturas sin cobrar, presupuestos
+// El tablero: KPIs del mes, accesos rápidos, pendientes de cobro, presupuestos
 // pendientes y los últimos movimientos de caja.
 //
 // Extraída de `pages/Dashboard.tsx` de Contalibra (fase 13, 2026-09-27): el
@@ -39,10 +39,10 @@ export type DashboardProps = {
   /** Si se muestra la tarjeta "Presupuestos sin respuesta". `false` en un producto sin presupuestos
    *  (la consulta siempre da vacía, pero el link a `/presupuestos` sería una ruta muerta). */
   conPresupuestos?: boolean
-  /** A dónde lleva una factura de "Facturas sin cobrar". `null` en un producto sin pantalla de facturas
+  /** A dónde lleva un comprobante de "Pendientes de cobro". `null` en un producto sin pantalla de facturas
    *  (el dato de la factura queda como texto en otro lado) — oculta el botón "Ver", no la tarjeta. */
   rutaDeFactura?: ((id: number) => string) | null
-  /** A dónde lleva "Ver todas" de "Facturas sin cobrar". `null` oculta el botón. */
+  /** A dónde lleva "Ver todas" de "Pendientes de cobro". `null` oculta el botón. */
   rutaDeFacturas?: string | null
   /** A dónde lleva "Ver caja completa". `null` oculta el botón. */
   rutaDeCaja?: string | null
@@ -122,21 +122,25 @@ export function Dashboard({
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader className="flex items-center justify-between space-y-0">
-                <CardTitle className="flex items-center gap-2 text-base"><IconoIndicador concepto="porCobrar" className="text-muted-foreground" />Facturas sin cobrar</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-base"><IconoIndicador concepto="porCobrar" className="text-muted-foreground" />Pendientes de cobro</CardTitle>
                 {rutaDeFacturas && <Button asChild size="sm" variant="outline"><Link to={rutaDeFacturas}>Ver todas</Link></Button>}
               </CardHeader>
               <CardContent>
                 {data.facturas_sin_cobrar.length === 0 ? (
                   <p className="flex flex-col items-center gap-2 py-4 text-center text-sm text-muted-foreground">
-                    <CheckCircle2 className="size-6 text-exito" />Todas las facturas están cobradas.
+                    <CheckCircle2 className="size-6 text-exito" />No hay nada pendiente de cobro.
                   </p>
                 ) : (
                   <ul className="divide-y">
                     {data.facturas_sin_cobrar.map((f) => (
                       <li key={f.id} className="flex items-center justify-between gap-3 py-2 text-sm">
                         <div className="min-w-0">
+                          {/* El tablero mezcla facturas y notas de débito (ADR-066 del motor): la fila dice qué es. Un motor anterior
+                              no manda `tipo_label` y se rotula como siempre, con la letra. */}
                           <p className="font-medium">
-                            <span className="text-muted-foreground">{f.letra}</span> {f.label_numero}
+                            {f.tipo_label
+                              ? <><span className="text-muted-foreground">{f.tipo_label}</span> {f.label_numero}</>
+                              : <><span className="text-muted-foreground">{f.letra}</span> {f.label_numero}</>}
                           </p>
                           <p className="truncate text-muted-foreground">{f.cliente_razon} — {fecha(f.fecha)}</p>
                         </div>

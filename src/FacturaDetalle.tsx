@@ -42,6 +42,7 @@ import { SelectBuscable } from './SelectBuscable'
 import { formatoMoneda } from './formatos'
 import { acreditadoDe, cuentaDelDetalle, estaAcreditadaPorCompleto, pendienteDe, tienePendiente } from './estado-de-cobro'
 import { Table } from './ui/table'
+import { esCobrable, esFactura } from './tipos-de-comprobante'
 
 function labelComprobante(f: Factura): string {
   const letra = ({ 1: 'A', 6: 'B', 11: 'C', 3: 'NC-A', 8: 'NC-B', 13: 'NC-C', 2: 'ND-A', 7: 'ND-B', 12: 'ND-C' } as Record<number, string>)[f.tipo] ?? '?'
@@ -368,8 +369,9 @@ export function FacturaDetalle({
   }
 
   // El motor dice si la nota de crédito de esta factura deja plata cobrada de más. Sólo tiene sentido en una factura al contado
-  // que ya se cobró; en cualquier otra no se pregunta nada y la pantalla es la de siempre.
-  const preguntaDestino = esAdmin && detalle !== null && [1, 6, 11].includes(detalle.factura.tipo)
+  // que ya se cobró; en cualquier otra no se pregunta nada y la pantalla es la de siempre. Es de las **facturas** (también las FCE), no de todo
+  // lo cobrable: una nota de débito se cobra, pero no se acredita (el motor no emite una nota sobre otra nota).
+  const preguntaDestino = esAdmin && detalle !== null && esFactura(detalle.factura.tipo)
     && detalle.factura.condicion_venta !== 'Cuenta Corriente' && detalle.total_cobrado > 0
   const { oferta: ofertaDeDestino, cargando: cargandoOferta } = useOfertaDeDestino(
     preguntaDestino ? `/api/facturas/${facturaId}/nota-credito/destino` : null, null)
@@ -529,7 +531,8 @@ export function FacturaDetalle({
             </div>
           )}
 
-          {[1, 6, 11].includes(detalle.factura.tipo) && (
+          {/* Se cobra lo cobrable: facturas, FCE y notas de débito (ADR-074). No es lo mismo que poder emitir una nota sobre el comprobante. */}
+          {esCobrable(detalle.factura.tipo) && (
             <PanelDeCobro detalle={detalle} muestraCobros={muestraCobros} onCobrar={() => setCobroOpen(true)} />
           )}
 
@@ -644,7 +647,7 @@ export function FacturaDetalle({
           </Card>
 
           <div className="flex flex-wrap justify-end gap-2">
-            {esAdmin && [1, 6, 11].includes(detalle.factura.tipo) && (
+            {esAdmin && esFactura(detalle.factura.tipo) && (
               <>
                 <Button size="sm" variant="outline" disabled={saving} onClick={() => setConfirmNota('nota-debito')}><FilePlus />Nota de Débito</Button>
                 <Button size="sm" variant="outline" disabled={saving || cargandoOferta} onClick={() => { setDestinoElegido(SIN_ELEGIR); setConfirmNota('nota-credito') }}><FileMinus />Nota de Crédito</Button>

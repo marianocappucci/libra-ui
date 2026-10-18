@@ -339,6 +339,70 @@ describe('las notas', () => {
   })
 })
 
+describe('lo cobrable: facturas, FCE y notas de débito (ADR-074)', () => {
+  const ND = {
+    ...AUTORIZADA, id: 77, tipo: 12, numero: 5, total: 3000, total_cobrado: 0, total_acreditado: 0, pendiente: 3000,
+    cbte_asoc_tipo: 11, cbte_asoc_pv: 3, cbte_asoc_nro: 7,
+  }
+  const NC = { ...ND, id: 78, tipo: 13, numero: 6, pendiente: 0 }
+
+  /** El listado devuelve `items` según la vista que se le pide. */
+  function conVistas(porVista: Record<string, Factura[]>) {
+    fetchMock.mockImplementation((url: string) => {
+      const vista = /vista=(\w+)/.exec(String(url))?.[1] ?? 'facturas'
+      const items = porVista[vista] ?? []
+      return Promise.resolve(json({ items, total: items.length, total_pages: 1, page: 1 }))
+    })
+  }
+  const aLaVista = async (nombre: RegExp) => {
+    await screen.findByText('Ana Perez')
+    await userEvent.click(screen.getByRole('tab', { name: nombre }))
+  }
+
+  it('una nota de débito muestra su estado de cobro y se puede cobrar', async () => {
+    conVistas({ facturas: [AUTORIZADA], nd: [ND] })
+    montar({ muestraCobros: true, rutaDelDetalle: (id) => `/facturas/${id}` })
+    await aLaVista(/Notas de Débito/)
+    expect(await screen.findByText('Sin cobrar', { selector: '[data-tono]' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Registrar cobro')).toHaveAttribute('href', '/facturas/77')
+    // Y sigue diciendo de qué comprobante cuelga.
+    expect(screen.getByText('0003-00000007')).toBeInTheDocument()
+  })
+
+  it('una nota de débito ya cobrada figura «Cobrada» y sin botón', async () => {
+    conVistas({ facturas: [AUTORIZADA], nd: [{ ...ND, total_cobrado: 3000, pendiente: 0 }] })
+    montar({ muestraCobros: true, rutaDelDetalle: (id) => `/facturas/${id}` })
+    await aLaVista(/Notas de Débito/)
+    expect(await screen.findByText('Cobrada', { selector: '[data-tono]' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('Registrar cobro')).toBeNull()
+  })
+
+  it('una nota de crédito NO se cobra: «Autorizada» a secas y sin botón', async () => {
+    conVistas({ facturas: [AUTORIZADA], nc: [NC] })
+    montar({ muestraCobros: true, rutaDelDetalle: (id) => `/facturas/${id}` })
+    await aLaVista(/Notas de Crédito/)
+    expect(await screen.findByText('Autorizada')).toBeInTheDocument()
+    expect(screen.queryByText('Sin cobrar', { selector: '[data-tono]' })).toBeNull()
+    expect(screen.queryByLabelText('Registrar cobro')).toBeNull()
+  })
+
+  it('sin cruce de cobros, la nota de débito sigue siendo «Autorizada»', async () => {
+    conVistas({ facturas: [AUTORIZADA], nd: [ND] })
+    montar({ muestraCobros: false, rutaDelDetalle: (id) => `/facturas/${id}` })
+    await aLaVista(/Notas de Débito/)
+    expect(await screen.findByText('Autorizada')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Registrar cobro')).toBeNull()
+  })
+
+  it('una Factura de Crédito Electrónica (FCE) también se cobra', async () => {
+    responder([{ ...AUTORIZADA, id: 90, tipo: 211, numero: 9 }])
+    montar({ muestraCobros: true, rutaDelDetalle: (id) => `/facturas/${id}` })
+    await screen.findByText('Ana Perez')
+    expect(screen.getByText('Sin cobrar', { selector: '[data-tono]' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Registrar cobro')).toHaveAttribute('href', '/facturas/90')
+  })
+})
+
 describe('el filtro por envío por mail', () => {
   it('pide el listado con envio= al elegirlo y lo saca al limpiar', async () => {
     const user = userEvent.setup()

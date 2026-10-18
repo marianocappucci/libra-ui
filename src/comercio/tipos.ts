@@ -1122,6 +1122,9 @@ export type FacturaSinCobrar = {
    *  libracore ≥ v1.172.0). Opcional: un motor viejo no lo manda y el tablero muestra el `total`. */
   pendiente?: number
   letra: string
+  /** Cómo se llama el comprobante («Factura C», «Nota de Débito C», «FCE MiPyME A»), desde que el tablero también lista las notas de
+   *  débito (libracore ≥ v1.178.0, ADR-066 del motor). Opcional: un motor anterior no lo manda y se rotula con `letra` y `label_numero`. */
+  tipo_label?: string
   label_numero: string
 }
 

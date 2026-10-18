@@ -58,7 +58,7 @@ describe('Dashboard: default (Contalibra)', () => {
   it('los vacíos avisan sin roturas, y la caída de red se muestra', async () => {
     responder({ '/api/dashboard': VACIO })
     montar('/dashboard', <Dashboard />)
-    expect(await screen.findByText('Todas las facturas están cobradas.')).toBeTruthy()
+    expect(await screen.findByText('No hay nada pendiente de cobro.')).toBeTruthy()
     expect(screen.getByText('Sin presupuestos pendientes.')).toBeTruthy()
     expect(screen.getByText('Sin movimientos registrados.')).toBeTruthy()
 
@@ -102,6 +102,36 @@ describe('Dashboard: lo que falta cobrar (ADR-059 del motor)', () => {
     const fila = (await screen.findByText('0005-00000042')).closest('li') as HTMLElement
     expect(within(fila).getByText(/5\.000/)).toBeTruthy()
     expect(within(fila).queryByText(/^de /)).toBeNull()
+  })
+})
+
+describe('Dashboard: pendientes de cobro, facturas y notas de débito (ADR-074)', () => {
+  const FILA = DATA.facturas_sin_cobrar[0]
+  const NOTA = { ...FILA, id: 12, tipo: 12, numero: 43, letra: 'C', tipo_label: 'Nota de Débito C', label_numero: '0005-00000043', total: 800 }
+
+  it('la tarjeta se llama «Pendientes de cobro», porque ya no son sólo facturas', async () => {
+    responder({ '/api/dashboard': DATA })
+    montar('/dashboard', <Dashboard />)
+    expect(await screen.findByText('Pendientes de cobro')).toBeTruthy()
+    expect(screen.queryByText('Facturas sin cobrar')).toBeNull()
+  })
+
+  it('cada fila dice qué comprobante es, con el `tipo_label` del motor', async () => {
+    responder({ '/api/dashboard': { ...DATA, facturas_sin_cobrar: [{ ...FILA, tipo_label: 'Factura C' }, NOTA] } })
+    montar('/dashboard', <Dashboard />)
+    const factura = (await screen.findByText('0005-00000042')).closest('li') as HTMLElement
+    expect(within(factura).getByText('Factura C')).toBeTruthy()
+    const nota = screen.getByText('0005-00000043').closest('li') as HTMLElement
+    expect(within(nota).getByText('Nota de Débito C')).toBeTruthy()
+    expect(within(nota).getByText(/800/)).toBeTruthy()
+  })
+
+  it('sin `tipo_label` (motor anterior) rotula como siempre, con la letra', async () => {
+    responder({ '/api/dashboard': DATA })
+    montar('/dashboard', <Dashboard />)
+    const fila = (await screen.findByText('0005-00000042')).closest('li') as HTMLElement
+    expect(within(fila).getByText('C')).toBeTruthy()
+    expect(within(fila).queryByText('Factura C')).toBeNull()
   })
 })
 
