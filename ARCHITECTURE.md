@@ -49,7 +49,8 @@ Tres capas, de más genérico a más específico:
   `card`, `table`, `form`, `sheet`, `sidebar`, `tooltip`, `dropdown-menu`,
   `alert-dialog`, `avatar`, `badge`, `separator`, `skeleton`, `switch`, y desde
   `v0.146.0` / `v0.152.0` también `tabs` y `dialog`, que las pantallas del kit
-  ya importan propias y no del consumidor). Se
+  ya importan propias y no del consumidor; desde `v0.162.0` `radio-group` y
+  `textarea`, que el kit exporta pero todavía no usa propias — ADR-076). Se
   centralizaron acá en `v0.59.0` (E4 de la auditoría): antes cada producto tenía
   su propia copia generada por el CLI de shadcn. Son la base sobre la que se
   construyen las pantallas. `vitest` las excluye de su corrida

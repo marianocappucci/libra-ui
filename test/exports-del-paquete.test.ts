@@ -56,6 +56,15 @@ describe('el mapa de exports de package.json', () => {
     expect(huerfanos).toEqual([])
   })
 
+  // Los dos casos de arriba miran sólo `src/` (la raíz): las primitivas de `src/ui/` no los alcanzaban, y una primitiva sin su línea en `exports` (`radio-group` y
+  // `textarea` entraron en 0.162.0, ADR-076) sale en verde de este repo y explota en el producto que hace `export * from 'libra-ui/ui/<x>'`.
+  it('🔴 cada primitiva de src/ui/ esta exportada como libra-ui/ui/<nombre>', () => {
+    const primitivas = readdirSync(resolve(raiz, 'src', 'ui')).filter((f) => /\.tsx?$/.test(f))
+    expect(primitivas.length).toBeGreaterThan(15)
+    const faltan = primitivas.filter((f) => mapa[`./ui/${f.replace(/\.tsx?$/, '')}`] !== `./src/ui/${f}`)
+    expect(faltan).toEqual([])
+  })
+
   it('el control — el guard sabe distinguir un destino que no existe', () => {
     // Sin esto, los dos casos de arriba pasarian igual si `existsSync` mintiera
     // o si la ruta base estuviera mal armada: una lista vacia comparada contra
