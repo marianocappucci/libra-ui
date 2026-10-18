@@ -422,3 +422,31 @@ describe('el filtro por envío por mail', () => {
     expect(urlesDelListado().every((u) => !u.includes('envio='))).toBe(true)
   })
 })
+
+describe('el badge del tipo conoce las FCE (ADR-075)', () => {
+  const FCE = [[201, 'FEA', 'FCE MiPyME A'], [206, 'FEB', 'FCE MiPyME B'], [211, 'FEC', 'FCE MiPyME C'],
+    [202, 'NDEA', 'Nota de Débito FCE A'], [207, 'NDEB', 'Nota de Débito FCE B'], [212, 'NDEC', 'Nota de Débito FCE C'],
+    [203, 'NCEA', 'Nota de Crédito FCE A'], [208, 'NCEB', 'Nota de Crédito FCE B'], [213, 'NCEC', 'Nota de Crédito FCE C']] as const
+
+  it.each(FCE)('el tipo %i dice «%s» y su nombre completo (%s), no «?»', async (tipo, sigla, nombre) => {
+    responder([{ ...AUTORIZADA, id: 90, tipo }])
+    montar()
+    const badge = await screen.findByText(sigla)
+    expect(badge).toHaveAttribute('title', nombre)
+    expect(screen.queryByText('?')).toBeNull()
+  })
+
+  it('un tipo que no se conoce sigue saliendo «?», con título genérico', async () => {
+    responder([{ ...AUTORIZADA, id: 91, tipo: 99 }])
+    montar()
+    expect(await screen.findByText('?')).toHaveAttribute('title', 'Comprobante')
+  })
+
+  it('los de siempre no cambian: FA, NCB, NDC', async () => {
+    responder([{ ...AUTORIZADA, id: 1, tipo: 1 }, { ...AUTORIZADA, id: 2, tipo: 8, numero: 2 }, { ...AUTORIZADA, id: 3, tipo: 12, numero: 3 }])
+    montar()
+    expect(await screen.findByText('FA')).toHaveAttribute('title', 'Factura A')
+    expect(screen.getByText('NCB')).toHaveAttribute('title', 'Nota de Crédito B')
+    expect(screen.getByText('NDC')).toHaveAttribute('title', 'Nota de Débito C')
+  })
+})

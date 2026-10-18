@@ -42,10 +42,10 @@ import { SelectBuscable } from './SelectBuscable'
 import { formatoMoneda } from './formatos'
 import { acreditadoDe, cuentaDelDetalle, estaAcreditadaPorCompleto, pendienteDe, tienePendiente } from './estado-de-cobro'
 import { Table } from './ui/table'
-import { esCobrable, esFactura } from './tipos-de-comprobante'
+import { discriminaIva, esCobrable, esFactura, prefijoDe } from './tipos-de-comprobante'
 
 function labelComprobante(f: Factura): string {
-  const letra = ({ 1: 'A', 6: 'B', 11: 'C', 3: 'NC-A', 8: 'NC-B', 13: 'NC-C', 2: 'ND-A', 7: 'ND-B', 12: 'ND-C' } as Record<number, string>)[f.tipo] ?? '?'
+  const letra = prefijoDe(f.tipo)
   const pv = String(f.punto_venta).padStart(4, '0')
   const num = String(f.numero).padStart(8, '0')
   return `${letra} ${pv}-${num}`
@@ -634,7 +634,7 @@ export function FacturaDetalle({
                   ))}
                 </tbody>
                 <tfoot className="font-medium">
-                  {detalle.factura.tipo !== 11 && detalle.factura.iva_amount > 0 && (
+                  {discriminaIva(detalle.factura.tipo) && detalle.factura.iva_amount > 0 && (
                     <>
                       <tr><td colSpan={3} className="p-3 text-right text-muted-foreground">Subtotal</td><td className="p-3 text-right">{formatoMoneda(detalle.factura.subtotal)}</td></tr>
                       <tr><td colSpan={3} className="p-3 text-right text-muted-foreground">IVA {detalle.factura.subtotal > 0 ? Math.round((detalle.factura.iva_amount / detalle.factura.subtotal) * 100) : 21}%</td><td className="p-3 text-right">{formatoMoneda(detalle.factura.iva_amount)}</td></tr>
