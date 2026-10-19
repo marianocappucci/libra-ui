@@ -1887,3 +1887,23 @@ Las 37 pantallas del kit que importaban `@/components/ui/dialog` (50 `DialogCont
 **Consecuencias.** MINOR, sólo visual: los productos que montan el cartel (`createLayout({ conexionDelNodo: true })`) lo ven con el pin; nada más cambia.
 
 **Tests.** `test/nodo-offline.test.tsx`: el cartel lleva la marca `LibraEdge`, a 20 px, en la variante favicon y del cian de la marca, y su texto empieza igual que antes.
+
+## ADR-080 — «Sucursal sin internet»: el alta del nodo de LibraEdge desde el central (0.166.0)
+
+**Estado:** propuesta (2026-10-19). Es la pantalla del ADR-011 de libraedge (`libraedge.pantalla_del_central.create_nodos_router`). Decisión del humano (2026-10-19): el administrador da de alta el nodo de una sucursal desde el central y se lleva el instalador y la carga.
+
+**Qué ya existe** (se miró antes). En libraedge: el aprovisionamiento (`registrar`, `dar_de_baja`, ADR-008), la carga (`armar_carga`, `registrar --carga`, ADR-010) y los instaladores publicados en los Releases (`libraedge-nodo-<producto>.exe`). En el kit: la marca de LibraEdge (`MarcaProducto producto="libraedge"`, ADR-078), `AvisoEstado`/`BadgeEstado`, `TituloPantalla`, el `Dialog` de confirmación que usa el pedido de certificado de ARCA (ADR-041, que ya resolvió «un archivo sensible que no pasa por el navegador»: ahí la clave ni sale del servidor). **No había** forma de bajar un adjunto de un `POST` sin leerlo: `api` parsea JSON y `useImprimirTicket` arma un Blob propio para imprimir.
+
+**Decisión.**
+1. **`libra-ui/SucursalSinInternet`**: `GET /api/nodos-offline` (ruta configurable con `ruta`) y tres tarjetas: el instalador (link del backend, con el nombre del producto), el nodo de cada sucursal activa («Dar de alta el nodo» en las que no tienen) y los nodos con su estado (`Al día`, `Sin noticias`, `Sin instalar`, `Dado de baja`), prefijo y última sincronización («hace 3 min», la hora exacta en el `title`), con «Carga nueva» y «Dar de baja». Cada acción pide confirmación en un diálogo que dice qué pasa (la carga se baja una sola vez; la nueva invalida la anterior y es sólo para la misma PC; la baja no se deshace) y el error del motor se muestra ahí.
+2. **🔴 La carga no pasa por la pantalla.** `api.postArchivo(path, body)` (nuevo en `api-client`) devuelve `{blob, nombre, headers}` **sin leer el cuerpo**; `guardarArchivo(blob, nombre)` lo baja con un `<a download>` efímero. Lo que se muestra (`node_id`, prefijo) viene en cabeceras aparte. Los errores se tratan como en `request` (sesión vencida, Términos, `ApiError` con el `mensaje` del motor).
+3. **Sin el adicional `offline`** la pantalla lo explica y deshabilita el alta y la carga nueva; la baja sigue (un nodo instalado se tiene que poder revocar). Sin URL https del central o con el CUIT mal cargado tampoco deja emitir; si faltan CUIT o condición de IVA, avisa que el nodo no va a poder facturar.
+4. **Concepto nuevo del catálogo de íconos: `sucursalSinInternet` → `CloudOff`** (lo usan tres productos). Falta la fila en la tabla del wiki (`catalogo-iconos-identidad-diseno`).
+
+**Cómo lo adopta cada producto** (RestoLibra, VentaLibra, ContaLibra). El backend monta `create_nodos_router(aprovisionamiento, get_connection)` con su guarda de administrador; el frontend agrega la ruta `/sucursal-sin-internet` con `<SucursalSinInternet />` y la entrada «Sucursal sin internet» (`ICONOS.sucursalSinInternet`, `module: 'offline'`, sólo admin).
+
+**Consecuencias.** MINOR: una pantalla, dos funciones y un método de `api` nuevos, un concepto del catálogo. Ninguna pantalla existente cambia.
+
+**Tests.** `test/SucursalSinInternet.test.tsx` (12): el instalador y las listas, sin adicional, sin URL del central, emisor incompleto, error al cargar; el alta baja el archivo con su nombre y **el secreto no aparece en el documento**; el rechazo del motor en el diálogo sin descargar nada; la carga nueva a la ruta del nodo; la baja con confirmación; `nombreDeArchivo`, `ultimaSincronizacion`, `nombreDelProducto`. `test/iconos-identidad.test.tsx`: el concepto nuevo y el ícono del título de la pantalla.
+
+**Lo que no cubre.** (a) El e2e en un navegador (la descarga real y los 390 px). (b) La revisión manual de operaciones (`libraedge-central revision`), que sigue siendo CLI. (c) El aviso de nodo callado por mail o Telegram (decisión 11 del plan).
