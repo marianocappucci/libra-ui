@@ -68,6 +68,13 @@ describe('MarcaProducto', () => {
     expect(container.querySelector('svg')!.innerHTML).toBe(dibujoDe(svgDeMarca('libracargo')))
   })
 
+  it('dibuja también la marca de LibraEdge, el complemento (ADR-078), con su nombre y su color', () => {
+    const { container } = render(<MarcaProducto producto="libraedge" />)
+    expect(screen.getByRole('img')).toHaveAttribute('aria-label', 'LibraEdge')
+    expect(fondoDe(screen.getByRole('img'))).toBe('#0e7490')
+    expect(container.querySelector('svg')!.innerHTML).toBe(dibujoDe(svgDeMarca('libraedge')))
+  })
+
   it('🔴 usa el color de MARCA y no el de acción: RestoLibra queda #ea580c aunque el botón use #c2410c', () => {
     render(<MarcaProducto producto="restolibra" />)
     expect(fondoDe(screen.getByRole('img'))).toBe('#ea580c')
