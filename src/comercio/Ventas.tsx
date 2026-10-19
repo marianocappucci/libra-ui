@@ -274,7 +274,8 @@ export function Ventas({
       ? <Link to={rutaDeFactura(v.factura_id as number)} onClick={(e) => e.stopPropagation()} className="inline-flex max-w-full items-center gap-1 truncate text-sm font-medium text-exito hover:underline" title={v.factura_display}><ReceiptText className="size-3.5 shrink-0" /><span className="truncate">{v.factura_display}</span></Link>
       : <span className="inline-flex max-w-full items-center gap-1 truncate text-sm font-medium" title={v.factura_display}><ReceiptText className="size-3.5 shrink-0" /><span className="truncate">{v.factura_display}</span></span>
     : v.estado !== 'anulada'
-      ? <BadgeEstado tono="atencion">Sin facturar</BadgeEstado>
+      // LibraEdge (ADR-077): la venta de un nodo que espera su factura en la bandeja se factura sola al volver la conexión.
+      ? <BadgeEstado tono="atencion">{v.factura_pendiente ? 'Pendiente (sin conexión)' : 'Sin facturar'}</BadgeEstado>
       : <span className="text-muted-foreground">—</span>
 
   const acciones = (v: Venta) => (

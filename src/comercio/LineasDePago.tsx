@@ -12,6 +12,7 @@
  *  registra. El vuelto sale de la resta entre esos dos, no del total. La forma
  *  y las cuentas viven en `pagos.ts` — acá queda sólo la pantalla.
  */
+import { useEffect } from 'react'
 import { Check, Plus, X } from 'lucide-react'
 
 import {
@@ -22,6 +23,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { SelectBuscable } from '../SelectBuscable'
+import { MENSAJE_QR_SIN_CONEXION, useConexionDelNodo } from '../nodo-offline'
 
 export function LineasDePago({
   lineas, onChange, medios, aPagar, formatCurrency, deshabilitado = false,
@@ -36,6 +38,14 @@ export function LineasDePago({
 }) {
   const declarado = totalDeclarado(lineas)
   const falta = redondear(aPagar - declarado)
+  // LibraEdge (ADR-077): en un nodo sin conexión el QR no puede salir. La casilla se apaga y, si estaba tildada, se
+  // destilda: el cobro se registra con su medio y el 409 del motor no llega a pasar.
+  const { sinConexion } = useConexionDelNodo()
+  const hayQrTildado = lineas.some((l) => l.cobrarConQr)
+  useEffect(() => {
+    if (sinConexion && hayQrTildado) onChange(lineas.map((l) => (l.cobrarConQr ? { ...l, cobrarConQr: false } : l)))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sinConexion, hayQrTildado])
 
   function actualizar(indice: number, cambio: Partial<LineaDePago>) {
     onChange(lineas.map((linea, i) => {
@@ -164,13 +174,15 @@ export function LineasDePago({
               )}
 
               {linea.medio === MEDIO_DEL_QR && (
-                <label className="flex items-center gap-2 pb-2 text-sm" htmlFor={`cobrar-con-qr-${i}`}>
+                <label className="flex items-center gap-2 pb-2 text-sm" htmlFor={`cobrar-con-qr-${i}`}
+                       title={sinConexion ? MENSAJE_QR_SIN_CONEXION : undefined}>
                   <input
                     type="checkbox" id={`cobrar-con-qr-${i}`} className="size-4"
-                    checked={linea.cobrarConQr} disabled={deshabilitado}
+                    checked={linea.cobrarConQr && !sinConexion} disabled={deshabilitado || sinConexion}
                     onChange={(e) => actualizar(i, { cobrarConQr: e.target.checked })}
                   />
                   Cobrar con QR ahora
+                  {sinConexion && <span className="text-xs text-muted-foreground">(sin conexión)</span>}
                 </label>
               )}
             </div>
