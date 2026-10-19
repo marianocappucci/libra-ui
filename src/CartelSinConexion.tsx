@@ -5,6 +5,7 @@ import { ReceiptText, WifiOff } from 'lucide-react'
 
 import { api, ApiError } from './api-client'
 import { AvisoEstado, BadgeEstado } from './badge-estado'
+import { MarcaProducto } from './MarcaProducto'
 import {
   CODIGO_SIN_CONEXION, ETIQUETA_VENTA_SIN_CONEXION, MENSAJE_FACTURAR_AHORA_SIN_CONEXION, RUTA_FACTURAR_PENDIENTES_DEL_NODO,
   TEXTO_CARTEL_SIN_CONEXION, codigoDelError, marcarSinConexion, refrescarConexionDelNodo, useConexionDelNodo,
@@ -13,7 +14,9 @@ import {
 import { Button } from '@/components/ui/button'
 
 /** El cartel fijo de un nodo sin conexión. Fuera de un nodo, o con conexión, no dibuja nada. Lo monta `createLayout`
- *  con `conexionDelNodo: true`; un producto con layout propio lo pone arriba del contenido. */
+ *  con `conexionDelNodo: true`; un producto con layout propio lo pone arriba del contenido.
+ *  Lleva la marca de LibraEdge (ADR-079), en la variante chica: el que sigue atendiendo sin internet es él, y es la misma
+ *  marca que el cajero ve en el instalador y en la PC. */
 export function CartelSinConexion({ ruta: rutaPedida, intervaloMs, className }: { ruta?: string; intervaloMs?: number; className?: string } = {}) {
   const { sinConexion, aFacturar } = useConsultarConexionDelNodo({ ruta: rutaPedida, intervaloMs })
   if (!sinConexion) return null
@@ -24,7 +27,7 @@ export function CartelSinConexion({ ruta: rutaPedida, intervaloMs, className }: 
       data-slot="cartel-sin-conexion"
       className={`sticky top-0 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 bg-background ${className ?? ''}`}
     >
-      <WifiOff className="size-4 shrink-0" aria-hidden="true" />
+      <MarcaProducto producto="libraedge" variante="favicon" className="h-5 w-5" />
       <span>{TEXTO_CARTEL_SIN_CONEXION}</span>
       {aFacturar > 0 && <span className="font-medium">{ventasParaFacturar(aFacturar)}</span>}
     </AvisoEstado>

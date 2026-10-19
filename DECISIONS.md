@@ -1877,3 +1877,13 @@ Las 37 pantallas del kit que importaban `@/components/ui/dialog` (50 `DialogCont
 **Tests.** `test/marcas.test.ts`: las mismas reglas de las ocho valen para LibraEdge (SVG de 120 × 120, fondo del color de marca, `<title>`, compacto, favicon distinto, los nueve dibujos distintos, los dieciocho archivos sellados), y además que no esté en `IDENTIDAD`, que su color no sea el de ninguna app y que las ocho sigan con el nombre y el color de `IDENTIDAD`. `test/marca-producto.test.tsx`: `MarcaProducto` la dibuja con su nombre y su color.
 
 **Lo que no cubre.** Llevarla a LibraSuite y a las landings (copian el archivo, como las otras ocho) y a la pantalla del nodo.
+
+## ADR-079 — La marca de LibraEdge en el cartel del nodo (0.165.0)
+
+**Estado:** aceptada (2026-10-19). Pedido del humano: «ponelo también en la pantalla del nodo», después de la marca (ADR-078).
+
+**Decisión.** `CartelSinConexion` (ADR-077) lleva `<MarcaProducto producto="libraedge" variante="favicon" className="h-5 w-5" />` en lugar del `WifiOff` de lucide. Es la variante chica (la PC sola, la luz prendida): la completa se empasta a 20 px. El cartel sigue diciendo «Sin conexión: …»; la marca dice quién sigue atendiendo, y es la misma que el cajero ve en el instalador y en «Agregar o quitar programas». El nombre accesible lo da el `aria-label` de `MarcaProducto` y el texto del cartel no cambia. `EtiquetaVentaSinConexion` conserva el `WifiOff`: en una fila de la bandeja lo que importa es que la venta se hizo sin conexión, y a 14 px una marca no se lee.
+
+**Consecuencias.** MINOR, sólo visual: los productos que montan el cartel (`createLayout({ conexionDelNodo: true })`) lo ven con el pin; nada más cambia.
+
+**Tests.** `test/nodo-offline.test.tsx`: el cartel lleva la marca `LibraEdge`, a 20 px, en la variante favicon y del cian de la marca, y su texto empieza igual que antes.
