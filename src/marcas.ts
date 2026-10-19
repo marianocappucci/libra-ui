@@ -16,12 +16,30 @@ import { IDENTIDAD, type Producto } from './identidad'
 
 export type VarianteDeMarca = 'icono' | 'favicon'
 
+// LibraEdge no es un producto: es el complemento de la suite que deja vender sin internet desde la PC del local (ADR-078). Tiene marca
+// —la usan su sección en LibraSuite y las landings, la pantalla del nodo y el instalador de Windows— pero no identidad de app: no tiene
+// pantalla propia, ni acento, ni `theme-color`. Por eso su nombre y su color viven acá y no en `IDENTIDAD`, que es la tabla de las ocho apps
+// y la que comparan las landings y el wiki.
+export type Complemento = 'libraedge'
+export type Marca = Producto | Complemento
+
+const COMPLEMENTOS: Record<Complemento, { nombre: string; color: string }> = {
+  // Cian: el único tono que no estaba tomado por los ocho (el más cercano, el verde azulado de MedLibra, es más verde y más claro).
+  libraedge: { nombre: 'LibraEdge', color: '#0e7490' },
+}
+
+/** El nombre y el color de fondo de una marca, sea app o complemento. */
+export function datosDeMarca(marca: Marca): { nombre: string; color: string } {
+  const { nombre, color } = marca in COMPLEMENTOS ? COMPLEMENTOS[marca as Complemento] : IDENTIDAD[marca as Producto]
+  return { nombre, color }
+}
+
 const BLANCO = '#ffffff'
 const AMARILLO = '#fbbf24'
 
 // Los dos tonos propios del dibujo, que no son colores de la interfaz y por eso no están en `IDENTIDAD`: la `tinta` (el detalle oscuro dentro
 // de las piezas blancas) y el `claro` (renglones, celdas, agujeros).
-const TONOS: Record<Producto, { tinta: string; claro: string }> = {
+const TONOS: Record<Marca, { tinta: string; claro: string }> = {
   contalibra: { tinta: '#172554', claro: '#bfdbfe' },
   restolibra: { tinta: '#7c2d12', claro: '#fed7aa' },
   gestiolibra: { tinta: '#3b0764', claro: '#ddd6fe' },
@@ -30,7 +48,12 @@ const TONOS: Record<Producto, { tinta: string; claro: string }> = {
   libradesk: { tinta: '#1e1b4b', claro: '#c7d2fe' },
   libracargo: { tinta: '#001d5c', claro: '#93b4f0' },
   libraclub: { tinta: '#022c1c', claro: '#a7f3d0' },
+  libraedge: { tinta: '#083344', claro: '#a5f3fc' },
 }
+
+/** Todas las marcas dibujadas: las ocho apps y los complementos. Sale de `TONOS` y no de `IDENTIDAD` porque `identidad.ts` importa este
+ *  módulo (el favicon): leer `IDENTIDAD` al cargar daría `undefined` por el import circular. El test la compara contra `IDENTIDAD`. */
+export const MARCAS = Object.keys(TONOS) as Marca[]
 
 type Paleta = { fondo: string; tinta: string; claro: string }
 
@@ -43,7 +66,7 @@ const repetir = <T>(xs: T[], f: (x: T, i: number) => string) => xs.map(f).join('
 
 // Los dibujos, en un lienzo de 120 × 120. El de `icono` se achica al 85 % y se centra (`translate(9 9) scale(.85)`) para dejar aire contra el
 // borde del cuadrado; el de `favicon` usa el lienzo entero, porque a 16 px cada píxel cuenta.
-const ICONO: Record<Producto, (c: Paleta) => string> = {
+const ICONO: Record<Marca, (c: Paleta) => string> = {
   contalibra: (c) => `
 <rect x="22" y="26" width="44" height="60" rx="5" fill="${BLANCO}" opacity=".35" transform="rotate(-9 44 56)"/>
 <path d="M32 24a4 4 0 0 1 4-4h36a4 4 0 0 1 4 4v70l-5.5-4-5.5 4-5.5-4-5.5 4-5.5-4-5.5 4-5.5-4-5.5 4z" fill="${BLANCO}"/>
@@ -130,10 +153,23 @@ ${repetir([[75, 37], [90, 37], [82.5, 45], [75, 53], [90, 53], [82.5, 61]], ([x,
 </g>
 <circle cx="34" cy="34" r="10" fill="${AMARILLO}" ${corte(c, 6)}/>
 <path d="M25.5 30a11 11 0 0 0 17 0" fill="none" stroke="${c.tinta}" stroke-width="2" opacity=".35"/>`,
+
+  // La nube de la central atrás, translúcida (está, pero el local no depende de ella), la PC del local adelante y el círculo de sincronía:
+  // lo que se vendió sin internet sube solo al volver.
+  libraedge: (c) => `
+<path d="M34 58a15 15 0 0 1-2-29.8A21 21 0 0 1 72 24a17 17 0 0 1 14 34z" fill="${BLANCO}" opacity=".4"/>
+<rect x="8" y="100" width="96" height="5" rx="2.5" fill="${BLANCO}" opacity=".3"/>
+<rect x="10" y="56" width="82" height="40" rx="9" fill="${BLANCO}" ${corte(c, 8)}/>
+<rect x="21" y="66" width="34" height="7" rx="3.5" fill="${c.tinta}"/>
+<rect x="21" y="80" width="22" height="5" rx="2.5" fill="${c.claro}"/>
+<circle cx="90" cy="88" r="18" fill="${AMARILLO}" ${corte(c, 8)}/>
+<g fill="none" stroke="${c.tinta}" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
+<path d="M79.5 86a11 11 0 0 1 18.5-6.5"/><path d="M99 72.5v7h-7"/><path d="M100.5 90a11 11 0 0 1-18.5 6.5"/><path d="M81 103.5v-7h7"/>
+</g>`,
 }
 
 // El favicon: una sola pieza del ícono, más grande y con trazos gruesos.
-const FAVICON: Record<Producto, (c: Paleta) => string> = {
+const FAVICON: Record<Marca, (c: Paleta) => string> = {
   contalibra: (c) => `
 <path d="M30 22a6 6 0 0 1 6-6h48a6 6 0 0 1 6 6v84l-10-7-10 7-10-7-10 7-10-7-10 7z" fill="${BLANCO}"/>
 <rect x="42" y="34" width="36" height="10" rx="5" fill="${c.tinta}"/>
@@ -180,26 +216,33 @@ ${repetir([[38, 7], [50, 5], [60, 9], [74, 5], [84, 7]], ([x, w]) => `<rect x="$
 ${repetir([[50, 30], [71, 30], [60.5, 43], [50, 56], [71, 56]], ([x, y]) => `<circle cx="${x}" cy="${y}" r="4" fill="${c.claro}"/>`)}
 </g>
 <circle cx="27" cy="88" r="14" fill="${AMARILLO}" ${corte(c, 8)}/>`,
+
+  // La PC del local sola, con la luz prendida: a 16 px el círculo de sincronía y la nube se empastan.
+  libraedge: (c) => `
+<rect x="8" y="34" width="104" height="56" rx="13" fill="${BLANCO}"/>
+<rect x="22" y="50" width="44" height="10" rx="5" fill="${c.tinta}"/>
+<rect x="22" y="68" width="28" height="8" rx="4" fill="${c.claro}"/>
+<circle cx="92" cy="62" r="9" fill="${AMARILLO}"/>`,
 }
 
 /**
  * El SVG completo de la marca: el cuadrado redondeado del color de marca y el dibujo encima. Sin `width` ni `height`: llena lo que le den.
  * `icono` lleva un `<title>` con el nombre; quien lo incruste como decoración (`MarcaProducto`) lo esconde con `aria-hidden`.
  */
-export function svgDeMarca(producto: Producto, variante: VarianteDeMarca = 'icono'): string {
-  const { nombre, color } = IDENTIDAD[producto]
-  const paleta: Paleta = { fondo: color, ...TONOS[producto] }
+export function svgDeMarca(marca: Marca, variante: VarianteDeMarca = 'icono'): string {
+  const { nombre, color } = datosDeMarca(marca)
+  const paleta: Paleta = { fondo: color, ...TONOS[marca] }
   // El favicon redondea un poco más (30 contra 27): achicado a 16 px, el radio del ícono se ve casi recto.
   const cuerpo =
     variante === 'favicon'
-      ? `<rect width="120" height="120" rx="30" fill="${color}"/>${FAVICON[producto](paleta)}`
-      : `<rect width="120" height="120" rx="27" fill="${color}"/><g transform="translate(9 9) scale(.85)">${ICONO[producto](paleta)}</g>`
+      ? `<rect width="120" height="120" rx="30" fill="${color}"/>${FAVICON[marca](paleta)}`
+      : `<rect width="120" height="120" rx="27" fill="${color}"/><g transform="translate(9 9) scale(.85)">${ICONO[marca](paleta)}</g>`
   // Compacto: sin saltos de línea ni sangría, para que el archivo y el data URL pesen lo justo.
   const dibujo = cuerpo.replace(/\n/g, '')
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><title>${nombre}</title>${dibujo}</svg>`
 }
 
 /** El favicon como `data:` URL, listo para un `<link rel="icon">`. */
-export function faviconDeMarca(producto: Producto): string {
-  return `data:image/svg+xml,${encodeURIComponent(svgDeMarca(producto, 'favicon'))}`
+export function faviconDeMarca(marca: Marca): string {
+  return `data:image/svg+xml,${encodeURIComponent(svgDeMarca(marca, 'favicon'))}`
 }

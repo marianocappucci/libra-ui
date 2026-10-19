@@ -1858,3 +1858,22 @@ Las 37 pantallas del kit que importaban `@/components/ui/dialog` (50 `DialogCont
 **Tests.** `test/nodo-offline.test.tsx` (25): los ayudantes; la consulta (fuera de un nodo una sola consulta aunque se remonte, el 404 igual, un 500 y un corte dejan lo último, el reloj compartido y frenado, la ruta y el intervalo propios, un cuerpo vacío); el cartel (texto, «N ventas», nada con conexión) y el layout (lo monta arriba del contenido, con la ruta del producto, y sin la opción no pide nada); el detalle (QR apagado con su motivo, 409 `sin_conexion` al pedir el QR y en el poll, 409 `factura_pendiente` como aviso con reimprimir y la etiqueta, la venta ya marcada, el 422 `nodo_sin_arca`); el punto de venta (la casilla del QR y el listado); la bandeja (la etiqueta, el resultado, singular y sin errores, deshabilitado sin conexión, el 409 y el corte de red).
 
 **Lo que no cubre.** (a) La bandeja como pantalla del kit: sigue siendo de Contalibra. (b) El aviso de «volvió la conexión, quedan N por facturar»: el cartel sólo se muestra sin conexión, y la tanda automática del nodo las factura sola. (c) El e2e en un navegador (el `sticky` del cartel a 390 px no se midió).
+
+## ADR-078 — La marca de LibraEdge, el complemento de la suite (0.164.0)
+
+**Estado:** aceptada (2026-10-19). Pedido del humano: «hagamos un ícono para libraedge así como tenemos los de las aplicaciones, alusivo a su uso, siguiendo la misma idea de los otros». Eligió la propuesta C de la lámina `diseños/iconos-libraedge.html` del wiki, en cian, y pidió que sirva también para el instalador de Windows y para «Agregar o quitar programas».
+
+**Qué ya existe.** `marcas.ts` (ADR-034) dibuja las ocho apps con las cuatro reglas de la serie v2; `IDENTIDAD` (ADR-033) es la tabla de las apps, con acento y `theme-color`, que comparan las landings y el wiki; `MarcaProducto` incrusta la marca; los `marcas/*.svg` son la copia en archivo, sellada por `test/marcas.test.ts`.
+
+**Decisión.**
+1. **El dibujo** sigue las cuatro reglas: la nube de la central atrás, blanca translúcida (está, pero el local no depende de ella); la PC del local adelante, con el corte del fondo; y el círculo de sincronía amarillo, que es el único acento: lo que se vendió sin internet sube solo al volver. El favicon es la PC sola con la luz prendida, porque a 16 px la nube y el círculo se empastan.
+2. **El color es cian `#0e7490`** (tinta `#083344`, claro `#a5f3fc`): el único tono que no estaba tomado por los ocho.
+3. **LibraEdge no entra en `IDENTIDAD`.** No es una app: no tiene pantalla propia, ni acento, ni `theme-color`, y meterlo cambiaría la tabla que comparan las landings y el wiki. `marcas.ts` suma el tipo `Complemento` (`'libraedge'`), `Marca = Producto | Complemento`, `datosDeMarca(marca)` (nombre y color, de `IDENTIDAD` o de los complementos) y `MARCAS` (las nueve). `svgDeMarca`, `faviconDeMarca` y `MarcaProducto` aceptan una `Marca`: con un `Producto`, todo sigue igual.
+4. **`MARCAS` sale de las claves de `TONOS`**, no de `IDENTIDAD`: `identidad.ts` importa `marcas.ts` (el favicon), y leer `IDENTIDAD` al cargar el módulo da `undefined` por el import circular. El test la compara contra `IDENTIDAD`.
+5. **El instalador** (`libraedge/instalador/`) copia `marcas/libraedge.svg` y `marcas/libraedge-favicon.svg` y de ellos arma el `.ico` (la PC sola de 16 a 32 px, la marca completa de 48 a 256), que va en `SetupIconFile` y en `UninstallDisplayIcon`.
+
+**Consecuencias.** MINOR: tipos y funciones nuevas; los parámetros de `svgDeMarca` y `MarcaProducto` se ensanchan. Ningún producto cambia hasta usarla.
+
+**Tests.** `test/marcas.test.ts`: las mismas reglas de las ocho valen para LibraEdge (SVG de 120 × 120, fondo del color de marca, `<title>`, compacto, favicon distinto, los nueve dibujos distintos, los dieciocho archivos sellados), y además que no esté en `IDENTIDAD`, que su color no sea el de ninguna app y que las ocho sigan con el nombre y el color de `IDENTIDAD`. `test/marca-producto.test.tsx`: `MarcaProducto` la dibuja con su nombre y su color.
+
+**Lo que no cubre.** Llevarla a LibraSuite y a las landings (copian el archivo, como las otras ocho) y a la pantalla del nodo.

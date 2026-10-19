@@ -4,8 +4,7 @@
 // El SVG sale de `svgDeMarca` (`marcas.ts`), que es la fuente también de los archivos de `marcas/` que copian las landings: un solo dibujo para
 // toda la familia. Se incrusta como markup y no como `<img>` para que pinte en el primer render, sin pedir nada a la red. Los strings son
 // constantes del paquete (no hay dato del usuario adentro), así que `dangerouslySetInnerHTML` no abre nada.
-import { IDENTIDAD, type Producto } from './identidad'
-import { svgDeMarca, type VarianteDeMarca } from './marcas'
+import { datosDeMarca, svgDeMarca, type Marca, type VarianteDeMarca } from './marcas'
 import { cn } from './utils'
 
 export function MarcaProducto({
@@ -13,7 +12,8 @@ export function MarcaProducto({
   variante = 'icono',
   className,
 }: {
-  producto: Producto
+  /** Una de las ocho apps o un complemento de la suite (`libraedge`, ADR-078). */
+  producto: Marca
   /** `icono` (por defecto) es la marca completa; `favicon` es la pieza sola y engrosada, para tamaños de 24 px o menos. */
   variante?: VarianteDeMarca
   /** Tamaño del cuadrado. Por defecto `h-8 w-8` (el de la sidebar); el Login usa `h-12 w-12`. Se mergea con `cn`: lo que pase pisa al default. */
@@ -21,7 +21,7 @@ export function MarcaProducto({
   /** @deprecated Desde `v0.124.0` la marca es un solo dibujo que llena el cuadrado; se acepta y se ignora para no romper a quien la pase. */
   iconoClassName?: string
 }) {
-  const { nombre } = IDENTIDAD[producto]
+  const { nombre } = datosDeMarca(producto)
   // Sin el `<title>` del SVG: el nombre accesible lo da el `aria-label` del contenedor, una sola vez, y el título no aparece como texto al lado
   // del nombre del producto (el encabezado ya lo escribe).
   const svg = svgDeMarca(producto, variante)

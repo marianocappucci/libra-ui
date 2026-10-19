@@ -1,4 +1,4 @@
-// La marca dibujada de cada producto (ADR-034, v0.124.0).
+// La marca dibujada de cada producto (ADR-034, v0.124.0) y de LibraEdge, el complemento de la suite (ADR-078, v0.164.0).
 //
 // Además de mirar que cada SVG esté bien armado, este test es el guardián de los archivos de `marcas/`: las landings (`libra-web-kit`) y LibraSuite
 // los copian, así que tienen que ser exactamente lo que devuelve `svgDeMarca`. Si cambia un dibujo, `npm run marcas` los regenera (corre este mismo
@@ -7,12 +7,12 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { IDENTIDAD, type Producto } from '../src/identidad'
-import { faviconDeMarca, svgDeMarca, type VarianteDeMarca } from '../src/marcas'
+import { MARCAS, datosDeMarca, faviconDeMarca, svgDeMarca, type Marca, type VarianteDeMarca } from '../src/marcas'
 
-const PRODUCTOS = Object.keys(IDENTIDAD) as Producto[]
+const PRODUCTOS = MARCAS
 const VARIANTES: VarianteDeMarca[] = ['icono', 'favicon']
 const CARPETA = join(__dirname, '..', 'marcas')
-const archivo = (p: Producto, v: VarianteDeMarca) => join(CARPETA, v === 'icono' ? `${p}.svg` : `${p}-favicon.svg`)
+const archivo = (p: Marca, v: VarianteDeMarca) => join(CARPETA, v === 'icono' ? `${p}.svg` : `${p}-favicon.svg`)
 
 if (process.env.ACTUALIZAR_MARCAS) {
   for (const p of PRODUCTOS) for (const v of VARIANTES) writeFileSync(archivo(p, v), svgDeMarca(p, v) + '\n')
@@ -32,12 +32,12 @@ describe.each(VARIANTES)('svgDeMarca, variante %s', (variante) => {
   it.each(PRODUCTOS)('🔴 %s: el fondo es el cuadrado redondeado del color de MARCA', (p) => {
     const fondo = parsear(svgDeMarca(p, variante)).querySelector('svg > rect')!
     expect(fondo.getAttribute('width')).toBe('120')
-    expect(fondo.getAttribute('fill')).toBe(IDENTIDAD[p].color)
+    expect(fondo.getAttribute('fill')).toBe(datosDeMarca(p).color)
     expect(Number(fondo.getAttribute('rx'))).toBeGreaterThan(0)
   })
 
   it.each(PRODUCTOS)('%s lleva el nombre del producto como <title>', (p) => {
-    expect(parsear(svgDeMarca(p, variante)).querySelector('title')?.textContent).toBe(IDENTIDAD[p].nombre)
+    expect(parsear(svgDeMarca(p, variante)).querySelector('title')?.textContent).toBe(datosDeMarca(p).nombre)
   })
 
   it.each(PRODUCTOS)('%s es compacto: sin saltos de línea ni `undefined` colado de un tono faltante', (p) => {
@@ -52,9 +52,9 @@ describe('las dos variantes', () => {
     expect(svgDeMarca(p, 'favicon')).not.toBe(svgDeMarca(p, 'icono'))
   })
 
-  it('🔴 los ocho dibujos son distintos entre sí', () => {
+  it('🔴 los nueve dibujos son distintos entre sí', () => {
     for (const v of VARIANTES) {
-      const dibujos = PRODUCTOS.map((p) => svgDeMarca(p, v).replace(/<title>.*?<\/title>/, '').replaceAll(IDENTIDAD[p].color, ''))
+      const dibujos = PRODUCTOS.map((p) => svgDeMarca(p, v).replace(/<title>.*?<\/title>/, '').replaceAll(datosDeMarca(p).color, ''))
       expect(new Set(dibujos).size).toBe(PRODUCTOS.length)
     }
   })
@@ -71,7 +71,7 @@ describe('las dos variantes', () => {
 })
 
 describe('🔴 los archivos de marcas/ (los que copian las landings)', () => {
-  it('son exactamente los dieciséis, uno por producto y variante', () => {
+  it('son exactamente los dieciocho, uno por marca y variante', () => {
     const esperados = PRODUCTOS.flatMap((p) => VARIANTES.map((v) => archivo(p, v).slice(CARPETA.length + 1))).sort()
     expect(readdirSync(CARPETA).filter((f) => f.endsWith('.svg')).sort()).toEqual(esperados)
   })
@@ -79,5 +79,22 @@ describe('🔴 los archivos de marcas/ (los que copian las landings)', () => {
   it.each(PRODUCTOS.flatMap((p) => VARIANTES.map((v) => [p, v] as const)))('%s (%s) coincide con svgDeMarca', (p, v) => {
     expect(existsSync(archivo(p, v))).toBe(true)
     expect(readFileSync(archivo(p, v), 'utf8')).toBe(svgDeMarca(p, v) + '\n')
+  })
+})
+
+describe('LibraEdge, el complemento (ADR-078)', () => {
+  const productos = Object.keys(IDENTIDAD) as Producto[]
+
+  it('está entre las marcas pero 🔴 NO en IDENTIDAD: no es una app (sin acento ni theme-color, y la tabla que comparan las landings sigue en ocho)', () => {
+    expect(MARCAS).toEqual([...productos, 'libraedge'])
+    expect(Object.keys(IDENTIDAD)).not.toContain('libraedge')
+  })
+
+  it('🔴 su color de fondo no es el de ninguna de las ocho apps', () => {
+    expect(productos.map((p) => IDENTIDAD[p].color)).not.toContain(datosDeMarca('libraedge').color)
+  })
+
+  it('las ocho apps siguen con el nombre y el color de IDENTIDAD', () => {
+    for (const p of productos) expect(datosDeMarca(p)).toEqual({ nombre: IDENTIDAD[p].nombre, color: IDENTIDAD[p].color })
   })
 })
