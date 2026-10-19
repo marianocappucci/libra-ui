@@ -11,7 +11,7 @@ import {
   BarChart3, BookOpen, BookText, Boxes, Calculator, CalendarCheck, CalendarClock, CalendarDays, Clock, Coins, CreditCard, FileClock,
   FileSpreadsheet, FileText, HandCoins, Inbox, Landmark, LayoutDashboard, MapPin, Package, PackagePlus, Percent, Receipt, ReceiptText,
   ScanBarcode, ScrollText, Settings, ShoppingBag, ShoppingBasket, ShoppingCart, SquareStack, Store, Tags, Truck, UserCog, Users,
-  Wallet, Warehouse,
+  Wallet, Warehouse, CloudOff,
   type LucideIcon,
 } from 'lucide-react'
 import type { ReactElement } from 'react'
@@ -42,6 +42,7 @@ import { Ventas } from '../src/comercio/Ventas'
 import { Remitos } from '../src/Remitos'
 import { Presupuestos } from '../src/Presupuestos'
 import { MpBandeja } from '../src/MpBandeja'
+import { SucursalSinInternet } from '../src/SucursalSinInternet'
 import {
   ICONOS, ICONOS_POR_PRODUCTO, iconoDelConcepto, iconosDe, type Concepto,
 } from '../src/iconos-identidad'
@@ -72,6 +73,7 @@ const TABLA_DEL_WIKI = {
   stock: Boxes,
   depositos: Warehouse,
   sucursales: MapPin,
+  sucursalSinInternet: CloudOff,
   caja: Wallet,
   cajas: SquareStack,
   cajaPorMedio: Coins,
@@ -100,7 +102,7 @@ describe('el catálogo base', () => {
   it('🔴 tiene exactamente los conceptos de la tabla del wiki, ni uno más ni uno menos', () => {
     expect(Object.keys(ICONOS).sort()).toEqual([...CONCEPTOS].sort())
     // El control: la tabla de este archivo no está vacía, así que la igualdad de arriba mide algo.
-    expect(CONCEPTOS).toHaveLength(33)
+    expect(CONCEPTOS).toHaveLength(34)
   })
 
   it.each(CONCEPTOS)('🔴 «%s» lleva el ícono de la tabla', (concepto) => {
@@ -236,6 +238,7 @@ describe('las pantallas del kit rinden el ícono del catálogo en su título', (
     ['Dashboard', 'dashboard', () => <Dashboard />],
     ['Tesorería', 'tesoreria', () => <Tesoreria />],
     ['Sucursales', 'sucursales', () => <Sucursales />],
+    ['Sucursal sin internet', 'sucursalSinInternet', () => <SucursalSinInternet />],
     ['Depósitos', 'depositos', () => <Depositos />],
     ['Stock', 'stock', () => <Stock rutaDeMovimientos={(id) => `/stock/${id}`} />],
     ['Listas de precio', 'listasDePrecio', () => <ListasPrecio />],

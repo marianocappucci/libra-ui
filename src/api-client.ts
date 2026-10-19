@@ -234,6 +234,63 @@ async function requestForm<T>(method: string, path: string, form: FormData): Pro
   return data as T
 }
 
+/** Lo que devuelve `api.postArchivo`: el archivo tal cual vino, sin leerlo. */
+export type ArchivoRecibido = {
+  blob: Blob
+  /** El `filename` de `Content-Disposition`, o `null` si no vino. */
+  nombre: string | null
+  headers: Headers
+}
+
+/** El `filename` de un `Content-Disposition` (`attachment; filename="carga.json"`), o `null`. */
+export function nombreDeArchivo(contentDisposition: string | null): string | null {
+  if (!contentDisposition) return null
+  const m = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(contentDisposition)
+  return m ? decodeURIComponent(m[1].trim()) : null
+}
+
+/** Un `POST` cuya respuesta es un ARCHIVO (un adjunto) y no datos para la pantalla.
+ *
+ *  🔑 **El cuerpo no se lee**: vuelve como `Blob` para guardarlo, nunca como texto ni JSON. Es lo que permite bajar un
+ *  archivo con un secreto (la carga del nodo de LibraEdge, ADR-080) sin que pase por el estado de React ni por la
+ *  pantalla. Un error, en cambio, se trata igual que en `request` (sesión vencida, Términos, `ApiError`). */
+async function requestArchivo(path: string, body: unknown): Promise<ArchivoRecibido> {
+  const response = await fetch(path, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body ?? {}),
+  })
+  if (esSesionVencida(path, response.status)) avisarSesionVencida()
+  if (!response.ok) {
+    const isJson = response.headers.get('content-type')?.includes('application/json')
+    const data = isJson ? await response.json() : undefined
+    const pendientes = terminosPendientesDe(response.status, data)
+    if (pendientes) alHaberTerminosPendientes(pendientes)
+    const [detail, detailData] = detalleDe(data, response.statusText)
+    throw new ApiError(response.status, detail, detailData, refDe(data))
+  }
+  return {
+    blob: await response.blob(),
+    nombre: nombreDeArchivo(response.headers.get('content-disposition')),
+    headers: response.headers,
+  }
+}
+
+/** Guarda un `Blob` como archivo descargado (un `<a download>` efímero). */
+export function guardarArchivo(blob: Blob, nombre: string) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = nombre
+  a.rel = 'noopener'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  // Se suelta en el próximo turno: algunos navegadores todavía no empezaron la descarga cuando vuelve `click()`.
+  setTimeout(() => URL.revokeObjectURL(url), 0)
+}
+
 export const api = {
   get: <T>(path: string) => request<T>('GET', path),
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body ?? {}),
@@ -243,6 +300,8 @@ export const api = {
   // Uploads (logo, certificados, restore de DB) -- multipart, sin
   // Content-Type explicito para que el browser agregue el boundary.
   postForm: <T>(path: string, form: FormData) => requestForm<T>('POST', path, form),
+  // Un adjunto (la carga del nodo de LibraEdge): vuelve como `Blob`, sin leerse.
+  postArchivo: (path: string, body?: unknown) => requestArchivo(path, body),
 }
 
 // Contrato id/username/name/role/active devuelto por

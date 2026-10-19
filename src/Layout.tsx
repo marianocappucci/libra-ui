@@ -51,6 +51,7 @@ import { MarcaProducto } from './MarcaProducto'
 import { cn } from './utils'
 import { fijarModo, leerModo, suscribirseAlModo, type Modo } from './modo'
 import { CartelSinConexion } from './CartelSinConexion'
+import { RUTA_MENU_DE_NODOS_OFFLINE, useMenuDeNodosOffline } from './menu-de-nodos-offline'
 
 /** Si la ruta actual corresponde a una entrada del menú: la suya exacta, o una
  *  de `activoEn` —ella misma o cualquier ruta debajo (`/pre-facturas` cubre
@@ -82,6 +83,11 @@ export type NavItem<TUser> = {
   activoEn?: string[]
   module?: string
   adminOnly?: boolean
+  /** La entrada «Sucursal sin internet» de LibraEdge (ADR-080): se ve si el adicional `offline` está contratado **o**
+   *  quedan nodos activos, según `GET /api/nodos-offline/menu`, que el layout pide **una vez** por carga de página y
+   *  sólo para un admin. Reemplaza a `module: 'offline'`, que la escondía con nodos adentro. `true` usa la ruta de
+   *  siempre; un texto, otra. */
+  nodosOffline?: boolean | string
   hideFor?: (user: TUser) => boolean
   children?: NavChild<TUser>[]
   badge?: (user: TUser) => ReactNode
@@ -217,6 +223,11 @@ export function createLayout<TUser = { role?: string; name?: string }>({
     const isAdmin = datos?.role === 'admin'
     const veLosMenusDeAdmin = isAdmin || datos?.demo_readonly === true
 
+    // LibraEdge (ADR-080): la entrada «Sucursal sin internet», si el menú la tiene. Una consulta por página, sólo de admin.
+    const entradaDeNodos = sections.flatMap((section) => section.items).find((item) => item.nodosOffline)
+    const rutaDeNodos = typeof entradaDeNodos?.nodosOffline === 'string' ? entradaDeNodos.nodosOffline : RUTA_MENU_DE_NODOS_OFFLINE
+    const seVeLaDeNodos = useMenuDeNodosOffline(!!entradaDeNodos && !!user && veLosMenusDeAdmin, rutaDeNodos)
+
     function moduleVisible(module?: string): boolean {
       if (!module) return true
       if (!user) return false
@@ -304,6 +315,7 @@ export function createLayout<TUser = { role?: string; name?: string }>({
             const items = section.items
               .filter((item) => !(user && item.hideFor?.(user)))
               .filter((item) => (!item.adminOnly || veLosMenusDeAdmin) && moduleVisible(item.module))
+              .filter((item) => !item.nodosOffline || seVeLaDeNodos)
             if (items.length === 0) return null
             return (
               <SidebarGroup key={section.label ?? si}>

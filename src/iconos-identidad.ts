@@ -30,7 +30,7 @@
 import {
   BookOpen, BookText, Boxes, Calculator, CalendarCheck, CalendarDays, ChartColumn, Clock, Coins, CreditCard, FileClock, FileText, HandCoins,
   Inbox, Landmark, LayoutDashboard, MapPin, Package, Receipt, ReceiptText, ScrollText, Settings, ShoppingBag, ShoppingBasket, ShoppingCart,
-  SquareStack, Store, Tags, Truck, UserCog, Users, Wallet, Warehouse,
+  SquareStack, Store, Tags, Truck, UserCog, Users, Wallet, Warehouse, CloudOff,
   type LucideIcon,
 } from 'lucide-react'
 import type { Producto } from './identidad'
@@ -64,6 +64,8 @@ const CATALOGO = {
   stock: Boxes,
   depositos: Warehouse,
   sucursales: MapPin,
+  /** «Sucursal sin internet»: el nodo de LibraEdge de cada sucursal (ADR-080). */
+  sucursalSinInternet: CloudOff,
   /** La caja: el libro de movimientos de plata. */
   caja: Wallet,
   /** Las cajas: los mostradores, en configuración. */

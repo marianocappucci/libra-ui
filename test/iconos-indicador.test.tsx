@@ -149,7 +149,7 @@ describe('el catálogo entero', () => {
 
   it('🔴 tiene los de identidad, los propios y los sinónimos', () => {
     expect([...TODOS].sort()).toEqual([...DE_IDENTIDAD, ...NOMBRES_PROPIOS, ...NOMBRES_SINONIMOS].sort())
-    expect(TODOS).toHaveLength(33 + 24 + 11)
+    expect(TODOS).toHaveLength(34 + 24 + 11)
   })
 
   it('🔴 dos conceptos no comparten ícono, salvo los sinónimos (que son el mismo concepto) y proveedores/fleteros (que se separan en LibraCargo)', () => {
