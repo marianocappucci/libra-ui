@@ -1,7 +1,7 @@
 // LibraEdge en la pantalla (ADR-077; el motor es ADR-074 de libracore): la consulta compartida de la conexión del nodo,
 // el cartel «sin conexión», el QR apagado, el 409 `factura_pendiente` como aviso y las piezas de la bandeja.
 import { useState } from 'react'
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -200,6 +200,18 @@ describe('el cartel «sin conexión»', () => {
     expect(cartel.textContent).toContain(TEXTO_CARTEL_SIN_CONEXION)
     expect(cartel.textContent).toContain('3 ventas para facturar')
     expect(cartel.getAttribute('data-tono')).toBe('atencion')
+  })
+
+  it('lleva la marca de LibraEdge en la variante chica, a 20 px (ADR-079)', async () => {
+    responder({ [RUTA_CONEXION_DEL_NODO]: NODO_SIN_CONEXION })
+    render(<CartelSinConexion />)
+    const cartel = await screen.findByRole('status')
+    const marca = within(cartel).getByRole('img', { name: 'LibraEdge' })
+    expect(marca.className).toContain('h-5')
+    expect(marca.querySelector('svg > rect')!.getAttribute('fill')).toBe('#0e7490')
+    expect(marca.innerHTML).toContain('rx="30"') // el cuadrado del favicon, no el del ícono (27)
+    // El nombre lo da el aria-label: el texto del cartel no cambia.
+    expect(cartel.textContent!.startsWith(TEXTO_CARTEL_SIN_CONEXION)).toBe(true)
   })
 
   it('con conexión no dibuja nada', async () => {
