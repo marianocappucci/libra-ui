@@ -25,11 +25,15 @@ export function CartelSinConexion({ ruta: rutaPedida, intervaloMs, className }: 
       tono="atencion"
       role="status"
       data-slot="cartel-sin-conexion"
-      className={`sticky top-0 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 bg-background ${className ?? ''}`}
+      // La marca a la izquierda y el texto en su propia columna: con `flex-wrap` en la raíz, en un celular la marca
+      // quedaba sola en el primer renglón. 20 px = el alto de línea de `text-sm`, así que `items-start` la alinea al primero.
+      className={`sticky top-0 z-10 flex items-start gap-3 bg-background ${className ?? ''}`}
     >
       <MarcaProducto producto="libraedge" variante="favicon" className="h-5 w-5" />
-      <span>{TEXTO_CARTEL_SIN_CONEXION}</span>
-      {aFacturar > 0 && <span className="font-medium">{ventasParaFacturar(aFacturar)}</span>}
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
+        <span>{TEXTO_CARTEL_SIN_CONEXION}</span>
+        {aFacturar > 0 && <span className="font-medium">{ventasParaFacturar(aFacturar)}</span>}
+      </div>
     </AvisoEstado>
   )
 }
