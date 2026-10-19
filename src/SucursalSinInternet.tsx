@@ -22,6 +22,7 @@ import { Download, FileKey2, Loader2, PlugZap, Trash2 } from 'lucide-react'
 import { api, ApiError, guardarArchivo } from './api-client'
 import { AvisoEstado, BadgeEstado, type TonoEstado } from './badge-estado'
 import { fechaHora } from './fechas'
+import { formatoCantidad } from './formatos'
 import { ICONOS } from './iconos-identidad'
 import { IDENTIDAD } from './identidad'
 import { MarcaProducto } from './MarcaProducto'
@@ -87,7 +88,7 @@ export function ultimaSincronizacion(nodo: Pick<NodoOffline, 'ultima_sincronizac
   if (!nodo.ultima_sincronizacion || m === null) return 'Nunca'
   if (m < 2) return 'Recién'
   if (m < 120) return `Hace ${Math.round(m)} min`
-  if (m < 48 * 60) return `Hace ${(m / 60).toLocaleString('es-AR', { maximumFractionDigits: 1 })} h`
+  if (m < 48 * 60) return `Hace ${formatoCantidad(Math.round(m / 6) / 10)} h`
   return fechaHora(nodo.ultima_sincronizacion)
 }
 
