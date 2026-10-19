@@ -37,6 +37,18 @@ const TEXTO = '#f4f4f5'
 const CONTENIDO = '#ffffff'
 const CONTENIDO_OSCURO = '#0a0a0a' // --background oscuro: oklch(0.145 0 0)
 
+describe('tema.css: la barra de scroll de la barra lateral no tiene canal propio (ADR-081, 2026-10-19)', () => {
+  /** Las declaraciones del bloque de un selector, tal cual. */
+  const bloque = (selector: string) => CSS.match(new RegExp(`^${selector.replace(/[[\]".:]/g, '\\$&')}\\s*\\{([^}]*)\\}`, 'm'))?.[1] ?? ''
+
+  it('🔴 el canal es transparente (se ve el fondo de la barra, en claro y en oscuro) y el pulgar sale del texto de la barra', () => {
+    const reposo = bloque('[data-sidebar="content"]')
+    expect(reposo).toMatch(/scrollbar-width:\s*thin;/)
+    expect(reposo).toMatch(/scrollbar-color:\s*color-mix\(in oklch, var\(--sidebar-foreground\) \d+%, transparent\) transparent;/)
+    expect(bloque('[data-sidebar="content"]:hover')).toMatch(/scrollbar-color:\s*color-mix\(in oklch, var\(--sidebar-foreground\) \d+%, transparent\) transparent;/)
+  })
+})
+
 describe('tema.css da el defecto de la barra lateral (grafito, ADR-043, 2026-10-09)', () => {
   it.each([
     [':root:root', '--sidebar', 'oklch(0.235 0.008 265)'],

@@ -1908,3 +1908,15 @@ Las 37 pantallas del kit que importaban `@/components/ui/dialog` (50 `DialogCont
 **Tests.** `test/SucursalSinInternet.test.tsx` (12): el instalador y las listas, sin adicional, sin URL del central, emisor incompleto, error al cargar; el alta baja el archivo con su nombre y **el secreto no aparece en el documento**; el rechazo del motor en el diálogo sin descargar nada; la carga nueva a la ruta del nodo; la baja con confirmación; `nombreDeArchivo`, `ultimaSincronizacion`, `nombreDelProducto`. `test/iconos-identidad.test.tsx`: el concepto nuevo y el ícono del título de la pantalla. `test/menu-de-nodos-offline.test.tsx` (6): visible / no visible / error, una sola consulta aunque el layout se remonte, un no admin o un menú sin la entrada no piden nada, y el refresco tras la baja la esconde.
 
 **Lo que no cubre.** (a) El e2e en un navegador (la descarga real y los 390 px). (b) La revisión manual de operaciones (`libraedge-central revision`), que sigue siendo CLI. (c) El aviso de nodo callado por mail o Telegram (decisión 11 del plan).
+
+## ADR-081 — La barra de scroll de la barra lateral, sin canal propio (0.167.0)
+
+**Estado:** aceptada (2026-10-19). Pedido del humano: que el fondo de la barra de scroll de la barra lateral sea el de la barra, en claro y en oscuro, «tal cual como es hoy día una scrollbar de Claude Code desktop».
+
+**Contexto.** La barra lateral es grafito en los dos modos (ADR-043), pero su `SidebarContent` (`overflow-auto`) dibujaba la barra de scroll clásica del esquema de la página: canal blanco en claro y gris en oscuro, una franja ajena pegada al borde de la barra.
+
+**Decisión.** `tema.css` le da a `[data-sidebar="content"]` `scrollbar-width: thin` y `scrollbar-color: <pulgar> transparent`: el canal es transparente, así que se ve el `--sidebar` de abajo en los dos modos, y el pulgar es el `--sidebar-foreground` al 22% (al 38% con el puntero encima de la barra), con `color-mix` para que siga al texto si «Apariencia» cambia la barra. Son las propiedades estándar (Chromium ≥ 121, Firefox), no `::-webkit-scrollbar`: en Chromium, con `scrollbar-color` declarado, los pseudoelementos se ignoran.
+
+**Consecuencias.** MINOR, sólo visual: todos los productos lo ven con el pin, sin tocar nada. El contenido de la página no cambia; con barras superpuestas (móvil, macOS) tampoco.
+
+**Tests.** `test/barra-lateral.test.ts`: el bloque de `[data-sidebar="content"]` declara el ancho fino y el canal transparente, en reposo y con hover. Medido en Chromium (barras clásicas, claro y oscuro): antes el canal blanco; ahora el canal es el grafito de la barra.

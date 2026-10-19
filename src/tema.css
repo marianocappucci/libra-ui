@@ -77,6 +77,19 @@ html {
   --sidebar-border: oklch(0.24 0.01 265);
 }
 
+/* La barra de scroll de la barra lateral, sin canal propio (pedido del humano, 2026-10-19, ADR-081): el canal tomaba el color del esquema de la
+   página, blanco en claro y gris en oscuro, y quedaba una franja ajena sobre el grafito. Ahora el canal es transparente (se ve el `--sidebar`
+   de abajo, en los dos modos) y el pulgar es fino, del texto de la barra con poca opacidad, como en Claude Code desktop; se marca un poco más
+   al pasar por encima. `scrollbar-color` lo entienden Chromium ≥ 121 y Firefox; con barras superpuestas (móvil, macOS) no cambia nada. */
+[data-sidebar="content"] {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklch, var(--sidebar-foreground) 22%, transparent) transparent;
+}
+
+[data-sidebar="content"]:hover {
+  scrollbar-color: color-mix(in oklch, var(--sidebar-foreground) 38%, transparent) transparent;
+}
+
 /* ---- Colores ampliados (ADR-009, `v0.97.0`) ----------------------------------------------------------------------------------- */
 
 /* Éxito y encabezado del POS tienen defecto acá. El acento (`--primary`) NO: su defecto es el de cada producto (lo fija `aplicarIdentidad`) y
