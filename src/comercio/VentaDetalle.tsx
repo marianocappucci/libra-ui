@@ -14,11 +14,16 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
-  ArrowLeft, Ban, CheckCircle2, FileCheck, FileMinus, Loader2, PackageCheck, Printer, QrCode, ReceiptText,
+  ArrowLeft, Ban, CheckCircle2, FileCheck, FileMinus, Loader2, PackageCheck, Printer, QrCode, ReceiptText, WifiOff,
 } from 'lucide-react'
 
 import { api, ApiError } from '../api-client'
-import { BadgeEstado } from '../badge-estado'
+import { AvisoEstado, BadgeEstado } from '../badge-estado'
+import {
+  CODIGO_FACTURA_PENDIENTE, CODIGO_NODO_SIN_ARCA, CODIGO_SIN_CONEXION, ETIQUETA_PENDIENTE_DE_FACTURAR,
+  MENSAJE_QR_SIN_CONEXION, MENSAJE_QUEDO_PARA_FACTURAR, codigoDelError, marcarSinConexion, refrescarConexionDelNodo,
+  useConexionDelNodo,
+} from '../nodo-offline'
 import { DestinoDeNotaDeCredito } from '../DestinoDeNotaDeCredito'
 import {
   SIN_ELEGIR, avisoDeReintegro, cuerpoDeDestino, faltaElegirDestino, useOfertaDeDestino,
@@ -169,12 +174,16 @@ export function VentaDetalle({
   const [notaEmitidaLocal, setNotaEmitidaLocal] = useState(false)
   const errorRef = useRef<HTMLParagraphElement | null>(null)
   const [facturando, setFacturando] = useState(false)
+  // LibraEdge (ADR-077): el 409 `factura_pendiente` de un nodo sin conexión no es un error: la venta quedó en la bandeja.
+  const [quedoParaFacturar, setQuedoParaFacturar] = useState(false)
+  const { sinConexion } = useConexionDelNodo()
   const [qrEstado, setQrEstado] = useState<QrEstado>('idle')
   const [qrError, setQrError] = useState<string | null>(null)
   const pollRef = useRef<number | null>(null)
   const audioRef = useRef<AudioContext | null>(null)
 
   useEffect(() => {
+    setQuedoParaFacturar(false)
     cargar()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ventaId])
@@ -270,6 +279,8 @@ export function VentaDetalle({
     try {
       await api.post(`/api/ventas/${detalle.id}/mp-qr`)
     } catch (err) {
+      // Un nodo sin conexión (409 `sin_conexion`): el `mensaje` del motor dice qué hacer, y el QR se apaga.
+      if (codigoDelError(err) === CODIGO_SIN_CONEXION) marcarSinConexion()
       setQrError(describeError(err))
       setQrEstado('idle')
       return
@@ -282,6 +293,7 @@ export function VentaDetalle({
         estado = (await api.get<{ status: string }>(`/api/ventas/${detalle.id}/mp-status`)).status
       } catch (err) {
         frenarPoll()
+        if (codigoDelError(err) === CODIGO_SIN_CONEXION) marcarSinConexion()
         setQrEstado('idle')
         setQrError(describeError(err))
         return
@@ -310,12 +322,24 @@ export function VentaDetalle({
   async function facturar() {
     if (!detalle) return
     setError(null)
+    setQuedoParaFacturar(false)
     setFacturando(true)
     try {
       await api.post(`/api/ventas/${detalle.id}/facturar`)
       await cargar()
     } catch (err) {
-      setError(describeError(err))
+      const codigo = codigoDelError(err)
+      if (codigo === CODIGO_FACTURA_PENDIENTE) {
+        // Un nodo sin conexión: la venta quedó con su ticket y en la bandeja; se factura sola al volver.
+        setQuedoParaFacturar(true)
+        marcarSinConexion()
+        void refrescarConexionDelNodo()
+        await cargar()
+      } else if (codigo === CODIGO_NODO_SIN_ARCA) {
+        setError(`Error de configuración: ${describeError(err)}`)
+      } else {
+        setError(describeError(err))
+      }
     } finally {
       setFacturando(false)
     }
@@ -385,6 +409,15 @@ export function VentaDetalle({
 
       {error && <p ref={errorRef} role="alert" tabIndex={-1} className="text-sm text-destructive outline-none">{error}</p>}
 
+      {quedoParaFacturar && (
+        <AvisoEstado tono="atencion" role="status" className="flex flex-wrap items-center justify-between gap-2">
+          <span className="flex items-center gap-2"><WifiOff className="size-4 shrink-0" />{MENSAJE_QUEDO_PARA_FACTURAR}</span>
+          {rutaDeTicket && detalle && (
+            <Button size="sm" variant="outline" className={BOTON_TACTIL} onClick={() => imprimir(rutaDeTicket(detalle.id))}><Printer />Reimprimir ticket</Button>
+          )}
+        </AvisoEstado>
+      )}
+
       {loading || !detalle ? (
         <p className="py-6 text-center text-sm text-muted-foreground">Cargando…</p>
       ) : (
@@ -436,9 +469,15 @@ export function VentaDetalle({
                             <CheckCircle2 className="size-3.5" />Pago acreditado.
                           </p>
                         ) : (
-                          <Button size="sm" variant="outline" className={BOTON_TACTIL} disabled={qrEstado === 'creando'} onClick={cobrarConQr}>
+                          // Sin conexión el QR no puede salir: el botón se apaga y dice por qué (en el `title` y abajo, a la vista).
+                          <Button size="sm" variant="outline" className={BOTON_TACTIL} disabled={qrEstado === 'creando' || sinConexion} onClick={cobrarConQr}
+                                  title={sinConexion ? MENSAJE_QR_SIN_CONEXION : undefined}
+                                  aria-describedby={sinConexion ? 'qr-sin-conexion' : undefined}>
                             <QrCode />{qrEstado === 'creando' ? 'Preparando el QR…' : 'Cobrar con QR'}
                           </Button>
+                        )}
+                        {sinConexion && qrEstado === 'idle' && !qrError && (
+                          <p id="qr-sin-conexion" className="flex items-center gap-1.5 text-xs text-muted-foreground"><WifiOff className="size-3.5 shrink-0" />{MENSAJE_QR_SIN_CONEXION}</p>
                         )}
                         {qrError && <p className="text-xs text-destructive">{qrError}</p>}
                       </div>
@@ -448,6 +487,12 @@ export function VentaDetalle({
               </CardContent>
             </Card>
           </div>
+
+          {!detalle.factura_display && (detalle.factura_pendiente || quedoParaFacturar) && detalle.estado !== 'anulada' && (
+            <p className="flex items-center gap-2 rounded-md border bg-muted/50 p-3 text-sm">
+              <WifiOff className="size-4 text-amber-700 dark:text-amber-400" />{ETIQUETA_PENDIENTE_DE_FACTURAR}
+            </p>
+          )}
 
           {(detalle.factura_display || detalle.remito_id) && (
             <div className="grid gap-2 sm:grid-cols-2">

@@ -50,6 +50,7 @@ import type { Producto } from './identidad'
 import { MarcaProducto } from './MarcaProducto'
 import { cn } from './utils'
 import { fijarModo, leerModo, suscribirseAlModo, type Modo } from './modo'
+import { CartelSinConexion } from './CartelSinConexion'
 
 /** Si la ruta actual corresponde a una entrada del menú: la suya exacta, o una
  *  de `activoEn` —ella misma o cualquier ruta debajo (`/pre-facturas` cubre
@@ -151,7 +152,7 @@ function BotonDeModo() {
 export function createLayout<TUser = { role?: string; name?: string }>({
   productName, productInitial, navItems, navSections,
   icon: HeaderIcon, logo, producto, wordmarkClassName, homeTo, accountTo,
-  hasModule, getUserName, getUserSubtitle, userMenu,
+  hasModule, getUserName, getUserSubtitle, userMenu, conexionDelNodo,
   useAuth = useAuthDefault as unknown as () => { user: TUser | null; logout: () => Promise<void> },
 }: {
   productName: string
@@ -188,6 +189,10 @@ export function createLayout<TUser = { role?: string; name?: string }>({
   // selector de sucursal de LibraDesk, que es un `<Select>` con su propio
   // estado. Una API de `{label, to, icon}` no lo habria podido expresar.
   userMenu?: ReactNode
+  // LibraEdge (ADR-077): con `true` (o la ruta y el intervalo), el layout consulta `GET /api/nodo/conexion` y, en un nodo
+  // sin conexión, muestra arriba del contenido el `CartelSinConexion`. Fuera de un nodo (o si el producto no monta la
+  // ruta) no muestra nada y deja de consultar. Sin la prop, ni un pedido más: es el layout de siempre.
+  conexionDelNodo?: boolean | { ruta?: string; intervaloMs?: number }
   // Hook `useAuth` a usar -- por defecto el de la instancia pre-configurada
   // de este modulo. Productos con su propia `createAuthContext`
   // (Contalibra/Restolibra) pasan el suyo.
@@ -498,7 +503,10 @@ export function createLayout<TUser = { role?: string; name?: string }>({
               quedaba 10 px más abajo; con el `p-6` que las pantallas de los productos le sumaban encima (48 px), 34 px más abajo (el pedido
               del humano, 2026-10-08). Si cambia el relleno del encabezado o el tamaño de la marca, cambia esta cuenta: `test/Layout.test.tsx` la
               repite. Las pantallas NO agregan relleno propio arriba (`libra-ui/auditoria-de-relleno`). */}
-          <div className="min-w-0 flex-1 space-y-4 p-4 pt-14 md:p-6 md:pt-3.5">{children}</div>
+          <div className="min-w-0 flex-1 space-y-4 p-4 pt-14 md:p-6 md:pt-3.5">
+            {conexionDelNodo && <CartelSinConexion {...(typeof conexionDelNodo === 'object' ? conexionDelNodo : {})} />}
+            {children}
+          </div>
         </SidebarInset>
       </SidebarProvider>
     )

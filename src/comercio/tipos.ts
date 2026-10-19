@@ -278,6 +278,10 @@ export type Venta = {
    *  sugiere el importe y sabe cuándo ya se puede anular la venta (saldo en cero). Sin ellos (un motor anterior) la nota es total. */
   factura_total?: number | null
   factura_saldo_acreditable?: number | null
+  /** LibraEdge (ADR-077; ADR-074 de libracore): en un nodo, la venta cobrada sin conexión que espera su factura en la bandeja.
+   *  El producto lo llena con `venta_facturacion.pendiente_de_facturar` (la fila abierta, o `null`); el detalle muestra
+   *  «Pendiente de facturar (sin conexión)». Sin el campo (fuera de un nodo, o un producto que no lo manda), nada cambia. */
+  factura_pendiente?: boolean | Record<string, unknown> | null
   remito_id: number | null
   /** Las promociones que se aplicaron a la venta (`sale_promotions`). Sólo las trae un producto que las
    *  monta (VentaLibra); su ahorro ya está dentro de `descuento`. */
