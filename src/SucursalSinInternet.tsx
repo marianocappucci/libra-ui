@@ -26,6 +26,7 @@ import { formatoCantidad } from './formatos'
 import { ICONOS } from './iconos-identidad'
 import { IDENTIDAD } from './identidad'
 import { MarcaProducto } from './MarcaProducto'
+import { refrescarMenuDeNodosOffline } from './menu-de-nodos-offline'
 import { TituloPantalla } from './titulo-pantalla'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
@@ -63,6 +64,8 @@ export type EstadoNodosOffline = {
   umbral_minutos: number
   sucursales: SucursalConNodo[]
   nodos: NodoOffline[]
+  /** Nodos no dados de baja (libraedge ≥ v0.11.0). */
+  nodos_activos?: number
 }
 
 const ESTADOS: Record<EstadoDelNodo, { texto: string; tono: TonoEstado }> = {
@@ -72,6 +75,9 @@ const ESTADOS: Record<EstadoDelNodo, { texto: string; tono: TonoEstado }> = {
   baja: { texto: 'Dado de baja', tono: 'negativo' },
 }
 
+export const TEXTO_ADICIONAL_APAGADO_CON_NODOS =
+  'El adicional LibraEdge (sucursal sin internet) está apagado: no se pueden dar de alta nodos nuevos ni emitir cargas. ' +
+  'Los nodos que siguen activos sólo se pueden dar de baja.'
 export const TEXTO_SIN_ADICIONAL =
   'Tu plan no incluye LibraEdge (sucursal sin internet). Para sumarlo a una sucursal, consultanos por WhatsApp.'
 export const TEXTO_CARGA_DESCARGADA =
@@ -185,6 +191,8 @@ export function SucursalSinInternet({ ruta = RUTA_NODOS_OFFLINE }: { ruta?: stri
         setAviso(`Se descargó la carga del nodo ${nodeId}${prefijo ? ` (prefijo ${prefijo})` : ''}. ${TEXTO_CARGA_DESCARGADA}`)
       }
       setAccion(null)
+      // Un alta o una baja cambia si el menú muestra esta entrada (sin el adicional, sólo con nodos activos).
+      refrescarMenuDeNodosOffline()
       await cargar()
     } catch (err) {
       setErrorDeAccion(describirError(err))
@@ -220,7 +228,13 @@ export function SucursalSinInternet({ ruta = RUTA_NODOS_OFFLINE }: { ruta?: stri
 
       {estado && (
         <>
-          {!estado.contratado && <AvisoEstado tono="atencion">{TEXTO_SIN_ADICIONAL}</AvisoEstado>}
+          {!estado.contratado && (
+            // Sin el adicional la pantalla sólo se abre si quedan nodos activos (el menú, ADR-080): ahí lo único que se puede
+            // hacer es darlos de baja, y tiene que quedar dicho.
+            <AvisoEstado tono="atencion" role="note">
+              {estado.nodos.some((n) => n.activo) ? TEXTO_ADICIONAL_APAGADO_CON_NODOS : TEXTO_SIN_ADICIONAL}
+            </AvisoEstado>
+          )}
           {estado.central_url_error && <AvisoEstado tono="negativo">{estado.central_url_error}</AvisoEstado>}
           {estado.emisor_error && (
             <AvisoEstado tono="negativo">Los datos de la empresa en Configuración: {estado.emisor_error}</AvisoEstado>

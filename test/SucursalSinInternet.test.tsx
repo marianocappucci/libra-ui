@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { nombreDeArchivo } from '../src/api-client'
 import {
-  SucursalSinInternet, TEXTO_SIN_ADICIONAL, nombreDelProducto, ultimaSincronizacion,
+  SucursalSinInternet, TEXTO_ADICIONAL_APAGADO_CON_NODOS, TEXTO_SIN_ADICIONAL, nombreDelProducto, ultimaSincronizacion,
   type EstadoNodosOffline,
 } from '../src/SucursalSinInternet'
 
@@ -112,13 +112,20 @@ describe('la pantalla', () => {
     expect(within(nodos).getAllByRole('button', { name: /Dar de baja/ })).toHaveLength(1)
   })
 
-  it('sin el adicional lo explica y no deja dar de alta', async () => {
+  it('🔴 sin el adicional y con nodos activos dice que sólo se puede dar de baja', async () => {
     await montar({ ...ESTADO, contratado: false })
-    expect(screen.getByText(TEXTO_SIN_ADICIONAL)).toBeInTheDocument()
+    expect(screen.getByText(TEXTO_ADICIONAL_APAGADO_CON_NODOS)).toBeInTheDocument()
+    expect(screen.queryByText(TEXTO_SIN_ADICIONAL)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Dar de alta el nodo/ })).toBeDisabled()
     expect(screen.getByRole('button', { name: /Carga nueva/ })).toBeDisabled()
     // Dar de baja sigue: un nodo instalado se tiene que poder revocar igual.
     expect(screen.getByRole('button', { name: /Dar de baja/ })).toBeEnabled()
+  })
+
+  it('sin el adicional y sin nodos activos invita a contratarlo', async () => {
+    await montar({ ...ESTADO, contratado: false, nodos: ESTADO.nodos.filter((n) => !n.activo) })
+    expect(screen.getByText(TEXTO_SIN_ADICIONAL)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Dar de baja/ })).not.toBeInTheDocument()
   })
 
   it('sin URL del central o con el CUIT mal cargado no deja emitir', async () => {

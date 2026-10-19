@@ -37,6 +37,7 @@
     "./SelectBuscable": "./src/SelectBuscable.tsx",
     "./SelectCliente": "./src/SelectCliente.tsx",
     "./SucursalSinInternet": "./src/SucursalSinInternet.tsx",
+    "./menu-de-nodos-offline": "./src/menu-de-nodos-offline.ts",
     "./TarjetaIndicador": "./src/TarjetaIndicador.tsx",
     "./TarjetaReporte": "./src/TarjetaReporte.tsx",
     "./Terminos": "./src/Terminos.tsx",
