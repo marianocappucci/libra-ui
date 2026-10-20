@@ -6,7 +6,7 @@
 //
 // ## Una consulta, no una por render
 //
-// El estado vive en un almacén del módulo (como `nodo-offline.ts` y `menu-de-nodos-offline.ts`): la barra lo lee con
+// El estado vive en un almacén del módulo (como `nodo-offline.ts`): la barra lo lee con
 // `useSyncExternalStore`, así que ni un render ni un remonte del layout piden nada. Se pregunta **al montar** la barra,
 // después **cada `refrescar_en_segundos`** que sugiere el servidor (60 en un nodo, 300 fuera) y **al volver a la pestaña**
 // (`visibilitychange` o `focus`), nunca antes de `MINIMO_ENTRE_CONSULTAS_MS` desde la anterior. Con la pestaña oculta no

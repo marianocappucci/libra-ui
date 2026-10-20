@@ -1,16 +1,17 @@
-// «Sucursal sin internet» (ADR-080): el alta del nodo de LibraEdge desde el central.
+// «Sucursal sin internet» (ADR-080 y ADR-085): el alta del nodo de LibraEdge desde el central.
 //
-// Lo que más importa: la carga del nodo trae el secreto y **no pasa por la pantalla**. Se baja como Blob y se guarda
-// tal cual; ni el texto de la carga ni el secreto aparecen en el documento.
+// Lo que más importa: el secreto del nodo **no pasa por la pantalla**. Con el código (ADR-085) la pantalla muestra la
+// dirección y un código de un solo uso, y el secreto sale recién en el canje del instalador; con el archivo de soporte
+// la carga se baja como Blob y se guarda tal cual. LibraEdge está incluido en todos los planes: no hay adicional.
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { nombreDeArchivo } from '../src/api-client'
 import {
-  CLAVE_DE_LA_SECCION, PUERTO_DEL_NODO, SucursalSinInternet, TEXTO_ADICIONAL_APAGADO_CON_NODOS, TEXTO_SIN_ADICIONAL,
-  comandoDeUbuntu, descargasDelNodo, nombreDelProducto, seccionSucursalSinInternet, textoEntrarPorLaCopiaLocal,
-  ultimaSincronizacion, type EstadoNodosOffline,
+  CLAVE_DE_LA_SECCION, PUERTO_DEL_NODO, SucursalSinInternet, TEXTO_CODIGO, comandoDeUbuntu, descargasDelNodo,
+  nombreDelProducto, seccionSucursalSinInternet, textoEntrarPorLaCopiaLocal, ultimaSincronizacion,
+  type CodigoDeVinculacion, type EstadoNodosOffline,
 } from '../src/SucursalSinInternet'
 
 const SECRETO = 'secreto-de-prueba-que-no-se-muestra'
@@ -21,6 +22,8 @@ const ESTADO: EstadoNodosOffline = {
   instalador_url: 'https://github.com/marianocappucci/libraedge/releases/latest/download/libraedge-nodo-ventalibra.exe',
   central_url: 'https://demo.ventalibra.com.ar',
   central_url_error: null,
+  direccion: 'demo.ventalibra.com.ar',
+  vinculacion_minutos: 15,
   emisor_faltan: [],
   emisor_error: null,
   umbral_minutos: 15,
@@ -47,6 +50,12 @@ let guardados: { nombre: string; blob: Blob }[]
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
+}
+
+const CODIGO: CodigoDeVinculacion = {
+  node_id: 'nodo-2-def456', prefijo: 'S02', sucursal: { id: '2', nombre: 'Norte' },
+  direccion: 'demo.ventalibra.com.ar', central_url: 'https://demo.ventalibra.com.ar',
+  codigo: 'K7Q4-M2XP', vence: '2026-10-20T18:15:00+00:00', vinculacion_minutos: 15,
 }
 
 function carga(nodeId: string) {
@@ -102,8 +111,10 @@ describe('la pantalla', () => {
       .toHaveAttribute('href', ESTADO.instalador_url)
     expect(screen.getByRole('link', { name: /Paquete de VentaLibra para Ubuntu/ }))
       .toHaveAttribute('href', `${RELEASES}/libraedge-nodo-ventalibra_amd64.deb`)
-    expect(screen.getByText(`curl -fsSL ${RELEASES}/instalar-nodo.sh | sudo bash -s ventalibra /ruta/carga-nodo.json`))
-      .toBeInTheDocument()
+    expect(screen.getByText(
+      `curl -fsSL ${RELEASES}/instalar-nodo.sh | sudo bash -s ventalibra --codigo <código> --direccion <dirección>`,
+    )).toBeInTheDocument()
+    expect(screen.getByText(/Está incluido en tu plan/)).toBeInTheDocument()
 
     const sucursales = screen.getByRole('list', { name: 'Sucursales' })
     expect(within(sucursales).getByText('Centro')).toBeInTheDocument()
@@ -120,37 +131,36 @@ describe('la pantalla', () => {
     expect(within(nodos).getAllByRole('button', { name: /Dar de baja/ })).toHaveLength(1)
   })
 
-  it('🔴 sin el adicional y con nodos activos dice que sólo se puede dar de baja', async () => {
+  it('🔴 LibraEdge está incluido en todos los planes: aunque un backend viejo diga contratado=false, ofrece todo', async () => {
     await montar({ ...ESTADO, contratado: false })
-    expect(screen.getByText(TEXTO_ADICIONAL_APAGADO_CON_NODOS)).toBeInTheDocument()
-    expect(screen.queryByText(TEXTO_SIN_ADICIONAL)).not.toBeInTheDocument()
-    // 🔴 Sin el adicional no hay descargas ni alta (ADR-082): el instalador sólo se baja contratado.
-    expect(screen.queryByRole('link')).not.toBeInTheDocument()
-    expect(screen.queryByText('1. El instalador')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Dar de alta el nodo/ })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Carga nueva/ })).toBeDisabled()
-    // Dar de baja sigue: un nodo instalado se tiene que poder revocar igual.
-    expect(screen.getByRole('button', { name: /Dar de baja/ })).toBeEnabled()
+    expect(screen.getByText('1. El instalador')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Dar de alta el nodo/ })).toBeEnabled()
+    expect(screen.getByRole('button', { name: /Código nuevo/ })).toBeEnabled()
+    expect(screen.queryByText(/adicional/i)).not.toBeInTheDocument()
   })
 
-  it('sin el adicional y sin nodos activos invita a contratarlo', async () => {
-    await montar({ ...ESTADO, contratado: false, nodos: ESTADO.nodos.filter((n) => !n.activo) })
-    expect(screen.getByText(TEXTO_SIN_ADICIONAL)).toBeInTheDocument()
-    expect(screen.queryByRole('link')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Dar de baja/ })).not.toBeInTheDocument()
+  it('sin ningún nodo igual ofrece el instalador y el alta', async () => {
+    await montar({ ...ESTADO, nodos: [] })
+    expect(screen.getByText('Todavía no hay ningún nodo.')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Instalador de VentaLibra para Windows/ })).toBeInTheDocument()
   })
 
-  it('sin el adicional y sin ningún nodo sólo queda la invitación', async () => {
-    await montar({ ...ESTADO, contratado: false, nodos: [] })
-    expect(screen.getByText(TEXTO_SIN_ADICIONAL)).toBeInTheDocument()
-    expect(screen.queryByRole('list')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+  it('un nodo con un código pendiente lo dice, con su vencimiento, y ofrece anularlo', async () => {
+    await montar({
+      ...ESTADO,
+      nodos: [{ ...ESTADO.nodos[0], vinculacion: { vence: '2026-10-20T18:15:00+00:00' } }, ESTADO.nodos[1]],
+    })
+    const nodos = screen.getByRole('list', { name: 'Nodos' })
+    expect(within(nodos).getByText('Código pendiente hasta las 15:15')).toBeInTheDocument()
+    expect(within(nodos).getByRole('button', { name: /Anular código/ })).toBeInTheDocument()
   })
 
   it('sin URL del central o con el CUIT mal cargado no deja emitir', async () => {
     await montar({ ...ESTADO, central_url: null, central_url_error: 'Definir LIBRAEDGE_CENTRAL_URL.' })
     expect(screen.getByText('Definir LIBRAEDGE_CENTRAL_URL.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Dar de alta el nodo/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /Código nuevo/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /Archivo de carga/ })).toBeDisabled()
   })
 
   it('avisa si faltan los datos de la empresa para facturar', async () => {
@@ -178,7 +188,7 @@ describe('🔴 en el local se entra por la copia local (ADR-084)', () => {
     expect(aviso).toHaveTextContent('La dirección de la nube es para entrar desde afuera del local.')
   })
 
-  it('el alta del nodo lo repite antes de descargar la carga', async () => {
+  it('el alta del nodo lo repite antes de mostrar el código', async () => {
     const usuario = userEvent.setup()
     await montar()
     await usuario.click(screen.getByRole('button', { name: /Dar de alta el nodo/ }))
@@ -186,16 +196,11 @@ describe('🔴 en el local se entra por la copia local (ADR-084)', () => {
     expect(within(dialogo).getByRole('note')).toHaveTextContent(textoEntrarPorLaCopiaLocal('VentaLibra'))
   })
 
-  it('la carga nueva y la baja no lo repiten', async () => {
+  it('el código nuevo y la baja no lo repiten', async () => {
     const usuario = userEvent.setup()
     await montar()
-    await usuario.click(screen.getByRole('button', { name: /Carga nueva/ }))
+    await usuario.click(screen.getByRole('button', { name: /Código nuevo/ }))
     expect(within(await screen.findByRole('dialog')).queryByRole('note')).not.toBeInTheDocument()
-  })
-
-  it('sin el adicional no hay instalador, así que tampoco el aviso', async () => {
-    await montar({ ...ESTADO, contratado: false, nodos: [] })
-    expect(document.querySelector('[data-aviso="copia-local"]')).toBeNull()
   })
 
   it('el puerto sale del backend si lo manda', async () => {
@@ -206,48 +211,101 @@ describe('🔴 en el local se entra por la copia local (ADR-084)', () => {
   })
 })
 
-describe('🔴 la carga del nodo', () => {
-  it('el alta baja la carga como archivo y el secreto no aparece en la pantalla', async () => {
+describe('🔴 el código de vinculación (ADR-085)', () => {
+  function conCodigo(url: string, init?: RequestInit) {
+    if (init?.method === 'POST' && url.endsWith('/vinculacion')) return json(CODIGO)
+    if (init?.method === 'DELETE' && url.endsWith('/vinculacion')) return json({ node_id: CODIGO.node_id, anulados: 1 })
+    return undefined
+  }
+
+  it('el alta muestra la dirección y el código para el instalador, sin el secreto', async () => {
     const usuario = userEvent.setup()
-    await montar(ESTADO, (_url, init) => (init?.method === 'POST' ? carga('nodo-2-def456') : undefined))
+    await montar(ESTADO, conCodigo)
     await usuario.click(screen.getByRole('button', { name: /Dar de alta el nodo/ }))
     const dialogo = await screen.findByRole('dialog')
-    expect(dialogo).toHaveTextContent('una sola vez')
-    await usuario.click(within(dialogo).getByRole('button', { name: 'Dar de alta y descargar la carga' }))
+    expect(dialogo).toHaveTextContent('15 minutos y una sola vez')
+    await usuario.click(within(dialogo).getByRole('button', { name: 'Dar de alta y ver el código' }))
 
-    await waitFor(() => expect(guardados).toHaveLength(1))
-    expect(guardados[0].nombre).toBe('carga-nodo-nodo-2-def456.json')
-    expect(guardados[0].blob.size).toBeGreaterThan(0)  // el archivo entero, tal cual vino
+    const tarjeta = await screen.findByLabelText('Código de vinculación')
+    expect(tarjeta).toHaveTextContent('Vincular el nodo de Norte')
+    expect(tarjeta).toHaveTextContent(TEXTO_CODIGO)
+    expect(within(tarjeta).getByText('demo.ventalibra.com.ar')).toBeInTheDocument()
+    expect(within(tarjeta).getByText('K7Q4-M2XP')).toBeInTheDocument()
+    expect(tarjeta).toHaveTextContent('Vence a las 15:15 (15 minutos) y sirve una sola vez.')
+    expect(within(tarjeta).getByText(
+      `curl -fsSL ${RELEASES}/instalar-nodo.sh | sudo bash -s ventalibra --codigo K7Q4-M2XP --direccion demo.ventalibra.com.ar`,
+    )).toBeInTheDocument()
     const post = fetchMock.mock.calls.find((c) => c[1]?.method === 'POST')!
-    expect(post[0]).toBe('/api/nodos-offline')
+    expect(post[0]).toBe('/api/nodos-offline/vinculacion')
     expect(JSON.parse(post[1].body)).toEqual({ sucursal_id: '2' })
-
-    expect(await screen.findByRole('status')).toHaveTextContent('Se descargó la carga del nodo nodo-2-def456 (prefijo S02)')
-    expect(document.body.textContent).not.toContain(SECRETO)
-    expect(document.body.innerHTML).not.toContain(SECRETO)
+    // Nada se descargó y el secreto no existe en esta respuesta.
+    expect(guardados).toHaveLength(0)
+    expect(document.body.innerHTML).not.toContain('SECRET')
   })
 
-  it('un rechazo del motor se muestra en el diálogo y no descarga nada', async () => {
+  it('copiar el código usa el portapapeles', async () => {
+    const usuario = userEvent.setup()
+    const escribir = vi.fn(() => Promise.resolve())
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: escribir }, configurable: true })
+    await montar(ESTADO, conCodigo)
+    await usuario.click(screen.getByRole('button', { name: /Dar de alta el nodo/ }))
+    await usuario.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Dar de alta y ver el código' }))
+    await usuario.click(await screen.findByRole('button', { name: 'Copiar código' }))
+    expect(escribir).toHaveBeenCalledWith('K7Q4-M2XP')
+    await usuario.click(screen.getByRole('button', { name: 'Copiar dirección' }))
+    expect(escribir).toHaveBeenCalledWith('demo.ventalibra.com.ar')
+  })
+
+  it('pedir otro código y anularlo van a las rutas del nodo', async () => {
+    const usuario = userEvent.setup()
+    await montar(ESTADO, conCodigo)
+    await usuario.click(screen.getByRole('button', { name: /Código nuevo/ }))
+    const dialogo = await screen.findByRole('dialog')
+    expect(dialogo).toHaveTextContent('sigue funcionando hasta que se instale con el código nuevo')
+    await usuario.click(within(dialogo).getByRole('button', { name: 'Pedir el código' }))
+    expect(await screen.findByText('K7Q4-M2XP')).toBeInTheDocument()
+    expect(fetchMock.mock.calls.find((c) => c[1]?.method === 'POST')![0]).toBe('/api/nodos-offline/nodo-1-abc123/vinculacion')
+
+    await usuario.click(screen.getByRole('button', { name: /Pedir otro código/ }))
+    await waitFor(() => expect(fetchMock.mock.calls.filter((c) => c[1]?.method === 'POST')).toHaveLength(2))
+    await usuario.click(screen.getByRole('button', { name: /Anular el código/ }))
+    await waitFor(() => expect(fetchMock.mock.calls.some((c) => c[1]?.method === 'DELETE')).toBe(true))
+    expect(fetchMock.mock.calls.find((c) => c[1]?.method === 'DELETE')![0]).toBe('/api/nodos-offline/nodo-2-def456/vinculacion')
+    expect(await screen.findByRole('status')).toHaveTextContent('quedó anulado')
+    expect(screen.queryByText('K7Q4-M2XP')).not.toBeInTheDocument()
+  })
+
+  it('un rechazo del motor se muestra en el diálogo y no muestra ningún código', async () => {
     const usuario = userEvent.setup()
     await montar(ESTADO, (_url, init) => (init?.method === 'POST'
-      ? json({ detail: { codigo: 'adicional_offline', mensaje: 'El plan no incluye «Modo offline».' } }, 403)
+      ? json({ detail: { codigo: 'sucursal_con_nodo', mensaje: 'La sucursal ya tiene un nodo.' } }, 409)
       : undefined))
     await usuario.click(screen.getByRole('button', { name: /Dar de alta el nodo/ }))
-    await usuario.click(within(await screen.findByRole('dialog')).getByRole('button', { name: /Dar de alta y descargar/ }))
-    expect(await within(screen.getByRole('dialog')).findByRole('alert')).toHaveTextContent('El plan no incluye «Modo offline».')
-    expect(guardados).toHaveLength(0)
+    await usuario.click(within(await screen.findByRole('dialog')).getByRole('button', { name: /Dar de alta y ver el código/ }))
+    expect(await within(screen.getByRole('dialog')).findByRole('alert')).toHaveTextContent('La sucursal ya tiene un nodo.')
+    expect(screen.queryByLabelText('Código de vinculación')).not.toBeInTheDocument()
   })
+})
 
-  it('una carga nueva va a la ruta del nodo y avisa que invalida la anterior', async () => {
+describe('🔴 el archivo de carga (soporte)', () => {
+  it('baja la carga como archivo y el secreto no aparece en la pantalla', async () => {
     const usuario = userEvent.setup()
     await montar(ESTADO, (_url, init) => (init?.method === 'POST' ? carga('nodo-1-abc123') : undefined))
-    await usuario.click(screen.getByRole('button', { name: /Carga nueva/ }))
+    await usuario.click(screen.getByRole('button', { name: /Archivo de carga/ }))
     const dialogo = await screen.findByRole('dialog')
-    expect(dialogo).toHaveTextContent('La carga anterior deja de servir')
+    expect(dialogo).toHaveTextContent('una sola vez')
+    expect(dialogo).toHaveTextContent('el código pendiente dejan de servir')
     await usuario.click(within(dialogo).getByRole('button', { name: 'Emitir y descargar' }))
+
     await waitFor(() => expect(guardados).toHaveLength(1))
+    expect(guardados[0].nombre).toBe('carga-nodo-nodo-1-abc123.json')
+    expect(guardados[0].blob.size).toBeGreaterThan(0)  // el archivo entero, tal cual vino
     const post = fetchMock.mock.calls.find((c) => c[1]?.method === 'POST')!
     expect(post[0]).toBe('/api/nodos-offline/nodo-1-abc123/carga')
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Se descargó la carga del nodo nodo-1-abc123 (prefijo S02)')
+    expect(document.body.textContent).not.toContain(SECRETO)
+    expect(document.body.innerHTML).not.toContain(SECRETO)
   })
 })
 
@@ -298,7 +356,10 @@ describe('piezas', () => {
       instalador_url: 'https://otro.lado/instalador.exe', instalador_deb_url: 'https://otro.lado/x.deb',
       instalar_script_url: 'https://otro.lado/i.sh',
     })).toEqual({ windows: 'https://otro.lado/instalador.exe', ubuntu: 'https://otro.lado/x.deb', script: 'https://otro.lado/i.sh' })
-    expect(comandoDeUbuntu('https://x/i.sh', 'contalibra')).toBe('curl -fsSL https://x/i.sh | sudo bash -s contalibra /ruta/carga-nodo.json')
+    expect(comandoDeUbuntu('https://x/i.sh', 'contalibra'))
+      .toBe('curl -fsSL https://x/i.sh | sudo bash -s contalibra --codigo <código> --direccion <dirección>')
+    expect(comandoDeUbuntu('https://x/i.sh', 'contalibra', 'K7Q4-M2XP', 'sistema.contalibra.com.ar'))
+      .toBe('curl -fsSL https://x/i.sh | sudo bash -s contalibra --codigo K7Q4-M2XP --direccion sistema.contalibra.com.ar')
   })
 
   it('el nombre del archivo sale del Content-Disposition', () => {

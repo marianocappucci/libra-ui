@@ -52,7 +52,6 @@ import { cn } from './utils'
 import { fijarModo, leerModo, suscribirseAlModo, type Modo } from './modo'
 import { CartelSinConexion } from './CartelSinConexion'
 import { BarraDeEstado, type OpcionesBarraDeEstado } from './BarraDeEstado'
-import { RUTA_MENU_DE_NODOS_OFFLINE, useMenuDeNodosOffline } from './menu-de-nodos-offline'
 
 /** Si la ruta actual corresponde a una entrada del menú: la suya exacta, o una
  *  de `activoEn` —ella misma o cualquier ruta debajo (`/pre-facturas` cubre
@@ -84,10 +83,9 @@ export type NavItem<TUser> = {
   activoEn?: string[]
   module?: string
   adminOnly?: boolean
-  /** La entrada «Sucursal sin internet» de LibraEdge (ADR-080): se ve si el adicional `offline` está contratado **o**
-   *  quedan nodos activos, según `GET /api/nodos-offline/menu`, que el layout pide **una vez** por carga de página y
-   *  sólo para un admin. Reemplaza a `module: 'offline'`, que la escondía con nodos adentro. `true` usa la ruta de
-   *  siempre; un texto, otra. */
+  /** La entrada «Sucursal sin internet» de LibraEdge (ADR-080). Desde ADR-085 LibraEdge está incluido en todos los
+   *  planes: se ve **siempre** para quien ve los menús de administración, sin preguntarle nada al backend (hasta
+   *  v0.170 dependía del adicional `offline` o de los nodos activos). El texto (otra ruta) ya no se usa. */
   nodosOffline?: boolean | string
   hideFor?: (user: TUser) => boolean
   children?: NavChild<TUser>[]
@@ -228,10 +226,8 @@ export function createLayout<TUser = { role?: string; name?: string }>({
     const isAdmin = datos?.role === 'admin'
     const veLosMenusDeAdmin = isAdmin || datos?.demo_readonly === true
 
-    // LibraEdge (ADR-080): la entrada «Sucursal sin internet», si el menú la tiene. Una consulta por página, sólo de admin.
-    const entradaDeNodos = sections.flatMap((section) => section.items).find((item) => item.nodosOffline)
-    const rutaDeNodos = typeof entradaDeNodos?.nodosOffline === 'string' ? entradaDeNodos.nodosOffline : RUTA_MENU_DE_NODOS_OFFLINE
-    const seVeLaDeNodos = useMenuDeNodosOffline(!!entradaDeNodos && !!user && veLosMenusDeAdmin, rutaDeNodos)
+    // LibraEdge (ADR-080 y ADR-085): la entrada «Sucursal sin internet» se ve siempre para el administrador.
+    const seVeLaDeNodos = !!user && veLosMenusDeAdmin
 
     function moduleVisible(module?: string): boolean {
       if (!module) return true

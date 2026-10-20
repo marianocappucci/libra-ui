@@ -1,47 +1,34 @@
-// La entrada «Sucursal sin internet» del menú (ADR-080, punto 5): se ve con el adicional `offline` **o** con nodos
-// activos, según `GET /api/nodos-offline/menu`, pedido UNA vez por página y sólo para un admin.
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+// La entrada «Sucursal sin internet» del menú (ADR-080, punto 5; ADR-085): LibraEdge está incluido en todos los planes,
+// así que se ve SIEMPRE para el administrador y el layout ya no le pregunta nada al backend.
+import { cleanup, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createLayout } from '../src/Layout'
 import {
-  RUTA_MENU_DE_NODOS_OFFLINE, _reiniciarMenuDeNodosOffline, refrescarMenuDeNodosOffline,
+  RUTA_MENU_DE_NODOS_OFFLINE, consultarMenuDeNodosOffline, refrescarMenuDeNodosOffline, useMenuDeNodosOffline,
 } from '../src/menu-de-nodos-offline'
 
-type Usuario = { role?: string }
+type Usuario = { role?: string; demo_readonly?: boolean }
 const Icono = () => <svg />
 
 let fetchMock: ReturnType<typeof vi.fn>
 
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
-}
-
-function responder(visible: boolean, status = 200) {
-  fetchMock.mockImplementation(() => Promise.resolve(
-    status === 200 ? json({ contratado: false, nodos_activos: visible ? 1 : 0, visible }) : json({ detail: 'x' }, status),
-  ))
-}
-
-function montar(user: Usuario | null, conEntrada = true) {
+function montar(user: Usuario | null) {
   const Layout = createLayout<Usuario>({
     productName: 'VentaLibra',
     productInitial: 'V',
     navItems: [
       { to: '/usuarios', label: 'Usuarios', icon: Icono, adminOnly: true },
-      ...(conEntrada ? [{ to: '/sucursal-sin-internet', label: 'Sucursal sin internet', icon: Icono, adminOnly: true, nodosOffline: true }] : []),
+      { to: '/sucursal-sin-internet', label: 'Sucursal sin internet', icon: Icono, adminOnly: true, nodosOffline: true },
     ],
     useAuth: () => ({ user, logout: vi.fn() }),
   })
   return render(<MemoryRouter><Layout><p>contenido</p></Layout></MemoryRouter>)
 }
 
-const pedidos = () => fetchMock.mock.calls.filter((c) => c[0] === RUTA_MENU_DE_NODOS_OFFLINE).length
-
 beforeEach(() => {
-  _reiniciarMenuDeNodosOffline()
-  fetchMock = vi.fn()
+  fetchMock = vi.fn(() => Promise.resolve(new Response('{}', { status: 200 })))
   vi.stubGlobal('fetch', fetchMock)
 })
 
@@ -51,54 +38,27 @@ afterEach(() => {
 })
 
 describe('la entrada «Sucursal sin internet»', () => {
-  it('se ve cuando el backend dice visible (adicional contratado o nodos activos)', async () => {
-    responder(true)
+  it('se ve siempre para el administrador, sin preguntarle al backend', () => {
     montar({ role: 'admin' })
-    expect(await screen.findByText('Sucursal sin internet')).toBeInTheDocument()
-    expect(screen.getByText('Usuarios')).toBeInTheDocument()
+    expect(screen.getByText('Sucursal sin internet')).toBeInTheDocument()
+    expect(fetchMock.mock.calls.filter((c) => c[0] === RUTA_MENU_DE_NODOS_OFFLINE)).toHaveLength(0)
   })
 
-  it('no se ve sin adicional ni nodos activos', async () => {
-    responder(false)
-    montar({ role: 'admin' })
-    await waitFor(() => expect(pedidos()).toBe(1))
-    expect(screen.queryByText('Sucursal sin internet')).not.toBeInTheDocument()
+  it('también para el visitante de una demo, que ve los menús de administración', () => {
+    montar({ role: 'cajero', demo_readonly: true })
+    expect(screen.getByText('Sucursal sin internet')).toBeInTheDocument()
   })
 
-  it('no se ve si la consulta falla (un 403, un 404 o la red)', async () => {
-    responder(true, 403)
-    montar({ role: 'admin' })
-    await waitFor(() => expect(pedidos()).toBe(1))
-    expect(screen.queryByText('Sucursal sin internet')).not.toBeInTheDocument()
-  })
-
-  it('🔴 se pide UNA sola vez por página, aunque el layout se vuelva a montar', async () => {
-    responder(true)
-    const { unmount } = montar({ role: 'admin' })
-    expect(await screen.findByText('Sucursal sin internet')).toBeInTheDocument()
-    unmount()
-    montar({ role: 'admin' })
-    expect(await screen.findByText('Sucursal sin internet')).toBeInTheDocument()
-    expect(pedidos()).toBe(1)
-  })
-
-  it('un no admin no la ve y no pide nada; sin la entrada en el menú tampoco se pide', async () => {
-    responder(true)
+  it('un no admin no la ve', () => {
     montar({ role: 'cajero' })
-    cleanup()
-    montar({ role: 'admin' }, false)
-    await new Promise((r) => setTimeout(r, 0))
-    expect(pedidos()).toBe(0)
     expect(screen.queryByText('Sucursal sin internet')).not.toBeInTheDocument()
   })
 
-  it('refrescar vuelve a preguntar: dar de baja el último nodo sin el adicional la esconde', async () => {
-    responder(true)
-    montar({ role: 'admin' })
-    expect(await screen.findByText('Sucursal sin internet')).toBeInTheDocument()
-    responder(false)
-    await act(async () => { refrescarMenuDeNodosOffline() })
-    await waitFor(() => expect(screen.queryByText('Sucursal sin internet')).not.toBeInTheDocument())
-    expect(pedidos()).toBe(2)
+  it('las funciones viejas quedan por compatibilidad y no piden nada', () => {
+    consultarMenuDeNodosOffline()
+    refrescarMenuDeNodosOffline()
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(useMenuDeNodosOffline(true)).toBe(true)
+    expect(useMenuDeNodosOffline(false)).toBe(false)
   })
 })
