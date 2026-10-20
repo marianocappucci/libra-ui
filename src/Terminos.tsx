@@ -307,7 +307,7 @@ export function AvisoProximaVersion({
       role="region"
       aria-label={titulo}
       data-testid="aviso-proxima-version"
-      className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 rounded-lg border bg-card p-4 text-card-foreground shadow-lg sm:inset-x-auto sm:right-4 sm:bottom-4 sm:w-[26rem]"
+      className="fixed inset-x-3 bottom-[calc(var(--alto-barra-de-estado,0px)+max(0.75rem,env(safe-area-inset-bottom)))] z-40 rounded-lg border bg-card p-4 text-card-foreground shadow-lg sm:inset-x-auto sm:right-4 sm:bottom-[calc(var(--alto-barra-de-estado,0px)+1rem)] sm:w-[26rem]"
     >
       {fase === 'aceptada' ? (
         <div className="flex items-center justify-between gap-3">
