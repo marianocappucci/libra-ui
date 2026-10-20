@@ -8,8 +8,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { nombreDeArchivo } from '../src/api-client'
 import {
-  CLAVE_DE_LA_SECCION, SucursalSinInternet, TEXTO_ADICIONAL_APAGADO_CON_NODOS, TEXTO_SIN_ADICIONAL, comandoDeUbuntu,
-  descargasDelNodo, nombreDelProducto, seccionSucursalSinInternet, ultimaSincronizacion, type EstadoNodosOffline,
+  CLAVE_DE_LA_SECCION, PUERTO_DEL_NODO, SucursalSinInternet, TEXTO_ADICIONAL_APAGADO_CON_NODOS, TEXTO_SIN_ADICIONAL,
+  comandoDeUbuntu, descargasDelNodo, nombreDelProducto, seccionSucursalSinInternet, textoEntrarPorLaCopiaLocal,
+  ultimaSincronizacion, type EstadoNodosOffline,
 } from '../src/SucursalSinInternet'
 
 const SECRETO = 'secreto-de-prueba-que-no-se-muestra'
@@ -162,6 +163,46 @@ describe('la pantalla', () => {
     fetchMock.mockResolvedValue(json({ detail: 'No tenés permiso para hacer esto.' }, 403))
     render(<SucursalSinInternet />)
     expect(await screen.findByRole('alert')).toHaveTextContent('No tenés permiso')
+  })
+})
+
+describe('🔴 en el local se entra por la copia local (ADR-084)', () => {
+  it('la tarjeta del instalador lo dice con el acceso directo del producto y las dos direcciones', async () => {
+    await montar()
+    const aviso = screen.getByRole('note')
+    expect(aviso).toHaveTextContent(textoEntrarPorLaCopiaLocal('VentaLibra'))
+    expect(aviso).toHaveTextContent('entrá siempre por la copia local, aunque haya internet')
+    expect(aviso).toHaveTextContent('el acceso directo «VentaLibra» que deja el instalador')
+    expect(aviso).toHaveTextContent('http://localhost:8000')
+    expect(aviso).toHaveTextContent('http://<IP de esa PC>:8000')
+    expect(aviso).toHaveTextContent('La dirección de la nube es para entrar desde afuera del local.')
+  })
+
+  it('el alta del nodo lo repite antes de descargar la carga', async () => {
+    const usuario = userEvent.setup()
+    await montar()
+    await usuario.click(screen.getByRole('button', { name: /Dar de alta el nodo/ }))
+    const dialogo = await screen.findByRole('dialog')
+    expect(within(dialogo).getByRole('note')).toHaveTextContent(textoEntrarPorLaCopiaLocal('VentaLibra'))
+  })
+
+  it('la carga nueva y la baja no lo repiten', async () => {
+    const usuario = userEvent.setup()
+    await montar()
+    await usuario.click(screen.getByRole('button', { name: /Carga nueva/ }))
+    expect(within(await screen.findByRole('dialog')).queryByRole('note')).not.toBeInTheDocument()
+  })
+
+  it('sin el adicional no hay instalador, así que tampoco el aviso', async () => {
+    await montar({ ...ESTADO, contratado: false, nodos: [] })
+    expect(document.querySelector('[data-aviso="copia-local"]')).toBeNull()
+  })
+
+  it('el puerto sale del backend si lo manda', async () => {
+    await montar({ ...ESTADO, puerto_local: 8100 })
+    expect(screen.getByRole('note')).toHaveTextContent('http://localhost:8100')
+    expect(screen.getByRole('note')).toHaveTextContent('http://<IP de esa PC>:8100')
+    expect(PUERTO_DEL_NODO).toBe(8000)
   })
 })
 

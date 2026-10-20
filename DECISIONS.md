@@ -1957,3 +1957,18 @@ Las 37 pantallas del kit que importaban `@/components/ui/dialog` (50 `DialogCont
 **Consecuencias.** MINOR (**0.169.0**). Cada producto suma `barraDeEstado: true` a su `createLayout` y monta la ruta del motor; LibraDesk pasa `useSucursal` con su selector. Un pie `sticky` o `fixed` propio de una pantalla tiene que correrse con `--alto-barra-de-estado` (los cuatro que hay ya lo hacen).
 
 **Tests.** `test/estado-del-sistema.test.tsx` (18): los textos (cuánto hace, LibraEdge en nodo y central, ARCA al día / por vencer / vencido / ilegible / servicio, respaldo, el peor nivel); en el layout (sin la prop no pide; administrador con todo y abajo del contenido; en el celular el texto en `sr-only`; el detalle con teclado; sin la ruta no dibuja ni vuelve a pedir; la sucursal del producto; otra ruta; la conexión del cartel gana); el refresco (un reloj para dos barras y el intervalo del servidor, cinco minutos por defecto, al volver a la pestaña con el mínimo de 30 s, pestaña oculta, un 500 deja lo último). `exports-del-paquete` con los dos módulos nuevos. La reserva de espacio (espaciador del alto de la barra, la variable y `scroll-padding-bottom`, el detalle que no la cambia, la izquierda del layout) tiene su test.
+## ADR-084 — «Sucursal sin internet»: en el local se entra siempre por la copia local (0.170.0)
+
+**Estado:** aceptada (2026-10-20). El humano, probando un nodo de ContaLibra en una VM, entró desde la PC del local a la versión en la nube (`demo.contalibra.com.ar`); al cortar internet esa pestaña dejó de andar y tuvo que abrir `localhost:8000` y volver a loguearse. Nadie sabe que en la PC con LibraEdge se entra **siempre** por la copia local, aunque haya internet (el nodo sincroniza por detrás). Decisión: que sea obvio, sin una app aparte.
+
+**Qué ya existe** (se miró antes). `SucursalSinInternet` (ADR-080 y ADR-082): la tarjeta del instalador, el alta del nodo con su diálogo y `AvisoEstado`. Nada decía cómo se entra después de instalar; el único texto era «en la PC del local, ejecutá el instalador y elegí la carga». En libraedge, el puerto del producto en el nodo es el `puerto` de `instalador/productos/<producto>.json` (8000 en los tres) y el central no lo manda en `GET /api/nodos-offline`.
+
+**Decisión.**
+1. **`textoEntrarPorLaCopiaLocal(producto, puerto?)`**: «En ese local, entrá siempre por la copia local, aunque haya internet: en la PC del nodo, con el acceso directo «<Producto>» que deja el instalador (o http://localhost:8000); desde las otras cajas, con http://<IP de esa PC>:8000. La dirección de la nube es para entrar desde afuera del local.» Va como `AvisoEstado` de atención (`role="note"`) **en la tarjeta del instalador** y **en el diálogo del alta del nodo**, antes de descargar la carga. La carga nueva y la baja no lo repiten.
+2. **El puerto:** `PUERTO_DEL_NODO = 8000`, o `puerto_local` si el backend lo manda (campo opcional de `EstadoNodosOffline`; hoy no lo manda).
+3. **La IP real la completa el nodo, no el central:** el central no sabe la IP de la red del local. El instalador de LibraEdge (página final y log) y su bandeja la muestran ya completa (libraedge ADR-013), junto con el acceso directo «<Producto>» que abre la copia local en modo aplicación.
+
+**Consecuencias.** MINOR: una función, una constante y un campo opcional nuevos; la pantalla suma el aviso. Sin cambios para el producto.
+
+**Tests.** `test/SucursalSinInternet.test.tsx` (+5): el aviso en la tarjeta del instalador con el acceso directo y las dos direcciones; en el alta; no en la carga nueva; sin el adicional no está; el puerto del backend.
+

@@ -22,6 +22,13 @@
  *  como JSON, sin guardarlo en el estado y sin mostrarlo. Lo único que se muestra es el `node_id` y el prefijo, que el
  *  backend manda en cabeceras aparte. No hay «volver a bajar»: el central guarda sólo el hash; una carga perdida se
  *  reemplaza con «Carga nueva», que invalida la anterior.
+ *
+ *  ## En el local se entra siempre por la copia local (ADR-084)
+ *
+ *  En la PC con el nodo, el producto corre en `http://localhost:<puerto>` y sincroniza por detrás: se entra **siempre**
+ *  por ahí (el acceso directo «<Producto>» que deja el instalador), aunque haya internet. Quien entra por la nube desde
+ *  el local se queda sin sistema al cortarse internet. Lo dicen la tarjeta del instalador y el alta del nodo
+ *  (`textoEntrarPorLaCopiaLocal`); el instalador y la bandeja de LibraEdge lo repiten con la IP ya completa.
  */
 import { useCallback, useEffect, useState } from 'react'
 import { Download, FileKey2, Loader2, PlugZap, Trash2 } from 'lucide-react'
@@ -77,6 +84,21 @@ export type EstadoNodosOffline = {
   /** El `.deb` de Ubuntu y el script de una línea, si el backend los manda; si no, salen de `instalador_url`. */
   instalador_deb_url?: string
   instalar_script_url?: string
+  /** El puerto del producto en la PC del nodo, si el backend lo manda; si no, `PUERTO_DEL_NODO`. */
+  puerto_local?: number
+}
+
+/** El puerto en el que el nodo deja el producto en la PC del local: el `puerto` de
+ *  `instalador/productos/<producto>.json` de libraedge, 8000 en los tres productos. */
+export const PUERTO_DEL_NODO = 8000
+
+/** Cómo se entra en el local que tiene el nodo (ADR-084): por la copia local, aunque haya internet. */
+export function textoEntrarPorLaCopiaLocal(producto: string, puerto: number = PUERTO_DEL_NODO): string {
+  return (
+    `En ese local, entrá siempre por la copia local, aunque haya internet: en la PC del nodo, con el acceso directo ` +
+    `«${producto}» que deja el instalador (o http://localhost:${puerto}); desde las otras cajas, con ` +
+    `http://<IP de esa PC>:${puerto}. La dirección de la nube es para entrar desde afuera del local.`
+  )
 }
 
 /** Lo que se baja para instalar el nodo: el `.exe` de Windows, el `.deb` de Ubuntu y el script de una línea. */
@@ -155,6 +177,15 @@ const TEXTOS_DE_ACCION = {
     boton: 'Dar de baja',
   },
 } as const
+
+/** El aviso de cómo se entra en el local (ADR-084), en la tarjeta del instalador y en el alta del nodo. */
+function EntrarPorLaCopiaLocal({ producto, puerto }: { producto: string; puerto?: number }) {
+  return (
+    <AvisoEstado tono="atencion" role="note" data-aviso="copia-local">
+      {textoEntrarPorLaCopiaLocal(producto, puerto)}
+    </AvisoEstado>
+  )
+}
 
 function DescripcionDeAccion({ accion }: { accion: Accion }) {
   if (accion.tipo === 'alta') {
@@ -311,6 +342,7 @@ export function SucursalSinInternet({ ruta = RUTA_NODOS_OFFLINE, enConfiguracion
                     <pre className="overflow-x-auto rounded-md border bg-muted px-3 py-2 text-xs"><code>{comandoDeUbuntu(descargas.script, estado.producto)}</code></pre>
                   </div>
                 )}
+                <EntrarPorLaCopiaLocal producto={producto} puerto={estado.puerto_local} />
               </CardContent>
             </Card>
           )}
@@ -390,6 +422,7 @@ export function SucursalSinInternet({ ruta = RUTA_NODOS_OFFLINE, enConfiguracion
               <DialogTitle>{TEXTOS_DE_ACCION[accion.tipo].titulo}</DialogTitle>
               <DialogDescription><DescripcionDeAccion accion={accion} /></DialogDescription>
             </DialogHeader>
+            {accion.tipo === 'alta' && <EntrarPorLaCopiaLocal producto={producto} puerto={estado?.puerto_local} />}
             {errorDeAccion && <AvisoEstado tono="negativo" role="alert">{errorDeAccion}</AvisoEstado>}
             <DialogFooter>
               <DialogClose asChild><Button variant="outline" disabled={ocupado}>Cancelar</Button></DialogClose>
