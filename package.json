@@ -6,6 +6,7 @@
   "description": "Paquete de frontend compartido para los verticales de la familia Libra sin backoffice server-rendered propio (Gestiolibra, MedLibra, VentaLibra).",
   "exports": {
     "./AuthContext": "./src/AuthContext.tsx",
+    "./BarraDeEstado": "./src/BarraDeEstado.tsx",
     "./DestinoDeNotaDeCredito": "./src/DestinoDeNotaDeCredito.tsx",
     "./CampoArchivo": "./src/CampoArchivo.tsx",
     "./CampoCaptcha": "./src/CampoCaptcha.tsx",
@@ -63,6 +64,7 @@
     "./configuracion/arca-tutorial": "./src/configuracion/arca-tutorial.ts",
     "./configuracion/consultar-cuit": "./src/configuracion/consultar-cuit.ts",
     "./nodo-offline": "./src/nodo-offline.ts",
+    "./estado-del-sistema": "./src/estado-del-sistema.ts",
     "./modo": "./src/modo.ts",
     "./tema": "./src/tema.ts",
     "./tema.css": "./src/tema.css",
