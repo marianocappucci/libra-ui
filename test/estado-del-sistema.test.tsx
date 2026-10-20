@@ -159,8 +159,43 @@ describe('la barra en el layout', () => {
     const contenido = screen.getByText('contenido')
     expect(contenido.compareDocumentPosition(barra) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(pedidosA(RUTA_ESTADO_DEL_SISTEMA)).toBe(1)
-    // 🔴 En el flujo, no pegada a la ventana: `sticky`/`fixed` tapaba los botones de abajo de todo (e2e de ContaLibra).
-    expect(barra.className).not.toMatch(/\b(sticky|fixed)\b/)
+  })
+
+  it('fija al pie de la columna del contenido, con su lugar reservado: no tapa el último botón', async () => {
+    const user = userEvent.setup()
+    // jsdom no mide: la línea de la barra mide 29 px (28 + el borde), como en escritorio.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const alto = this.parentElement?.getAttribute('data-slot') === 'barra-de-estado' ? 29 : 0
+      return { x: 0, y: 0, top: 0, left: 0, right: 0, bottom: alto, width: 0, height: alto, toJSON: () => ({}) } as DOMRect
+    })
+    responder({ [RUTA_ESTADO_DEL_SISTEMA]: ADMIN })
+    const { container, unmount } = montarLayout(true)
+    const barra = await waitFor(() => {
+      const b = container.querySelector('[data-slot="barra-de-estado"]')
+      expect(b).not.toBeNull()
+      return b as HTMLElement
+    })
+    expect(barra.className).toMatch(/\bfixed\b/)
+    expect(barra.className).toContain('md:left-[var(--izquierda-barra-de-estado,0px)]')
+    // El layout le dice dónde empieza la columna (después de la barra lateral, abierta o en íconos).
+    expect(container.querySelector('main')?.className).toContain('[--izquierda-barra-de-estado:var(--sidebar-width)]')
+    // El espacio en el flujo mide lo mismo que la barra cerrada, y lo publica para los pies `sticky` y `scrollIntoView`.
+    const espacio = container.querySelector('[data-slot="espacio-de-la-barra-de-estado"]') as HTMLElement
+    await waitFor(() => expect(espacio.style.height).toBe('29px'))
+    expect(screen.getByText('contenido').compareDocumentPosition(espacio) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(document.documentElement.style.getPropertyValue('--alto-barra-de-estado')).toBe('29px')
+    expect(document.documentElement.style.scrollPaddingBottom).toBe('29px')
+    // Abrir el detalle no cambia la reserva: se despliega hacia arriba, encima del contenido.
+    await user.click(screen.getByRole('button', { name: /Estado del sistema/ }))
+    const detalle = screen.getByRole('region', { name: 'Detalle del estado del sistema' })
+    expect(detalle.className).toContain('bottom-full')
+    expect(espacio.style.height).toBe('29px')
+    // Un clic afuera lo cierra.
+    await user.click(screen.getByText('contenido'))
+    expect(screen.queryByRole('region', { name: 'Detalle del estado del sistema' })).toBeNull()
+    unmount()
+    expect(document.documentElement.style.getPropertyValue('--alto-barra-de-estado')).toBe('')
+    expect(document.documentElement.style.scrollPaddingBottom).toBe('')
   })
 
   it('en el celular, cada parte queda en su ícono y el texto sigue para el lector de pantalla', async () => {

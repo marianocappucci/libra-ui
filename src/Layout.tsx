@@ -507,7 +507,9 @@ export function createLayout<TUser = { role?: string; name?: string }>({
             El `<main>` de abajo ya tenia su propio `min-w-0` por esta misma
             razon; faltaba el de este nivel. Le pasa a los seis productos, no
             solo al que lo destapo — cualquier pantalla con contenido ancho. */}
-        <SidebarInset className="min-w-0">
+        {/* `--izquierda-barra-de-estado`: dónde empieza la columna del contenido en escritorio, para la barra de estado
+            fija (ADR-083). Es el ancho de la barra lateral, abierta o en íconos (`data-collapsible="icon"` de su `peer`). */}
+        <SidebarInset className="min-w-0 md:[--izquierda-barra-de-estado:var(--sidebar-width)] md:peer-data-[collapsible=icon]:[--izquierda-barra-de-estado:var(--sidebar-width-icon)] md:peer-data-[collapsible=offcanvas]:[--izquierda-barra-de-estado:0px]">
           {/* Unico resto de la barra vieja: en mobile la sidebar arranca
               cerrada y sin esto no hay como abrirla. En desktop no hace falta
               -- la sidebar esta a la vista y Ctrl/Cmd+B la colapsa. */}
