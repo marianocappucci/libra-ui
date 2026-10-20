@@ -51,6 +51,7 @@ import { MarcaProducto } from './MarcaProducto'
 import { cn } from './utils'
 import { fijarModo, leerModo, suscribirseAlModo, type Modo } from './modo'
 import { CartelSinConexion } from './CartelSinConexion'
+import { BarraDeEstado, type OpcionesBarraDeEstado } from './BarraDeEstado'
 import { RUTA_MENU_DE_NODOS_OFFLINE, useMenuDeNodosOffline } from './menu-de-nodos-offline'
 
 /** Si la ruta actual corresponde a una entrada del menú: la suya exacta, o una
@@ -158,7 +159,7 @@ function BotonDeModo() {
 export function createLayout<TUser = { role?: string; name?: string }>({
   productName, productInitial, navItems, navSections,
   icon: HeaderIcon, logo, producto, wordmarkClassName, homeTo, accountTo,
-  hasModule, getUserName, getUserSubtitle, userMenu, conexionDelNodo,
+  hasModule, getUserName, getUserSubtitle, userMenu, conexionDelNodo, barraDeEstado,
   useAuth = useAuthDefault as unknown as () => { user: TUser | null; logout: () => Promise<void> },
 }: {
   productName: string
@@ -199,6 +200,10 @@ export function createLayout<TUser = { role?: string; name?: string }>({
   // sin conexión, muestra arriba del contenido el `CartelSinConexion`. Fuera de un nodo (o si el producto no monta la
   // ruta) no muestra nada y deja de consultar. Sin la prop, ni un pedido más: es el layout de siempre.
   conexionDelNodo?: boolean | { ruta?: string; intervaloMs?: number }
+  // La barra de estado del pie (ADR-083): con `true` (o la ruta y el hook de la sucursal del producto), el layout pide
+  // `GET /api/estado-del-sistema` al montar y cada pocos minutos, y muestra al pie una línea con LibraEdge, el usuario y
+  // la sucursal, ARCA, el respaldo y la versión. Si el producto no monta la ruta, no muestra nada. Sin la prop, nada.
+  barraDeEstado?: boolean | OpcionesBarraDeEstado
   // Hook `useAuth` a usar -- por defecto el de la instancia pre-configurada
   // de este modulo. Productos con su propia `createAuthContext`
   // (Contalibra/Restolibra) pasan el suyo.
@@ -472,6 +477,13 @@ export function createLayout<TUser = { role?: string; name?: string }>({
     )
   }
 
+  /** La barra con el nombre que ya muestra el pie de la barra lateral. */
+  function BarraDelLayout({ opciones }: { opciones: OpcionesBarraDeEstado }) {
+    const { user } = useAuth()
+    const nombre = user ? (getUserName ? getUserName(user) : (user as { name?: string }).name) : null
+    return <BarraDeEstado {...opciones} nombre={nombre} />
+  }
+
   return function Layout({ children }: { children: ReactNode }) {
     return (
       <SidebarProvider>
@@ -519,6 +531,7 @@ export function createLayout<TUser = { role?: string; name?: string }>({
             {conexionDelNodo && <CartelSinConexion {...(typeof conexionDelNodo === 'object' ? conexionDelNodo : {})} />}
             {children}
           </div>
+          {barraDeEstado && <BarraDelLayout opciones={typeof barraDeEstado === 'object' ? barraDeEstado : {}} />}
         </SidebarInset>
       </SidebarProvider>
     )
