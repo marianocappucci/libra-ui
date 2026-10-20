@@ -159,6 +159,8 @@ describe('la barra en el layout', () => {
     const contenido = screen.getByText('contenido')
     expect(contenido.compareDocumentPosition(barra) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(pedidosA(RUTA_ESTADO_DEL_SISTEMA)).toBe(1)
+    // 🔴 En el flujo, no pegada a la ventana: `sticky`/`fixed` tapaba los botones de abajo de todo (e2e de ContaLibra).
+    expect(barra.className).not.toMatch(/\b(sticky|fixed)\b/)
   })
 
   it('en el celular, cada parte queda en su ícono y el texto sigue para el lector de pantalla', async () => {

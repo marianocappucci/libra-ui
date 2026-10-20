@@ -121,9 +121,12 @@ export function BarraDeEstado({ ruta, useSucursal = sinSucursal, nombre, classNa
       ref={raiz}
       data-slot="barra-de-estado"
       className={cn(
-        // `sticky bottom-0` dentro del `SidebarInset`: queda al pie de la ventana con contenido largo y al pie del
-        // contenido con uno corto. El margen de abajo es el del área segura del teléfono (la barra de gestos).
-        'sticky bottom-0 z-10 mt-auto border-t bg-background/95 pb-[env(safe-area-inset-bottom)] text-xs text-muted-foreground backdrop-blur supports-[backdrop-filter]:bg-background/80',
+        // 🔴 En el flujo y NO `sticky bottom-0`: pegada al pie de la ventana tapaba los botones que quedan abajo de todo
+        // (el e2e de ContaLibra no podía tocar «Emitir nota de crédito»: `scrollIntoView` lo deja justo debajo de la
+        // barra). `mt-auto` la deja al pie de la ventana con contenido corto y al final de la página con uno largo. Lo
+        // urgente de un nodo sin conexión ya está siempre a la vista en el cartel de arriba. El margen de abajo es el del
+        // área segura del teléfono (la barra de gestos).
+        'mt-auto border-t bg-background pb-[env(safe-area-inset-bottom)] text-xs text-muted-foreground',
         className,
       )}
       onKeyDown={(e) => {
