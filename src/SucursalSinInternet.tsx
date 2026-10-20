@@ -6,7 +6,14 @@
  *  instancia con su última sincronización y puede emitir una carga nueva o darlos de baja.
  *
  *  Todo lo dice `GET /api/nodos-offline` (`libraedge.pantalla_del_central.create_nodos_router`): el producto sólo
- *  monta el router con su guarda de administrador y pone esta pantalla en el menú, gateada por el módulo `offline`.
+ *  monta el router con su guarda de administrador y pone esta pantalla como sección de Configuración
+ *  (`seccionSucursalSinInternet`, ADR-082), sólo para el administrador.
+ *
+ *  ## Las descargas, sólo adentro y con el adicional (decisión del humano, 2026-10-20)
+ *
+ *  El instalador ya no se ofrece en las webs: se baja de acá, y **sólo con el adicional `offline` contratado**. Sin
+ *  él, la sección explica que hay que contratarlo y no muestra ni el instalador ni el alta; si quedan nodos activos,
+ *  los lista para poder darlos de baja.
  *
  *  ## 🔴 El secreto del nodo no pasa por la pantalla
  *
@@ -26,6 +33,7 @@ import { formatoCantidad } from './formatos'
 import { ICONOS } from './iconos-identidad'
 import { IDENTIDAD } from './identidad'
 import { MarcaProducto } from './MarcaProducto'
+import type { SeccionConfig } from './Configuracion'
 import { refrescarMenuDeNodosOffline } from './menu-de-nodos-offline'
 import { TituloPantalla } from './titulo-pantalla'
 import { Button } from '@/components/ui/button'
@@ -66,6 +74,31 @@ export type EstadoNodosOffline = {
   nodos: NodoOffline[]
   /** Nodos no dados de baja (libraedge ≥ v0.11.0). */
   nodos_activos?: number
+  /** El `.deb` de Ubuntu y el script de una línea, si el backend los manda; si no, salen de `instalador_url`. */
+  instalador_deb_url?: string
+  instalar_script_url?: string
+}
+
+/** Lo que se baja para instalar el nodo: el `.exe` de Windows, el `.deb` de Ubuntu y el script de una línea. */
+export type DescargasDelNodo = { windows: string; ubuntu: string | null; script: string | null }
+
+/** Las tres descargas. Los Releases de LibraEdge publican, junto a `libraedge-nodo-<producto>.exe`, el alias
+ *  `libraedge-nodo-<producto>_amd64.deb` y `instalar-nodo.sh` (libraedge ADR-010 y ADR-012): mientras el backend no los
+ *  mande, se arman al lado del `.exe`. Con otra URL (un instalador servido de otro lado) no se inventa nada. */
+export function descargasDelNodo(
+  estado: Pick<EstadoNodosOffline, 'instalador_url' | 'instalador_deb_url' | 'instalar_script_url'>,
+): DescargasDelNodo {
+  const m = /^(.*)\/libraedge-nodo-([a-z0-9]+)\.exe$/.exec(estado.instalador_url)
+  return {
+    windows: estado.instalador_url,
+    ubuntu: estado.instalador_deb_url ?? (m ? `${m[1]}/libraedge-nodo-${m[2]}_amd64.deb` : null),
+    script: estado.instalar_script_url ?? (m ? `${m[1]}/instalar-nodo.sh` : null),
+  }
+}
+
+/** La línea para instalar en Ubuntu, con el producto y el lugar de la carga a completar. */
+export function comandoDeUbuntu(script: string, producto: string): string {
+  return `curl -fsSL ${script} | sudo bash -s ${producto} /ruta/carga-nodo.json`
 }
 
 const ESTADOS: Record<EstadoDelNodo, { texto: string; tono: TonoEstado }> = {
@@ -79,7 +112,8 @@ export const TEXTO_ADICIONAL_APAGADO_CON_NODOS =
   'El adicional LibraEdge (sucursal sin internet) está apagado: no se pueden dar de alta nodos nuevos ni emitir cargas. ' +
   'Los nodos que siguen activos sólo se pueden dar de baja.'
 export const TEXTO_SIN_ADICIONAL =
-  'Tu plan no incluye LibraEdge (sucursal sin internet). Para sumarlo a una sucursal, consultanos por WhatsApp.'
+  'Tu plan no incluye LibraEdge (sucursal sin internet). Para sumarlo a una sucursal, consultanos por WhatsApp: ' +
+  'una vez contratado, acá vas a encontrar el instalador y la carga de cada sucursal.'
 export const TEXTO_CARGA_DESCARGADA =
   'La carga tiene la clave del nodo: llevala a la PC del local, instalá con ella y después borrala de Descargas. ' +
   'No se puede volver a descargar; si se pierde, se emite una carga nueva.'
@@ -148,7 +182,11 @@ function DescripcionDeAccion({ accion }: { accion: Accion }) {
   )
 }
 
-export function SucursalSinInternet({ ruta = RUTA_NODOS_OFFLINE }: { ruta?: string } = {}) {
+export function SucursalSinInternet({ ruta = RUTA_NODOS_OFFLINE, enConfiguracion = false }: {
+  ruta?: string
+  /** Como sección de Configuración (ADR-082): sin el título de pantalla, que ya lo pone Configuración. */
+  enConfiguracion?: boolean
+} = {}) {
   const [estado, setEstado] = useState<EstadoNodosOffline | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [accion, setAccion] = useState<Accion | null>(null)
@@ -204,10 +242,11 @@ export function SucursalSinInternet({ ruta = RUTA_NODOS_OFFLINE }: { ruta?: stri
   const producto = estado ? nombreDelProducto(estado.producto) : ''
   const activas = estado?.sucursales.filter((s) => s.activa) ?? []
   const puedeEmitir = !!estado && estado.contratado && !estado.central_url_error && !estado.emisor_error
+  const descargas = estado ? descargasDelNodo(estado) : null
 
   return (
     <div className="space-y-6">
-      <TituloPantalla icono={ICONOS.sucursalSinInternet}>Sucursal sin internet</TituloPantalla>
+      {!enConfiguracion && <TituloPantalla icono={ICONOS.sucursalSinInternet}>Sucursal sin internet</TituloPantalla>}
 
       <div className="flex items-start gap-3 text-sm text-muted-foreground">
         <MarcaProducto producto="libraedge" className="h-10 w-10 shrink-0" />
@@ -229,8 +268,8 @@ export function SucursalSinInternet({ ruta = RUTA_NODOS_OFFLINE }: { ruta?: stri
       {estado && (
         <>
           {!estado.contratado && (
-            // Sin el adicional la pantalla sólo se abre si quedan nodos activos (el menú, ADR-080): ahí lo único que se puede
-            // hacer es darlos de baja, y tiene que quedar dicho.
+            // Sin el adicional no hay descargas ni alta (ADR-082): si quedan nodos activos, lo único que se puede hacer es
+            // darlos de baja, y tiene que quedar dicho.
             <AvisoEstado tono="atencion" role="note">
               {estado.nodos.some((n) => n.activo) ? TEXTO_ADICIONAL_APAGADO_CON_NODOS : TEXTO_SIN_ADICIONAL}
             </AvisoEstado>
@@ -246,79 +285,101 @@ export function SucursalSinInternet({ ruta = RUTA_NODOS_OFFLINE }: { ruta?: stri
             </AvisoEstado>
           )}
 
-          <Card>
-            <CardHeader className="pb-2"><h2 className="text-base font-semibold">1. El instalador</h2></CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <p className="text-muted-foreground">
-                Es el mismo para todas las sucursales y no tiene ninguna clave. Va en la PC del local (Windows 10 u 11).
-              </p>
-              <Button asChild variant="outline">
-                <a href={estado.instalador_url} rel="noopener noreferrer"><Download />Descargar el instalador de {producto}</a>
-              </Button>
-            </CardContent>
-          </Card>
+          {estado.contratado && descargas && (
+            <Card>
+              <CardHeader className="pb-2"><h2 className="text-base font-semibold">1. El instalador</h2></CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <p className="text-muted-foreground">
+                  Es el mismo para todas las sucursales y no tiene ninguna clave. Va en la PC del local: Windows 10 u 11, o
+                  Ubuntu, de 64 bits.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button asChild variant="outline">
+                    <a href={descargas.windows} rel="noopener noreferrer"><Download />Instalador de {producto} para Windows</a>
+                  </Button>
+                  {descargas.ubuntu && (
+                    <Button asChild variant="outline">
+                      <a href={descargas.ubuntu} rel="noopener noreferrer"><Download />Paquete de {producto} para Ubuntu</a>
+                    </Button>
+                  )}
+                </div>
+                {descargas.script && (
+                  <div className="space-y-1">
+                    <p className="text-muted-foreground">
+                      En Ubuntu también se instala con una sola línea, que agrega PostgreSQL 16 y verifica el paquete:
+                    </p>
+                    <pre className="overflow-x-auto rounded-md border bg-muted px-3 py-2 text-xs"><code>{comandoDeUbuntu(descargas.script, estado.producto)}</code></pre>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
-          <Card>
-            <CardHeader className="pb-2"><h2 className="text-base font-semibold">2. El nodo de cada sucursal</h2></CardHeader>
-            <CardContent className="text-sm">
-              {activas.length === 0 ? (
-                <p className="text-muted-foreground">No hay sucursales activas. Creá la sucursal primero.</p>
-              ) : (
-                <ul className="divide-y" aria-label="Sucursales">
-                  {activas.map((s) => (
-                    <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-                      <span className="font-medium">{s.nombre}</span>
-                      {s.nodo ? (
-                        <span className="text-muted-foreground">Nodo {s.nodo}</span>
-                      ) : (
-                        <Button size="sm" disabled={!puedeEmitir} onClick={() => abrir({ tipo: 'alta', sucursal: s })}>
-                          <PlugZap />Dar de alta el nodo
-                        </Button>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
+          {estado.contratado && (
+            <Card>
+              <CardHeader className="pb-2"><h2 className="text-base font-semibold">2. El nodo de cada sucursal</h2></CardHeader>
+              <CardContent className="text-sm">
+                {activas.length === 0 ? (
+                  <p className="text-muted-foreground">No hay sucursales activas. Creá la sucursal primero.</p>
+                ) : (
+                  <ul className="divide-y" aria-label="Sucursales">
+                    {activas.map((s) => (
+                      <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                        <span className="font-medium">{s.nombre}</span>
+                        {s.nodo ? (
+                          <span className="text-muted-foreground">Nodo {s.nodo}</span>
+                        ) : (
+                          <Button size="sm" disabled={!puedeEmitir} onClick={() => abrir({ tipo: 'alta', sucursal: s })}>
+                            <PlugZap />Dar de alta el nodo
+                          </Button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
-          <Card>
-            <CardHeader className="pb-2"><h2 className="text-base font-semibold">Nodos</h2></CardHeader>
-            <CardContent className="text-sm">
-              {estado.nodos.length === 0 ? (
-                <p className="text-muted-foreground">Todavía no hay ningún nodo.</p>
-              ) : (
-                <ul className="divide-y" aria-label="Nodos">
-                  {estado.nodos.map((n) => (
-                    <li key={n.node_id} className="flex flex-wrap items-center justify-between gap-3 py-3" data-nodo={n.node_id}>
-                      <div className="min-w-0 space-y-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-medium">{n.sucursal ?? `Sucursal ${n.sucursal_id}`}</span>
-                          <BadgeEstado tono={ESTADOS[n.estado].tono}>{ESTADOS[n.estado].texto}</BadgeEstado>
+          {(estado.contratado || estado.nodos.length > 0) && (
+            <Card>
+              <CardHeader className="pb-2"><h2 className="text-base font-semibold">Nodos</h2></CardHeader>
+              <CardContent className="text-sm">
+                {estado.nodos.length === 0 ? (
+                  <p className="text-muted-foreground">Todavía no hay ningún nodo.</p>
+                ) : (
+                  <ul className="divide-y" aria-label="Nodos">
+                    {estado.nodos.map((n) => (
+                      <li key={n.node_id} className="flex flex-wrap items-center justify-between gap-3 py-3" data-nodo={n.node_id}>
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-medium">{n.sucursal ?? `Sucursal ${n.sucursal_id}`}</span>
+                            <BadgeEstado tono={ESTADOS[n.estado].tono}>{ESTADOS[n.estado].texto}</BadgeEstado>
+                          </div>
+                          <p className="break-all text-muted-foreground">
+                            {n.node_id} · prefijo {n.prefijo ?? '—'} · última sincronización{' '}
+                            <span title={n.ultima_sincronizacion ? fechaHora(n.ultima_sincronizacion) : undefined}>
+                              {ultimaSincronizacion(n).toLowerCase()}
+                            </span>
+                          </p>
                         </div>
-                        <p className="break-all text-muted-foreground">
-                          {n.node_id} · prefijo {n.prefijo ?? '—'} · última sincronización{' '}
-                          <span title={n.ultima_sincronizacion ? fechaHora(n.ultima_sincronizacion) : undefined}>
-                            {ultimaSincronizacion(n).toLowerCase()}
-                          </span>
-                        </p>
-                      </div>
-                      {n.activo && (
-                        <div className="flex flex-wrap gap-2">
-                          <Button size="sm" variant="outline" disabled={!puedeEmitir} onClick={() => abrir({ tipo: 'carga', nodo: n })}>
-                            <FileKey2 />Carga nueva
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => abrir({ tipo: 'baja', nodo: n })}>
-                            <Trash2 />Dar de baja
-                          </Button>
-                        </div>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
+                        {n.activo && (
+                          <div className="flex flex-wrap gap-2">
+                            <Button size="sm" variant="outline" disabled={!puedeEmitir} onClick={() => abrir({ tipo: 'carga', nodo: n })}>
+                              <FileKey2 />Carga nueva
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => abrir({ tipo: 'baja', nodo: n })}>
+                              <Trash2 />Dar de baja
+                            </Button>
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </>
       )}
 
@@ -346,3 +407,18 @@ export function SucursalSinInternet({ ruta = RUTA_NODOS_OFFLINE }: { ruta?: stri
     </div>
   )
 }
+
+/** La sección «Sucursal sin internet» de Configuración (ADR-082). El producto la suma a `propias` **sólo para el
+ *  administrador** (el backend corta igual): `createConfiguracion({ propias: [..., seccionSucursalSinInternet()] })`. */
+export function seccionSucursalSinInternet({ ruta = RUTA_NODOS_OFFLINE }: { ruta?: string } = {}): SeccionConfig {
+  return {
+    clave: CLAVE_DE_LA_SECCION,
+    label: 'Sucursal sin internet',
+    icono: ICONOS.sucursalSinInternet,
+    contenido: <SucursalSinInternet ruta={ruta} enConfiguracion />,
+  }
+}
+
+/** `?seccion=` de la sección: la ruta vieja `/sucursal-sin-internet` del producto redirige a
+ *  `/configuracion?seccion=sucursal-sin-internet`. */
+export const CLAVE_DE_LA_SECCION = 'sucursal-sin-internet'

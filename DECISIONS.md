@@ -1920,3 +1920,18 @@ Las 37 pantallas del kit que importaban `@/components/ui/dialog` (50 `DialogCont
 **Consecuencias.** MINOR, sólo visual: todos los productos lo ven con el pin, sin tocar nada. El contenido de la página no cambia; con barras superpuestas (móvil, macOS) tampoco.
 
 **Tests.** `test/barra-lateral.test.ts`: el bloque de `[data-sidebar="content"]` declara el ancho fino y el canal transparente, en reposo y con hover. Medido en Chromium (barras clásicas, claro y oscuro): antes el canal blanco; ahora el canal es el grafito de la barra.
+
+## ADR-082 — «Sucursal sin internet» pasa a Configuración y las descargas, sólo con el adicional (0.168.0)
+
+**Estado:** aceptada (2026-10-20). Decisión del humano: «el instalador de libraedge no quiero que esté disponible ni en la página de librasuite ni en las landings de las apps, las descargas deben estar disponibles en configuración de las apps una vez que uno está dentro de una app, de esa manera nadie lo descarga porque sí». LibraEdge sigue siendo un adicional por sucursal (no entra en un plan) y los Releases de libraedge siguen públicos: lo que cambia es dónde se ofrece.
+
+**Qué ya existe** (se miró antes). La pantalla `SucursalSinInternet` y la entrada de menú `nodosOffline` (ADR-080); `createConfiguracion({ propias })` (secciones propias del producto, con `?seccion=` en la URL); los Releases de libraedge con `libraedge-nodo-<producto>.exe`, el alias `libraedge-nodo-<producto>_amd64.deb` e `instalar-nodo.sh` (libraedge ADR-010 y ADR-012). La pantalla sólo ofrecía el `.exe`: el `.deb` y la línea de Ubuntu estaban sólo en las webs, que los sacaron (librasuite_web#9, ventalibra_web#26, restolibra_web#18, contalibra_web#15).
+
+**Decisión.**
+1. **`seccionSucursalSinInternet({ ruta? })`** devuelve la `SeccionConfig` (`clave: 'sucursal-sin-internet'`, `CLAVE_DE_LA_SECCION`) para `propias`. El producto la suma **sólo para el administrador** (el backend corta igual) y saca la entrada del menú; la ruta vieja `/sucursal-sin-internet` redirige a `/configuracion?seccion=sucursal-sin-internet`. `SucursalSinInternet({ enConfiguracion })` no repite el título de pantalla.
+2. **🔴 Sin el adicional no hay descargas ni alta.** La tarjeta del instalador y la del nodo de cada sucursal se ven sólo con `contratado`; sin él queda el texto para contratarlo (`TEXTO_SIN_ADICIONAL`, que ahora dice que el instalador y la carga aparecen ahí una vez contratado) y, si hay nodos, su lista con «Dar de baja».
+3. **Las tres descargas:** Windows (`instalador_url`), Ubuntu (`.deb`) y la línea de `instalar-nodo.sh` (`comandoDeUbuntu`). `descargasDelNodo` usa `instalador_deb_url` e `instalar_script_url` si el backend los manda y, si no, los arma al lado del `.exe` de los Releases; con otra URL no inventa nada. Se resolvió en el kit para no tocar libraedge mientras otra sesión trabajaba ahí; cuando `create_nodos_router` mande los dos campos, el kit los toma sin cambios.
+
+**Consecuencias.** MINOR. `SucursalSinInternet` cambia sin el adicional (ya no muestra el instalador ni el alta deshabilitada). La entrada de menú `nodosOffline` (ADR-080, punto 5) queda en el kit pero los tres productos dejan de usarla.
+
+**Tests.** `test/SucursalSinInternet.test.tsx` (17): las tres descargas con el adicional; sin él, ningún link ni alta (con y sin nodos); la sección sin título y con su clave; la ruta propia; `descargasDelNodo` (armadas, ajenas, del backend) y `comandoDeUbuntu`.

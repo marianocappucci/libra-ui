@@ -8,8 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { nombreDeArchivo } from '../src/api-client'
 import {
-  SucursalSinInternet, TEXTO_ADICIONAL_APAGADO_CON_NODOS, TEXTO_SIN_ADICIONAL, nombreDelProducto, ultimaSincronizacion,
-  type EstadoNodosOffline,
+  CLAVE_DE_LA_SECCION, SucursalSinInternet, TEXTO_ADICIONAL_APAGADO_CON_NODOS, TEXTO_SIN_ADICIONAL, comandoDeUbuntu,
+  descargasDelNodo, nombreDelProducto, seccionSucursalSinInternet, ultimaSincronizacion, type EstadoNodosOffline,
 } from '../src/SucursalSinInternet'
 
 const SECRETO = 'secreto-de-prueba-que-no-se-muestra'
@@ -88,14 +88,21 @@ function responder(estado: EstadoNodosOffline, extra?: (url: string, init?: Requ
 async function montar(estado = ESTADO, extra?: Parameters<typeof responder>[1]) {
   responder(estado, extra)
   render(<SucursalSinInternet />)
-  await waitFor(() => expect(screen.getByText('1. El instalador')).toBeInTheDocument())
+  await waitFor(() => expect(screen.queryByText('Cargando…')).not.toBeInTheDocument())
 }
+
+const RELEASES = 'https://github.com/marianocappucci/libraedge/releases/latest/download'
 
 describe('la pantalla', () => {
   it('ofrece el instalador del producto y lista sucursales activas y nodos con su estado', async () => {
     await montar()
-    const link = screen.getByRole('link', { name: /Descargar el instalador de VentaLibra/ })
-    expect(link).toHaveAttribute('href', ESTADO.instalador_url)
+    expect(screen.getByRole('heading', { name: 'Sucursal sin internet' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Instalador de VentaLibra para Windows/ }))
+      .toHaveAttribute('href', ESTADO.instalador_url)
+    expect(screen.getByRole('link', { name: /Paquete de VentaLibra para Ubuntu/ }))
+      .toHaveAttribute('href', `${RELEASES}/libraedge-nodo-ventalibra_amd64.deb`)
+    expect(screen.getByText(`curl -fsSL ${RELEASES}/instalar-nodo.sh | sudo bash -s ventalibra /ruta/carga-nodo.json`))
+      .toBeInTheDocument()
 
     const sucursales = screen.getByRole('list', { name: 'Sucursales' })
     expect(within(sucursales).getByText('Centro')).toBeInTheDocument()
@@ -116,7 +123,10 @@ describe('la pantalla', () => {
     await montar({ ...ESTADO, contratado: false })
     expect(screen.getByText(TEXTO_ADICIONAL_APAGADO_CON_NODOS)).toBeInTheDocument()
     expect(screen.queryByText(TEXTO_SIN_ADICIONAL)).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Dar de alta el nodo/ })).toBeDisabled()
+    // 🔴 Sin el adicional no hay descargas ni alta (ADR-082): el instalador sólo se baja contratado.
+    expect(screen.queryByRole('link')).not.toBeInTheDocument()
+    expect(screen.queryByText('1. El instalador')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Dar de alta el nodo/ })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Carga nueva/ })).toBeDisabled()
     // Dar de baja sigue: un nodo instalado se tiene que poder revocar igual.
     expect(screen.getByRole('button', { name: /Dar de baja/ })).toBeEnabled()
@@ -125,7 +135,15 @@ describe('la pantalla', () => {
   it('sin el adicional y sin nodos activos invita a contratarlo', async () => {
     await montar({ ...ESTADO, contratado: false, nodos: ESTADO.nodos.filter((n) => !n.activo) })
     expect(screen.getByText(TEXTO_SIN_ADICIONAL)).toBeInTheDocument()
+    expect(screen.queryByRole('link')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Dar de baja/ })).not.toBeInTheDocument()
+  })
+
+  it('sin el adicional y sin ningún nodo sólo queda la invitación', async () => {
+    await montar({ ...ESTADO, contratado: false, nodos: [] })
+    expect(screen.getByText(TEXTO_SIN_ADICIONAL)).toBeInTheDocument()
+    expect(screen.queryByRole('list')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 
   it('sin URL del central o con el CUIT mal cargado no deja emitir', async () => {
@@ -207,7 +225,41 @@ describe('la baja', () => {
   })
 })
 
+describe('en Configuración (ADR-082)', () => {
+  it('la sección no repite el título de pantalla y tiene su clave para ?seccion=', async () => {
+    const seccion = seccionSucursalSinInternet()
+    expect(seccion).toMatchObject({ clave: CLAVE_DE_LA_SECCION, label: 'Sucursal sin internet' })
+    expect(CLAVE_DE_LA_SECCION).toBe('sucursal-sin-internet')
+    responder(ESTADO)
+    render(<>{seccion.contenido}</>)
+    await waitFor(() => expect(screen.getByText('1. El instalador')).toBeInTheDocument())
+    expect(screen.queryByRole('heading', { name: 'Sucursal sin internet' })).not.toBeInTheDocument()
+  })
+
+  it('la ruta propia del producto llega a la sección', async () => {
+    responder(ESTADO)
+    render(<>{seccionSucursalSinInternet({ ruta: '/api/otra/nodos' }).contenido}</>)
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/otra/nodos')
+  })
+})
+
 describe('piezas', () => {
+  it('las descargas salen del instalador de Windows, o del backend si las manda', () => {
+    expect(descargasDelNodo(ESTADO)).toEqual({
+      windows: ESTADO.instalador_url,
+      ubuntu: `${RELEASES}/libraedge-nodo-ventalibra_amd64.deb`,
+      script: `${RELEASES}/instalar-nodo.sh`,
+    })
+    expect(descargasDelNodo({ instalador_url: 'https://otro.lado/instalador.exe' }))
+      .toEqual({ windows: 'https://otro.lado/instalador.exe', ubuntu: null, script: null })
+    expect(descargasDelNodo({
+      instalador_url: 'https://otro.lado/instalador.exe', instalador_deb_url: 'https://otro.lado/x.deb',
+      instalar_script_url: 'https://otro.lado/i.sh',
+    })).toEqual({ windows: 'https://otro.lado/instalador.exe', ubuntu: 'https://otro.lado/x.deb', script: 'https://otro.lado/i.sh' })
+    expect(comandoDeUbuntu('https://x/i.sh', 'contalibra')).toBe('curl -fsSL https://x/i.sh | sudo bash -s contalibra /ruta/carga-nodo.json')
+  })
+
   it('el nombre del archivo sale del Content-Disposition', () => {
     expect(nombreDeArchivo('attachment; filename="carga-nodo-x.json"')).toBe('carga-nodo-x.json')
     expect(nombreDeArchivo('attachment; filename=otra.json')).toBe('otra.json')
