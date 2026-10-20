@@ -165,7 +165,7 @@ describe('la barra en el layout', () => {
     const user = userEvent.setup()
     // jsdom no mide: la línea de la barra mide 29 px (28 + el borde), como en escritorio.
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
-      const alto = this.parentElement?.getAttribute('data-slot') === 'barra-de-estado' ? 29 : 0
+      const alto = this.getAttribute('data-slot') === 'barra-de-estado' ? 29 : 0
       return { x: 0, y: 0, top: 0, left: 0, right: 0, bottom: alto, width: 0, height: alto, toJSON: () => ({}) } as DOMRect
     })
     responder({ [RUTA_ESTADO_DEL_SISTEMA]: ADMIN })

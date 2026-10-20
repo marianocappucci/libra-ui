@@ -131,7 +131,8 @@ export function BarraDeEstado({ ruta, useSucursal = sinSucursal, nombre, classNa
   const [alto, setAlto] = useState(0)
   const hayDatos = datos !== null
   useLayoutEffect(() => {
-    const linea = raiz.current
+    // La barra entera (con su borde y el área segura): el detalle va `absolute`, así que no suma.
+    const linea = raiz.current?.parentElement
     if (!hayDatos || !linea) return
     const medir = () => setAlto(Math.ceil(linea.getBoundingClientRect().height))
     medir()
