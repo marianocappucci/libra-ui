@@ -9,7 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { nombreDeArchivo } from '../src/api-client'
 import {
-  CLAVE_DE_LA_SECCION, PUERTO_DEL_NODO, SucursalSinInternet, TEXTO_CODIGO, comandoDeUbuntu, descargasDelNodo,
+  CLAVE_DE_LA_SECCION, PUERTO_DEL_NODO, SucursalSinInternet, TEXTO_CAJA, TEXTO_CODIGO, comandoDeUbuntu,
+  descargasDeCaja, descargasDelNodo,
   nombreDelProducto, seccionSucursalSinInternet, textoEntrarPorLaCopiaLocal, ultimaSincronizacion,
   type CodigoDeVinculacion, type EstadoNodosOffline,
 } from '../src/SucursalSinInternet'
@@ -176,6 +177,37 @@ describe('la pantalla', () => {
   })
 })
 
+describe('las otras PC del local: la app de caja (ADR-086)', () => {
+  it('la tarjeta del instalador ofrece la app de caja con una línea de para qué es', async () => {
+    await montar()
+    const caja = document.querySelector('[data-descargas="caja"]') as HTMLElement
+    expect(caja).not.toBeNull()
+    expect(within(caja).getByRole('heading', { name: 'Para las otras PC del local' })).toBeInTheDocument()
+    expect(caja).toHaveTextContent(TEXTO_CAJA)
+    expect(within(caja).getByRole('link', { name: /VentaLibra para otra caja \(Windows\)/ }))
+      .toHaveAttribute('href', `${RELEASES}/libraedge-caja-ventalibra.exe`)
+    expect(within(caja).getByRole('link', { name: /VentaLibra para otra caja \(Ubuntu\)/ }))
+      .toHaveAttribute('href', `${RELEASES}/libraedge-caja-ventalibra_amd64.deb`)
+  })
+
+  it('con un instalador servido de otro lado no se inventa la caja', async () => {
+    await montar({ ...ESTADO, instalador_url: 'https://otro.lado/instalador.exe' })
+    expect(document.querySelector('[data-descargas="caja"]')).toBeNull()
+  })
+
+  it('las descargas de caja salen del instalador del nodo, o del backend si las manda', () => {
+    expect(descargasDeCaja(ESTADO)).toEqual({
+      windows: `${RELEASES}/libraedge-caja-ventalibra.exe`,
+      ubuntu: `${RELEASES}/libraedge-caja-ventalibra_amd64.deb`,
+    })
+    expect(descargasDeCaja({ instalador_url: 'https://otro.lado/instalador.exe' })).toBeNull()
+    expect(descargasDeCaja({
+      instalador_url: 'https://otro.lado/instalador.exe', caja_url: 'https://otro.lado/c.exe',
+      caja_deb_url: 'https://otro.lado/c.deb',
+    })).toEqual({ windows: 'https://otro.lado/c.exe', ubuntu: 'https://otro.lado/c.deb' })
+  })
+})
+
 describe('🔴 en el local se entra por la copia local (ADR-084)', () => {
   it('la tarjeta del instalador lo dice con el acceso directo del producto y las dos direcciones', async () => {
     await montar()
@@ -185,6 +217,7 @@ describe('🔴 en el local se entra por la copia local (ADR-084)', () => {
     expect(aviso).toHaveTextContent('el acceso directo «VentaLibra» que deja el instalador')
     expect(aviso).toHaveTextContent('http://localhost:8000')
     expect(aviso).toHaveTextContent('http://<IP de esa PC>:8000')
+    expect(aviso).toHaveTextContent('desde las otras cajas, con la app de caja, que encuentra sola esa PC en la red')
     expect(aviso).toHaveTextContent('La dirección de la nube es para entrar desde afuera del local.')
   })
 
