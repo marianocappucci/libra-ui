@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice">
+  <title>Burbujas de chat</title>
+  <defs>
+    <radialGradient id="fondo" cx="78%" cy="45%" r="80%">
+      <stop offset="0" stop-color="#f43f5e"/>
+      <stop offset=".55" stop-color="#be123c"/>
+      <stop offset="1" stop-color="#4c0519"/>
+    </radialGradient>
+    <linearGradient id="burbuja" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#fbe4e9"/>
+    </linearGradient>
+    <linearGradient id="respuesta" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".9"/>
+      <stop offset="1" stop-color="#fde2e8" stop-opacity=".8"/>
+    </linearGradient>
+    <radialGradient id="punto" cx="40%" cy="35%" r="70%">
+      <stop offset="0" stop-color="#fb7185"/>
+      <stop offset="1" stop-color="#e11d48"/>
+    </radialGradient>
+    <filter id="sombra" x="-30%" y="-30%" width="160%" height="170%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="22"/>
+      <feOffset dy="28"/>
+      <feComponentTransfer><feFuncA type="linear" slope=".28"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="difusa"><feGaussianBlur stdDeviation="6"/></filter>
+    <!-- Una burbuja de chat de 100 × 76 con la cola abajo a la izquierda; se escala en cada uso. -->
+    <path id="b" d="M18 0h64a18 18 0 0 1 18 18v36a18 18 0 0 1-18 18H38L20 88V72h-2A18 18 0 0 1 0 54V18A18 18 0 0 1 18 0z"/>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#fondo)"/>
+
+  <!-- Burbujas lejanas, chicas y desenfocadas: dan profundidad sin distraer. -->
+  <g fill="#ffffff" filter="url(#difusa)">
+    <use href="#b" transform="translate(150 140) scale(.9)" opacity=".16"/>
+    <use href="#b" transform="translate(330 620) scale(.6)" opacity=".12"/>
+    <use href="#b" transform="translate(70 470) scale(.45)" opacity=".14"/>
+    <use href="#b" transform="translate(560 90) scale(.5)" opacity=".1"/>
+    <use href="#b" transform="translate(1450 120) scale(.55) rotate(8)" opacity=".14"/>
+    <use href="#b" transform="translate(1420 690) scale(.7) rotate(-6)" opacity=".12"/>
+    <use href="#b" transform="translate(780 760) scale(.4)" opacity=".1"/>
+  </g>
+
+  <!-- La pareja principal: la respuesta detrás y la burbuja que está escribiendo adelante. -->
+  <g filter="url(#sombra)">
+    <g transform="translate(1370 230) scale(2.1) rotate(4)">
+      <use href="#b" fill="url(#respuesta)" transform="matrix(-1 0 0 1 100 0)"/>
+    </g>
+    <g transform="translate(1110 330) scale(3) rotate(-5)">
+      <use href="#b" fill="url(#burbuja)"/>
+      <circle cx="30" cy="36" r="8" fill="url(#punto)"/>
+      <circle cx="50" cy="36" r="8" fill="url(#punto)"/>
+      <circle cx="70" cy="36" r="8" fill="url(#punto)"/>
+    </g>
+  </g>
+
+  <!-- Dos burbujas medianas, más cerca, a la izquierda: la conversación sigue. -->
+  <g fill="url(#burbuja)" opacity=".55" filter="url(#sombra)">
+    <use href="#b" transform="translate(120 330) scale(1.2) rotate(-8)"/>
+    <use href="#b" transform="translate(300 540) scale(.8) rotate(6)"/>
+  </g>
+</svg>

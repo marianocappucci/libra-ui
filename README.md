@@ -208,6 +208,12 @@ no espera y el login manda sólo usuario y contraseña. El widget no puede corre
 navegador da sólo en https o `localhost`, y a un nodo se entra por `http://<IP-LAN>:8000`. Una consulta que falla (404, 500, el
 `index.html` de la SPA) deja el captcha apagado, como siempre. La regla está en `captchaRequerido` (`src/captcha.ts`).
 
+## El fondo del login: la foto del hero de la landing (`v0.178.0`, ADR-092)
+
+Con `producto`, `createLogin` pone de fondo la foto del hero de la landing de esa marca con su mismo velo oscuro
+(`src/fondo-de-login.ts`). Quien no pasa `producto` lo pide con `fondo: 'librabot'` (o la marca que corresponda), y
+`fondo: false` lo apaga. Sin ninguno, el gris claro de siempre.
+
 ## El segundo factor en dos pasos: modal con un dígito por casillero (`v0.70.0`)
 
 Reemplaza al segundo factor de una sola pantalla de `v0.60.0` (F2): antes el

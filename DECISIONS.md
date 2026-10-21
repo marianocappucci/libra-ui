@@ -2118,3 +2118,30 @@ productos que corran e2e contra un nodo tienen que saltearlo (abierto, ver abajo
 forma de desafío y un 500 no encienden el captcha y el login sigue siendo `login('ana', 'clave')` con «Ingresar» habilitado.
 `test/PasswordReset.test.tsx`: con `{ requerido: false }` no hay widget y el pedido es `{"identificador":"ana"}`. Sin el cambio de
 `captcha.ts` se pone rojo el caso de `requerido: false` con forma de desafío; el resto es la contraprueba que pasa en los dos lados.
+
+## ADR-092 — El login lleva de fondo la foto del hero de la landing, con su mismo velo (0.178.0)
+
+**Estado:** aceptada (2026-10-21). Pedido del humano, aprobado sobre una muestra: «usar las imágenes de los heros de las landings
+de background en la pantalla de login de las apps, así tenues igual que en los heros».
+
+**Qué ya existe** (se miró antes). Cada landing (`<producto>_web/public/css/style.css`) arma su `.hero` con un velo oscuro
+(`linear-gradient` vertical, o tres capas en RestoLibra), la foto en `public/img/*-hero.jpg` con su encuadre y un color base, más
+un brillo radial del color de la marca en `.hero::before`. LibraBot usa un dibujo (`burbujas-hero.svg`) en lugar de foto. El login
+del kit (`createLogin`) pintaba un `bg-muted/40` y ya sabía la marca por `producto` (ADR-033); el panel de LibraBot no pasa
+`producto` sino `logo`.
+
+**Decisión.**
+1. Las nueve imágenes viven en el kit (`src/fondos-de-login/`) y sus capas en `src/fondo-de-login.ts`, copiadas tal cual de cada
+   landing. Si una landing cambia su hero, se copian acá.
+2. **Con `producto` el fondo sale solo**: los ocho productos lo reciben con subir el pin, sin tocar su `Login.tsx`.
+3. Prop nueva `fondo?: MarcaConFondo | false`: quien no pasa `producto` lo pide con su marca (`fondo: 'librabot'`), y `false` lo
+   apaga. Sin ninguno de los dos (backoffice, panel), la pantalla queda como siempre.
+4. Con fondo, la tarjeta suma `shadow-2xl` y un borde `white/10` para despegarse de la foto.
+
+**Consecuencias.** MINOR, aditivo. Vite emite las ocho fotos como archivos aparte (150–300 KB cada una) en el `dist/` de cada
+producto; el navegador baja sólo la de la marca. El SVG de LibraBot pesa menos de 4 KB y va incrustado como `data:` URI.
+`src/imagenes.d.ts` declara `*.jpg` y `*.svg` para el typecheck del kit; los productos ya los tienen por `vite/client`.
+
+**Tests.** `test/Login.test.tsx`, bloque «fondo»: sin `producto` ni `fondo` queda `bg-muted/40` y sin `style`; con `producto`
+sale la foto y el velo; `fondo: 'librabot'` sin producto; `fondo={false}` lo apaga. El `data:` URI no lo parsea el CSS de jsdom,
+así que el caso de LibraBot mira lo que arma `estiloDeFondo`. Verificado además en un build real de LibraCargo a 1280 y 390 px.
