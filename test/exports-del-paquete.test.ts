@@ -39,7 +39,11 @@ const exports: [string, string][] = Object.entries(mapa).flatMap(([clave, destin
 // Se exportan desde v0.69.3 porque el portal de jugadores de LibraClub tiene
 // un formulario propio —no es `createLogin`— y su backend también exige el
 // captcha. La razón de arriba sigue en pie: el widget sigue siendo perezoso.
-const INTERNOS = new Set<string>(['CaptchaAltcha.tsx'])
+//
+// `fondo-de-login.ts` (ADR-092) sólo lo usa `createLogin`: el producto elige el
+// fondo con `producto` o `fondo`, no importando el mapa. `imagenes.d.ts` son
+// tipos para el typecheck del kit, no un módulo.
+const INTERNOS = new Set<string>(['CaptchaAltcha.tsx', 'fondo-de-login.ts', 'imagenes.d.ts'])
 
 describe('el mapa de exports de package.json', () => {
   it('🔴 cada destino existe en disco', () => {
