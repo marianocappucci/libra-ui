@@ -26,6 +26,11 @@
  *  con `api.postArchivo`, vuelve como `Blob` y se guarda tal cual (`guardarArchivo`), sin leerlo, sin guardarlo en el
  *  estado y sin mostrarlo.
  *
+ *  ## Las otras PC del local (ADR-086)
+ *
+ *  La tarjeta del instalador ofrece también la **app de puesto** (`descargasDePuesto`, libraedge ADR-017): sólo la versión
+ *  de escritorio, para las otras PC del local, que busca sola la PC principal en la red.
+ *
  *  ## En el local se entra siempre por la copia local (ADR-084)
  *
  *  En la PC con el nodo, el producto corre en `http://localhost:<puerto>` y sincroniza por detrás: se entra **siempre**
@@ -95,6 +100,10 @@ export type EstadoNodosOffline = {
   /** El `.deb` de Ubuntu y el script de una línea, si el backend los manda; si no, salen de `instalador_url`. */
   instalador_deb_url?: string
   instalar_script_url?: string
+  /** La app de puesto para las otras PC del local (libraedge ADR-017), si el backend la manda; si no, sale de
+   *  `instalador_url`. */
+  puesto_url?: string
+  puesto_deb_url?: string
   /** El puerto del producto en la PC del nodo, si el backend lo manda; si no, `PUERTO_DEL_NODO`. */
   puerto_local?: number
 }
@@ -119,8 +128,9 @@ export const PUERTO_DEL_NODO = 8000
 export function textoEntrarPorLaCopiaLocal(producto: string, puerto: number = PUERTO_DEL_NODO): string {
   return (
     `En ese local, entrá siempre por la copia local, aunque haya internet: en la PC del nodo, con el acceso directo ` +
-    `«${producto}» que deja el instalador (o http://localhost:${puerto}); desde las otras cajas, con ` +
-    `http://<IP de esa PC>:${puerto}. La dirección de la nube es para entrar desde afuera del local.`
+    `«${producto}» que deja el instalador (o http://localhost:${puerto}); desde los otros puestos, con la app de puesto, ` +
+    `que encuentra sola esa PC en la red (o con http://<IP de esa PC>:${puerto}). La dirección de la nube es para ` +
+    `entrar desde afuera del local.`
   )
 }
 
@@ -140,6 +150,26 @@ export function descargasDelNodo(
     script: estado.instalar_script_url ?? (m ? `${m[1]}/instalar-nodo.sh` : null),
   }
 }
+
+/** La app de puesto de las otras PC del local (libraedge ADR-017): sólo la versión de escritorio, sin nodo, que busca
+ *  sola la PC principal en la red. Los Releases la publican al lado del instalador del nodo
+ *  (`libraedge-puesto-<producto>.exe` y `libraedge-puesto-<producto>_amd64.deb`): mientras el backend no la mande, se arma
+ *  ahí, como las otras descargas. Con otra URL de instalador no se inventa nada (`null`). */
+export type DescargasDePuesto = { windows: string; ubuntu: string }
+
+export function descargasDePuesto(
+  estado: Pick<EstadoNodosOffline, 'instalador_url' | 'puesto_url' | 'puesto_deb_url'>,
+): DescargasDePuesto | null {
+  const m = /^(.*)\/libraedge-nodo-([a-z0-9]+)\.exe$/.exec(estado.instalador_url)
+  const windows = estado.puesto_url ?? (m ? `${m[1]}/libraedge-puesto-${m[2]}.exe` : null)
+  const ubuntu = estado.puesto_deb_url ?? (m ? `${m[1]}/libraedge-puesto-${m[2]}_amd64.deb` : null)
+  return windows && ubuntu ? { windows, ubuntu } : null
+}
+
+/** Para qué es la app de puesto, en una línea (la tarjeta del instalador). */
+export const TEXTO_PUESTO =
+  'Para las otras PC del local: la app de puesto no tiene nodo ni base de datos; busca sola la PC principal en la red ' +
+  'y abre el sistema desde ella, aunque no haya internet.'
 
 /** La línea para instalar en Ubuntu con el código (libraedge ADR-014). Sin código ni dirección, con los lugares a
  *  completar. */
@@ -406,6 +436,7 @@ export function SucursalSinInternet({ ruta = RUTA_NODOS_OFFLINE, enConfiguracion
   const activas = estado?.sucursales.filter((s) => s.activa) ?? []
   const puedeEmitir = !!estado && !estado.central_url_error && !estado.emisor_error
   const descargas = estado ? descargasDelNodo(estado) : null
+  const puesto = estado ? descargasDePuesto(estado) : null
   const minutos = estado?.vinculacion_minutos ?? 15
 
   return (
@@ -481,6 +512,20 @@ export function SucursalSinInternet({ ruta = RUTA_NODOS_OFFLINE, enConfiguracion
                   </div>
                 )}
                 <EntrarPorLaCopiaLocal producto={producto} puerto={estado.puerto_local} />
+                {puesto && (
+                  <div className="space-y-2 border-t pt-3" data-descargas="puesto">
+                    <h3 className="font-medium">Para las otras PC del local</h3>
+                    <p className="text-muted-foreground">{TEXTO_PUESTO}</p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button asChild variant="outline">
+                        <a href={puesto.windows} rel="noopener noreferrer"><Download />{producto} para otro puesto (Windows)</a>
+                      </Button>
+                      <Button asChild variant="outline">
+                        <a href={puesto.ubuntu} rel="noopener noreferrer"><Download />{producto} para otro puesto (Ubuntu)</a>
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
