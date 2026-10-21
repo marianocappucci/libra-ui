@@ -1,4 +1,5 @@
-// La marca dibujada de cada producto: un SVG propio, plano, sobre el cuadrado redondeado de su color (ADR-034, `v0.124.0`).
+// La marca dibujada de cada producto: un SVG propio sobre el cuadrado redondeado de su color (ADR-034, `v0.124.0`). Se dibuja plana y se
+// le da volumen al armarla (`VOLUMEN`, ADR-090): desde `v0.176.0` las diez marcas van en 3D, con el tratamiento que estrenó LibraBot.
 //
 // Reemplaza al ícono de lucide sobre el cuadrado (ADR-033): aquél era el mismo dibujo que trae cualquier pack. Ésta junta lo plano de la serie
 // de lucide con la composición de la ilustrada de `kit-libra-v1`, con cuatro reglas que la hacen de la familia:
@@ -61,12 +62,16 @@ const TONOS: Record<Marca, { tinta: string; claro: string }> = {
  *  módulo (el favicon): leer `IDENTIDAD` al cargar daría `undefined` por el import circular. El test la compara contra `IDENTIDAD`. */
 export const MARCAS = Object.keys(TONOS) as Marca[]
 
-type Paleta = { fondo: string; tinta: string; claro: string }
+// `sombra`: el id del filtro con que la marca en 3D separa una pieza de lo que pisa, en lugar del corte (ver `corte`).
+type Paleta = { fondo: string; tinta: string; claro: string; sombra?: string }
 
 // El corte de la familia: un trazo del color de fondo pintado DEBAJO del relleno (`paint-order`), así separa la pieza de lo que pisa sin
-// agrandarla hacia adentro.
+// agrandarla hacia adentro. En 3D (ADR-090) el fondo es un degradé y un filo de color liso se vería como un contorno: ahí la pieza lleva
+// su propia sombra corta, que la separa igual.
 const corte = (c: Paleta, ancho: number) =>
-  `stroke="${c.fondo}" stroke-width="${ancho}" paint-order="stroke" stroke-linejoin="round"`
+  c.sombra
+    ? `filter="url(#${c.sombra})"`
+    : `stroke="${c.fondo}" stroke-width="${ancho}" paint-order="stroke" stroke-linejoin="round"`
 
 const repetir = <T>(xs: T[], f: (x: T, i: number) => string) => xs.map(f).join('')
 
@@ -174,7 +179,7 @@ ${repetir([[75, 37], [90, 37], [82.5, 45], [75, 53], [90, 53], [82.5, 61]], ([x,
 </g>`,
   // La idea es del humano: una burbuja de chat con cara, dos ojos y una sonrisa. Desde ADR-089 va **en 3D**, como la burbuja del
   // fondo de su landing: volumen con degradés, ojos con reflejo, sombra, y la respuesta translúcida detrás. Es la única marca con
-  // `VOLUMEN` (abajo). Las coordenadas son las del lienzo de 120 entero: el primer `<g>` deshace el `translate(9 9) scale(.85)`.
+  // el volumen dibujado a mano (`VOLUMEN`, abajo). Las coordenadas son las del lienzo de 120 entero: el primer `<g>` deshace el `translate(9 9) scale(.85)`.
   librabot: (c) => `
 <g transform="scale(1.17647) translate(-9 -9)"><g filter="url(#lbS)">
 <g transform="translate(102 12) scale(-.5 .5) rotate(-4 50 44)"><path d="M18 0h64a18 18 0 0 1 18 18v36a18 18 0 0 1-18 18H38L20 88V72h-2A18 18 0 0 1 0 54V18A18 18 0 0 1 18 0z" fill="url(#lbR)"/></g>
@@ -251,14 +256,59 @@ ${repetir([[50, 30], [71, 30], [60.5, 43], [50, 56], [71, 56]], ([x, y]) => `<ci
 </g>`,
 }
 
-/**
- * El SVG completo de la marca: el cuadrado redondeado del color de marca y el dibujo encima. Sin `width` ni `height`: llena lo que le den.
- * `icono` lleva un `<title>` con el nombre; quien lo incruste como decoración (`MarcaProducto`) lo esconde con `aria-hidden`.
- */
-// Las marcas en 3D (por ahora sólo LibraBot, ADR-089): `defs` con sus degradés y su sombra, y `luz`, un segundo cuadrado con un degradé
-// que va ENCIMA del fondo de color (el primero sigue siendo el de MARCA, que es lo que mira el test). Las demás son planas (ADR-034).
-// Los ids llevan el prefijo de la marca para no chocar con otros SVG en línea de la misma página.
-const VOLUMEN: Partial<Record<Marca, { defs: (c: Paleta) => string; luz: string }>> = {
+// El volumen de las marcas (ADR-090; LibraBot lo estrenó en ADR-089): `defs` con los degradés y las sombras, y `luz`, un segundo cuadrado
+// con un degradé radial que va ENCIMA del fondo de color (el primero sigue siendo el de MARCA, que es lo que mira el test). Los ids llevan el
+// prefijo de la marca para no chocar con otros SVG en línea de la misma página.
+type Volumen = {
+  defs: (c: Paleta) => string
+  luz: string
+  /** El filtro que reemplaza al corte (`corte`). LibraBot no lo usa: su dibujo no tiene piezas que se pisen. */
+  sombra?: string
+  /** Lo que se le hace al dibujo plano para darle volumen. Sin esto, el dibujo ya viene en 3D (LibraBot). */
+  pintar?: (dibujo: string, c: Paleta) => string
+}
+
+// Mezcla dos colores `#rrggbb` (`t` = 0 es `a`, 1 es `b`): las luces y las sombras de cada marca salen de sus propios tonos.
+const mezclar = (a: string, b: string, t: number) =>
+  '#' +
+  [1, 3, 5]
+    .map((i) => {
+      const x = parseInt(a.slice(i, i + 2), 16)
+      const y = parseInt(b.slice(i, i + 2), 16)
+      return Math.round(x + (y - x) * t).toString(16).padStart(2, '0')
+    })
+    .join('')
+
+const filtroDeSombra = (id: string, desvio: number, caida: number, opacidad: number, margen: number) =>
+  `<filter id="${id}" x="-${margen}%" y="-${margen}%" width="${100 + 2 * margen}%" height="${110 + 2 * margen}%"><feGaussianBlur in="SourceAlpha" stdDeviation="${desvio}"/><feOffset dy="${caida}"/><feComponentTransfer><feFuncA type="linear" slope="${opacidad}"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>`
+
+// El volumen de las nueve marcas dibujadas planas: el mismo tratamiento que LibraBot, sacado de la paleta de cada una. Las piezas blancas
+// llenas pasan a un degradé del blanco al `claro`, la `tinta` y el amarillo de acento toman luz arriba a la izquierda, y todo el dibujo
+// proyecta una sombra suave. Sólo los RELLENOS: un trazo con degradé por caja desaparece si la línea es recta (su caja no tiene alto), así que
+// los trazos quedan lisos. Tampoco los blancos translúcidos (`opacity`): son lo que está atrás, y atrás no se ilumina.
+const volumenComun = (p: string): Volumen => ({
+  defs: (c) => `<defs>
+<radialGradient id="${p}F" cx="30%" cy="22%" r="95%"><stop offset="0" stop-color="${mezclar(c.fondo, BLANCO, 0.38)}"/><stop offset=".55" stop-color="${c.fondo}"/><stop offset="1" stop-color="${mezclar(c.fondo, '#000000', 0.22)}"/></radialGradient>
+<linearGradient id="${p}B" x1="0" y1="0" x2=".25" y2="1"><stop offset="0" stop-color="${BLANCO}"/><stop offset=".7" stop-color="${mezclar(BLANCO, c.claro, 0.25)}"/><stop offset="1" stop-color="${mezclar(BLANCO, c.claro, 0.6)}"/></linearGradient>
+<radialGradient id="${p}O" cx="38%" cy="32%" r="70%"><stop offset="0" stop-color="${mezclar(c.tinta, c.fondo, 0.45)}"/><stop offset="1" stop-color="${c.tinta}"/></radialGradient>
+<radialGradient id="${p}A" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#fde68a"/><stop offset=".6" stop-color="${AMARILLO}"/><stop offset="1" stop-color="#f59e0b"/></radialGradient>
+${filtroDeSombra(`${p}S`, 4, 6, 0.32, 30)}
+${filtroDeSombra(`${p}s`, 2.6, 3.5, 0.38, 40)}
+</defs>`,
+  luz: `url(#${p}F)`,
+  sombra: `${p}s`,
+  pintar: (dibujo, c) =>
+    `<g filter="url(#${p}S)">` +
+    dibujo
+      .replace(new RegExp(`fill="${BLANCO}"(?![^>]*opacity)`, 'g'), `fill="url(#${p}B)"`)
+      .replace(new RegExp(`fill="${AMARILLO}"`, 'g'), `fill="url(#${p}A)"`)
+      .replace(new RegExp(`fill="${c.tinta}"`, 'g'), `fill="url(#${p}O)"`) +
+    '</g>',
+})
+
+const VOLUMEN: Record<Marca, Volumen> = {
+  ...(Object.fromEntries(MARCAS.map((m) => [m, volumenComun(m)])) as Record<Marca, Volumen>),
+  // LibraBot (ADR-089) trae su volumen dibujado a mano: la burbuja, la respuesta translúcida y los ojos con reflejo.
   librabot: {
     defs: (c) => `<defs>
 <radialGradient id="lbF" cx="30%" cy="22%" r="95%"><stop offset="0" stop-color="#fb7185"/><stop offset=".55" stop-color="${c.fondo}"/><stop offset="1" stop-color="#be123c"/></radialGradient>
@@ -271,20 +321,22 @@ const VOLUMEN: Partial<Record<Marca, { defs: (c: Paleta) => string; luz: string 
   },
 }
 
+/**
+ * El SVG completo de la marca: el cuadrado redondeado del color de marca y el dibujo encima. Sin `width` ni `height`: llena lo que le den.
+ * `icono` lleva un `<title>` con el nombre; quien lo incruste como decoración (`MarcaProducto`) lo esconde con `aria-hidden`.
+ */
 export function svgDeMarca(marca: Marca, variante: VarianteDeMarca = 'icono'): string {
   const { nombre, color } = datosDeMarca(marca)
-  const paleta: Paleta = { fondo: color, ...TONOS[marca] }
-  // El favicon redondea un poco más (30 contra 27): achicado a 16 px, el radio del ícono se ve casi recto.
   const volumen = VOLUMEN[marca]
+  const paleta: Paleta = { fondo: color, ...TONOS[marca], sombra: volumen.sombra }
+  // El favicon redondea un poco más (30 contra 27): achicado a 16 px, el radio del ícono se ve casi recto.
   const rx = variante === 'favicon' ? 30 : 27
-  const fondo =
-    `<rect width="120" height="120" rx="${rx}" fill="${color}"/>` +
-    (volumen ? `<rect width="120" height="120" rx="${rx}" fill="${volumen.luz}"/>` : '')
+  const fondo = `<rect width="120" height="120" rx="${rx}" fill="${color}"/><rect width="120" height="120" rx="${rx}" fill="${volumen.luz}"/>`
+  const plano = (variante === 'favicon' ? FAVICON : ICONO)[marca](paleta)
+  const dibujo3d = volumen.pintar ? volumen.pintar(plano, paleta) : plano
   const cuerpo =
-    (volumen ? volumen.defs(paleta) : '') +
-    (variante === 'favicon'
-      ? `${fondo}${FAVICON[marca](paleta)}`
-      : `${fondo}<g transform="translate(9 9) scale(.85)">${ICONO[marca](paleta)}</g>`)
+    volumen.defs(paleta) +
+    (variante === 'favicon' ? `${fondo}${dibujo3d}` : `${fondo}<g transform="translate(9 9) scale(.85)">${dibujo3d}</g>`)
   // Compacto: sin saltos de línea ni sangría, para que el archivo y el data URL pesen lo justo.
   const dibujo = cuerpo.replace(/\n/g, '')
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><title>${nombre}</title>${dibujo}</svg>`

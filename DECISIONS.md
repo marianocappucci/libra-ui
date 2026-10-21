@@ -2064,3 +2064,22 @@ Las 37 pantallas del kit que importaban `@/components/ui/dialog` (50 `DialogCont
 **Consecuencias.** MINOR. Cambian sólo `marcas/librabot.svg` y `marcas/librabot-favicon.svg`; las otras nueve marcas quedan byte a byte iguales. La landing y LibraSuite vuelven a copiar los dos archivos del tag `v0.175.0`.
 
 **Tests.** Los de `test/marcas.test.ts`, sin cambios: SVG bien formado de 120, primer `rect` del color de MARCA, `<title>`, compacto, favicon distinto del ícono, diez dibujos distintos y archivos idénticos a `svgDeMarca`.
+
+## ADR-090 — Las diez marcas en 3D (0.176.0)
+
+**Estado:** aceptada (2026-10-21). Extiende el ADR-089 a toda la familia y deja sin efecto su punto 1 («LibraBot es la única marca en 3D»). Los dibujos, los colores y los tonos de ADR-034, ADR-078 y ADR-088 no cambian.
+
+**Contexto.** Con LibraBot en 3D, el humano pidió ver las ocho apps con el mismo efecto, aprobó la muestra y pidió sumar LibraEdge y pasarlas al kit con favicon.
+
+**Qué ya existe** (se miró antes). `VOLUMEN` en `marcas.ts` (ADR-089): `defs` y `luz` dibujados a mano, sólo para LibraBot. Las otras nueve se dibujan planas con cuatro piezas de paleta: blanco, `tinta`, `claro` y el amarillo de acento, y el corte (`corte()`) del color de fondo donde una pieza pisa a otra.
+
+**Decisión.**
+1. **Las diez marcas van en 3D.** Las nueve dibujadas planas no se redibujan: `volumenComun` les da volumen al armarlas, con el tratamiento de LibraBot sacado de la paleta de cada una (`mezclar`): la luz radial sobre el fondo, los rellenos blancos llenos con un degradé del blanco al `claro`, la `tinta` y el amarillo con luz arriba a la izquierda, y una sombra suave bajo todo el dibujo. LibraBot conserva su volumen dibujado a mano.
+2. **Sólo los rellenos.** Un trazo con degradé por caja desaparece cuando la línea es recta (su caja no tiene alto), así que los trazos quedan lisos. Los blancos translúcidos (`opacity`) tampoco se iluminan: son lo que está atrás.
+3. **El corte pasa a sombra.** Sobre un fondo degradado, el filo de color liso se ve como un contorno. En 3D `corte()` devuelve un filtro de sombra corta (`Paleta.sombra`), que separa la pieza igual.
+4. **Sin inclinar.** LibraBot está girada porque su dibujo es descontracturado; las otras nueve quedan derechas, formales.
+5. Los ids llevan el nombre de la marca como prefijo (`contalibraF`, `libraedgeS`…), para que dos marcas en línea en la misma página no se pisen los degradés.
+
+**Consecuencias.** MINOR. Cambian los dieciocho archivos de `marcas/` de las nueve marcas; los dos de LibraBot quedan byte a byte iguales. `MarcaProducto` no cambia: la sidebar, el login y la pantalla del nodo toman el 3D con el bump del pin. LibraSuite, las landings (`libra-web-kit`, `scripts/sincronizar_marcas.py --tag v0.176.0`) y el instalador del nodo vuelven a copiar los archivos.
+
+**Tests.** `test/marcas.test.ts` suma: las diez marcas llevan la luz encima del fondo y una sombra; ninguna deja un corte de color liso ni un trazo con degradé; y los ids de dos marcas distintas no se repiten.
