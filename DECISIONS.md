@@ -2083,3 +2083,38 @@ Las 37 pantallas del kit que importaban `@/components/ui/dialog` (50 `DialogCont
 **Consecuencias.** MINOR. Cambian los dieciocho archivos de `marcas/` de las nueve marcas; los dos de LibraBot quedan byte a byte iguales. `MarcaProducto` no cambia: la sidebar, el login y la pantalla del nodo toman el 3D con el bump del pin. LibraSuite, las landings (`libra-web-kit`, `scripts/sincronizar_marcas.py --tag v0.176.0`) y el instalador del nodo vuelven a copiar los archivos.
 
 **Tests.** `test/marcas.test.ts` suma: las diez marcas llevan la luz encima del fondo y una sombra; ninguna deja un corte de color liso ni un trazo con degradé; y los ids de dos marcas distintas no se repiten.
+
+## ADR-091 — El login no pide captcha cuando el backend dice que no hace falta: el nodo de LibraEdge (0.177.0)
+
+**Estado:** aceptada (2026-10-21). Es la mitad de libra-ui de libraauth ADR-028.
+
+**Contexto.** En una prueba real, desde un puesto se entra a la PC principal por `http://<IP-LAN>:8000` y el widget «No soy un
+robot» muestra «Secure context (HTTPS) required.»: ALTCHA usa WebCrypto (`crypto.subtle`), que Chromium/WebView2 y WebKitGTK sólo dan
+en https o `localhost`. Sin solución no se habilita «Ingresar» y nadie entra, ni en la app de escritorio ni en un navegador. El
+humano decidió que **en un nodo de LibraEdge no se pide captcha** (a un nodo sólo se llega por la red del local); en la nube, todo igual.
+
+**Qué ya existe** (se miró antes). `useCaptcha` (`src/captcha.ts`, v0.69.0) consulta `captchaPath` al montar y sólo enciende el
+captcha si la respuesta tiene la **forma** de un desafío (`esDesafio`: `parameters` objeto + `signature` texto); un 404, el
+`index.html` del catch-all o un JSON sin esa forma lo dejan apagado, y entonces `CampoCaptcha` no dibuja nada, «Ingresar» no
+espera y `login` se llama con dos argumentos (`Login.tsx`, `PasswordReset.tsx`). Por eso **la respuesta `{ "requerido": false }`
+de libraauth ya hacía lo correcto con libra-ui 0.176.0** (medido: el caso se agregó a los tests de 0.177.0 y pasa sin tocar el
+código). Lo que faltaba era fijar el contrato y que no dependa de un efecto lateral.
+
+**Decisión.**
+1. **Contrato.** El backend contesta `GET {captchaPath}` con el desafío (hay captcha) o con `{ "requerido": false }` (no hace falta).
+   El cliente aplica una sola regla, `captchaRequerido(info)`: hay captcha si y sólo si `esDesafio(info)` **y** `info.requerido` no
+   es el booleano `false`. `requerido: false` manda aunque venga también la forma de un desafío. Sólo `false` apaga: `"false"`, `0`
+   o `true` no.
+2. **Nada más cambia.** Si la consulta falla, comportamiento de siempre (captcha apagado). Ni `Login`, ni `PasswordReset`, ni
+   `CampoCaptcha` se tocan: leen `captcha.activo`, que ahora sale de `captchaRequerido`. Sin `captchaPath`, no se consulta.
+3. **Orden de los bumps libre.** libra-ui viejo contra un libraauth nuevo en un nodo: la respuesta no es un desafío, no hay widget
+   y entra. libra-ui nuevo contra un libraauth viejo: recibe el desafío (que un nodo viejo seguiría emitiendo) y se comporta como hoy.
+
+**Consecuencias.** MINOR, aditivo: se exporta `captchaRequerido` desde `src/captcha.ts` (módulo interno, no está en `exports` del
+paquete). El e2e helper `tildarCaptcha` (`e2e/src/captcha.ts`) espera el widget: contra un nodo no hay widget y fallaría; los
+productos que corran e2e contra un nodo tienen que saltearlo (abierto, ver abajo).
+
+**Tests.** `test/captcha.test.ts` (nuevo, 8): la regla sola. `test/Login.test.tsx`: `{ requerido: false }`, `requerido: false` con
+forma de desafío y un 500 no encienden el captcha y el login sigue siendo `login('ana', 'clave')` con «Ingresar» habilitado.
+`test/PasswordReset.test.tsx`: con `{ requerido: false }` no hay widget y el pedido es `{"identificador":"ana"}`. Sin el cambio de
+`captcha.ts` se pone rojo el caso de `requerido: false` con forma de desafío; el resto es la contraprueba que pasa en los dos lados.

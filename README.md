@@ -199,6 +199,15 @@ aplicarTema(tema)                              // fija las variables en <html>; 
   (tope de 3 s): un color no puede impedir entrar al sistema.
 - Hoy están las fases 1 y 2. Las siguientes (pantalla del backoffice y el resto de los productos) no cambian esta API.
 
+## El captcha «No soy un robot» y el nodo de LibraEdge (`v0.177.0`, ADR-091)
+
+`createLogin({ captchaPath })` y `createForgotPassword({ captchaPath })` consultan `GET {captchaPath}` al montar y dibujan el
+widget ALTCHA —y deshabilitan «Ingresar» hasta que se tilda— **sólo si la respuesta es un desafío** (`parameters` + `signature`).
+En un **nodo de LibraEdge** el backend (libraauth ≥ 0.55.0, ADR-028) contesta `{ "requerido": false }`: no hay widget, «Ingresar»
+no espera y el login manda sólo usuario y contraseña. El widget no puede correr ahí: usa WebCrypto (`crypto.subtle`), que el
+navegador da sólo en https o `localhost`, y a un nodo se entra por `http://<IP-LAN>:8000`. Una consulta que falla (404, 500, el
+`index.html` de la SPA) deja el captcha apagado, como siempre. La regla está en `captchaRequerido` (`src/captcha.ts`).
+
 ## El segundo factor en dos pasos: modal con un dígito por casillero (`v0.70.0`)
 
 Reemplaza al segundo factor de una sola pantalla de `v0.60.0` (F2): antes el

@@ -595,6 +595,12 @@ describe('el captcha', () => {
     ['🔴 un 200 que no es JSON (el catch-all de la SPA)', { cuerpo: '<!doctype html><html></html>', json: false }],
     ['un JSON sin la forma de un desafío', { cuerpo: { totp: true } }],
     ['un 404', { cuerpo: { detail: 'Not Found' }, status: 404 }],
+    // v0.177.0: un nodo de LibraEdge contesta así (libraauth ADR-028). Sin
+    // widget y sin deshabilitar «Ingresar»: el widget no puede correr ahí
+    // (`crypto.subtle` pide https o localhost, y al nodo se entra por http://IP).
+    ['🔴 `{ requerido: false }` (un nodo de LibraEdge)', { cuerpo: { requerido: false } }],
+    ['`requerido: false` aunque venga la forma de un desafío', { cuerpo: { ...DESAFIO, requerido: false } }],
+    ['un 500', { cuerpo: { detail: 'Error' }, status: 500 }],
   ])('%s no lo enciende', async (_caso, respuesta) => {
     sondas({ '/auth/captcha': respuesta })
     const { login } = montar({ captchaPath: '/auth/captcha' })
