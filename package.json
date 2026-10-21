@@ -1,11 +1,12 @@
 {
   "name": "libra-ui",
-  "version": "0.172.0",
+  "version": "0.173.0",
   "private": true,
   "type": "module",
   "description": "Paquete de frontend compartido para los verticales de la familia Libra sin backoffice server-rendered propio (Gestiolibra, MedLibra, VentaLibra).",
   "exports": {
     "./AuthContext": "./src/AuthContext.tsx",
+    "./BandejaDeComprobantes": "./src/BandejaDeComprobantes.tsx",
     "./BarraDeEstado": "./src/BarraDeEstado.tsx",
     "./DestinoDeNotaDeCredito": "./src/DestinoDeNotaDeCredito.tsx",
     "./CampoArchivo": "./src/CampoArchivo.tsx",
@@ -63,6 +64,7 @@
     "./configuracion/ConsultarEnArca": "./src/configuracion/ConsultarEnArca.tsx",
     "./configuracion/arca-tutorial": "./src/configuracion/arca-tutorial.ts",
     "./configuracion/consultar-cuit": "./src/configuracion/consultar-cuit.ts",
+    "./comprobantes-pendientes": "./src/comprobantes-pendientes.ts",
     "./nodo-offline": "./src/nodo-offline.ts",
     "./estado-del-sistema": "./src/estado-del-sistema.ts",
     "./modo": "./src/modo.ts",
