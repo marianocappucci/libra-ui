@@ -1990,18 +1990,18 @@ Las 37 pantallas del kit que importaban `@/components/ui/dialog` (50 `DialogCont
 
 **Tests.** `test/SucursalSinInternet.test.tsx` (23): todo habilitado aunque un backend viejo diga `contratado: false`; el código pendiente y su anulación; el alta con código (dirección, código, vencimiento, línea de Ubuntu completa, sin descargas ni secreto); copiar al portapapeles; pedir otro y anular por las rutas del nodo; un rechazo del motor en el diálogo; el archivo de soporte como `Blob` sin el secreto en el documento. `test/menu-de-nodos-offline.test.tsx` (4): la entrada siempre para el admin y para la demo, nunca para otro rol, sin pedidos.
 
-## ADR-086 — «Sucursal sin internet»: la app de caja para las otras PC del local (0.172.0)
+## ADR-086 — «Sucursal sin internet»: la app de puesto para las otras PC del local (0.172.0)
 
-**Estado:** aceptada (2026-10-20). Decisión del humano: una app por producto también para las otras PC del local (las cajas que no tienen el nodo). El motor es libraedge ADR-017: el nodo contesta un descubrimiento en la red y la app de caja busca sola la PC principal.
+**Estado:** aceptada (2026-10-20). Decisión del humano: una app por producto también para las otras PC del local (los puestos que no tienen el nodo). El motor es libraedge ADR-017: el nodo contesta un descubrimiento en la red y la app de puesto busca sola la PC principal.
 
-**Qué ya existe** (se miró antes). La tarjeta «1. El instalador» de `SucursalSinInternet` con las descargas armadas al lado del `.exe` del nodo cuando el backend no las manda (`descargasDelNodo`, ADR-082/085) y el aviso de la copia local (`textoEntrarPorLaCopiaLocal`, ADR-084), que decía «desde las otras cajas, con `http://<IP de esa PC>:<puerto>`». Los Releases de LibraEdge publican con nombre fijo `libraedge-caja-<producto>.exe` y `libraedge-caja-<producto>_amd64.deb` (libraedge ADR-017).
+**Qué ya existe** (se miró antes). La tarjeta «1. El instalador» de `SucursalSinInternet` con las descargas armadas al lado del `.exe` del nodo cuando el backend no las manda (`descargasDelNodo`, ADR-082/085) y el aviso de la copia local (`textoEntrarPorLaCopiaLocal`, ADR-084), que decía «desde los otros puestos, con `http://<IP de esa PC>:<puerto>`». Los Releases de LibraEdge publican con nombre fijo `libraedge-puesto-<producto>.exe` y `libraedge-puesto-<producto>_amd64.deb` (libraedge ADR-017).
 
 **Decisión.**
-1. **`descargasDeCaja(estado)`** arma las dos descargas de caja al lado de `libraedge-nodo-<producto>.exe` (como las otras: el backend no manda nada nuevo; si algún día manda `caja_url`/`caja_deb_url`, mandan esas). Con un instalador servido de otro lado devuelve `null` y no se muestra nada.
-2. La tarjeta del instalador suma **«Para las otras PC del local»** con una línea (`TEXTO_CAJA`: la app de caja no tiene nodo ni base de datos, busca sola la PC principal y abre el sistema desde ella) y los botones «<Producto> para otra caja (Windows)» y «(Ubuntu)».
-3. `textoEntrarPorLaCopiaLocal` dice ahora «desde las otras cajas, con la app de caja, que encuentra sola esa PC en la red (o con `http://<IP de esa PC>:<puerto>`)».
+1. **`descargasDePuesto(estado)`** arma las dos descargas de puesto al lado de `libraedge-nodo-<producto>.exe` (como las otras: el backend no manda nada nuevo; si algún día manda `puesto_url`/`puesto_deb_url`, mandan esas). Con un instalador servido de otro lado devuelve `null` y no se muestra nada.
+2. La tarjeta del instalador suma **«Para las otras PC del local»** con una línea (`TEXTO_PUESTO`: la app de puesto no tiene nodo ni base de datos, busca sola la PC principal y abre el sistema desde ella) y los botones «<Producto> para otro puesto (Windows)» y «(Ubuntu)».
+3. `textoEntrarPorLaCopiaLocal` dice ahora «desde los otros puestos, con la app de puesto, que encuentra sola esa PC en la red (o con `http://<IP de esa PC>:<puerto>`)».
 
-**Consecuencias.** MINOR, sin cambios para el producto (no hay ruta ni campo nuevo). Contra un libraedge anterior a la versión que publica las cajas, los dos botones darían 404 en el Release: el kit se sube junto con el tag de libraedge que las trae.
+**Consecuencias.** MINOR, sin cambios para el producto (no hay ruta ni campo nuevo). Contra un libraedge anterior a la versión que publica los instaladores de puesto, los dos botones darían 404 en el Release: el kit se sube junto con el tag de libraedge que las trae.
 
-**Tests.** `test/SucursalSinInternet.test.tsx`: la sección de caja con su línea y los dos links al Release; sin caja con otra URL de instalador; `descargasDeCaja` con y sin las URLs del backend; el aviso de la copia local menciona la app de caja.
+**Tests.** `test/SucursalSinInternet.test.tsx`: la sección de puesto con su línea y los dos links al Release; sin puesto con otra URL de instalador; `descargasDePuesto` con y sin las URLs del backend; el aviso de la copia local menciona la app de puesto.
 
