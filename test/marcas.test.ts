@@ -70,6 +70,30 @@ describe('las dos variantes', () => {
   })
 })
 
+describe('🔴 las diez marcas en 3D (ADR-090)', () => {
+  const casos = PRODUCTOS.flatMap((p) => VARIANTES.map((v) => [p, v] as const))
+
+  it.each(casos)('%s (%s): la luz va encima del fondo de color y el dibujo lleva sombra', (p, v) => {
+    const doc = parsear(svgDeMarca(p, v))
+    const [fondo, luz] = Array.from(doc.querySelectorAll('svg > rect'))
+    expect(fondo.getAttribute('fill')).toBe(datosDeMarca(p).color)
+    expect(luz.getAttribute('fill')).toMatch(/^url\(#.+\)$/)
+    expect(doc.querySelector('filter')).not.toBeNull()
+  })
+
+  it.each(casos)('%s (%s): sin corte de color liso ni trazos con degradé', (p, v) => {
+    const svg = svgDeMarca(p, v)
+    expect(svg).not.toContain('paint-order="stroke"')
+    expect(svg).not.toMatch(/stroke="url\(/)
+  })
+
+  it('los ids de dos marcas distintas no se repiten (van en línea en la misma página)', () => {
+    const ids = PRODUCTOS.map((p) => new Set([...svgDeMarca(p).matchAll(/id="([^"]+)"/g)].map((m) => m[1])))
+    const todos = ids.flatMap((s) => [...s])
+    expect(new Set(todos).size).toBe(todos.length)
+  })
+})
+
 describe('🔴 los archivos de marcas/ (los que copian las landings)', () => {
   it('son exactamente los dieciocho, uno por marca y variante', () => {
     const esperados = PRODUCTOS.flatMap((p) => VARIANTES.map((v) => archivo(p, v).slice(CARPETA.length + 1))).sort()
