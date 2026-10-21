@@ -8,6 +8,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createLogin } from '../src/Login'
 import { ApiError } from '../src/api-client'
 import { SegundoFactorRequerido } from '../src/AuthContext'
+import type { Producto } from '../src/identidad'
+import { estiloDeFondo, type MarcaConFondo } from '../src/fondo-de-login'
 
 const navegar = vi.fn()
 vi.mock('react-router-dom', async () => {
@@ -45,6 +47,8 @@ function montar({
   captchaPath?: string
   onLoginSuccess?: (u: UsuarioDePrueba) => string
   formatError?: (e: ApiError) => string
+  producto?: Producto
+  fondo?: MarcaConFondo | false
 } = {}) {
   const Login = createLogin<UsuarioDePrueba>({
     productName: 'Contalibra',
@@ -74,6 +78,43 @@ describe('render', () => {
   it('el campo de contraseña usa el ojito compartido', () => {
     montar()
     expect(screen.getByRole('button', { name: 'Mostrar contraseña' })).toBeInTheDocument()
+  })
+})
+
+// El fondo con la foto del hero de la landing (ADR-092). Lo que se fija acá es
+// quién lo prende: `producto` solo, `fondo` para quien no pasa `producto`, y
+// `false` para apagarlo. Sin ninguno, la pantalla de siempre.
+describe('fondo', () => {
+  const pantalla = () => screen.getByRole('heading', { name: 'Contalibra' }).closest('.min-h-svh') as HTMLElement
+
+  it('sin producto ni fondo queda el gris de siempre', () => {
+    montar()
+    expect(pantalla()).toHaveClass('bg-muted/40')
+    expect(pantalla()).not.toHaveAttribute('data-fondo')
+    expect(pantalla().getAttribute('style') ?? '').toBe('')
+  })
+
+  it('con producto sale solo: la foto de su landing debajo del velo', () => {
+    montar({ producto: 'libracargo' })
+    expect(pantalla()).toHaveAttribute('data-fondo', 'libracargo')
+    expect(pantalla()).not.toHaveClass('bg-muted/40')
+    const estilo = pantalla().getAttribute('style') ?? ''
+    expect(estilo).toContain('libracargo.jpg')
+    expect(estilo).toContain('rgba(0, 10, 32, 0.84)')
+  })
+
+  it('sin producto se pide con la marca (LibraBot y su dibujo)', () => {
+    montar({ fondo: 'librabot' })
+    expect(pantalla()).toHaveAttribute('data-fondo', 'librabot')
+    // El dibujo pesa menos de 4 KB y Vite lo incrusta como `data:` URI, que el
+    // CSS de jsdom no sabe leer (un navegador sí): se mira lo que arma el kit.
+    expect(String(estiloDeFondo('librabot').background)).toContain('data:image/svg+xml')
+  })
+
+  it('fondo={false} lo apaga aunque haya producto', () => {
+    montar({ producto: 'libracargo', fondo: false })
+    expect(pantalla()).toHaveClass('bg-muted/40')
+    expect(pantalla()).not.toHaveAttribute('data-fondo')
   })
 })
 

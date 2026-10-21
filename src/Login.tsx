@@ -18,6 +18,7 @@ import { CodigoPorDigitos } from './CodigoPorDigitos'
 import type { ProductLogo } from './branding'
 import type { Producto } from './identidad'
 import { MarcaProducto } from './MarcaProducto'
+import { estiloDeFondo, type MarcaConFondo } from './fondo-de-login'
 import { cn } from './utils'
 import { useCaptcha } from './captcha'
 import { CampoCaptcha } from './CampoCaptcha'
@@ -39,7 +40,7 @@ function esDesafioVencido(err: ApiError): boolean {
 // `useAuth` juntos, consistentes entre si.
 export function createLogin<TUser = User>({
   productName, productInitial, redirectTo, onLoginSuccess, useAuth: useAuthOverride, formatError,
-  forgotPasswordPath, forgotPasswordHint, demoPath, captchaPath, logo, producto, wordmarkClassName,
+  forgotPasswordPath, forgotPasswordHint, demoPath, captchaPath, logo, producto, fondo, wordmarkClassName,
   // `totpPath` NO se desestructura: sigue en el tipo de acá abajo (deprecado)
   // para que el backoffice compile sin cambiar una línea, pero el cuerpo de
   // esta función no lo usa para nada -- ver el comentario del prop.
@@ -53,6 +54,10 @@ export function createLogin<TUser = User>({
   // Identidad del producto (`identidad.ts`): dibuja `MarcaProducto` (su ícono sobre un cuadrado de su color) arriba del nombre. Gana a `logo` y
   // a la inicial: precedencia `producto` > `logo` > inicial. Sin ella, el login es el de siempre.
   producto?: Producto
+  // Fondo de la pantalla (ADR-092): la foto del hero de la landing de la marca, con su mismo velo oscuro
+  // (`fondo-de-login.ts`). Con `producto` sale solo; quien no pasa `producto` (el panel de LibraBot, que dibuja
+  // su `logo`) lo pide con su marca. `false` lo apaga. Sin ninguno de los dos, el gris claro de siempre.
+  fondo?: MarcaConFondo | false
   // Clases extra para el nombre del producto. Se mergean con `text-xl` via
   // `cn`, así que el producto puede pisar tamaño, peso y color sin perder el
   // resto. LibraDesk lo usa para su Montserrat Bold.
@@ -293,9 +298,15 @@ export function createLogin<TUser = User>({
       }
     }
 
+    const marcaDelFondo = fondo === false ? undefined : (fondo ?? producto)
+
     return (
-      <div className="flex min-h-svh items-center justify-center bg-muted/40 p-4">
-        <Card className="w-full max-w-sm">
+      <div
+        className={cn('flex min-h-svh items-center justify-center p-4', !marcaDelFondo && 'bg-muted/40')}
+        style={marcaDelFondo ? estiloDeFondo(marcaDelFondo) : undefined}
+        data-fondo={marcaDelFondo}
+      >
+        <Card className={cn('w-full max-w-sm', marcaDelFondo && 'border-white/10 shadow-2xl')}>
           <CardHeader className="text-center">
             {producto ? (
               <MarcaProducto producto={producto} className="mx-auto mb-2 h-12 w-12" />
