@@ -7,6 +7,15 @@
 // desafío ALTCHA (`parameters` + `signature`). Un 200 no alcanza —el catch-all
 // de la SPA devuelve 200 con el index.html a cualquier ruta—, y la misma
 // imagen corre con y sin captcha según cómo el producto monte el router.
+//
+// **En un nodo de LibraEdge no hay captcha** (v0.177.0, ADR-091; libraauth
+// v0.55.0, ADR-028): el servidor contesta `{ "requerido": false }` en vez del
+// desafío, y el widget no se dibuja ni se exige para habilitar «Ingresar». El
+// widget necesita WebCrypto (`crypto.subtle`), que el navegador sólo da en https
+// o `localhost`, y a un nodo se entra por `http://<IP-LAN>:8000`. La regla del
+// cliente es una sola: *hay captcha si y sólo si la respuesta es un desafío y no
+// dice `requerido: false`*. Una consulta que falla, o que no es un desafío, deja
+// el captcha apagado (el comportamiento de siempre).
 import { useCallback, useEffect, useState } from 'react'
 import { api } from './api-client'
 
@@ -15,6 +24,14 @@ export function esDesafio(info: unknown): boolean {
   const desafio = info as { parameters?: unknown; signature?: unknown }
   return typeof desafio.parameters === 'object' && desafio.parameters !== null
     && typeof desafio.signature === 'string'
+}
+
+// La respuesta de la sonda dice que hace falta resolver un desafío. `requerido:
+// false` manda aunque venga también la forma de un desafío: es la forma explícita
+// con que un nodo de LibraEdge dice «acá no se pide».
+export function captchaRequerido(info: unknown): boolean {
+  if (!esDesafio(info)) return false
+  return (info as { requerido?: unknown }).requerido !== false
 }
 
 export type EstadoCaptcha = {
@@ -39,8 +56,9 @@ export function useCaptcha(path?: string): EstadoCaptcha {
     if (!path) return
     let vivo = true
     api.get<unknown>(path)
-      .then((info) => { if (vivo && esDesafio(info)) setActivo(true) })
-      // Un producto sin captcha contesta 404 o el index.html: no es un error.
+      .then((info) => { if (vivo && captchaRequerido(info)) setActivo(true) })
+      // Un producto sin captcha contesta 404 o el index.html, y un nodo de LibraEdge
+      // `{ requerido: false }`: ninguno es un error.
       .catch(() => {})
     return () => { vivo = false }
   }, [path])

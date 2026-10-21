@@ -2,7 +2,7 @@
 // no puede confirmar si una cuenta existe, porque eso convertiría el
 // formulario en un buscador de usuarios dados de alta. Estos tests fijan
 // justamente eso, además de los flujos.
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -91,6 +91,22 @@ describe('ForgotPassword con captcha (v0.69.0)', () => {
     expect(await screen.findByText('La verificación «No soy un robot» venció. Volvé a tildarla.'))
       .toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Enviar enlace' })).toBeDisabled()
+  })
+
+  it('🔴 con `{ requerido: false }` (un nodo de LibraEdge) no hay widget, el botón no espera y el pedido es el de siempre', async () => {
+    fetchMock.mockImplementation((url: string, init?: RequestInit) =>
+      Promise.resolve(init?.method === 'POST' ? json({ ok: true })
+        : url === '/auth/captcha' ? json({ requerido: false }) : json({}, 404)))
+    const ForgotPassword = createForgotPassword({
+      productName: 'MedLibra', productInitial: 'M', captchaPath: '/auth/captcha',
+    })
+    render(<MemoryRouter><ForgotPassword /></MemoryRouter>)
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Usuario o correo'), 'ana')
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/auth/captcha', expect.anything()))
+    expect(screen.queryByRole('button', { name: 'No soy un robot' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Enviar enlace' }))
+    expect(cuerpoDelPost()).toBe('{"identificador":"ana"}')
   })
 
   it('sin captchaPath no pregunta: el pedido es el de siempre', async () => {
