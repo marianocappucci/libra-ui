@@ -52,7 +52,7 @@ describe('las dos variantes', () => {
     expect(svgDeMarca(p, 'favicon')).not.toBe(svgDeMarca(p, 'icono'))
   })
 
-  it('🔴 los nueve dibujos son distintos entre sí', () => {
+  it('🔴 los diez dibujos son distintos entre sí', () => {
     for (const v of VARIANTES) {
       const dibujos = PRODUCTOS.map((p) => svgDeMarca(p, v).replace(/<title>.*?<\/title>/, '').replaceAll(datosDeMarca(p).color, ''))
       expect(new Set(dibujos).size).toBe(PRODUCTOS.length)
@@ -86,12 +86,19 @@ describe('LibraEdge, el complemento (ADR-078)', () => {
   const productos = Object.keys(IDENTIDAD) as Producto[]
 
   it('está entre las marcas pero 🔴 NO en IDENTIDAD: no es una app (sin acento ni theme-color, y la tabla que comparan las landings sigue en ocho)', () => {
-    expect(MARCAS).toEqual([...productos, 'libraedge'])
+    expect(MARCAS).toEqual([...productos, 'libraedge', 'librabot'])
     expect(Object.keys(IDENTIDAD)).not.toContain('libraedge')
   })
 
   it('🔴 su color de fondo no es el de ninguna de las ocho apps', () => {
     expect(productos.map((p) => IDENTIDAD[p].color)).not.toContain(datosDeMarca('libraedge').color)
+  })
+
+  it('🔴 LibraBot (ADR-088) tampoco es una app de IDENTIDAD y su color no es el de ninguna marca', () => {
+    expect(Object.keys(IDENTIDAD)).not.toContain('librabot')
+    const otros = [...productos.map((p) => IDENTIDAD[p].color), datosDeMarca('libraedge').color]
+    expect(otros).not.toContain(datosDeMarca('librabot').color)
+    expect(datosDeMarca('librabot')).toEqual({ nombre: 'LibraBot', color: '#e11d48' })
   })
 
   it('las ocho apps siguen con el nombre y el color de IDENTIDAD', () => {

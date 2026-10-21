@@ -2030,3 +2030,20 @@ Las 37 pantallas del kit que importaban `@/components/ui/dialog` (50 `DialogCont
 **Tests.** `test/BandejaDeComprobantes.test.tsx` (29): lo que muestra (origen rotulado, período, vacío, error del motor y corte de red, «+N» y origen desconocido); el agrupado (mismo cliente, bloqueo del otro, total, «Limpiar» y cambio de pestaña); «Facturar» (los ids van al prefill, el resultado a `alFacturar` y no se escribe nada más, 422, 409 `se_factura_desde_la_venta`, sin `alFacturar` no hay casillas); descartar (motivo y recarga, cancelar, error del motor, sin permiso); las ventas del nodo (etiqueta y sin casilla, **sin «Descartar»**, sin `alFacturar` igual se facturan, la elección se poda al recargar, la ruta de la tanda del producto, sin ventas no se pregunta nada del nodo); el historial (`rutaFactura`, motivo, pestañas vacías); y las props del producto (`ruta`, `titulo`, `introduccion`, `origenes`). Los cinco tests de las ventas del nodo se ponen rojos si se quita el guard de `esVentaSinConexion` de la casilla y de «Descartar».
 
 **Lo que no cubre.** (a) El formulario de factura que recibe el `prefill` y llama a `marcar-facturado` sigue siendo de cada producto (en Contalibra, `FacturaNueva`): sube cuando un segundo producto con bandeja de otros sistemas lo necesite. (b) El e2e en un navegador y el ancho en celular (la tabla usa `DataTable` como siempre, sin vista en tarjetas). (c) Los orígenes por defecto son los que manda hoy LibraDesk; un origen nuevo sin etiqueta se muestra como llega.
+
+## ADR-088 — La marca de LibraBot, segundo complemento con marca (0.174.0)
+
+**Estado:** aceptada (2026-10-21).
+
+**Contexto.** LibraBot es el chatbot con IA de la suite: responde con el sitio web de cada empresa y lo que ella le carga, tiene preguntas fijas y pasa la conversación a una persona en Chatwoot (diseño en el wiki: `chatbot-ia-para-prospectos`). Necesita marca para su landing (`librabot.com.ar`) y para LibraSuite, que copian los SVG de este paquete (ADR-034). Todavía no tiene pantallas propias en el kit.
+
+**Qué ya existe** (se miró antes). LibraEdge entró por el mismo camino (ADR-078): marca dibujada sin ser una de las ocho apps de `IDENTIDAD`, con su nombre y su color en `COMPLEMENTOS`.
+
+**Decisión.**
+1. `librabot` es un `Complemento` más: nombre «LibraBot», fondo **rojo frambuesa `#e11d48`** (elegido por el humano; no lo usa ninguna app ni LibraEdge), tinta `#4c0519`, claro `#fecdd3`. `IDENTIDAD` sigue en ocho.
+2. **El dibujo es idea del humano**: una burbuja de chat con cara, dos ojos y una sonrisa. Se llevó a las cuatro reglas de la familia (ADR-034): la burbuja con cara es la pieza principal; detrás, otra burbuja en blanco translúcido (la respuesta); el corte las separa; la cara va en la tinta; el único acento es una chispa amarilla (la IA). El humano eligió esta versión frente a la burbuja sola.
+3. El favicon es la burbuja con cara, sola y engrosada, para que se lea a 16 px.
+
+**Consecuencias.** MINOR: dos archivos en `marcas/` y una marca más en `MARCAS`. Ningún producto cambia. `libra-web-kit` las copia con `scripts/sincronizar_marcas.py --tag v0.174.0`.
+
+**Tests.** `test/marcas.test.ts`: los diez dibujos son distintos entre sí, LibraBot no está en `IDENTIDAD` y su color no es el de ninguna otra marca, y los archivos de `marcas/` son exactamente lo que devuelve `svgDeMarca`.

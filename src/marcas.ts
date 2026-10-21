@@ -20,12 +20,17 @@ export type VarianteDeMarca = 'icono' | 'favicon'
 // —la usan su sección en LibraSuite y las landings, la pantalla del nodo y el instalador de Windows— pero no identidad de app: no tiene
 // pantalla propia, ni acento, ni `theme-color`. Por eso su nombre y su color viven acá y no en `IDENTIDAD`, que es la tabla de las ocho apps
 // y la que comparan las landings y el wiki.
-export type Complemento = 'libraedge'
+//
+// LibraBot, el chatbot con IA para el sitio de cada empresa (ADR-088), entra igual: tiene marca —su landing y LibraSuite— y todavía no tiene
+// pantalla propia en el kit.
+export type Complemento = 'libraedge' | 'librabot'
 export type Marca = Producto | Complemento
 
 const COMPLEMENTOS: Record<Complemento, { nombre: string; color: string }> = {
   // Cian: el único tono que no estaba tomado por los ocho (el más cercano, el verde azulado de MedLibra, es más verde y más claro).
   libraedge: { nombre: 'LibraEdge', color: '#0e7490' },
+  // Rojo frambuesa, elegido por el humano (2026-10-21): ninguna de las ocho apps ni LibraEdge lo usan.
+  librabot: { nombre: 'LibraBot', color: '#e11d48' },
 }
 
 /** El nombre y el color de fondo de una marca, sea app o complemento. */
@@ -49,6 +54,7 @@ const TONOS: Record<Marca, { tinta: string; claro: string }> = {
   libracargo: { tinta: '#001d5c', claro: '#93b4f0' },
   libraclub: { tinta: '#022c1c', claro: '#a7f3d0' },
   libraedge: { tinta: '#083344', claro: '#a5f3fc' },
+  librabot: { tinta: '#4c0519', claro: '#fecdd3' },
 }
 
 /** Todas las marcas dibujadas: las ocho apps y los complementos. Sale de `TONOS` y no de `IDENTIDAD` porque `identidad.ts` importa este
@@ -166,6 +172,14 @@ ${repetir([[75, 37], [90, 37], [82.5, 45], [75, 53], [90, 53], [82.5, 61]], ([x,
 <g fill="none" stroke="${c.tinta}" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
 <path d="M79.5 86a11 11 0 0 1 18.5-6.5"/><path d="M99 72.5v7h-7"/><path d="M100.5 90a11 11 0 0 1-18.5 6.5"/><path d="M81 103.5v-7h7"/>
 </g>`,
+  // La idea es del humano: una burbuja de chat con cara, dos ojos y una sonrisa. Detrás, la respuesta (translúcida); la chispa es la IA.
+  librabot: (c) => `
+<path d="M60 10h34a14 14 0 0 1 14 14v18a14 14 0 0 1-14 14h-2v12L78 56H60a14 14 0 0 1-14-14V24a14 14 0 0 1 14-14z" fill="${BLANCO}" opacity=".4"/>
+<path d="M28 36h44a16 16 0 0 1 16 16v26a16 16 0 0 1-16 16H48L30 108V94h-2a16 16 0 0 1-16-16V52a16 16 0 0 1 16-16z" fill="${BLANCO}" ${corte(c, 8)}/>
+<circle cx="37" cy="59" r="6.5" fill="${c.tinta}"/>
+<circle cx="63" cy="59" r="6.5" fill="${c.tinta}"/>
+<path d="M37 74q13 11 26 0" fill="none" stroke="${c.tinta}" stroke-width="6" stroke-linecap="round"/>
+<path d="M98 0Q100.4 13.6 112 16Q100.4 18.4 98 32Q95.6 18.4 84 16Q95.6 13.6 98 0Z" fill="${AMARILLO}" ${corte(c, 5)}/>`,
 }
 
 // El favicon: una sola pieza del ícono, más grande y con trazos gruesos.
@@ -223,6 +237,11 @@ ${repetir([[50, 30], [71, 30], [60.5, 43], [50, 56], [71, 56]], ([x, y]) => `<ci
 <rect x="22" y="50" width="44" height="10" rx="5" fill="${c.tinta}"/>
 <rect x="22" y="68" width="28" height="8" rx="4" fill="${c.claro}"/>
 <circle cx="92" cy="62" r="9" fill="${AMARILLO}"/>`,
+  librabot: (c) => `
+<path d="M32 20h56a15 15 0 0 1 15 15v36a15 15 0 0 1-15 15H54L31 104V86a15 15 0 0 1-14-15V35a15 15 0 0 1 15-15z" fill="${BLANCO}"/>
+<circle cx="43" cy="46" r="9.5" fill="${c.tinta}"/>
+<circle cx="77" cy="46" r="9.5" fill="${c.tinta}"/>
+<path d="M41 63q19 16 38 0" fill="none" stroke="${c.tinta}" stroke-width="9" stroke-linecap="round"/>`,
 }
 
 /**
