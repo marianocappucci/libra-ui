@@ -2047,3 +2047,20 @@ Las 37 pantallas del kit que importaban `@/components/ui/dialog` (50 `DialogCont
 **Consecuencias.** MINOR: dos archivos en `marcas/` y una marca más en `MARCAS`. Ningún producto cambia. `libra-web-kit` las copia con `scripts/sincronizar_marcas.py --tag v0.174.0`.
 
 **Tests.** `test/marcas.test.ts`: los diez dibujos son distintos entre sí, LibraBot no está en `IDENTIDAD` y su color no es el de ninguna otra marca, y los archivos de `marcas/` son exactamente lo que devuelve `svgDeMarca`.
+
+## ADR-089 — La marca de LibraBot pasa a 3D (0.175.0)
+
+**Estado:** aceptada (2026-10-21). Reemplaza el dibujo del ADR-088; el color, los tonos y el lugar de complemento no cambian.
+
+**Contexto.** La landing de LibraBot estrenó de fondo un dibujo propio de burbujas blandas, con volumen y sombra. El humano pidió que la marca tome esa burbuja «más descontracturada», con su carita, y «más en 3D como la de la imagen». Eligió, entre dos propuestas, la que lleva la respuesta translúcida detrás, como en el fondo.
+
+**Qué ya existe** (se miró antes). Las nueve marcas eran planas por regla (ADR-034, regla 3: formas llenas con detalles calados, nunca el trazo fino de los packs). `svgDeMarca` armaba siempre el cuadrado de color y el dibujo encima, sin `defs`.
+
+**Decisión.**
+1. **LibraBot es la única marca en 3D.** Es una excepción pedida por el humano a la regla de ADR-034, no un cambio de la familia: las otras nueve siguen planas.
+2. `VOLUMEN` en `marcas.ts`, opcional por marca: `defs` (degradés de la burbuja, de la respuesta y de los ojos, y un filtro de sombra) y `luz`, un segundo cuadrado con un degradé radial encima del fondo de color. **El primer `rect` sigue siendo el del color de MARCA**, que es lo que exige el test. Los ids llevan el prefijo `lb` para no chocar con otros SVG en línea.
+3. El ícono usa las coordenadas del lienzo de 120 entero (un `<g>` deshace el `translate(9 9) scale(.85)`). El favicon es la burbuja sola, inclinada y con volumen, para que se lea a 16 px.
+
+**Consecuencias.** MINOR. Cambian sólo `marcas/librabot.svg` y `marcas/librabot-favicon.svg`; las otras nueve marcas quedan byte a byte iguales. La landing y LibraSuite vuelven a copiar los dos archivos del tag `v0.175.0`.
+
+**Tests.** Los de `test/marcas.test.ts`, sin cambios: SVG bien formado de 120, primer `rect` del color de MARCA, `<title>`, compacto, favicon distinto del ícono, diez dibujos distintos y archivos idénticos a `svgDeMarca`.

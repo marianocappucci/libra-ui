@@ -172,14 +172,20 @@ ${repetir([[75, 37], [90, 37], [82.5, 45], [75, 53], [90, 53], [82.5, 61]], ([x,
 <g fill="none" stroke="${c.tinta}" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
 <path d="M79.5 86a11 11 0 0 1 18.5-6.5"/><path d="M99 72.5v7h-7"/><path d="M100.5 90a11 11 0 0 1-18.5 6.5"/><path d="M81 103.5v-7h7"/>
 </g>`,
-  // La idea es del humano: una burbuja de chat con cara, dos ojos y una sonrisa. Detrás, la respuesta (translúcida); la chispa es la IA.
+  // La idea es del humano: una burbuja de chat con cara, dos ojos y una sonrisa. Desde ADR-089 va **en 3D**, como la burbuja del
+  // fondo de su landing: volumen con degradés, ojos con reflejo, sombra, y la respuesta translúcida detrás. Es la única marca con
+  // `VOLUMEN` (abajo). Las coordenadas son las del lienzo de 120 entero: el primer `<g>` deshace el `translate(9 9) scale(.85)`.
   librabot: (c) => `
-<path d="M60 10h34a14 14 0 0 1 14 14v18a14 14 0 0 1-14 14h-2v12L78 56H60a14 14 0 0 1-14-14V24a14 14 0 0 1 14-14z" fill="${BLANCO}" opacity=".4"/>
-<path d="M28 36h44a16 16 0 0 1 16 16v26a16 16 0 0 1-16 16H48L30 108V94h-2a16 16 0 0 1-16-16V52a16 16 0 0 1 16-16z" fill="${BLANCO}" ${corte(c, 8)}/>
-<circle cx="37" cy="59" r="6.5" fill="${c.tinta}"/>
-<circle cx="63" cy="59" r="6.5" fill="${c.tinta}"/>
-<path d="M37 74q13 11 26 0" fill="none" stroke="${c.tinta}" stroke-width="6" stroke-linecap="round"/>
-<path d="M98 0Q100.4 13.6 112 16Q100.4 18.4 98 32Q95.6 18.4 84 16Q95.6 13.6 98 0Z" fill="${AMARILLO}" ${corte(c, 5)}/>`,
+<g transform="scale(1.17647) translate(-9 -9)"><g filter="url(#lbS)">
+<g transform="translate(102 12) scale(-.5 .5) rotate(-4 50 44)"><path d="M18 0h64a18 18 0 0 1 18 18v36a18 18 0 0 1-18 18H38L20 88V72h-2A18 18 0 0 1 0 54V18A18 18 0 0 1 18 0z" fill="url(#lbR)"/></g>
+<g transform="translate(10 30) scale(.8) rotate(-5 50 44)"><path d="M18 0h64a18 18 0 0 1 18 18v36a18 18 0 0 1-18 18H38L20 88V72h-2A18 18 0 0 1 0 54V18A18 18 0 0 1 18 0z" fill="url(#lbB)"/>
+<circle cx="35" cy="31" r="7.5" fill="url(#lbO)"/>
+<circle cx="65" cy="31" r="7.5" fill="url(#lbO)"/>
+<circle cx="32.6" cy="28.4" r="2.4" fill="${BLANCO}" opacity=".9"/>
+<circle cx="62.6" cy="28.4" r="2.4" fill="${BLANCO}" opacity=".9"/>
+<path d="M34 47q16 13 32 0" fill="none" stroke="${c.tinta}" stroke-width="6.5" stroke-linecap="round"/>
+<path d="M14 9q4-5 12-6" fill="none" stroke="${BLANCO}" stroke-width="4" stroke-linecap="round" opacity=".9"/>
+</g></g></g>`,
 }
 
 // El favicon: una sola pieza del ícono, más grande y con trazos gruesos.
@@ -238,24 +244,47 @@ ${repetir([[50, 30], [71, 30], [60.5, 43], [50, 56], [71, 56]], ([x, y]) => `<ci
 <rect x="22" y="68" width="28" height="8" rx="4" fill="${c.claro}"/>
 <circle cx="92" cy="62" r="9" fill="${AMARILLO}"/>`,
   librabot: (c) => `
-<path d="M32 20h56a15 15 0 0 1 15 15v36a15 15 0 0 1-15 15H54L31 104V86a15 15 0 0 1-14-15V35a15 15 0 0 1 15-15z" fill="${BLANCO}"/>
-<circle cx="43" cy="46" r="9.5" fill="${c.tinta}"/>
-<circle cx="77" cy="46" r="9.5" fill="${c.tinta}"/>
-<path d="M41 63q19 16 38 0" fill="none" stroke="${c.tinta}" stroke-width="9" stroke-linecap="round"/>`,
+<g filter="url(#lbS)" transform="translate(8 14) scale(1.04) rotate(-4 50 44)"><path d="M18 0h64a18 18 0 0 1 18 18v36a18 18 0 0 1-18 18H38L20 88V72h-2A18 18 0 0 1 0 54V18A18 18 0 0 1 18 0z" fill="url(#lbB)"/>
+<circle cx="33" cy="31" r="10" fill="${c.tinta}"/>
+<circle cx="67" cy="31" r="10" fill="${c.tinta}"/>
+<path d="M31 49q19 15 38 0" fill="none" stroke="${c.tinta}" stroke-width="9" stroke-linecap="round"/>
+</g>`,
 }
 
 /**
  * El SVG completo de la marca: el cuadrado redondeado del color de marca y el dibujo encima. Sin `width` ni `height`: llena lo que le den.
  * `icono` lleva un `<title>` con el nombre; quien lo incruste como decoración (`MarcaProducto`) lo esconde con `aria-hidden`.
  */
+// Las marcas en 3D (por ahora sólo LibraBot, ADR-089): `defs` con sus degradés y su sombra, y `luz`, un segundo cuadrado con un degradé
+// que va ENCIMA del fondo de color (el primero sigue siendo el de MARCA, que es lo que mira el test). Las demás son planas (ADR-034).
+// Los ids llevan el prefijo de la marca para no chocar con otros SVG en línea de la misma página.
+const VOLUMEN: Partial<Record<Marca, { defs: (c: Paleta) => string; luz: string }>> = {
+  librabot: {
+    defs: (c) => `<defs>
+<radialGradient id="lbF" cx="30%" cy="22%" r="95%"><stop offset="0" stop-color="#fb7185"/><stop offset=".55" stop-color="${c.fondo}"/><stop offset="1" stop-color="#be123c"/></radialGradient>
+<linearGradient id="lbB" x1="0" y1="0" x2=".25" y2="1"><stop offset="0" stop-color="${BLANCO}"/><stop offset=".7" stop-color="#fdf2f4"/><stop offset="1" stop-color="#f9d5dd"/></linearGradient>
+<linearGradient id="lbR" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${BLANCO}" stop-opacity=".75"/><stop offset="1" stop-color="${c.claro}" stop-opacity=".6"/></linearGradient>
+<radialGradient id="lbO" cx="38%" cy="32%" r="70%"><stop offset="0" stop-color="#881337"/><stop offset="1" stop-color="${c.tinta}"/></radialGradient>
+<filter id="lbS" x="-30%" y="-30%" width="160%" height="170%"><feGaussianBlur in="SourceAlpha" stdDeviation="4"/><feOffset dy="6"/><feComponentTransfer><feFuncA type="linear" slope=".32"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs>`,
+    luz: 'url(#lbF)',
+  },
+}
+
 export function svgDeMarca(marca: Marca, variante: VarianteDeMarca = 'icono'): string {
   const { nombre, color } = datosDeMarca(marca)
   const paleta: Paleta = { fondo: color, ...TONOS[marca] }
   // El favicon redondea un poco más (30 contra 27): achicado a 16 px, el radio del ícono se ve casi recto.
+  const volumen = VOLUMEN[marca]
+  const rx = variante === 'favicon' ? 30 : 27
+  const fondo =
+    `<rect width="120" height="120" rx="${rx}" fill="${color}"/>` +
+    (volumen ? `<rect width="120" height="120" rx="${rx}" fill="${volumen.luz}"/>` : '')
   const cuerpo =
-    variante === 'favicon'
-      ? `<rect width="120" height="120" rx="30" fill="${color}"/>${FAVICON[marca](paleta)}`
-      : `<rect width="120" height="120" rx="27" fill="${color}"/><g transform="translate(9 9) scale(.85)">${ICONO[marca](paleta)}</g>`
+    (volumen ? volumen.defs(paleta) : '') +
+    (variante === 'favicon'
+      ? `${fondo}${FAVICON[marca](paleta)}`
+      : `${fondo}<g transform="translate(9 9) scale(.85)">${ICONO[marca](paleta)}</g>`)
   // Compacto: sin saltos de línea ni sangría, para que el archivo y el data URL pesen lo justo.
   const dibujo = cuerpo.replace(/\n/g, '')
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><title>${nombre}</title>${dibujo}</svg>`
