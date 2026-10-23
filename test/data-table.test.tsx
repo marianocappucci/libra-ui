@@ -309,3 +309,61 @@ describe('DataTable: el resto del contrato', () => {
     expect(boton.querySelector('svg')!.getAttribute('class')).toContain('shrink-0')
   })
 })
+
+describe('DataTable con `detalle` (ADR-093)', () => {
+  const DETALLE = { render: (e: Equipo) => <p>Sector: {e.sector}</p>, etiqueta: (e: Equipo) => `Ver detalle de ${e.marca}` }
+
+  it('sin la prop no hay columna de chevron (la tabla de siempre)', () => {
+    render(<DataTable columns={COLUMNAS} data={EQUIPOS} />)
+    expect(screen.queryByText('Detalle')).toBeNull()
+    expect(screen.queryByLabelText(/Ver detalle/)).toBeNull()
+  })
+
+  it('suma la columna del chevron y despliega la fila con un colSpan de toda la tabla; varias a la vez', async () => {
+    const user = userEvent.setup()
+    render(<DataTable columns={COLUMNAS} data={EQUIPOS} detalle={DETALLE} />)
+    expect(screen.getAllByRole('columnheader')).toHaveLength(COLUMNAS.length + 1)
+    await user.click(screen.getByLabelText('Ver detalle de HP'))
+    await user.click(screen.getByText('Lenovo'))
+    const celda = screen.getByText('Sector: Admisión').closest('td')!
+    expect(celda.colSpan).toBe(COLUMNAS.length + 1)
+    expect(celda.id).toBe(screen.getByLabelText('Ver detalle de HP').getAttribute('aria-controls'))
+    expect(screen.getByText('Sector: Contaduría')).toBeTruthy()
+    expect(screen.queryByText('Sector: Depósito')).toBeNull()
+  })
+
+  it('con `size` la columna del chevron reserva sus 40 px en el colgroup y en el min-width', () => {
+    const conAncho: ColumnDef<Equipo>[] = [{ accessorKey: 'tipo', header: 'Tipo', size: 100 }, { accessorKey: 'marca', header: 'Marca', size: 120 }]
+    const { container } = render(<DataTable columns={conAncho} data={EQUIPOS} detalle={DETALLE} />)
+    expect((container.querySelector('col') as HTMLElement).style.width).toBe('40px')
+    expect((container.querySelector('table') as HTMLElement).style.minWidth).toBe('260px')
+  })
+
+  it('un botón de la fila no la despliega', async () => {
+    const user = userEvent.setup()
+    const conBoton: ColumnDef<Equipo>[] = [...COLUMNAS, { id: 'actions', header: 'Acciones', cell: () => <button type="button">Editar</button> }]
+    render(<DataTable columns={conBoton} data={EQUIPOS} detalle={DETALLE} />)
+    await user.click(screen.getAllByRole('button', { name: 'Editar' })[0])
+    expect(screen.queryByText(/Sector:/)).toBeNull()
+  })
+
+  it('el colSpan del detalle cuenta sólo las columnas que se ven: una `opcional` oculta por CSS no entra (Chrome dejaba un hueco)', async () => {
+    const user = userEvent.setup()
+    const estilo = document.createElement('style')
+    estilo.textContent = '.oculta-en-test { display: none }'
+    document.head.appendChild(estilo)
+    try {
+      const conOpcional: ColumnDef<Equipo>[] = [...COLUMNAS, { accessorKey: 'sector', header: 'Sector', meta: { opcional: true, className: 'oculta-en-test' } }]
+      render(<DataTable columns={conOpcional} data={EQUIPOS} detalle={DETALLE} />)
+      await user.click(screen.getByLabelText('Ver detalle de HP'))
+      expect(screen.getByText('Sector: Admisión').closest('td')!.colSpan).toBe(COLUMNAS.length + 1)
+    } finally {
+      estilo.remove()
+    }
+  })
+
+  it('la tabla vacía ocupa también la columna del chevron', () => {
+    render(<DataTable columns={COLUMNAS} data={[]} detalle={DETALLE} emptyMessage="Nada" />)
+    expect(screen.getByText('Nada').closest('td')!.colSpan).toBe(COLUMNAS.length + 1)
+  })
+})

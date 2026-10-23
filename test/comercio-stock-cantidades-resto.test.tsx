@@ -55,16 +55,19 @@ describe('Stock: las cantidades con decimales en todo el listado', () => {
     '/api/stock/movimientos': [MOV],
   }
 
-  it('la tabla: mínimo, cada depósito y el total salen con sus decimales (2,5 · 0,75 · 0,75 · 1,5), no redondeados', async () => {
+  it('la tabla: el total sale con sus decimales (1,5) y, desplegado, el mínimo y cada depósito (2,5 · 0,75 · 0,75), no redondeados', async () => {
+    const user = userEvent.setup()
     responder(TABLA)
     render(<MemoryRouter><Stock /></MemoryRouter>)
     await screen.findByText('Sal')
-    const celdas = celdasDeLaFila('Queso')
-    expect(celdas).toContain('2,5')
-    expect(celdas.filter((c) => c === '0,75')).toHaveLength(2)
-    expect(celdas).toContain('1,5')
+    expect(celdasDeLaFila('Queso')).toContain('1,5kg')
     // Y el de unidades enteras, igual que siempre.
-    expect(celdasDeLaFila('Sal')).toContain('40')
+    expect(celdasDeLaFila('Sal')).toContain('40u')
+    // El mínimo y los depósitos van en el detalle de la fila (ADR-093).
+    await user.click(screen.getByLabelText('Ver detalle de Queso'))
+    expect(screen.getByText('Stock mínimo').nextElementSibling!.textContent).toBe('2,5 kg')
+    const depositos = screen.getByLabelText('Stock por depósito')
+    expect(within(depositos).getAllByText('0,75')).toHaveLength(2)
   })
 
   it('las tarjetas (ancho chico): el total, el mínimo y los depósitos de cada producto', async () => {
