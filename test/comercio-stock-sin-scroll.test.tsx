@@ -102,19 +102,7 @@ describe('Stock: tabla o tarjetas según el ancho', () => {
 })
 
 describe('Stock: cosméticos', () => {
-  it('el encabezado de un depósito de nombre largo parte en hasta dos líneas antes del «…» y lleva el nombre entero en el title (0.145.0)', async () => {
-    // Medido en Chromium con tres depósitos: con `truncate` los tres encabezados de 110 px se leían «Cas…», «Suc…», «Dep…». ADR-057.
-    await abrir(1600)
-    const boton = screen.getByTitle(DEPOSITOS[1].nombre)
-    expect(boton.className).toContain('max-w-full')
-    const texto = within(boton).getByText(DEPOSITOS[1].nombre)
-    for (const clase of ['line-clamp-2', 'break-words', 'whitespace-normal']) expect(texto.className).toContain(clase)
-    expect(texto.className).not.toContain('truncate')
-    expect(boton.className).toContain('h-auto')   // el botón crece con la segunda línea
-    expect(boton.querySelector('svg')!.getAttribute('class')).toContain('shrink-0')   // el icono de orden no se pierde
-  })
-
-  it('el resto de los encabezados con orden (Producto) siguen cortando con «…» en una línea', async () => {
+  it('los encabezados con orden (Producto) cortan con «…» en una línea', async () => {
     await abrir(1600)
     const boton = screen.getByTitle('Producto')
     expect(within(boton).getByText('Producto').className).toContain('truncate')
@@ -145,19 +133,20 @@ describe('Stock: los botones de la tabla son de 44 px bajo 1024 px (0.145.0)', (
     expect(contenedor.className).toContain('max-lg:[&_a]:size-11')
   })
 
-  it('el umbral de las tarjetas cuenta los 8 px de más por botón bajo 1024 px: 1057 con los de 36, 1073 con los de 44', async () => {
-    // Con dos depósitos: 200 + 120 + 85 + 100 + 2 × 110 + 115 + 125 + acciones (2 botones: 92, o 108 con los de 44) = 1057 o 1073.
-    await abrir(1057)
+  it('el umbral de las tarjetas cuenta los 8 px de más por botón bajo 1024 px: 587 con los de 36, 603 con los de 44', async () => {
+    // Tabla compacta (ADR-093), con depósitos o sin ellos: chevron 40 + producto 200 + stock 130 + estado 125 + acciones (2 botones: 92, o 108 con los de 44) = 587 o 603.
+    // La categoría es opcional (se ve desde 1280 px) y no cuenta.
+    await abrir(587)
     expect(screen.getByRole('table')).toBeTruthy()
     cleanup()
-    await abrir(1056)
+    await abrir(586)
     expect(screen.queryByRole('table')).toBeNull()
     cleanup()
     vi.stubGlobal('matchMedia', (query: string) => ({ matches: true, media: query, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
-    await abrir(1072)
+    await abrir(602)
     expect(screen.queryByRole('table')).toBeNull()
     cleanup()
-    await abrir(1073)
+    await abrir(603)
     expect(screen.getByRole('table')).toBeTruthy()
   })
 })

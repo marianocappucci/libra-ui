@@ -2145,3 +2145,44 @@ producto; el navegador baja sólo la de la marca. El SVG de LibraBot pesa menos 
 **Tests.** `test/Login.test.tsx`, bloque «fondo»: sin `producto` ni `fondo` queda `bg-muted/40` y sin `style`; con `producto`
 sale la foto y el velo; `fondo: 'librabot'` sin producto; `fondo={false}` lo apaga. El `data:` URI no lo parsea el CSS de jsdom,
 así que el caso de LibraBot mira lo que arma `estiloDeFondo`. Verificado además en un build real de LibraCargo a 1280 y 390 px.
+
+## ADR-093 — Stock en tabla compacta con detalle desplegable, y la fila desplegable de `DataTable` (0.179.0)
+
+**Estado:** aceptada (2026-10-23). Pedido del humano, sobre VentaLibra: «cuando voy a stock veo los productos en tarjetas
+[…] un negocio con muchos productos ver los productos así no es práctico a la vista, necesitamos hacer una tabla con los
+productos y que muestre los datos importantes, los demás que se desplieguen cuando hago click en el producto».
+
+**Qué ya existe** (se miró antes). La pantalla de Stock ya era una tabla con fallback a tarjetas (ADR-016): una columna por
+depósito (ADR-057) más producto, categoría, unidad, mínimo, total, estado y acciones. Con dos depósitos la tabla pedía
+1057 px; con tres o más sucursales y el menú abierto no entraba en casi ninguna pantalla y la vista pasaba a tarjetas,
+una debajo de la otra. `DataTable` no tenía filas desplegables; el único despliegue por fila del kit era el de `Logs.tsx`,
+escrito a mano en su propia tabla. `meta.opcional` (columna oculta por CSS que no cuenta para el mínimo) ya existía y la
+usan Turnos y Libros IVA.
+
+**Decisión.**
+1. `DataTable` suma la prop `detalle?: { render, etiqueta? }`: una primera columna de 40 px (`ANCHO_COLUMNA_DETALLE`, en
+   `libra-ui/tabla`) con un chevron que es el control accesible (`aria-expanded`, `aria-controls`), y el click en cualquier
+   parte de la fila que no sea un botón, link o campo despliega `render(fila)` en una fila de abajo a todo el ancho. Varias
+   filas pueden quedar abiertas. Sin la prop no cambia nada. Si una tabla trae `onRowClick` y `detalle`, el click en la fila
+   es de `onRowClick` y el detalle se abre con el chevron.
+2. El `colSpan` de la fila desplegada cuenta **las columnas que se ven** (celdas del encabezado que no están en
+   `display: none`), no `headers.length`: medido en Chromium a 900 px, con la categoría oculta y un colSpan que la incluía,
+   la columna elástica dejaba de recibir el sobrante y quedaba un hueco de 200 px a la derecha de Acciones.
+3. Stock: la tabla lleva **producto (con su código), stock con la unidad al lado, estado y acciones**, más la categoría
+   como columna opcional desde 1280 px. Código, categoría, unidad, mínimo y **el stock de cada depósito** van al detalle.
+   Las columnas por depósito se van de la tabla. Mínimo de la tabla: 587 px (603 con los botones de 44 bajo 1024 px),
+   con depósitos o sin ellos: las tarjetas quedan sólo para el celular.
+4. El encabezado es «Stock» con depósitos o sin ellos («Stock total» no entraba en 130 px con el ícono de orden).
+5. El buscador de `conFiltros` encuentra también por código.
+
+**Consecuencias.** MINOR. Contalibra, Restolibra y VentaLibra ven la tabla nueva al subir el pin, sin cambios en su código.
+Se pierde ordenar por un depósito en particular (se ordena por producto o por stock total); si hace falta, se agrega al
+detalle o como filtro. ADR-057 (encabezados de depósito en dos líneas) deja de aplicar a Stock; `sortableHeader` con
+`dosLineas` sigue en el kit.
+
+**Tests.** `test/comercio-stock-detalle.test.tsx` (encabezados, categoría opcional, unidad junto al número, despliegue y
+cierre, depósito que falta = 0, los botones no despliegan, sin depósitos, búsqueda por código); `test/data-table.test.tsx`,
+bloque «`detalle`» (sin la prop no hay chevron, colSpan, colgroup y min-width, botones, tabla vacía y el colSpan con una
+columna oculta por CSS). Actualizados los de Stock que describían las columnas por depósito y el umbral de 1057/1073 px.
+Verificado además en Chromium con el CSS de VentaLibra, 20 productos y tres depósitos, a 1280, 900 y 390 px: sin scroll
+horizontal en ninguno.

@@ -269,17 +269,18 @@ describe('Stock por depósito', () => {
     expect(screen.queryByLabelText('Buscar producto')).toBeNull()
   })
 
-  it('con `depositos` hay una columna por depósito y el total', async () => {
+  it('con `depositos` la fila dice el total y el detalle desplegado, cuánto hay en cada depósito (ADR-093)', async () => {
     responder(con)
+    const user = userEvent.setup()
     render(<MemoryRouter><Stock /></MemoryRouter>)
     await screen.findByText('Yerba')
-    expect(screen.getByText('Salón')).toBeTruthy()
-    expect(screen.getByText('Bodega')).toBeTruthy()
-    expect(screen.getByText('Total')).toBeTruthy()
+    expect(screen.getByRole('columnheader', { name: 'Stock' })).toBeTruthy()
     const fila = screen.getByText('Yerba').closest('tr')!
-    expect(within(fila).getByText('10')).toBeTruthy()
-    expect(within(fila).getByText('3')).toBeTruthy()
     expect(within(fila).getByText('13')).toBeTruthy()
+    await user.click(screen.getByText('Yerba'))
+    const porDeposito = screen.getByLabelText('Stock por depósito')
+    expect(within(porDeposito).getByText('Salón:').nextElementSibling!.textContent).toBe('10')
+    expect(within(porDeposito).getByText('Bodega:').nextElementSibling!.textContent).toBe('3')
   })
 
   it('el ajuste elige el depósito (el predeterminado), parte del stock de ESE depósito y manda deposito_id', async () => {

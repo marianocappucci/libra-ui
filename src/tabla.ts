@@ -78,6 +78,10 @@ export type { RowData }
 export type ColumnDef<TData extends RowData, TValue = unknown> =
   ColumnDefTanstack<LibraFeatures, TData, TValue>
 
+/** Lo que mide la columna del chevron que `DataTable` agrega cuando recibe `detalle` (ADR-093): un botón de 32 px y el relleno de la celda. Quien calcula el ancho de
+ *  antemano (el umbral de las tarjetas) lo suma a `anchoMinimoDeColumnas`. */
+export const ANCHO_COLUMNA_DETALLE = 40
+
 /** El ancho de columna que TanStack usa cuando la columna no declara `size`. */
 const ANCHO_POR_DEFECTO = 150
 

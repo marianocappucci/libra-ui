@@ -14,8 +14,14 @@
 //   Restolibra tiene una página propia. Con `rutaDeMovimientos` el botón
 //   navega; sin ella, el historial se abre acá abajo.
 // - Los **depósitos** (VentaLibra, con varias sucursales): si el backend devuelve `depositos` (y `por_deposito` en
-//   cada producto) hay una columna por depósito, el ajuste elige en qué depósito va y el historial dice cuál. Es
-//   dato, no prop: sin `depositos` la pantalla es la de siempre.
+//   cada producto) el detalle de cada producto dice cuánto hay en cada uno, el ajuste elige en qué depósito va y el
+//   historial dice cuál. Es dato, no prop: sin `depositos` la pantalla es la de siempre.
+//
+// La tabla lleva sólo lo que se mira de un vistazo —producto, stock, estado y acciones, más la categoría en
+// pantallas anchas— y el resto (código, unidad, mínimo y el stock de cada depósito) se despliega al hacer click en
+// la fila (ADR-093). Antes había una columna por depósito: con varias sucursales la tabla no entraba y la pantalla
+// pasaba a tarjetas, poco prácticas con muchos productos. Las tarjetas quedan para cuando ni la tabla compacta entra
+// (el celular, ADR-016).
 //
 // El formulario de ajuste toma la forma de Contalibra (estado simple, sin
 // react-hook-form) con las validaciones que Restolibra tenía en su schema:
@@ -33,7 +39,7 @@ import { BadgeEstado, type TonoEstado } from '../badge-estado'
 import { TituloPantalla } from '../titulo-pantalla'
 import { ICONOS } from '../iconos-identidad'
 import { SelectBuscable } from '../SelectBuscable'
-import { anchoMinimoDeColumnas } from '../tabla'
+import { ANCHO_COLUMNA_DETALLE, anchoMinimoDeColumnas } from '../tabla'
 import { TACTIL, TACTIL_BAJO_LG, useAncho, useBajoLg } from '../use-ancho'
 // Alias: `fecha` ya es el estado del campo de fecha del ajuste de stock.
 import { hoyISO, fecha as formatearFecha } from '../fechas'
@@ -146,6 +152,44 @@ function TarjetaDeStock({ p, depositos, acciones }: { p: StockItem; depositos: D
   )
 }
 
+/** Lo que la tabla no muestra de un producto, en la fila desplegada (ADR-093): código, categoría, unidad, mínimo y, con depósitos, cuánto hay en cada uno. */
+function DetalleDeStock({ p, depositos }: { p: StockItem; depositos: DepositoColumna[] }) {
+  const datos: [string, string][] = [
+    ['Código', p.codigo || '—'],
+    ['Categoría', p.categoria || '—'],
+    ['Unidad', p.unidad || '—'],
+    ['Stock mínimo', p.stock_minimo > 0 ? `${formatoCantidad(p.stock_minimo)} ${p.unidad}` : '—'],
+  ]
+  return (
+    <div className="grid min-w-0 gap-3">
+      <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
+        {datos.map(([etiqueta, valor]) => (
+          <div key={etiqueta} className="min-w-0">
+            <dt className="text-xs text-muted-foreground">{etiqueta}</dt>
+            <dd className="[overflow-wrap:anywhere]">{valor}</dd>
+          </div>
+        ))}
+      </dl>
+      {depositos.length > 0 && (
+        <div className="grid gap-2">
+          <p className="text-xs text-muted-foreground">Stock por depósito</p>
+          <ul className="flex flex-wrap gap-1.5" aria-label="Stock por depósito">
+            {depositos.map((d) => {
+              const n = p.por_deposito?.[String(d.id)] ?? 0
+              return (
+                <li key={d.id} className="flex min-w-0 max-w-full items-baseline gap-1.5 rounded-md border bg-background px-2 py-1 text-sm" title={`${d.nombre}: ${formatoCantidad(n)}`}>
+                  <span className="truncate">{d.nombre}:</span>
+                  <span className={`shrink-0 font-medium tabular-nums ${claseDeCantidad(n)}`}>{formatoCantidad(n)}</span>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function Stock({
   rutaDeMovimientos, conConversionDeUnidad = false, rutaDeProductos = '/productos', conFiltros = false, puedeAjustar = true,
 }: StockProps) {
@@ -184,7 +228,7 @@ export function Stock({
   const visibles = useMemo(() => {
     if (!conFiltros) return productos
     const q = busqueda.trim().toLowerCase()
-    return productos.filter((p) => (!soloConStock || p.stock_actual !== 0) && (!q || p.nombre.toLowerCase().includes(q)))
+    return productos.filter((p) => (!soloConStock || p.stock_actual !== 0) && (!q || p.nombre.toLowerCase().includes(q) || (p.codigo ?? '').toLowerCase().includes(q)))
   }, [productos, conFiltros, busqueda, soloConStock])
   const conMerma = motivosMerma.length > 0
   const modos = MODOS.filter((m) => m.value !== 'merma' || conMerma)
@@ -355,31 +399,29 @@ export function Stock({
         </span>
       ),
     },
-    { accessorKey: 'categoria', header: 'Categoría', size: 120, minSize: 90, cell: ({ row }) => <span className="block truncate text-muted-foreground" title={row.original.categoria ?? undefined}>{row.original.categoria || '—'}</span> },
-    { accessorKey: 'unidad', header: () => <div className="text-center">Unidad</div>, size: 85, minSize: 70, cell: ({ row }) => <div className="truncate text-center text-muted-foreground">{row.original.unidad}</div> },
-    { accessorKey: 'stock_minimo', header: () => <div className="text-center">Mínimo</div>, size: 100, minSize: 85, cell: ({ row }) => <div className="truncate text-center text-muted-foreground">{row.original.stock_minimo > 0 ? formatoCantidad(row.original.stock_minimo) : '—'}</div> },
-    ...depositos.map((d): ColumnDef<StockItem> => ({
-      id: `deposito-${d.id}`,
-      // Hasta dos líneas antes del «…» (ADR-057): con varios depósitos de nombre largo, uno solo no alcanzaba para distinguirlos.
-      header: sortableHeader(d.nombre, { dosLineas: true }),
-      size: 110,
-      minSize: 80,
-      // El NÚMERO y no el texto, para que ordenar por un depósito ordene por cantidad.
-      accessorFn: (p) => p.por_deposito?.[String(d.id)] ?? 0,
-      cell: ({ row }) => {
-        const n = row.original.por_deposito?.[String(d.id)] ?? 0
-        return <div className={`truncate text-center tabular-nums ${n < 0 ? 'font-medium text-destructive' : n === 0 ? 'text-muted-foreground' : ''}`}>{formatoCantidad(n)}</div>
-      },
-    })),
+    // Opcional: se ve desde 1280 px y no cuenta para el umbral de las tarjetas; en el detalle está siempre.
+    {
+      accessorKey: 'categoria',
+      header: 'Categoría',
+      size: 140,
+      minSize: 90,
+      meta: { opcional: true, className: 'hidden xl:table-cell', colClassName: 'hidden xl:table-column' },
+      cell: ({ row }) => <span className="block truncate text-muted-foreground" title={row.original.categoria ?? undefined}>{row.original.categoria || '—'}</span>,
+    },
     {
       accessorKey: 'stock_actual',
-      header: () => <div className="text-center">{conDepositos ? 'Total' : 'Stock actual'}</div>,
-      size: 115,
+      header: sortableHeader('Stock'),
+      size: 130,
       minSize: 95,
       cell: ({ row }) => {
         const p = row.original
         const cls = p.stock_actual <= 0 ? 'text-destructive' : (p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo) ? 'text-amber-800 dark:text-amber-400' : 'text-exito'
-        return <div className={`truncate text-center text-base font-bold ${cls}`}>{formatoCantidad(p.stock_actual)}</div>
+        return (
+          <div className="truncate" title={`${formatoCantidad(p.stock_actual)} ${p.unidad}`}>
+            <span className={`text-base font-bold tabular-nums ${cls}`}>{formatoCantidad(p.stock_actual)}</span>
+            <span className="ml-1 text-xs text-muted-foreground">{p.unidad}</span>
+          </div>
+        )
       },
     },
     {
@@ -402,9 +444,9 @@ export function Stock({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [rutaDeMovimientos, depositos, bajoLg, puedeAjustar])
 
-  // La tabla necesita la suma de los `size` de sus columnas (`DataTable` la fija como `min-width`): si el contenedor es más angosto, en vez de scrollear de costado
-  // la pantalla pasa a tarjetas. Sin medida (0) se queda la tabla.
-  const anchoMinimoTabla = useMemo(() => anchoMinimoDeColumnas(columns), [columns])
+  // La tabla necesita la suma de los `size` de sus columnas más la del chevron (`DataTable` la fija como `min-width`): si el contenedor es más angosto, en vez de
+  // scrollear de costado la pantalla pasa a tarjetas. Sin medida (0) se queda la tabla.
+  const anchoMinimoTabla = useMemo(() => anchoMinimoDeColumnas(columns) + ANCHO_COLUMNA_DETALLE, [columns])
   const enTarjetas = anchoTabla > 0 && anchoTabla < anchoMinimoTabla
   const tarjetas = useMemo(() => {
     const orden_ = [...visibles]
@@ -491,7 +533,7 @@ export function Stock({
             <div className="flex flex-wrap items-end gap-4">
               <div className="grid gap-2">
                 <Label htmlFor="stock-buscar">Buscar producto</Label>
-                <Input id="stock-buscar" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} className="w-64" />
+                <Input id="stock-buscar" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Nombre o código" className="w-64 max-w-full" />
               </div>
               <label className="flex items-center gap-2 pb-2 text-sm">
                 <input type="checkbox" checked={soloConStock} onChange={(e) => setSoloConStock(e.target.checked)} className="size-4" />
@@ -527,6 +569,7 @@ export function Stock({
               <DataTable
                 columns={columns}
                 data={visibles}
+                detalle={{ render: (p) => <DetalleDeStock p={p} depositos={depositos} />, etiqueta: (p) => `Ver detalle de ${p.nombre}` }}
                 emptyMessage={<>No hay productos activos. <Link to={rutaDeProductos} className="text-primary hover:underline">Crear un producto</Link>.</>}
               />
             )}

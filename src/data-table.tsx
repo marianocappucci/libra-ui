@@ -14,6 +14,8 @@
 // colgroup + resize + columnas elasticas), igual que el comportamiento
 // que ya tenia Contalibra.
 //
+// v0.179.0 (2026-10-23): fila desplegable opcional (prop `detalle`, ADR-093).
+//
 // v0.8.0 (2026-07-31): busqueda opcional (prop `search`). Tambien con
 // gating -- sin la prop el componente devuelve exactamente el mismo
 // <Table> de antes, sin envoltorio ni row model de filtrado, asi que los
@@ -27,7 +29,7 @@ import {
 } from '@tanstack/table-core'
 import { flexRender, useTable } from '@tanstack/react-table'
 
-import { libraFeatures, type ColumnDef, type LibraFeatures } from './tabla'
+import { ANCHO_COLUMNA_DETALLE, libraFeatures, type ColumnDef, type LibraFeatures } from './tabla'
 
 // Re-exportado desde aca a proposito: es el mismo modulo del que un consumidor
 // ya importa `DataTable`, asi que declarar columnas no le agrega un import
@@ -39,10 +41,10 @@ export type { ColumnDef, LibraFeatures, RowData } from './tabla'
 // `libra-ui/tabla`.
 
 import {
-  useCallback, useEffect, useLayoutEffect, useRef, useState,
+  Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState,
   type MouseEvent, type ReactNode,
 } from 'react'
-import { ArrowUpDown, Search, X } from 'lucide-react'
+import { ArrowUpDown, ChevronRight, Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { coincideBusqueda } from './utils'
 import {
@@ -206,6 +208,17 @@ type DataTableProps<TData extends RowData> = {
   // Buscador sobre la tabla. Sin esta prop no se renderiza input alguno y el
   // row model de filtrado ni se arma (ver DataTableSearch).
   search?: DataTableSearch<TData>
+  // Fila desplegable (ADR-093): la tabla muestra lo que se mira de un vistazo
+  // y el resto va abajo de la fila, al hacer click en ella o en el chevron de
+  // la primera columna (que es el control accesible: `aria-expanded`). Varias
+  // filas pueden quedar abiertas a la vez. Sin esta prop, la tabla de siempre.
+  detalle?: DataTableDetalle<TData>
+}
+
+export type DataTableDetalle<TData> = {
+  render: (row: TData) => ReactNode
+  /** Nombre accesible del chevron de la fila. Default: «Ver detalle». */
+  etiqueta?: (row: TData) => string
 }
 
 /** Una celda (o encabezado) con identidad estable. `flexRender` monta una función como componente, y las columnas se
@@ -224,9 +237,17 @@ function CeldaEstable<P extends object>({ render, contexto }: { render: unknown;
 
 export function DataTable<TData extends RowData>({
   columns, data, emptyMessage = 'Sin resultados.', getRowClassName, onRowClick,
-  search,
+  search, detalle,
 }: DataTableProps<TData>) {
   const [sorting, setSorting] = useState<SortingState>([])
+  const [abiertas, setAbiertas] = useState<ReadonlySet<string>>(() => new Set())
+  // La columna del chevron va primera: corre en uno el índice de las celdas del DOM respecto del de los headers.
+  const corrimiento = detalle ? 1 : 0
+  const alternar = (id: string) => setAbiertas((previas) => {
+    const nuevas = new Set(previas)
+    if (!nuevas.delete(id)) nuevas.add(id)
+    return nuevas
+  })
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({})
   const [consulta, setConsulta] = useState('')
 
@@ -297,7 +318,7 @@ export function DataTable<TData extends RowData>({
 
     const filas = cuerpoRef.current?.rows
     for (let i = 0; filas && i < filas.length; i++) {
-      const contenido = filas[i].cells[indiceAcciones]?.firstElementChild
+      const contenido = filas[i].cells[indiceAcciones + corrimiento]?.firstElementChild
       if (!contenido) continue
       // OJO: no sirve el scrollWidth del contenedor. Los botones van con
       // `justify-end`, asi que cuando no entran desbordan hacia la IZQUIERDA
@@ -316,7 +337,7 @@ export function DataTable<TData extends RowData>({
     // La cabecera ("Acciones") tambien tiene que entrar: con una sola accion
     // el titulo es mas ancho que el boton. Se mide con un Range porque el
     // texto va alineado a la derecha y sufre el mismo problema de arriba.
-    const th = cabeceraRef.current?.rows[0]?.cells[indiceAcciones]?.firstElementChild
+    const th = cabeceraRef.current?.rows[0]?.cells[indiceAcciones + corrimiento]?.firstElementChild
     if (th && typeof document.createRange === 'function') {
       const rango = document.createRange()
       rango.selectNodeContents(th)
@@ -327,19 +348,31 @@ export function DataTable<TData extends RowData>({
       const nuevo = Math.ceil(maximo) + PADDING_CELDA
       setAnchoAcciones((previo) => (previo === nuevo ? previo : nuevo))
     }
-  }, [indiceAcciones, accionesRedimensionada])
+  }, [indiceAcciones, accionesRedimensionada, corrimiento])
 
-  useLayoutEffect(() => { medirAcciones() })
+  // El colSpan de la fila desplegada tiene que ser el de las columnas que SE VEN: una columna `opcional` oculta por CSS
+  // (`hidden xl:table-cell`) sigue contando en `headers`, y con un colSpan que la incluye Chrome deja de darle el
+  // sobrante a la columna elástica (medido a 900 px en Stock: un hueco de 200 px a la derecha de Acciones). Se cuentan
+  // las celdas del encabezado que no están en `display: none`. En jsdom no hay CSS: cuentan todas.
+  const [columnasVisibles, setColumnasVisibles] = useState<number | null>(null)
+  const contarColumnasVisibles = useCallback(() => {
+    const celdas = cabeceraRef.current?.rows[0]?.cells
+    if (!detalle || !celdas) return
+    const n = Array.from(celdas).filter((c) => getComputedStyle(c).display !== 'none').length
+    setColumnasVisibles((previo) => (previo === n ? previo : n))
+  }, [detalle])
+
+  useLayoutEffect(() => { medirAcciones(); contarColumnasVisibles() })
 
   // Los iconos llegan con las fuentes/SVG ya resueltos casi siempre, pero un
   // re-layout posterior (fuente que carga tarde, zoom del navegador) puede
   // cambiar el ancho: se remide sin re-renderizar de mas.
   useEffect(() => {
     if (typeof ResizeObserver === 'undefined' || !cuerpoRef.current) return
-    const obs = new ResizeObserver(() => medirAcciones())
+    const obs = new ResizeObserver(() => { medirAcciones(); contarColumnasVisibles() })
     obs.observe(cuerpoRef.current)
     return () => obs.disconnect()
-  }, [medirAcciones])
+  }, [medirAcciones, contarColumnasVisibles])
 
   // Ancho efectivo: el medido para la columna de acciones, el declarado para
   // el resto.
@@ -366,7 +399,7 @@ export function DataTable<TData extends RowData>({
   // que no se esta viendo.
   const anchoMinimo = headers.reduce(
     (total, header) => (header.column.columnDef.meta?.opcional ? total : total + anchoDeColumna(header)),
-    0,
+    detalle ? ANCHO_COLUMNA_DETALLE : 0,
   )
 
   // Buscar y no encontrar nada no es lo mismo que no tener datos: sin esto
@@ -388,6 +421,7 @@ export function DataTable<TData extends RowData>({
     >
       {anySized && (
         <colgroup>
+          {detalle && <col style={{ width: ANCHO_COLUMNA_DETALLE }} />}
           {headers.map((header) => (
             <col
               key={header.id}
@@ -402,6 +436,7 @@ export function DataTable<TData extends RowData>({
       <TableHeader ref={cabeceraRef}>
         {table.getHeaderGroups().map((headerGroup) => (
           <TableRow key={headerGroup.id}>
+            {detalle && <TableHead><span className="sr-only">Detalle</span></TableHead>}
             {headerGroup.headers.map((header) => (
               <TableHead key={header.id} className={cn(anySized && 'relative select-none overflow-hidden', header.column.columnDef.meta?.className)}>
                 {header.isPlaceholder
@@ -426,25 +461,55 @@ export function DataTable<TData extends RowData>({
       </TableHeader>
       <TableBody ref={cuerpoRef}>
         {table.getRowModel().rows.length ? (
-          table.getRowModel().rows.map((row) => (
-            <TableRow
-              key={row.id}
-              className={cn(onRowClick && 'cursor-pointer', getRowClassName?.(row.original))}
-              onClick={onRowClick && ((e: MouseEvent) => {
-                if ((e.target as HTMLElement).closest('button, a')) return
-                onRowClick(row.original)
-              })}
-            >
-              {row.getVisibleCells().map((cell) => (
-                <TableCell key={cell.id} className={cn(anySized && 'overflow-hidden', cell.column.columnDef.meta?.className)}>
-                  <CeldaEstable render={cell.column.columnDef.cell} contexto={cell.getContext()} />
-                </TableCell>
-              ))}
-            </TableRow>
-          ))
+          table.getRowModel().rows.map((row) => {
+            const abierta = detalle !== undefined && abiertas.has(row.id)
+            const idDetalle = `detalle-${row.id}`
+            return (
+              <Fragment key={row.id}>
+                <TableRow
+                  className={cn((onRowClick || detalle) && 'cursor-pointer', getRowClassName?.(row.original))}
+                  onClick={(onRowClick || detalle) && ((e: MouseEvent) => {
+                    if ((e.target as HTMLElement).closest('button, a, input, select, textarea, label')) return
+                    if (onRowClick) onRowClick(row.original)
+                    else alternar(row.id)
+                  })}
+                >
+                  {detalle && (
+                    <TableCell className="px-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-8"
+                        aria-expanded={abierta}
+                        aria-controls={abierta ? idDetalle : undefined}
+                        aria-label={detalle.etiqueta?.(row.original) ?? 'Ver detalle'}
+                        title={abierta ? 'Ocultar detalle' : 'Ver detalle'}
+                        onClick={() => alternar(row.id)}
+                      >
+                        <ChevronRight className={cn('transition-transform', abierta && 'rotate-90')} />
+                      </Button>
+                    </TableCell>
+                  )}
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id} className={cn(anySized && 'overflow-hidden', cell.column.columnDef.meta?.className)}>
+                      <CeldaEstable render={cell.column.columnDef.cell} contexto={cell.getContext()} />
+                    </TableCell>
+                  ))}
+                </TableRow>
+                {abierta && (
+                  <TableRow className="bg-muted/30 hover:bg-muted/30">
+                    <TableCell id={idDetalle} colSpan={columnasVisibles ?? headers.length + 1} className="px-4 py-3 whitespace-normal">
+                      {detalle.render(row.original)}
+                    </TableCell>
+                  </TableRow>
+                )}
+              </Fragment>
+            )
+          })
         ) : (
           <TableRow>
-            <TableCell colSpan={columns.length} className="h-24 text-center text-sm text-muted-foreground">
+            <TableCell colSpan={columns.length + corrimiento} className="h-24 text-center text-sm text-muted-foreground">
               {mensajeVacio}
             </TableCell>
           </TableRow>
