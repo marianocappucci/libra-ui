@@ -58,6 +58,9 @@ export const ORIGEN_VENTA = 'venta'
 /** Igual a `MENSAJE_QR_SIN_CONEXION` del motor: el aviso del QR apagado dice lo mismo que el 409 si igual se pide. */
 export const MENSAJE_QR_SIN_CONEXION = 'Sin conexión: el cobro con QR de MercadoPago no está disponible. Cobrá con otro medio.'
 export const TEXTO_CARTEL_SIN_CONEXION = 'Sin conexión: las ventas se cobran y se imprime el ticket; se facturan solas al volver.'
+/** El cartel de un nodo que no vende en un mostrador sino que encola facturas y cartas de porte (LibraCargo, LibraClub; ADR-094). Lleva el
+ *  límite legal: sin conexión no se puede emitir la CPE y el camión no puede viajar sin ella. */
+export const TEXTO_CARTEL_SIN_CONEXION_CON_COLA = 'Sin conexión: las facturas y las cartas de porte quedan en cola y se emiten solas al volver. Hasta entonces no hay CPE válida para viajar.'
 export const MENSAJE_QUEDO_PARA_FACTURAR = 'Quedó para facturar al volver la conexión.'
 export const ETIQUETA_PENDIENTE_DE_FACTURAR = 'Pendiente de facturar (sin conexión)'
 export const ETIQUETA_VENTA_SIN_CONEXION = 'Venta sin conexión'

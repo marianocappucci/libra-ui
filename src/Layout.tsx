@@ -197,7 +197,8 @@ export function createLayout<TUser = { role?: string; name?: string }>({
   // LibraEdge (ADR-077): con `true` (o la ruta y el intervalo), el layout consulta `GET /api/nodo/conexion` y, en un nodo
   // sin conexión, muestra arriba del contenido el `CartelSinConexion`. Fuera de un nodo (o si el producto no monta la
   // ruta) no muestra nada y deja de consultar. Sin la prop, ni un pedido más: es el layout de siempre.
-  conexionDelNodo?: boolean | { ruta?: string; intervaloMs?: number }
+  // `texto` cambia la frase del cartel para un producto que encola facturas y cartas de porte en vez de vender (ADR-094).
+  conexionDelNodo?: boolean | { ruta?: string; intervaloMs?: number; texto?: ReactNode }
   // La barra de estado del pie (ADR-083): con `true` (o la ruta y el hook de la sucursal del producto), el layout pide
   // `GET /api/estado-del-sistema` al montar y cada pocos minutos, y muestra al pie una línea con LibraEdge, el usuario y
   // la sucursal, ARCA, el respaldo y la versión. Si el producto no monta la ruta, no muestra nada. Sin la prop, nada.
