@@ -1,6 +1,6 @@
 // Los componentes de LibraEdge en la pantalla (ADR-077): el cartel de un nodo sin conexión y las piezas de la bandeja de
 // comprobantes pendientes. La lógica (la consulta compartida, los hooks y los textos) está en `nodo-offline.ts`.
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { ReceiptText, WifiOff } from 'lucide-react'
 
 import { api, ApiError } from './api-client'
@@ -16,8 +16,13 @@ import { Button } from '@/components/ui/button'
 /** El cartel fijo de un nodo sin conexión. Fuera de un nodo, o con conexión, no dibuja nada. Lo monta `createLayout`
  *  con `conexionDelNodo: true`; un producto con layout propio lo pone arriba del contenido.
  *  Lleva la marca de LibraEdge (ADR-079), en la variante chica: el que sigue atendiendo sin internet es él, y es la misma
- *  marca que el cajero ve en el instalador y en la PC. */
-export function CartelSinConexion({ ruta: rutaPedida, intervaloMs, className }: { ruta?: string; intervaloMs?: number; className?: string } = {}) {
+ *  marca que el cajero ve en el instalador y en la PC.
+ *
+ *  `texto` cambia la frase para un producto que no vende en un mostrador: el de las ventas («se cobran y se imprime el ticket») no
+ *  sirve en LibraCargo ni en LibraClub, donde se encolan facturas y cartas de porte (`TEXTO_CARTEL_SIN_CONEXION_CON_COLA`, ADR-094). */
+export function CartelSinConexion(
+  { ruta: rutaPedida, intervaloMs, texto, className }: { ruta?: string; intervaloMs?: number; texto?: ReactNode; className?: string } = {},
+) {
   const { sinConexion, aFacturar } = useConsultarConexionDelNodo({ ruta: rutaPedida, intervaloMs })
   if (!sinConexion) return null
   return (
@@ -31,7 +36,7 @@ export function CartelSinConexion({ ruta: rutaPedida, intervaloMs, className }: 
     >
       <MarcaProducto producto="libraedge" variante="favicon" className="h-5 w-5" />
       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
-        <span>{TEXTO_CARTEL_SIN_CONEXION}</span>
+        <span>{texto ?? TEXTO_CARTEL_SIN_CONEXION}</span>
         {aFacturar > 0 && <span className="font-medium">{ventasParaFacturar(aFacturar)}</span>}
       </div>
     </AvisoEstado>

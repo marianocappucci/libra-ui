@@ -1,6 +1,6 @@
 // LibraEdge en la pantalla (ADR-077; el motor es ADR-074 de libracore): la consulta compartida de la conexión del nodo,
 // el cartel «sin conexión», el QR apagado, el 409 `factura_pendiente` como aviso y las piezas de la bandeja.
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
@@ -18,7 +18,7 @@ import { _resetCacheDeMedios } from '../src/comercio/medios-pago'
 import { MEDIO_DEL_QR, lineaVacia, type LineaDePago } from '../src/comercio/pagos'
 import type { Venta } from '../src/comercio/tipos'
 import {
-  INTERVALO_CONEXION_MS, MENSAJE_QR_SIN_CONEXION, RUTA_CONEXION_DEL_NODO, TEXTO_CARTEL_SIN_CONEXION,
+  INTERVALO_CONEXION_MS, MENSAJE_QR_SIN_CONEXION, RUTA_CONEXION_DEL_NODO, TEXTO_CARTEL_SIN_CONEXION, TEXTO_CARTEL_SIN_CONEXION_CON_COLA,
   _reiniciarConexionDelNodo, codigoDelError, consultarConexionDelNodo, esVentaSinConexion, marcarSinConexion,
   refrescarConexionDelNodo, useConexionDelNodo, ventasParaFacturar,
 } from '../src/nodo-offline'
@@ -222,7 +222,7 @@ describe('el cartel «sin conexión»', () => {
   })
 
   const Icono = () => <svg />
-  function montarLayout(conexionDelNodo?: boolean | { ruta?: string }) {
+  function montarLayout(conexionDelNodo?: boolean | { ruta?: string; texto?: ReactNode }) {
     const Layout = createLayout({
       productName: 'VentaLibra', productInitial: 'V', navItems: [{ to: '/ventas', label: 'Ventas', icon: Icono }],
       useAuth: () => ({ user: { role: 'admin', name: 'Cajera Demo' }, logout: vi.fn() }), conexionDelNodo,
@@ -243,6 +243,15 @@ describe('el cartel «sin conexión»', () => {
     responder({ '/api/edge/conexion': NODO_SIN_CONEXION })
     montarLayout({ ruta: '/api/edge/conexion' })
     expect(await screen.findByText(TEXTO_CARTEL_SIN_CONEXION)).toBeTruthy()
+  })
+
+  it('un producto que encola facturas y cartas de porte cambia la frase, y el cartel dice que no hay CPE válida (ADR-094)', async () => {
+    responder({ [RUTA_CONEXION_DEL_NODO]: NODO_SIN_CONEXION })
+    montarLayout({ texto: TEXTO_CARTEL_SIN_CONEXION_CON_COLA })
+    const cartel = await screen.findByText(TEXTO_CARTEL_SIN_CONEXION_CON_COLA)
+    expect(cartel.textContent).toContain('Hasta entonces no hay CPE válida para viajar.')
+    // La frase de las ventas ya no sale: en LibraCargo no se cobra con ticket.
+    expect(screen.queryByText(TEXTO_CARTEL_SIN_CONEXION)).toBeNull()
   })
 
   it('🔴 sin la prop el layout no pide nada', async () => {

@@ -18,6 +18,13 @@
 // siempre (409 desde libracore v1.186.1). Por eso en esa fila no hay casilla ni «Descartar»: hay `BotonFacturarPendientesDelNodo`
 // y la etiqueta `EtiquetaVentaSinConexion`. Fuera de un nodo no hay ninguna fila así y la tabla queda como siempre.
 //
+// ## La cola de comprobantes del nodo (ADR-094)
+//
+// Con `cola`, la pantalla suma una pestaña «Cola de ARCA»: las facturas y cartas de porte que el nodo dejó pendientes sin conexión
+// (`cola_arca`, libracore ADR-079), con sus acciones (`PanelDeLaCola`). Es otra tabla que la de acá —de máquina, con un estado por
+// pedido— pero se mira en el mismo lugar. Sin `cola` (o fuera de un nodo, o si el producto no monta la ruta) no hay pestaña ni se
+// pregunta nada: la pantalla queda como siempre.
+//
 // Lo que resuelve contra el consumidor son los `@/components/ui/*`, como `MpBandeja`.
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
@@ -25,7 +32,9 @@ import { FileText, Info, ReceiptText, X } from 'lucide-react'
 
 import { api, ApiError } from './api-client'
 import { BadgeEstado } from './badge-estado'
+import { PanelDeLaCola, type PanelDeLaColaProps } from './BandejaDeLaCola'
 import { BotonFacturarPendientesDelNodo, EtiquetaVentaSinConexion } from './CartelSinConexion'
+import { ESTADOS_ABIERTOS, estaAbierto, useColaDelNodo } from './cola-del-nodo'
 import {
   ORIGENES_DE_COMPROBANTE, RUTA_COMPROBANTES_PENDIENTES, TEXTO_BANDEJA_DE_CONSULTA, TITULO_BANDEJA, periodoDelComprobante,
   type BandejaDeComprobantesDatos, type ComprobantePendiente, type OrigenDeComprobante, type PrefillComprobantes,
@@ -41,7 +50,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
-type Pestana = 'pendientes' | 'facturados' | 'descartados'
+type Pestana = 'pendientes' | 'facturados' | 'descartados' | 'cola'
 
 export type BandejaDeComprobantesProps = {
   /** Qué hacer con los comprobantes elegidos, ya armado el formulario (`POST .../facturar-prefill`, que no escribe nada):
@@ -64,6 +73,10 @@ export type BandejaDeComprobantesProps = {
   introduccion?: ReactNode
   /** Los orígenes del producto, que suman a los de la familia (`ORIGENES_DE_COMPROBANTE`) o los pisan. */
   origenes?: Record<string, OrigenDeComprobante>
+  /** Suma la pestaña «Cola de ARCA» (ADR-094): los pedidos de `cola_arca` del nodo. `true` con la ruta de siempre
+   *  (`/api/nodo/cola`); un objeto para cambiar la `ruta`, `puedeResolver`, `describir` o `introduccion` (los de `PanelDeLaCola`).
+   *  La pestaña sólo aparece en un nodo con la ruta montada. */
+  cola?: boolean | Omit<PanelDeLaColaProps, 'cola' | 'className'>
   className?: string
 }
 
@@ -90,18 +103,27 @@ function Origen({ tipo, producto, origenes }: { tipo: string; producto: string; 
 
 export function BandejaDeComprobantes({
   alFacturar, puedeDescartar = true, rutaFactura = rutaDeFacturaPorDefecto, ruta = RUTA_COMPROBANTES_PENDIENTES,
-  rutaFacturarPendientes, titulo = TITULO_BANDEJA, introduccion, origenes: origenesPropios, className,
+  rutaFacturarPendientes, titulo = TITULO_BANDEJA, introduccion, origenes: origenesPropios, cola: colaPedida, className,
 }: BandejaDeComprobantesProps) {
   const [data, setData] = useState<BandejaDeComprobantesDatos | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [tab, setTab] = useState<Pestana>('pendientes')
+  const [tabElegida, setTab] = useState<Pestana>('pendientes')
   const [elegidos, setElegidos] = useState<number[]>([])
   const [descartando, setDescartando] = useState<ComprobantePendiente | null>(null)
   const [motivo, setMotivo] = useState('')
   const [saving, setSaving] = useState(false)
 
   const origenes = useMemo(() => ({ ...ORIGENES_DE_COMPROBANTE, ...origenesPropios }), [origenesPropios])
+
+  // La cola se pide aunque la pestaña no esté abierta: el conteo del rótulo y saber si hay pestaña dependen de ella.
+  const conCola = colaPedida !== undefined && colaPedida !== false
+  const propiedadesDeLaCola = typeof colaPedida === 'object' ? colaPedida : undefined
+  const usoDeLaCola = useColaDelNodo({ ruta: propiedadesDeLaCola?.ruta, estados: ESTADOS_ABIERTOS, habilitada: conCola })
+  const hayCola = conCola && usoDeLaCola.disponible === true
+  const abiertosDeLaCola = usoDeLaCola.pedidos.filter((p) => estaAbierto(p.estado)).length
+  // Si la cola deja de estar (el nodo ya no contesta la ruta) y era la pestaña abierta, se vuelve a la primera.
+  const tab: Pestana = tabElegida === 'cola' && !hayCola ? 'pendientes' : tabElegida
 
   const load = useCallback(async () => {
     setError(null)
@@ -341,7 +363,7 @@ export function BandejaDeComprobantes({
       <Card>
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
           <CardTitle className="text-base">
-            {tab === 'pendientes' ? 'Pendientes' : tab === 'facturados' ? 'Facturados' : 'Descartados'}
+            {tab === 'pendientes' ? 'Pendientes' : tab === 'facturados' ? 'Facturados' : tab === 'descartados' ? 'Descartados' : 'Cola de ARCA'}
           </CardTitle>
           <Tabs value={tab} onValueChange={(v) => { setTab(v as Pestana); setElegidos([]) }}>
             <TabsList>
@@ -350,10 +372,13 @@ export function BandejaDeComprobantes({
               </TabsTrigger>
               <TabsTrigger value="facturados">Facturados</TabsTrigger>
               <TabsTrigger value="descartados">Descartados</TabsTrigger>
+              {hayCola && <TabsTrigger value="cola">Cola de ARCA{usoDeLaCola.cola ? ` (${abiertosDeLaCola})` : ''}</TabsTrigger>}
             </TabsList>
           </Tabs>
         </CardHeader>
         <CardContent className="grid gap-3">
+          {tab === 'cola' && <PanelDeLaCola cola={usoDeLaCola} {...propiedadesDeLaCola} />}
+
           {tab === 'pendientes' && textoIntroduccion !== null && (
             <p className="flex items-start gap-2 text-sm text-muted-foreground">
               <Info className="mt-0.5 size-4 shrink-0" />
@@ -361,7 +386,7 @@ export function BandejaDeComprobantes({
             </p>
           )}
 
-          {loading && !data
+          {tab === 'cola' ? null : loading && !data
             ? <p className="text-sm text-muted-foreground">Cargando…</p>
             : filas.length === 0
               ? (
