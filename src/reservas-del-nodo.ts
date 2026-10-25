@@ -12,6 +12,8 @@
 // 🔴 `provisoria` ya es otra cosa en LibraClub: `EstadoReserva.PROVISORIA`, el turno retenido esperando el pago del portal. Por eso la
 // etiqueta del id negativo dice «Sin subir al central» y no «Provisoria»: el cajero vería dos «Provisoria» con significados opuestos.
 
+import { esIdProvisorio } from './ids-provisorios'
+
 export const ESTADO_EN_CONFLICTO = 'en_conflicto'
 
 export const ETIQUETA_SIN_SUBIR = 'Sin subir al central'
@@ -20,12 +22,9 @@ export const AYUDA_SIN_SUBIR = 'Se dio en este equipo sin conexión y todavía n
 export const AYUDA_EN_CONFLICTO = 'Chocó con otra reserva que llegó antes al central, así que no ocupa la cancha. Hay que llamar al cliente y moverla o cancelarla.'
 
 /** ¿Es una reserva dada en un nodo que todavía no tiene su id definitivo? Los ids del central son positivos; los del nodo, negativos
- *  (hasta que el central la aplica y el id definitivo baja por el espejo). */
-export function esReservaProvisoria(id: number | string | null | undefined): boolean {
-  if (id === null || id === undefined || id === '') return false
-  const n = Number(id)
-  return Number.isInteger(n) && n < 0
-}
+ *  (hasta que el central la aplica y el id definitivo baja por el espejo). Es `esIdProvisorio`: la misma regla que usa el paciente o
+ *  cliente «Provisorio» (ADR-095). */
+export const esReservaProvisoria = esIdProvisorio
 
 /** ¿Está en conflicto? Compara con el `estado` de la reserva de LibraClub. */
 export const estaEnConflicto = (estado: string | null | undefined): boolean => estado === ESTADO_EN_CONFLICTO

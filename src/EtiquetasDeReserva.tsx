@@ -2,7 +2,7 @@
 // (y por qué la primera no se llama «Provisoria») están en `reservas-del-nodo.ts`.
 import { CalendarX, CloudUpload } from 'lucide-react'
 
-import { BadgeEstado } from './badge-estado'
+import { EtiquetaDelNodo } from './EtiquetaDelNodo'
 import {
   AYUDA_EN_CONFLICTO, AYUDA_SIN_SUBIR, ETIQUETA_EN_CONFLICTO, ETIQUETA_SIN_SUBIR, esReservaProvisoria, estaEnConflicto,
 } from './reservas-del-nodo'
@@ -10,9 +10,9 @@ import {
 /** La reserva se dio en este nodo y todavía no subió al central (id negativo). Azul: está en camino. */
 export function EtiquetaReservaSinSubir({ className }: { className?: string }) {
   return (
-    <BadgeEstado tono="curso" title={AYUDA_SIN_SUBIR} data-slot="etiqueta-reserva-sin-subir" className={className}>
-      <CloudUpload className="size-3.5" aria-hidden="true" />{ETIQUETA_SIN_SUBIR}
-    </BadgeEstado>
+    <EtiquetaDelNodo
+      tono="curso" icono={CloudUpload} texto={ETIQUETA_SIN_SUBIR} ayuda={AYUDA_SIN_SUBIR} slot="etiqueta-reserva-sin-subir" className={className}
+    />
   )
 }
 
@@ -20,9 +20,9 @@ export function EtiquetaReservaSinSubir({ className }: { className?: string }) {
  *  nada, pide que alguien la resuelva. */
 export function EtiquetaReservaEnConflicto({ className }: { className?: string }) {
   return (
-    <BadgeEstado tono="atencion" title={AYUDA_EN_CONFLICTO} data-slot="etiqueta-reserva-en-conflicto" className={className}>
-      <CalendarX className="size-3.5" aria-hidden="true" />{ETIQUETA_EN_CONFLICTO}
-    </BadgeEstado>
+    <EtiquetaDelNodo
+      tono="atencion" icono={CalendarX} texto={ETIQUETA_EN_CONFLICTO} ayuda={AYUDA_EN_CONFLICTO} slot="etiqueta-reserva-en-conflicto" className={className}
+    />
   )
 }
 
