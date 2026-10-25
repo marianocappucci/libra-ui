@@ -43,7 +43,10 @@ const exports: [string, string][] = Object.entries(mapa).flatMap(([clave, destin
 // `fondo-de-login.ts` (ADR-092) sólo lo usa `createLogin`: el producto elige el
 // fondo con `producto` o `fondo`, no importando el mapa. `imagenes.d.ts` son
 // tipos para el typecheck del kit, no un módulo.
-const INTERNOS = new Set<string>(['CaptchaAltcha.tsx', 'fondo-de-login.ts', 'imagenes.d.ts'])
+//
+// `EtiquetaDelNodo.tsx` (ADR-095) es la pastilla común de las etiquetas de reserva, de turno y de «Provisorio»: lo que un producto
+// importa son las etiquetas, no la pastilla.
+const INTERNOS = new Set<string>(['CaptchaAltcha.tsx', 'fondo-de-login.ts', 'imagenes.d.ts', 'EtiquetaDelNodo.tsx'])
 
 describe('el mapa de exports de package.json', () => {
   it('🔴 cada destino existe en disco', () => {
