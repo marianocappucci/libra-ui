@@ -233,6 +233,27 @@ describe('ClienteDetalle', () => {
     expect(screen.queryByRole('button', { name: 'Consultar en ARCA' })).toBeNull()
   })
 
+  it('sin `conMercadoPago` la edición no ofrece la facturación automática por MP, y conserva el valor', async () => {
+    responder({ '/api/clientes/1': { ...FICHA, auto_facturar: 1 } })
+    const user = userEvent.setup()
+    montar('/clientes/1', <ClienteDetalle conMercadoPago={false} conComprobantes={false} conConsultaCuit={false} />)
+    await screen.findByText('Datos del cliente')
+    await user.click(screen.getByRole('button', { name: /Editar/ }))
+    const dialogo = await screen.findByRole('dialog')
+    expect(within(dialogo).queryByText('Facturación automática por MercadoPago')).toBeNull()
+    expect(within(dialogo).queryByRole('switch')).toBeNull()
+  })
+
+  it('con MercadoPago (el default) la edición sí ofrece la facturación automática', async () => {
+    responder({ '/api/clientes/1': FICHA })
+    const user = userEvent.setup()
+    montar('/clientes/1', <ClienteDetalle />)
+    await screen.findByText('Datos del cliente')
+    await user.click(screen.getByRole('button', { name: /Editar/ }))
+    const dialogo = await screen.findByRole('dialog')
+    expect(within(dialogo).getByText('Facturación automática por MercadoPago')).toBeTruthy()
+  })
+
   it('los alias: agrega, quita con confirmación, y muestra el error', async () => {
     let alias = FICHA.alias_facturacion
     responder({
