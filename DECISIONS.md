@@ -2257,3 +2257,18 @@ horizontal en ninguno.
 - (d) **La lista no filtra ni pagina.** Alcanza para los pocos turnos que quedan a revisar; si hubiera cientos, hay que filtrar por fecha desde la ruta del producto.
 - (e) Verificado en jsdom con los stubs del kit; **no se miró en un navegador** (el ancho en celular de las tarjetas, el aspecto de las etiquetas en modo oscuro).
 - (f) El kit no tiene `CHANGELOG` (ADR-094, g): la convención es ADR + fila del README + versión en `package.json` y lock. El `CHANGELOG` de cada producto lo escribe su PR de pin.
+
+## ADR-096 — LibraInmo entra a la familia: identidad lima, marca de casa y llave, y fondo de login (0.182.0)
+
+**Estado:** propuesta (2026-10-27).
+
+**Contexto.** LibraInmo es el producto nuevo para inmobiliarias que administran alquileres (repo `librainmo`, piloto NA Propiedades). Ya tiene dev y demo; le faltaban el color, la marca y el fondo del login que tienen los ocho. El humano eligió el color y aprobó el dibujo sobre una muestra (casa y llave en fucsia, lima y celeste, al lado de las marcas de la familia y con el login de fondo), y pasó la foto del hero (libre o con licencia, según el humano).
+
+**Qué ya existe** (se miró antes). La identidad es una tabla en tres lugares (`src/identidad.ts`, `libra_web_kit/identidad.py` y la página `identidad-de-producto-diseno` del wiki, ADR-033) que un test compara. La marca se dibuja plana en `marcas.ts` y toma volumen con `volumenComun` (ADR-034 y ADR-090). El fondo del login sale de `FONDOS_DE_LOGIN` (ADR-092). No hace falta nada nuevo: es una fila más en cada registro.
+
+**Decisión.**
+1. **Identidad:** `librainmo`, «Inmobiliarias que administran alquileres», lima `#65a30d` (oscuro `#4d7c0f`, claro `#f7fee7`, sobre oscuro `#a3e635`) e ícono de lucide `House`. El lima es el único tono libre que no se confunde con los ocho ni con los complementos. No llega a 4,5:1 contra blanco (3,0:1), así que `colorAccion` es el oscuro, como en RestoLibra, MedLibra y VentaLibra.
+2. **Marca:** las dos piezas de la familia. La casa blanca (puerta en `tinta`, ventanas y ojo de buey en `claro`) y la llave amarilla, que la pisa abajo a la derecha con su sombra corta. El favicon es la casa sola con la puerta y un círculo amarillo, porque a 16 px la llave se empasta. Tonos: tinta `#1a2e05`, claro `#d9f99d`.
+3. **Fondo del login:** la foto, de 1600 × 900 y 180 KB, encuadrada al `60% center`, con el velo de la familia teñido del lima (`brillo` al 25 % y el vertical en `rgba(16,26,4,…)`). La landing, cuando se haga, copia estas capas: es el sentido inverso del de los ocho, porque acá el login existió primero.
+
+**Para los productos.** LibraInmo sube el pin, llama a `aplicarIdentidad('librainmo')` y pasa `producto="librainmo"` a `Layout` y `Login`. Los ocho no cambian. `libra-web-kit` suma la fila cuando se haga la landing.

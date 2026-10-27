@@ -3,7 +3,7 @@
 // La tabla de abajo está escrita a mano A PROPÓSITO, copiada de la página `identidad-de-producto-diseno` del wiki: es el guardián de divergencia.
 // `src/identidad.ts`, `libra_web_kit/identidad.py` (las landings) y esa página son la misma tabla en tres lugares; si alguien cambia un color en
 // uno solo, este test falla. Cambiar un valor acá sin cambiarlo en los otros dos es justo lo que NO hay que hacer.
-import { Coffee, CalendarCheck, HeartPulse, Headset, ReceiptText, ScanBarcode, Trophy, Truck } from 'lucide-react'
+import { Coffee, CalendarCheck, HeartPulse, Headset, House, ReceiptText, ScanBarcode, Trophy, Truck } from 'lucide-react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { FONDO_DEL_ITEM_ACTIVO, IDENTIDAD, aplicarIdentidad, cssDeIdentidad, defectosDelProducto, menuActivoDeProducto, type Producto } from '../src/identidad'
 import { COLORES_DE_TEMA, aplicarTema, validarTema } from '../src/tema'
@@ -18,11 +18,12 @@ const TABLA_DEL_WIKI = {
   libradesk: { nombre: 'LibraDesk', rubro: 'Empresas de IT', color: '#4f46e5', colorOscuro: '#4338ca', colorClaro: '#eef2ff', colorSobreOscuro: '#818cf8', icono: Headset },
   libracargo: { nombre: 'LibraCargo', rubro: 'Agencias de cargas', color: '#012c83', colorOscuro: '#001d5c', colorClaro: '#eef3fc', colorSobreOscuro: '#7aa2f7', icono: Truck },
   libraclub: { nombre: 'LibraClub', rubro: 'Complejos deportivos', color: '#017b4b', colorOscuro: '#015c38', colorClaro: '#ecfdf5', colorSobreOscuro: '#34d399', icono: Trophy },
+  librainmo: { nombre: 'LibraInmo', rubro: 'Inmobiliarias que administran alquileres', color: '#65a30d', colorOscuro: '#4d7c0f', colorClaro: '#f7fee7', colorSobreOscuro: '#a3e635', icono: House },
 } as const satisfies Record<Producto, object>
 
 const PRODUCTOS = Object.keys(TABLA_DEL_WIKI) as Producto[]
-// Los tres cuyo color de marca no llega a 4,5:1 contra blanco: ahí el botón usa `colorOscuro`.
-const CON_COLOR_DE_ACCION_OSCURO: Producto[] = ['restolibra', 'medlibra', 'ventalibra']
+// Los cuatro cuyo color de marca no llega a 4,5:1 contra blanco: ahí el botón usa `colorOscuro`.
+const CON_COLOR_DE_ACCION_OSCURO: Producto[] = ['restolibra', 'medlibra', 'ventalibra', 'librainmo']
 
 // Luminancia relativa y razón de contraste de WCAG 2.x.
 function luminancia(hex: string): number {
@@ -38,9 +39,9 @@ function contraste(a: string, b: string): number {
 }
 
 describe('el registro de identidad', () => {
-  it('tiene exactamente los ocho productos', () => {
+  it('tiene exactamente los nueve productos', () => {
     expect(Object.keys(IDENTIDAD).sort()).toEqual([...PRODUCTOS].sort())
-    expect(PRODUCTOS).toHaveLength(8)
+    expect(PRODUCTOS).toHaveLength(9)
   })
 
   it.each(PRODUCTOS)('🔴 %s coincide con la tabla del wiki', (p) => {
@@ -265,12 +266,12 @@ describe('defectosDelProducto', () => {
     expect(d.barraLateralFondo).toBe('#1c1e22')
   })
 
-  it('los ocho tienen acento y franja del ítem activo propios; el fondo del ítem es el grafito común (ADR-043)', () => {
+  it('los nueve tienen acento y franja del ítem activo propios; el fondo del ítem es el grafito común (ADR-043)', () => {
     const acentos = new Set(PRODUCTOS.map((p) => defectosDelProducto(p).acento))
     const franjas = new Set(PRODUCTOS.map((p) => defectosDelProducto(p).menuActivoBorde))
     const fondos = new Set(PRODUCTOS.map((p) => defectosDelProducto(p).menuActivoFondo))
-    expect(acentos.size).toBe(8)
-    expect(franjas.size).toBe(8)
+    expect(acentos.size).toBe(9)
+    expect(franjas.size).toBe(9)
     expect(fondos).toEqual(new Set([FONDO_DEL_ITEM_ACTIVO]))
   })
 })

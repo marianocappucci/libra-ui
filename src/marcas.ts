@@ -54,6 +54,7 @@ const TONOS: Record<Marca, { tinta: string; claro: string }> = {
   libradesk: { tinta: '#1e1b4b', claro: '#c7d2fe' },
   libracargo: { tinta: '#001d5c', claro: '#93b4f0' },
   libraclub: { tinta: '#022c1c', claro: '#a7f3d0' },
+  librainmo: { tinta: '#1a2e05', claro: '#d9f99d' },
   libraedge: { tinta: '#083344', claro: '#a5f3fc' },
   librabot: { tinta: '#4c0519', claro: '#fecdd3' },
 }
@@ -165,6 +166,22 @@ ${repetir([[75, 37], [90, 37], [82.5, 45], [75, 53], [90, 53], [82.5, 61]], ([x,
 <circle cx="34" cy="34" r="10" fill="${AMARILLO}" ${corte(c, 6)}/>
 <path d="M25.5 30a11 11 0 0 0 17 0" fill="none" stroke="${c.tinta}" stroke-width="2" opacity=".35"/>`,
 
+  // La casa y la llave (2026-10-27, elegida sobre una muestra): la propiedad y quien la administra. La llave pisa la casa abajo a la derecha.
+  librainmo: (c) => `
+<rect x="10" y="100" width="76" height="4" rx="2" fill="${BLANCO}" opacity=".3"/>
+<path d="M45.5 21.5Q50 18 54.5 21.5L83 45.5Q86 48 86 52V92a6 6 0 0 1-6 6H20a6 6 0 0 1-6-6V52Q14 48 17 45.5Z" fill="${BLANCO}"/>
+<rect x="24" y="56" width="14" height="13" rx="3" fill="${c.claro}"/>
+<rect x="62" y="56" width="14" height="13" rx="3" fill="${c.claro}"/>
+<path d="M42 98V76a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v22z" fill="${c.tinta}"/>
+<rect x="44" y="34" width="12" height="12" rx="6" fill="${c.claro}"/>
+<g transform="rotate(-35 82 88)">
+<circle cx="82" cy="88" r="13" fill="${AMARILLO}" ${corte(c, 8)}/>
+<rect x="91" y="84.5" width="25" height="7" rx="3.5" fill="${AMARILLO}" ${corte(c, 8)}/>
+<rect x="104" y="89" width="4.5" height="9" rx="2" fill="${AMARILLO}"/>
+<rect x="111" y="89" width="4.5" height="6" rx="2" fill="${AMARILLO}"/>
+<circle cx="82" cy="88" r="5" fill="${c.fondo}"/>
+</g>`,
+
   // La nube de la central atrás, translúcida (está, pero el local no depende de ella), la PC del local adelante y el círculo de sincronía:
   // lo que se vendió sin internet sube solo al volver.
   libraedge: (c) => `
@@ -241,6 +258,12 @@ ${repetir([[38, 7], [50, 5], [60, 9], [74, 5], [84, 7]], ([x, w]) => `<rect x="$
 ${repetir([[50, 30], [71, 30], [60.5, 43], [50, 56], [71, 56]], ([x, y]) => `<circle cx="${x}" cy="${y}" r="4" fill="${c.claro}"/>`)}
 </g>
 <circle cx="27" cy="88" r="14" fill="${AMARILLO}" ${corte(c, 8)}/>`,
+
+  // La casa sola, con la puerta y la ventana redonda en amarillo: a 16 px la llave se empasta.
+  librainmo: (c) => `
+<path d="M54 12Q60 7.5 66 12L106 44Q110 47.5 110 53V102a8 8 0 0 1-8 8H18a8 8 0 0 1-8-8V53Q10 47.5 14 44Z" fill="${BLANCO}"/>
+<path d="M46 110V80a6 6 0 0 1 6-6h16a6 6 0 0 1 6 6v30z" fill="${c.tinta}"/>
+<circle cx="60" cy="48" r="9" fill="${AMARILLO}"/>`,
 
   // La PC del local sola, con la luz prendida: a 16 px el círculo de sincronía y la nube se empastan.
   libraedge: (c) => `
