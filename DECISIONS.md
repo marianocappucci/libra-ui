@@ -1957,6 +1957,12 @@ Las 37 pantallas del kit que importaban `@/components/ui/dialog` (50 `DialogCont
 **Consecuencias.** MINOR (**0.169.0**). Cada producto suma `barraDeEstado: true` a su `createLayout` y monta la ruta del motor; LibraDesk pasa `useSucursal` con su selector. Un pie `sticky` o `fixed` propio de una pantalla tiene que correrse con `--alto-barra-de-estado` (los cuatro que hay ya lo hacen).
 
 **Tests.** `test/estado-del-sistema.test.tsx` (18): los textos (cuánto hace, LibraEdge en nodo y central, ARCA al día / por vencer / vencido / ilegible / servicio, respaldo, el peor nivel); en el layout (sin la prop no pide; administrador con todo y abajo del contenido; en el celular el texto en `sr-only`; el detalle con teclado; sin la ruta no dibuja ni vuelve a pedir; la sucursal del producto; otra ruta; la conexión del cartel gana); el refresco (un reloj para dos barras y el intervalo del servidor, cinco minutos por defecto, al volver a la pestaña con el mínimo de 30 s, pestaña oculta, un 500 deja lo último). `exports-del-paquete` con los dos módulos nuevos. La reserva de espacio (espaciador del alto de la barra, la variable y `scroll-padding-bottom`, el detalle que no la cambia, la izquierda del layout) tiene su test.
+**Addendum (2026-10-27, v0.183.0): «Falló el respaldo nocturno».** Con libracore v1.200.0 el bloque `respaldo` trae
+`motivo` y `nocturno` (addendum del ADR-075 del motor). La línea corta dice «Falló el respaldo nocturno» con
+`motivo == "fallo"` (manda sobre «Falló la copia externa»; el detalle dice los dos) y el detalle distingue «falló» (con
+la fecha del intento, «avisá a soporte»), «no corrió» y «corrió pero no dejó un archivo nuevo». Con un motor anterior
+(`motivo` ausente) se comporta como antes.
+
 ## ADR-084 — «Sucursal sin internet»: en el local se entra siempre por la copia local (0.170.0)
 
 **Estado:** aceptada (2026-10-20). El humano, probando un nodo de ContaLibra en una VM, entró desde la PC del local a la versión en la nube (`demo.contalibra.com.ar`); al cortar internet esa pestaña dejó de andar y tuvo que abrir `localhost:8000` y volver a loguearse. Nadie sabe que en la PC con LibraEdge se entra **siempre** por la copia local, aunque haya internet (el nodo sincroniza por detrás). Decisión: que sea obvio, sin una app aparte.

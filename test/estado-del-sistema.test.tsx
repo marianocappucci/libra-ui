@@ -126,6 +126,23 @@ describe('los textos', () => {
       .toContain('no corrió')
   })
 
+  it('el respaldo nocturno que falló, el que no corrió y el que no dejó archivo (libracore v1.200.0)', () => {
+    const viejo = { nivel: 'atencion' as const, ultimo: '2026-10-17T06:00:00+00:00', horas_desde_el_ultimo: 75, externo: null }
+    const fallo = { ...viejo, nivel: 'error' as const, motivo: 'fallo' as const,
+      nocturno: { ultimo_intento: '2026-10-20T06:45:00+00:00', fallo: true } }
+    expect(textoRespaldo(fallo)).toBe('Falló el respaldo nocturno')
+    expect(detalleRespaldo(fallo).join(' ')).toContain('El respaldo de anoche falló (')
+    expect(detalleRespaldo(fallo).join(' ')).not.toContain('no corrió')
+    // El fallo del nocturno manda sobre el de la copia externa en la línea corta; el detalle dice los dos.
+    const ambos = { ...fallo, externo: { al_dia: false, fallo: true, ultimo: null } }
+    expect(textoRespaldo(ambos)).toBe('Falló el respaldo nocturno')
+    expect(detalleRespaldo(ambos).join(' ')).toContain('La última copia a tu nube falló')
+    expect(detalleRespaldo({ ...viejo, motivo: 'no_corrio', nocturno: null }).join(' ')).toContain('no corrió')
+    expect(detalleRespaldo({ ...viejo, motivo: 'viejo', nocturno: { ultimo_intento: null, fallo: false } }).join(' '))
+      .toContain('no dejó un archivo nuevo')
+    expect(textoRespaldo({ ...viejo, motivo: 'no_corrio' })).toBe('Respaldo hace 3 días')
+  })
+
   it('el nivel de la barra es el peor', () => {
     expect(nivelGeneral(ADMIN)).toBe('atencion')
     expect(nivelGeneral({ ...ADMIN, arca: null })).toBe('ok')
