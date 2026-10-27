@@ -51,6 +51,10 @@ export type EstadoRespaldo = {
   nivel: NivelDelSistema
   ultimo: string | null
   horas_desde_el_ultimo: number | null
+  /** Por qué no está en `ok` (libracore v1.200.0, addendum del ADR-075). Un motor anterior no lo manda. */
+  motivo?: 'fallo' | 'sin_respaldos' | 'no_corrio' | 'viejo' | null
+  /** El último intento del respaldo de la noche, `null` si nunca corrió en esta instancia. */
+  nocturno?: { ultimo_intento: string | null; fallo: boolean } | null
   externo: { al_dia: boolean; fallo: boolean; ultimo: string | null } | null
 }
 
@@ -296,8 +300,9 @@ export function detalleArca(a: EstadoArca): string {
   return `El certificado de ARCA${servicio} vence${cuando}: pedí uno nuevo antes, desde Configuración → ARCA.`
 }
 
-/** El respaldo, corto: «Respaldo hace 3 h», «Sin respaldos», «Copia externa con error». */
+/** El respaldo, corto: «Respaldo hace 3 h», «Sin respaldos», «Falló el respaldo nocturno», «Falló la copia externa». */
 export function textoRespaldo(r: EstadoRespaldo): string {
+  if (r.motivo === 'fallo') return 'Falló el respaldo nocturno'
   if (r.externo?.fallo) return 'Falló la copia externa'
   if (!r.ultimo) return 'Sin respaldos'
   return `Respaldo ${haceCuanto(r.horas_desde_el_ultimo)}`.trim()
@@ -307,7 +312,15 @@ export function detalleRespaldo(r: EstadoRespaldo): string[] {
   const lineas = [r.ultimo
     ? `Último respaldo: ${fechaHora(r.ultimo)} (${haceCuanto(r.horas_desde_el_ultimo)}).`
     : 'Todavía no hay respaldos de esta instancia.']
-  if (r.ultimo && r.nivel !== 'ok' && !r.externo?.fallo) lineas.push('El respaldo de todas las noches no corrió: revisalo.')
+  if (r.motivo === 'fallo') {
+    const cuando = r.nocturno?.ultimo_intento ? ` (${fechaHora(r.nocturno.ultimo_intento)})` : ''
+    lineas.push(`El respaldo de anoche falló${cuando}: avisá a soporte.`)
+  } else if (r.motivo === 'viejo') {
+    lineas.push('El respaldo de anoche corrió pero no dejó un archivo nuevo: avisá a soporte.')
+  } else if (r.ultimo && r.nivel !== 'ok' && !r.externo?.fallo && r.motivo !== null) {
+    // `no_corrio`, o un motor anterior que no manda `motivo` (`undefined`): lo único que se sabía era la fecha.
+    lineas.push('El respaldo de todas las noches no corrió: revisalo.')
+  }
   if (r.externo) {
     lineas.push(r.externo.fallo
       ? 'La última copia a tu nube falló: revisá el resguardo externo en Configuración.'
