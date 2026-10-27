@@ -16,6 +16,7 @@ import gestiolibra from './fondos-de-login/gestiolibra.jpg'
 import librabot from './fondos-de-login/librabot.svg'
 import libracargo from './fondos-de-login/libracargo.jpg'
 import libraclub from './fondos-de-login/libraclub.jpg'
+import librainmo from './fondos-de-login/librainmo.jpg'
 import libradesk from './fondos-de-login/libradesk.jpg'
 import medlibra from './fondos-de-login/medlibra.jpg'
 import restolibra from './fondos-de-login/restolibra.jpg'
@@ -74,6 +75,12 @@ export const FONDOS_DE_LOGIN: Record<MarcaConFondo, Fondo> = {
   libraclub: {
     imagen: libraclub, encuadre: '90% 45%', base: '#04231a',
     velo: [brillo('1,123,75', 0.32), veloVertical('rgba(2,25,17,.86)', 'rgba(2,25,17,.68)', 'rgba(2,25,17,.90)')],
+  },
+  // La foto la eligió el humano (2026-10-27, libre o con licencia): casa moderna con pileta al atardecer. El velo es el de la familia,
+  // teñido de la tinta del lima; la landing (`librainmo_web`) copia estas capas.
+  librainmo: {
+    imagen: librainmo, encuadre: '60% center', base: '#101a04',
+    velo: [brillo('101,163,13', 0.25), veloVertical('rgba(16,26,4,.86)', 'rgba(16,26,4,.70)', 'rgba(16,26,4,.90)')],
   },
   // Su hero es un dibujo (burbujas de chat), no una foto: va igual, con su velo.
   librabot: {

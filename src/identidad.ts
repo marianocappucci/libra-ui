@@ -14,7 +14,7 @@
 //                        contra blanco (RestoLibra 3,6:1, MedLibra 3,7:1, VentaLibra 3,2:1); en el resto, el `color` de marca.
 // El ítem activo del menú (ADR-036) no tiene campo propio: se deriva de estos (`menuActivoDeProducto`), así no hay una tabla más que mantener.
 import {
-  CalendarCheck, Coffee, HeartPulse, Headset, ReceiptText, ScanBarcode, Trophy, Truck,
+  CalendarCheck, Coffee, HeartPulse, Headset, House, ReceiptText, ScanBarcode, Trophy, Truck,
   type LucideIcon,
 } from 'lucide-react'
 import { faviconDeMarca } from './marcas'
@@ -29,6 +29,7 @@ export type Producto =
   | 'libradesk'
   | 'libracargo'
   | 'libraclub'
+  | 'librainmo'
 
 export type IdentidadDeProducto = {
   /** Cómo se escribe el nombre del producto. */
@@ -130,6 +131,18 @@ export const IDENTIDAD: Record<Producto, IdentidadDeProducto> = {
     colorSobreOscuro: '#34d399',
     colorAccion: '#017b4b',
     icono: Trophy,
+  },
+  // Lima, elegido por el humano sobre una muestra (2026-10-27): ningún otro producto ni complemento lo usa. No llega a 4,5:1 contra blanco
+  // (3,0:1), así que el botón usa el tono oscuro, como RestoLibra, MedLibra y VentaLibra.
+  librainmo: {
+    nombre: 'LibraInmo',
+    rubro: 'Inmobiliarias que administran alquileres',
+    color: '#65a30d',
+    colorOscuro: '#4d7c0f',
+    colorClaro: '#f7fee7',
+    colorSobreOscuro: '#a3e635',
+    colorAccion: '#4d7c0f',
+    icono: House,
   },
 }
 
