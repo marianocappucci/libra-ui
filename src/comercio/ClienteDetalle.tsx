@@ -386,6 +386,10 @@ export function ClienteDetalle(
                         </FormItem>
                       )}
                     />
+                    {/* Sólo con MercadoPago: un producto que lo apaga (`conMercadoPago={false}`, LibraInmo o VentaLibra)
+                        no ofrece en la edición un interruptor que la ficha ya esconde. El valor guardado se conserva
+                        igual: el formulario lo lee del cliente y lo devuelve sin tocar. */}
+                    {conMercadoPago && (
                     <FormField
                       control={form.control}
                       name="auto_facturar"
@@ -404,6 +408,7 @@ export function ClienteDetalle(
                         </FormItem>
                       )}
                     />
+                    )}
                     {/* «Consultar en ARCA» (ADR-070): completa nombre, dirección y condición de IVA con el padrón, sin pisar lo ya
                         escrito sin preguntar. Va en su propia línea: el mensaje y el aviso de «datos distintos» son más anchos que un campo. */}
                     {conConsultaCuit && (
