@@ -2278,3 +2278,40 @@ horizontal en ninguno.
 3. **Fondo del login:** la foto, de 1600 × 900 y 180 KB, encuadrada al `60% center`, con el velo de la familia teñido del lima (`brillo` al 25 % y el vertical en `rgba(16,26,4,…)`). La landing, cuando se haga, copia estas capas: es el sentido inverso del de los ocho, porque acá el login existió primero.
 
 **Para los productos.** LibraInmo sube el pin, llama a `aplicarIdentidad('librainmo')` y pasa `producto="librainmo"` a `Layout` y `Login`. Los ocho no cambian. `libra-web-kit` suma la fila cuando se haga la landing.
+
+## ADR-097 — La configuración y el registro de los avisos: `ConfiguracionDeAvisos` y `RegistroDeAvisos` (0.184.0)
+
+**Estado:** propuesta (2026-10-28).
+
+**Contexto.** El motor suma `libracore.avisos` (ADR-090, libracore v1.202.0): WhatsApp por Evolution API, mail por el SMTP de la instancia y un registro de lo enviado, con su router en `/api/avisos` (`GET`/`PUT /config`, `POST /probar`, `GET /envios`). El ADR-090 deja explícito que «la pantalla es del kit o del producto». La van a necesitar LibraClub, GestioLibra y MedLibra, y la regla de la familia es escribirla una vez.
+
+**Qué ya existe** (se miró antes). `ConfiguracionSmtp` es el molde: un secreto sólo de escritura donde la clave se omite del cuerpo si no se tipeó nada (`cuerpoAGuardar`) y una casilla para quitarlo; el token de MercadoPago sigue la misma regla. `BadgeEstado`/`AvisoEstado` ponen los tonos, `TablaOTarjetas` hace tabla en ancho y tarjetas en angosto, `codigoDelError` y `CODIGO_SOLO_EN_EL_CENTRAL` ya leen el 409 del nodo (ADR-094), `RadioGroup` es del kit (ADR-076) y `Logs` ya fijó cómo se ve un paginador («Mostrando 1–20 de 143»). No había nada de avisos.
+
+**Decisión.**
+1. **`libra-ui/avisos`** (módulo sin pantalla): los tipos de lo que contesta el router (`EstadoDeAvisos`, `Envio`, `ResultadoDePrueba`), `clienteDeAvisos(basePath)` con los cuatro pedidos, `cuerpoParaGuardar`, `enmascararDestino` y los textos compartidos. El prefijo es `/api/avisos` por defecto, igual que el del router.
+2. **`ConfiguracionDeAvisos`** (`basePath`, `demo`, `className`). Resumen de cómo está WhatsApp y el correo; selector de modo con su explicación («Registro: arma los mensajes pero no manda nada», «Evolution: manda de verdad desde el número vinculado»); URL, instancia y API key; y una tarjeta «Probar envío» a un número.
+   - **La apikey es sólo de escritura.** El campo arranca vacío, el aviso «Cargada» sale de `apikey_cargada`, la clave `apikey` **sólo viaja si se tipeó algo**, y sacarla es la casilla «Quitar la apikey guardada» (`quitar_apikey`), que le gana a lo tipeado. Es la regla de `ConfiguracionSmtp`, con su test.
+   - **Por qué no manda** sale del `motivo` del motor, sin reinterpretarlo.
+   - **409 `solo_en_el_central`** (nodo de LibraEdge, en `PUT` y en `probar`): un aviso fijo explica que se configura desde el central y la pantalla queda de consulta. No se sabe de antemano (el `GET` no lo dice), así que se detecta en la primera escritura.
+   - **Demo.** El motor no dice en el `GET` que es una demo. El producto lo pasa con `demo` (Evolution deshabilitado y un aviso de entrada); sin esa prop, la pantalla muestra igual el 422 del motor al guardar y entiende como demo una prueba «simulada» con Evolution guardado.
+   - **502** de Evolution: «Evolution no pudo mandar la prueba: <motivo>. Revisá la URL, la instancia y la apikey…». El motor ya lo devuelve como 502 para que el kit no mande al login, y un test lo sostiene.
+   - La prueba usa **lo guardado**: con cambios sin guardar la pantalla lo avisa.
+3. **`RegistroDeAvisos`** (`basePath`, `esAdmin`, `limite`, `porPagina`, `etiquetaDelTipo`, `titulo`, `className`). Fecha, canal, destino, tipo, estado (`BadgeEstado`) y detalle, con filtros por canal y estado **que se piden al motor** y un paginador en la pantalla.
+   - El motor no pagina: devuelve los últimos `limite` (hasta 500). Se pide una vez y se muestra de a `porPagina` (20); si llegan tantos como el límite, avisa que hay más viejos.
+   - **El destino llega completo** (`GET /envios` trae el teléfono y el mail tal cual; el registro existe para contestar «¿le llegó?»). Con `esAdmin` se ve entero; sin esa prop se enmascara (`••••••••1234`, `a•••@dominio`). El default es el seguro. El router es sólo de administrador, así que el producto la monta detrás de su gate y pasa `esAdmin`.
+   - El `tipo` lo pone quien avisa: `etiquetaDelTipo` deja que el producto lo rotule; sin ella se muestra legible (`recordatorio_24h` → «Recordatorio 24h»).
+   - Un estado que el kit no conoce (un motor más nuevo) se ve con su nombre en neutro; no rompe.
+
+**Lo que no hace.** No manda ni decide qué se avisa. No prueba el canal de correo (el SMTP tiene su «Probar conexión» en Configuración). No filtra por `tipo` en pantalla (el cliente lo admite). No decide dónde vive: la pantalla «Avisos» y su entrada de menú son del producto, y en una sola pantalla cada una va con el título que le toca (ADR-040, ADR-035).
+
+**Para los productos.** Suben el pin a 0.184.0 y el motor a libracore v1.202.0, montan `build_avisos_router(require_admin=…, smtp_config=…)` y ponen en su pantalla de administrador:
+
+    import { ConfiguracionDeAvisos } from 'libra-ui/ConfiguracionDeAvisos'
+    import { RegistroDeAvisos } from 'libra-ui/RegistroDeAvisos'
+
+    <ConfiguracionDeAvisos demo={esDemo} />
+    <RegistroDeAvisos esAdmin etiquetaDelTipo={(t) => TIPOS_DE_AVISO[t] ?? t} />
+
+**Consecuencias.** MINOR (**0.184.0**), sólo piezas nuevas y un módulo; ningún producto cambia hasta que las monte. Cada producto con una pantalla de administrador (LibraClub, GestioLibra, MedLibra) las usa tal cual.
+
+**Tests.** `test/ConfiguracionDeAvisos.test.tsx` (carga y `basePath`; la apikey que no se muestra; modos con su explicación; motivo del motor; guardar sin tocar la apikey, con una, y quitándola; el 422; probar OK, simulada, 409 y 422; el 502 que no dispara el login; el nodo en `PUT` y en `probar`; la demo), `test/RegistroDeAvisos.test.tsx` (vacío y con filas, destino enmascarado y entero, paginación, aviso del límite, filtros que se piden al motor, error, estado desconocido) y `test/avisos.test.ts` (`cuerpoParaGuardar`, `enmascararDestino`, rutas del cliente). `exports-del-paquete` cubre las tres líneas nuevas de `exports`.
