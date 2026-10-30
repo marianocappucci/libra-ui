@@ -45,6 +45,54 @@ beforeEach(() => {
   configurarTerminosPendientes(() => {})
 })
 
+// ── 0. Sin contrato (marca propia sin sus Términos, libraauth ADR-030) ───────────────────
+
+describe('sin contrato', () => {
+  // Lo que devuelve libraauth cuando la instancia es de marca propia y todavía no tiene sus Términos: no hay versión ni texto.
+  const SIN_CONTRATO = {
+    version: '', vigente_desde: '', hash_texto: '', pendiente: true, puede_aceptar: false, sin_contrato: true,
+  }
+
+  it('dice que faltan los Términos y no le pide a quien los mira que le pida a otro que acepte', async () => {
+    fetchMock.mockImplementation(() => Promise.resolve(json(SIN_CONTRATO)))
+    render(<PantallaTerminos onSalir={vi.fn()} />)
+
+    await screen.findByTestId('terminos-sin-contrato')
+    expect(screen.getByText(/todavía no tiene cargados sus Términos y Condiciones/i)).toBeInTheDocument()
+    // Nada del contrato vacío: ni la línea de versión, ni la huella, ni el aviso de «sólo el responsable».
+    expect(screen.queryByText(/Versión/)).toBeNull()
+    expect(screen.queryByText(/Huella SHA-256/i)).toBeNull()
+    expect(screen.queryByText(/Sólo el responsable de la cuenta/i)).toBeNull()
+    expect(screen.queryByText(/Para seguir usando el sistema hace falta la conformidad/i)).toBeNull()
+    expect(screen.queryByRole('button', { name: /Aceptar y continuar/i })).toBeNull()
+    expect(screen.queryByRole('checkbox')).toBeNull()
+  })
+
+  it('🔴 sigue habiendo salida: se puede cerrar la sesión', async () => {
+    fetchMock.mockImplementation(() => Promise.resolve(json(SIN_CONTRATO)))
+    const salir = vi.fn()
+    render(<PantallaTerminos onSalir={salir} />)
+    await screen.findByTestId('terminos-sin-contrato')
+    await userEvent.click(screen.getByRole('button', { name: /Cerrar sesión/i }))
+    expect(salir).toHaveBeenCalledTimes(1)
+  })
+
+  it('con marca propia no queda «Libra» a la vista', async () => {
+    fetchMock.mockImplementation(() => Promise.resolve(json(SIN_CONTRATO)))
+    const { container } = render(<PantallaTerminos onSalir={vi.fn()} />)
+    await screen.findByTestId('terminos-sin-contrato')
+    expect(container.textContent).not.toMatch(/libra/i)
+  })
+
+  it('un backend anterior (sin `sin_contrato`) se ve como siempre', async () => {
+    fetchMock.mockImplementation(() => Promise.resolve(json(ESTADO)))
+    render(<PantallaTerminos onSalir={vi.fn()} />)
+    await screen.findByText(/Huella SHA-256/i)
+    expect(screen.queryByTestId('terminos-sin-contrato')).toBeNull()
+    expect(screen.getByText(/Versión 1\.0/)).toBeInTheDocument()
+  })
+})
+
 // ── 1. Nadie queda encerrado ────────────────────────────────────────────────
 
 describe('salidas', () => {

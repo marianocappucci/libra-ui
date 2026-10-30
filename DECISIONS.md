@@ -2371,3 +2371,19 @@ horizontal en ninguno.
 - Los textos de los productos (fuera de esta librería) y los de `libracore` (PDF, mails) los audita cada repo.
 - El `<title>`/favicon previos al JavaScript (PR 15).
 
+## ADR-100 — La pantalla de Términos «sin contrato»: una cuenta de marca propia sin sus Términos (0.187.0)
+
+**Estado:** aceptada (2026-10-30). Hallado probando los Términos con una sesión real en `ventalibra-dev` (marca blanca, `marca-blanca-piloto-diseno`).
+
+**Contexto.** Con marca propia y sin Términos propios, `libraauth` (ADR-030) frena la instancia y contesta `/terminos` con `sin_contrato: true`, versión y huella vacías y `puede_aceptar: false`. `PantallaTerminos` no conocía ese caso y mostraba: «Versión · vigente desde el» sin datos, un recuadro en blanco, la huella vacía y «Sólo el responsable de la cuenta —un usuario con rol de administrador— puede aceptar estos Términos. Pedile que ingrese al sistema». Se lo decía **al administrador**, que es quien miraba: no tenía a quién pedírselo y no entendía qué faltaba.
+
+**Decisión.** `EstadoTerminos` suma `sin_contrato?: boolean` (ausente en un backend anterior: la pantalla es la de siempre) y, con `sin_contrato`, la pantalla:
+- dice que **la cuenta todavía no tiene cargados sus Términos** y que no hay nada que aceptar todavía;
+- explica quién los carga («quien te brinda el servicio») y que, cuando estén, quien administra la cuenta podrá leerlos y aceptarlos desde la misma pantalla;
+- **no** muestra la línea de versión, la huella, el aviso de «sólo el responsable» ni la casilla, y deja el botón de **cerrar sesión** (nadie queda encerrado);
+- no nombra a ninguna marca: sirve igual para el revendedor que para Libra.
+
+**No resuelve.** Que el administrador logueado no puede cargar los Términos desde la propia instancia estando frenada (403 `terminos_pendientes`): es a propósito, los carga el backoffice con el token de servicio, y el backoffice exige los Términos antes que la marca.
+
+**Tests:** `test/Terminos.test.tsx` («sin contrato»: el mensaje, lo que no aparece, la salida, ningún «libra» y que un backend anterior se ve como siempre); sin el cambio fallan tres.
+
