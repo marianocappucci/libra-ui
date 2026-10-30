@@ -2340,7 +2340,7 @@ horizontal en ninguno.
 
 **Lo que NO resuelve.**
 - El `<title>` y el favicon del `index.html` se ven hasta que corre el JavaScript, y un enlace compartido (WhatsApp, redes) lee ese HTML sin ejecutarlo. Para «estricta» ahí hace falta que el servidor reescriba el `index.html`: **queda fuera de este PR y del plan original**, y se anota como pendiente.
-- Los colores derivados de la identidad del producto (el ítem activo del menú, `--libra-menu-activo-*`) siguen siendo los del producto: sólo cambia el acento.
+- Los colores derivados de la identidad del producto (el ítem activo del menú, `--libra-menu-activo-*`) siguen siendo los del producto: sólo cambia el acento. *(Resuelto en ADR-099.)*
 - Hay nombres de producto que no vienen de `productName`: `LibraEdge` en `SucursalSinInternet` y `BarraDeEstado`, y los nombres en `identidad.ts`/`marcas.ts`. Los cubre la auditoría del PR 14 del plan.
 
 **Cómo lo adopta un producto** (PR 5 a 13): subir el pin, montar los routers de `libracore` (ADR-092) y, en `main.tsx`:
@@ -2351,3 +2351,23 @@ horizontal en ninguno.
 **Consecuencias.** MINOR (**0.185.0**): módulo nuevo y export `./marca`; sin la marca, `Layout`, `Login` y `PasswordReset` se ven exactamente igual (`test/Layout`, `Login` y `PasswordReset` sin cambios, 796 tests vecinos verdes). `PasswordReset` gana soporte de logo, pero sólo con marca propia.
 
 **Tests** (`test/marca.test.tsx`, 49): la forma (lo que se rechaza, sobre todo el logo ajeno); la carga (primera visita, caché, refresco de fondo, sin red, 500, 404, cuerpo roto, HTML con 200, tope de tiempo, caché corrupta); el documento (aplicar, restaurar, lo creado, `aplicarIdentidad` antes y después); el acento (defecto, el del tema le gana, contraste); y los tres componentes con un chequeo de que con marca propia **no queda «Libra» a la vista** (texto, `alt`, `title` y `aria-label`). Seis roturas deliberadas los ponen en rojo (identidad de Libra en el login, logo ajeno, `aplicarIdentidad` pisando, fondo, acento de la marca ganándole al tema, no restaurar el documento); una primera mutación del acento resultó equivalente y se rehízo.
+
+## ADR-099 — Auditoría de «Libra» a la vista: LibraEdge y la franja del menú con marca propia (0.186.0)
+
+**Estado:** aceptada (2026-10-30). PR 14 del piloto de marca blanca (`marca-blanca-piloto-diseno`); cierra los dos pendientes que anotó ADR-098.
+
+**Contexto.** ADR-098 reemplaza la identidad de Libra en `Layout`, `Login` y `PasswordReset`, que reciben su nombre por `productName`. Una auditoría de los textos de la librería (todo literal con «Libra» fuera de comentarios, `identidad.ts` y `marcas.ts`) encontró **dos** lugares más que no salen de `productName`, ambos de LibraEdge, y un color:
+- `BarraDeEstado`: la parte de la línea («LibraEdge: …»), su ícono y el título de la sección del detalle.
+- `CartelSinConexion` y `SucursalSinInternet`: el ícono de LibraEdge; esta última, además, el párrafo «Con **LibraEdge** la PC del local…».
+- La **franja del ítem activo del menú** (`--libra-menu-activo-borde`) la fija `aplicarIdentidad` con el color del producto: con marca propia el menú seguía en el naranja de VentaLibra.
+
+**Decisión.**
+1. **LibraEdge, con marca propia, se nombra por lo que hace**: `nombreDeLibraEdge(propia)` (`marca.ts`) devuelve «Sucursal sin internet» (el mismo nombre de la entrada del menú) y las tres piezas **no dibujan el ícono** de LibraEdge. Sin marca propia, todo igual que antes.
+2. **La franja del ítem activo es el color de la marca**, aclarado con `ajustarContraste` hasta 4,5:1 contra el grafito del ítem. Vive en `aplicarTema` (único escritor de esas variables, como el acento) y es un **defecto**: un `menuActivoBorde` explícito del tema le gana. Sin color de marca no se toca. El fondo del ítem es el grafito de la familia y no cambia.
+3. **Un test de auditoría** (`test/libra-visible.test.tsx`) monta las piezas con una marca ficticia y falla si en lo que ve o lee una persona (texto, `alt`, `title`, `aria-label`) aparece `libra`. Con `marca.test.tsx` (Login, Layout, PasswordReset) cubre las pantallas de la librería que se ven sin entrar a un módulo.
+
+**Lo que NO resuelve (anotado a propósito).**
+- **El instalador de LibraEdge** sigue siendo de Libra: el acceso directo se llama como el producto («VentaLibra»), los archivos son `libraedge-nodo-<producto>.exe` y la URL de descarga es de un repo de Libra. `SucursalSinInternet` los nombra tal cual porque es lo que el instalador crea. Hacerlo de marca blanca es trabajo del instalador (libraedge), no de esta pantalla.
+- Los textos de los productos (fuera de esta librería) y los de `libracore` (PDF, mails) los audita cada repo.
+- El `<title>`/favicon previos al JavaScript (PR 15).
+

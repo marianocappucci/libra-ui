@@ -6,6 +6,7 @@ import { ReceiptText, WifiOff } from 'lucide-react'
 import { api, ApiError } from './api-client'
 import { AvisoEstado, BadgeEstado } from './badge-estado'
 import { MarcaProducto } from './MarcaProducto'
+import { useMarca } from './marca'
 import {
   CODIGO_SIN_CONEXION, ETIQUETA_VENTA_SIN_CONEXION, MENSAJE_FACTURAR_AHORA_SIN_CONEXION, RUTA_FACTURAR_PENDIENTES_DEL_NODO,
   TEXTO_CARTEL_SIN_CONEXION, codigoDelError, marcarSinConexion, refrescarConexionDelNodo, useConexionDelNodo,
@@ -24,6 +25,7 @@ export function CartelSinConexion(
   { ruta: rutaPedida, intervaloMs, texto, className }: { ruta?: string; intervaloMs?: number; texto?: ReactNode; className?: string } = {},
 ) {
   const { sinConexion, aFacturar } = useConsultarConexionDelNodo({ ruta: rutaPedida, intervaloMs })
+  const { propia } = useMarca()
   if (!sinConexion) return null
   return (
     <AvisoEstado
@@ -34,7 +36,8 @@ export function CartelSinConexion(
       // quedaba sola en el primer renglón. 20 px = el alto de línea de `text-sm`, así que `items-start` la alinea al primero.
       className={`sticky top-0 z-10 flex items-start gap-3 bg-background ${className ?? ''}`}
     >
-      <MarcaProducto producto="libraedge" variante="favicon" className="h-5 w-5" />
+      {/* Con marca propia no se dibuja el ícono de LibraEdge (es de Libra): el texto alcanza (ADR-099). */}
+      {!propia && <MarcaProducto producto="libraedge" variante="favicon" className="h-5 w-5" />}
       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
         <span>{texto ?? TEXTO_CARTEL_SIN_CONEXION}</span>
         {aFacturar > 0 && <span className="font-medium">{ventasParaFacturar(aFacturar)}</span>}

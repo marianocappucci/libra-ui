@@ -187,6 +187,8 @@ export function mezclar(a: string, b: string, t: number): string {
 
 /** El fondo contra el que se mide un texto en cada modo (la tarjeta, y el tinte de éxito que se le pone encima en oscuro). */
 const FONDO_TEXTO_CLARO = '#ffffff'
+/** El grafito del ítem activo (`FONDO_DEL_ITEM_ACTIVO` de `identidad.ts`, que importa de acá: se repite para no hacer un ciclo). */
+const FONDO_ITEM_ACTIVO_DE_TEMA = '#2c2f35'
 const FONDO_TEXTO_OSCURO = '#162420'
 
 /** Acerca `hex` al negro (fondo claro) o al blanco (fondo oscuro) de a poco hasta que el contraste contra `fondo` llegue a `minimo`. Si ya
@@ -291,7 +293,13 @@ export function fijarAcentoDeMarca(hex: string | undefined, elemento?: HTMLEleme
 export function aplicarTema(tema: Tema, elemento: HTMLElement = document.documentElement): void {
   ultimoTema = tema
   const { tema: propio } = validarTema(tema)
-  const deMarca = acentoDeMarca && !propio.acento ? validarTema({ acento: acentoDeMarca }).tema : {}
+  const deMarca: Tema = acentoDeMarca && !propio.acento ? validarTema({ acento: acentoDeMarca }).tema : {}
+  // La franja del ítem activo del menú es, por defecto, el color del PRODUCTO (`aplicarIdentidad`): con marca propia tiene que ser el de la
+  // marca, o el menú sigue diciendo «VentaLibra» en naranja (ADR-099). Se aclara hasta leerse sobre el grafito de la barra; el fondo del ítem
+  // es el mismo grafito de siempre. Un `menuActivoBorde` explícito del tema le gana.
+  if (acentoDeMarca && !propio.menuActivoBorde) {
+    deMarca.menuActivoBorde = ajustarContraste(acentoDeMarca, FONDO_ITEM_ACTIVO_DE_TEMA, 4.5)
+  }
   const limpio = { ...deMarca, ...propio }
   for (const def of COLORES_DE_TEMA) {
     const variables = [def.variable, ...(def.tambien ?? [])]

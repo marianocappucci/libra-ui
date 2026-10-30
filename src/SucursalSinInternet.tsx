@@ -48,6 +48,7 @@ import { formatoCantidad } from './formatos'
 import { ICONOS } from './iconos-identidad'
 import { IDENTIDAD } from './identidad'
 import { MarcaProducto } from './MarcaProducto'
+import { nombreDeLibraEdge, useMarca } from './marca'
 import type { SeccionConfig } from './Configuracion'
 import { TituloPantalla } from './titulo-pantalla'
 import { Button } from '@/components/ui/button'
@@ -438,15 +439,16 @@ export function SucursalSinInternet({ ruta = RUTA_NODOS_OFFLINE, enConfiguracion
   const descargas = estado ? descargasDelNodo(estado) : null
   const puesto = estado ? descargasDePuesto(estado) : null
   const minutos = estado?.vinculacion_minutos ?? 15
+  const { propia: marcaPropia } = useMarca()
 
   return (
     <div className="space-y-6">
       {!enConfiguracion && <TituloPantalla icono={ICONOS.sucursalSinInternet}>Sucursal sin internet</TituloPantalla>}
 
       <div className="flex items-start gap-3 text-sm text-muted-foreground">
-        <MarcaProducto producto="libraedge" className="h-10 w-10 shrink-0" />
+        {!marcaPropia && <MarcaProducto producto="libraedge" className="h-10 w-10 shrink-0" />}
         <p>
-          Con <strong className="text-foreground">LibraEdge</strong> la PC del local sigue vendiendo cuando se corta
+          Con <strong className="text-foreground">{nombreDeLibraEdge(marcaPropia)}</strong> la PC del local sigue vendiendo cuando se corta
           internet: cobra e imprime el ticket, y al volver la conexión las ventas suben solas al central y se facturan.
           Está incluido en tu plan. Se instala una vez por sucursal: descargá el instalador, da de alta el nodo de la
           sucursal y, en la PC del local, ejecutá el instalador y escribí la dirección y el código que aparecen acá.
