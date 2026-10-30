@@ -12,6 +12,7 @@ import { api, ApiError, type User } from './api-client'
 import { PasswordInput } from './PasswordInput'
 import { useCaptcha } from './captcha'
 import { CampoCaptcha } from './CampoCaptcha'
+import { useMarcaVisible } from './marca'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -31,14 +32,21 @@ function Shell({ productName, productInitial, title, description, children }: {
   productName: string; productInitial: string; title: string
   description: string; children: ReactNode
 }) {
+  // La marca de la instancia (ADR-098): con marca propia, su nombre y su logo (o la inicial de su nombre). Sin ella, lo de siempre.
+  const marca = useMarcaVisible(productName, productInitial)
   return (
     <div className="flex min-h-svh items-center justify-center bg-muted/40 p-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground font-semibold">
-            {productInitial}
-          </div>
-          <CardTitle className="text-xl">{productName}</CardTitle>
+          {marca.logo ? (
+            // `max-w-none` por lo mismo que en Login.tsx: el preflight de Tailwind clampea toda imagen a `max-width: 100%`.
+            <img src={marca.logo.src} alt={marca.logo.alt ?? marca.nombre} className="mx-auto mb-2 block h-10 w-10 max-w-none object-contain" />
+          ) : (
+            <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground font-semibold">
+              {marca.inicial}
+            </div>
+          )}
+          <CardTitle className="text-xl">{marca.nombre}</CardTitle>
           <CardDescription>{description}</CardDescription>
         </CardHeader>
         <CardContent>

@@ -17,6 +17,7 @@ import {
   CalendarCheck, Coffee, HeartPulse, Headset, House, ReceiptText, ScanBarcode, Trophy, Truck,
   type LucideIcon,
 } from 'lucide-react'
+import { hayMarcaPropia } from './marca'
 import { faviconDeMarca } from './marcas'
 import { COLORES_DE_TEMA, ajustarContraste, type ClaveDeTema } from './tema'
 
@@ -249,6 +250,10 @@ export function aplicarIdentidad(producto: Producto): void {
     document.head.appendChild(estilo)
   }
   estilo.textContent = cssDeIdentidad(producto)
+
+  // Con marca propia (`marca.ts`, ADR-098) el favicon y el `theme-color` son los de la marca: esta función puede correr antes o después de
+  // `cargarMarca`, y no tiene que pisarlos.
+  if (hayMarcaPropia()) return
 
   let tema = document.head.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
   if (!tema) {
