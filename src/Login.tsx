@@ -18,6 +18,7 @@ import { CodigoPorDigitos } from './CodigoPorDigitos'
 import type { ProductLogo } from './branding'
 import type { Producto } from './identidad'
 import { MarcaProducto } from './MarcaProducto'
+import { useMarcaVisible } from './marca'
 import { estiloDeFondo, type MarcaConFondo } from './fondo-de-login'
 import { cn } from './utils'
 import { useCaptcha } from './captcha'
@@ -140,6 +141,9 @@ export function createLogin<TUser = User>({
       confirmarCodigo?: (desafio: string, codigo: string) => Promise<TUser>
     }
     const navigate = useNavigate()
+    // La marca de la instancia (ADR-098): con marca propia el nombre y el logo salen de ella, y no se dibuja el ícono ni el fondo de Libra.
+    const marca = useMarcaVisible(productName, productInitial)
+    const logoVisible = marca.reemplaza ? marca.logo : logo
     const [username, setUsername] = useState('')
     const [password, setPassword] = useState('')
     const [error, setError] = useState<string | null>(null)
@@ -298,7 +302,7 @@ export function createLogin<TUser = User>({
       }
     }
 
-    const marcaDelFondo = fondo === false ? undefined : (fondo ?? producto)
+    const marcaDelFondo = fondo === false ? undefined : (fondo ?? (marca.reemplaza ? undefined : producto))
 
     return (
       <div
@@ -308,24 +312,24 @@ export function createLogin<TUser = User>({
       >
         <Card className={cn('w-full max-w-sm', marcaDelFondo && 'border-white/10 shadow-2xl')}>
           <CardHeader className="text-center">
-            {producto ? (
+            {producto && !marca.reemplaza ? (
               <MarcaProducto producto={producto} className="mx-auto mb-2 h-12 w-12" />
-            ) : logo ? (
+            ) : logoVisible ? (
               <img
-                src={logo.src}
-                alt={logo.alt ?? productName}
+                src={logoVisible.src}
+                alt={logoVisible.alt ?? marca.nombre}
                 // `max-w-none` por lo mismo que en Layout.tsx: el preflight de
                 // Tailwind clampea toda imagen a `max-width: 100%`, y el logo
                 // tiene que medir lo que pide el producto, no lo que le deje el
                 // contenedor.
-                className={cn('mx-auto mb-2 block h-10 w-10 max-w-none object-contain', logo.className)}
+                className={cn('mx-auto mb-2 block h-10 w-10 max-w-none object-contain', logoVisible.className)}
               />
             ) : (
               <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground font-semibold">
-                {productInitial}
+                {marca.inicial}
               </div>
             )}
-            <CardTitle className={cn('text-xl', wordmarkClassName)}>{productName}</CardTitle>
+            <CardTitle className={cn('text-xl', wordmarkClassName)}>{marca.nombre}</CardTitle>
             <CardDescription>
               {demo ? 'Ingresá con tu código de acceso' : 'Iniciá sesión para continuar'}
             </CardDescription>
@@ -341,7 +345,7 @@ export function createLogin<TUser = User>({
             {demo && (
               <form onSubmit={entrarALaDemo} className="mb-4 grid gap-2">
                 <p className="text-center text-sm text-muted-foreground">
-                  Ésta es la demo pública de {productName}: entrás como «{demo.username}»,
+                  Ésta es la demo pública de {marca.nombre}: entrás como «{demo.username}»,
                   con datos de prueba que se reponen todos los días.
                 </p>
                 <Label htmlFor="codigo-demo">Código de acceso</Label>

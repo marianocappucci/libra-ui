@@ -272,10 +272,27 @@ export function validarTema(crudo: unknown): ResultadoDeTema {
   return { tema, errores }
 }
 
+// El acento de la MARCA de la instancia (`marca.ts`, ADR-098): el color por defecto de los botones y enlaces cuando el revendedor eligió uno.
+// Es un defecto, no una orden: un `acento` explícito del tema le gana. Vive acá, y no en `marca.ts`, porque `aplicarTema` es el único que
+// escribe esas variables y no puede haber dos escritores.
+let acentoDeMarca: string | undefined
+let ultimoTema: Tema = {}
+
+/** Fija (o saca, con `undefined`) el acento por defecto de la marca y vuelve a aplicar el último tema. Si el color no pasa el contraste
+ *  (`validarTema`), no se aplica: la marca no puede dejar un botón ilegible. */
+export function fijarAcentoDeMarca(hex: string | undefined, elemento?: HTMLElement): void {
+  if (hex === acentoDeMarca) return
+  acentoDeMarca = hex
+  if (typeof document !== 'undefined') aplicarTema(ultimoTema, elemento)
+}
+
 /** Fija el tema en un elemento (por defecto, `<html>`): un estilo en línea le gana al `:root` de `tema.css`. Lo que no está en el
  *  tema se limpia, así «restaurar valores por defecto» es aplicar `{}`. Calcula también el texto de los fondos. */
 export function aplicarTema(tema: Tema, elemento: HTMLElement = document.documentElement): void {
-  const { tema: limpio } = validarTema(tema)
+  ultimoTema = tema
+  const { tema: propio } = validarTema(tema)
+  const deMarca = acentoDeMarca && !propio.acento ? validarTema({ acento: acentoDeMarca }).tema : {}
+  const limpio = { ...deMarca, ...propio }
   for (const def of COLORES_DE_TEMA) {
     const variables = [def.variable, ...(def.tambien ?? [])]
     const deTexto = def.textoSobre ? [def.textoSobre.variable, ...(def.textoSobre.tambien ?? [])] : []

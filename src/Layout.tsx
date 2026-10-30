@@ -48,6 +48,7 @@ import { CambiarPassword } from './CambiarPassword'
 import type { ProductLogo } from './branding'
 import type { Producto } from './identidad'
 import { MarcaProducto } from './MarcaProducto'
+import { useMarcaVisible } from './marca'
 import { cn } from './utils'
 import { fijarModo, leerModo, suscribirseAlModo, type Modo } from './modo'
 import { CartelSinConexion } from './CartelSinConexion'
@@ -215,6 +216,10 @@ export function createLayout<TUser = { role?: string; name?: string }>({
 
   function AppSidebar() {
     const { user, logout } = useAuth()
+    // La marca de la instancia (ADR-098): con marca propia el nombre y el logo salen de ella y no se dibuja la identidad de Libra. Sin marca,
+    // `marca.nombre` es `productName` y todo lo de abajo es lo de siempre.
+    const marca = useMarcaVisible(productName, productInitial)
+    const logoVisible = marca.reemplaza ? marca.logo : logo
     const location = useLocation()
     const [cambiandoPassword, setCambiandoPassword] = useState(false)
     // El visitante de una demo pública ve **todos** los menús, incluidos los
@@ -238,13 +243,13 @@ export function createLayout<TUser = { role?: string; name?: string }>({
 
     const HeaderContent = (
       <>
-        {producto ? (
+        {producto && !marca.reemplaza ? (
           // Con la sidebar colapsada el encabezado deja 32 px de ancho útil: `MarcaProducto` ya viene con `h-8 w-8 shrink-0`.
           <MarcaProducto producto={producto} />
-        ) : logo ? (
+        ) : logoVisible ? (
           <img
-            src={logo.src}
-            alt={logo.alt ?? productName}
+            src={logoVisible.src}
+            alt={logoVisible.alt ?? marca.nombre}
             // `max-w-none` NO es decorativo. El preflight de Tailwind le pone
             // `max-width: 100%` a toda imagen, y con la sidebar colapsada el
             // contenedor del encabezado deja 15 px de ancho util (48 de la barra
@@ -252,11 +257,11 @@ export function createLayout<TUser = { role?: string; name?: string }>({
             // 15x32 en modo icono. El box de la inicial no tenia el problema
             // porque un div no lo alcanza esa regla — medido en el navegador el
             // 2026-08-16, no se ve en jsdom.
-            className={cn('block h-8 w-8 max-w-none shrink-0 object-contain', logo.className)}
+            className={cn('block h-8 w-8 max-w-none shrink-0 object-contain', logoVisible.className)}
           />
         ) : (
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground font-semibold">
-            {HeaderIcon ? <HeaderIcon className="size-4" /> : productInitial}
+            {HeaderIcon && !marca.reemplaza ? <HeaderIcon className="size-4" /> : marca.inicial}
           </div>
         )}
         {/* El interlineado de las dos lineas, MEDIDO en un navegador el
@@ -287,7 +292,7 @@ export function createLayout<TUser = { role?: string; name?: string }>({
           {/* `text-sidebar-foreground` va DESPUÉS de `wordmarkClassName` a propósito (ADR-043): los productos pasan el color del nombre pensado
               para el login, sobre blanco (`text-[#2d2d2d]`), y en la barra grafito no se leía. `cn` (tailwind-merge) descarta el color del
               producto y se queda con el de la barra; el tamaño y el peso del producto se conservan. */}
-          <span className={cn('truncate font-semibold leading-none', wordmarkClassName, 'text-sidebar-foreground dark:text-sidebar-foreground')}>{productName}</span>
+          <span className={cn('truncate font-semibold leading-none', wordmarkClassName, 'text-sidebar-foreground dark:text-sidebar-foreground')}>{marca.nombre}</span>
           {getUserSubtitle && user && getUserSubtitle(user) && (
             <span className="truncate text-xs leading-tight text-sidebar-foreground/70">{getUserSubtitle(user)}</span>
           )}

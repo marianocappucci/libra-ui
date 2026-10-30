@@ -202,6 +202,23 @@ aplicarTema(tema)                              // fija las variables en <html>; 
   (tope de 3 s): un color no puede impedir entrar al sistema.
 - Hoy están las fases 1 y 2. Las siguientes (pantalla del backoffice y el resto de los productos) no cambian esta API.
 
+## La marca de la instancia, para vender a marca blanca (`v0.185.0`, ADR-098)
+
+Una instancia de un revendedor lleva **su** nombre, logo y color. La guarda `libracore` (`marca_router`, ADR-092) y la SPA la lee de ella:
+
+```ts
+import { cargarMarca } from 'libra-ui/marca'
+void cargarMarca().finally(() => createRoot(document.getElementById('root')!).render(...))   // en main.tsx, en lugar del render directo
+```
+
+- **Sin marca propia no cambia nada.** `Layout`, `Login` y `PasswordReset` se ven como siempre.
+- **Con marca propia**: el nombre y el logo salen de la marca (o la inicial del nombre, sin logo), y **no se dibuja la identidad de Libra**
+  (su ícono ni el fondo de color del login). Cambian también el `<title>`, el favicon, el `apple-touch-icon` y el `theme-color`; el color de
+  la marca es el acento por defecto y un `acento` explícito del tema le gana.
+- **La primera visita espera** la respuesta (hasta 2 s); las siguientes aplican la guardada al instante y refrescan de fondo. Nunca lanza.
+- Si hay marca propia, `aplicarIdentidad` no pisa el favicon ni el `theme-color`: el orden de arranque no importa.
+- No resuelve el `<title>` ni el favicon del `index.html` (se ven hasta que corre el JS y un enlace compartido los lee sin ejecutarlo).
+
 ## El captcha «No soy un robot» y el nodo de LibraEdge (`v0.177.0`, ADR-091)
 
 `createLogin({ captchaPath })` y `createForgotPassword({ captchaPath })` consultan `GET {captchaPath}` al montar y dibujan el

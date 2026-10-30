@@ -2315,3 +2315,39 @@ horizontal en ninguno.
 **Consecuencias.** MINOR (**0.184.0**), sólo piezas nuevas y un módulo; ningún producto cambia hasta que las monte. Cada producto con una pantalla de administrador (LibraClub, GestioLibra, MedLibra) las usa tal cual.
 
 **Tests.** `test/ConfiguracionDeAvisos.test.tsx` (carga y `basePath`; la apikey que no se muestra; modos con su explicación; motivo del motor; guardar sin tocar la apikey, con una, y quitándola; el 422; probar OK, simulada, 409 y 422; el 502 que no dispara el login; el nodo en `PUT` y en `probar`; la demo), `test/RegistroDeAvisos.test.tsx` (vacío y con filas, destino enmascarado y entero, paginación, aviso del límite, filtros que se piden al motor, error, estado desconocido) y `test/avisos.test.ts` (`cuerpoParaGuardar`, `enmascararDestino`, rutas del cliente). `exports-del-paquete` cubre las tres líneas nuevas de `exports`.
+
+
+## ADR-098 — La marca de la instancia: `libra-ui/marca`, para vender a marca blanca (0.185.0)
+
+**Estado:** propuesta (2026-10-30), pedida por el humano para que un revendedor venda cualquiera de los productos con su nombre de fantasia. PR 2 de 14 del piloto (diseño en el wiki, `marca-blanca-piloto-diseno`). Consume `libracore.marca_router` (libracore ADR-092, `v1.205.0`).
+
+**Contexto.** El nombre (`productName`), el logo, el `<title>`, el favicon y el color de un producto están compilados: llegan como props de `createLayout`/`createLogin`/`createForgotPassword`, por `aplicarIdentidad` y por el `index.html`. Una instancia de un revendedor no tiene dónde cambiarlos. El tema de colores ya se carga en runtime desde la propia instancia (ADR-007/008); la marca sigue el mismo camino.
+
+**Qué ya existe** (se miró antes). `ProductLogo` (`branding.ts`) ya entra por prop y se dibuja en `Layout` y `Login`; `aplicarIdentidad` ya fija el favicon y el `theme-color`; `cargarTema` es el molde de la carga (caché en `localStorage`, tope de tiempo, nunca lanza). **No existía:** soporte de logo en `PasswordReset` (sólo la inicial), un almacén reactivo para algo que llega por red, ni forma de que el acento viniera de algo que no fuera el tema.
+
+**Decisión.** Un módulo `libra-ui/marca`:
+- **`cargarMarca({ url = '/api/marca', tiempoMs = 2000 })`**, en `main.tsx` antes de montar. Con una marca guardada en el navegador (incluso «sin marca») la aplica en el acto, devuelve sin esperar y refresca de fondo. **Sin nada guardado** (la primera visita) espera la respuesta hasta el tope, para que un login de marca blanca no arranque diciendo el nombre del producto; una respuesta buena se guarda y esa espera no se repite. Nunca lanza.
+- **Un almacén en memoria** (`leerMarca`, `suscribirMarca`, `useMarca`, `useMarcaVisible`) del que leen `Layout`, `Login` y `PasswordReset`.
+- **Precedencia con marca propia:** marca > `producto` > `logo` > `icon` > inicial. La identidad de Libra (`MarcaProducto`, el ícono del encabezado y el fondo de color del login) **se reemplaza cuando la marca trae nombre o logo**; un color solo cambia el acento y nada más. Sin logo, se dibuja la inicial **del nombre de la marca**. Un `fondo` pasado explícitamente al login se respeta.
+- **El documento:** `<title>`, favicon, `apple-touch-icon` y `theme-color`. Lo que había se **fotografía** la primera vez y se restaura si la marca cambia o se borra (y se quita lo que la marca había creado). `aplicarIdentidad` no pisa el favicon ni el `theme-color` si hay marca propia (`hayMarcaPropia()`), así que el orden de arranque no importa.
+- **El acento:** el color de la marca es el acento **por defecto** (`fijarAcentoDeMarca`, en `tema.ts`, que sigue siendo el único que escribe esas variables); un `acento` explícito del tema le gana, y un color que no pasa el contraste de `validarTema` no se aplica.
+
+**Por qué así.**
+- **La URL del logo se valida** (`/api/marca/logo` con `?v=` de 12 hex, del mismo origen). Lo demás —otro origen, `//host`, `javascript:`, `data:`, `..`— se descarta, venga de la red o de la caché: la marca es un dato que escribe un tercero (el revendedor).
+- **Un color solo no reemplaza la identidad.** Un revendedor que sólo eligió un color no pidió esconder el nombre del producto; pedirlo es traer nombre o logo.
+- **`fijarAcentoDeMarca` vive en `tema.ts`**, no en `marca.ts`: `aplicarTema` es el único escritor de `--primary` y dos escritores se pisarían. `tema.ts` no importa `marca.ts` (sin ciclo).
+- **Los íconos de la app instalable no pasan por acá:** el manifest lo sirve la instancia (ADR-092) con los íconos de la marca; la SPA sólo cambia el favicon y el `apple-touch-icon`, que el navegador lee del DOM.
+
+**Lo que NO resuelve.**
+- El `<title>` y el favicon del `index.html` se ven hasta que corre el JavaScript, y un enlace compartido (WhatsApp, redes) lee ese HTML sin ejecutarlo. Para «estricta» ahí hace falta que el servidor reescriba el `index.html`: **queda fuera de este PR y del plan original**, y se anota como pendiente.
+- Los colores derivados de la identidad del producto (el ítem activo del menú, `--libra-menu-activo-*`) siguen siendo los del producto: sólo cambia el acento.
+- Hay nombres de producto que no vienen de `productName`: `LibraEdge` en `SucursalSinInternet` y `BarraDeEstado`, y los nombres en `identidad.ts`/`marcas.ts`. Los cubre la auditoría del PR 14 del plan.
+
+**Cómo lo adopta un producto** (PR 5 a 13): subir el pin, montar los routers de `libracore` (ADR-092) y, en `main.tsx`:
+
+    import { cargarMarca } from 'libra-ui/marca'
+    void cargarMarca().finally(() => createRoot(document.getElementById('root')!).render(...))
+
+**Consecuencias.** MINOR (**0.185.0**): módulo nuevo y export `./marca`; sin la marca, `Layout`, `Login` y `PasswordReset` se ven exactamente igual (`test/Layout`, `Login` y `PasswordReset` sin cambios, 796 tests vecinos verdes). `PasswordReset` gana soporte de logo, pero sólo con marca propia.
+
+**Tests** (`test/marca.test.tsx`, 49): la forma (lo que se rechaza, sobre todo el logo ajeno); la carga (primera visita, caché, refresco de fondo, sin red, 500, 404, cuerpo roto, HTML con 200, tope de tiempo, caché corrupta); el documento (aplicar, restaurar, lo creado, `aplicarIdentidad` antes y después); el acento (defecto, el del tema le gana, contraste); y los tres componentes con un chequeo de que con marca propia **no queda «Libra» a la vista** (texto, `alt`, `title` y `aria-label`). Seis roturas deliberadas los ponen en rojo (identidad de Libra en el login, logo ajeno, `aplicarIdentidad` pisando, fondo, acento de la marca ganándole al tema, no restaurar el documento); una primera mutación del acento resultó equivalente y se rehízo.
