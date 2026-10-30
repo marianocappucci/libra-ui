@@ -78,6 +78,9 @@ export type EstadoTerminos = {
   hash_texto: string
   pendiente: boolean
   puede_aceptar: boolean
+  /** La instancia no tiene ningún contrato que mostrar (una marca propia sin sus Términos cargados, libraauth ADR-030): no hay nada
+   *  que aceptar, ni siquiera para un administrador. Ausente en un backend anterior. */
+  sin_contrato?: boolean
   aceptada_por?: string | null
   aceptada_at?: string | null
   texto?: string | null
@@ -102,6 +105,8 @@ export function PantallaTerminos({
   const [leido, setLeido] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
+  // Sin contrato (marca propia sin sus Términos): no hay texto, ni huella, ni a quién pedirle que acepte.
+  const sinContrato = estado?.sin_contrato === true
 
   useEffect(() => {
     api.get<EstadoTerminos>(`${basePath}?texto=1`)
@@ -134,14 +139,15 @@ export function PantallaTerminos({
           <h1 className="text-xl font-semibold text-card-foreground">
             Términos y Condiciones del Servicio
           </h1>
-          {estado && (
+          {estado && !sinContrato && (
             <p className="mt-1 text-sm text-muted-foreground">
               Versión {estado.version} · vigente desde el {estado.vigente_desde}
             </p>
           )}
           <p className="mt-2 text-sm text-muted-foreground">
-            Para seguir usando el sistema hace falta la conformidad del responsable
-            de la cuenta.
+            {sinContrato
+              ? 'Esta cuenta todavía no tiene cargados sus Términos y Condiciones, y sin ellos no se puede seguir usando el sistema.'
+              : 'Para seguir usando el sistema hace falta la conformidad del responsable de la cuenta.'}
           </p>
         </header>
 
@@ -150,6 +156,15 @@ export function PantallaTerminos({
           className="terminos-texto min-h-0 flex-1 overflow-y-auto px-6 py-5 text-sm leading-relaxed text-card-foreground"
         >
           {!estado && !error && <p className="text-muted-foreground">Cargando el contrato…</p>}
+          {sinContrato && (
+            <div data-testid="terminos-sin-contrato" className="space-y-2">
+              <p>No hay nada que aceptar todavía: los Términos los carga quien te brinda el servicio.</p>
+              <p className="text-muted-foreground">
+                Avisale que faltan. En cuanto estén cargados, quien administra la cuenta los va a poder leer y aceptar desde esta
+                misma pantalla; mientras tanto podés cerrar la sesión.
+              </p>
+            </div>
+          )}
           {estado?.texto_html && (
             // El HTML lo genera `libraauth.terminos.texto_html()` a partir del
             // mismo Markdown que se hashea, y es el mismo convertidor que arma
@@ -160,7 +175,7 @@ export function PantallaTerminos({
         </div>
 
         <footer className="space-y-3 border-t px-6 py-4">
-          {estado && (
+          {estado && !sinContrato && (
             <p className="text-xs text-muted-foreground">
               Huella SHA-256 del texto:{' '}
               <code className="break-all">{estado.hash_texto}</code>
@@ -168,7 +183,7 @@ export function PantallaTerminos({
           )}
           {error && <p className="text-sm text-destructive">{error}</p>}
 
-          {estado && !estado.puede_aceptar && (
+          {estado && !sinContrato && !estado.puede_aceptar && (
             <p className="text-sm text-muted-foreground">
               Sólo el responsable de la cuenta —un usuario con rol de administrador—
               puede aceptar estos Términos. Pedile que ingrese al sistema.
