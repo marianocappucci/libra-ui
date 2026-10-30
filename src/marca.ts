@@ -91,6 +91,14 @@ export function useMarca(): Marca {
   return useSyncExternalStore(suscribirMarca, leerMarca, () => MARCA_VACIA)
 }
 
+/** Cómo se llama LibraEdge en pantalla (ADR-099): con marca propia no se dice «LibraEdge» (es un nombre de Libra, y no sale de `productName`):
+ *  se nombra lo que hace, igual que la entrada del menú. */
+export const NOMBRE_DE_LIBRAEDGE = 'LibraEdge'
+export const NOMBRE_NEUTRO_DE_LIBRAEDGE = 'Sucursal sin internet'
+export function nombreDeLibraEdge(marcaPropia: boolean): string {
+  return marcaPropia ? NOMBRE_NEUTRO_DE_LIBRAEDGE : NOMBRE_DE_LIBRAEDGE
+}
+
 /** Lo que `Layout`, `Login` y `PasswordReset` dibujan, resuelto contra las props del producto. */
 export type MarcaVisible = {
   nombre: string

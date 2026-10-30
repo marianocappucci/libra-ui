@@ -18,6 +18,7 @@ import {
 } from './estado-del-sistema'
 import { ICONOS } from './iconos-identidad'
 import { MarcaProducto } from './MarcaProducto'
+import { nombreDeLibraEdge, useMarca } from './marca'
 import { useConexionDelNodo } from './nodo-offline'
 import { cn } from './utils'
 
@@ -79,7 +80,10 @@ function Seccion({ titulo, nivel = 'ok', lineas }: { titulo: string; nivel?: Niv
 }
 
 /** Las partes de la línea, en orden: LibraEdge, usuario y sucursal, ARCA, respaldo. */
-function partes(d: EstadoDelSistema, nombre: string | null, sucursal: string | null, edge: { en_linea?: boolean; a_facturar?: number }) {
+function partes(
+  d: EstadoDelSistema, nombre: string | null, sucursal: string | null, edge: { en_linea?: boolean; a_facturar?: number },
+  marcaPropia: boolean,
+) {
   const lista: ReactNode[] = []
   const le = d.libraedge
   if (le) {
@@ -88,8 +92,8 @@ function partes(d: EstadoDelSistema, nombre: string | null, sucursal: string | n
       ? { ...le, en_linea: edge.en_linea, a_facturar: edge.a_facturar ?? le.a_facturar, nivel: (edge.en_linea ? 'ok' : 'atencion') as NivelDelSistema }
       : le
     lista.push(
-      <Parte key="edge" slot="estado-libraedge" nivel={vivo.nivel} texto={`LibraEdge: ${partesLibraEdge(vivo).join(' · ')}`}>
-        <MarcaProducto producto="libraedge" variante="favicon" className="size-3.5 shrink-0 rounded-sm" />
+      <Parte key="edge" slot="estado-libraedge" nivel={vivo.nivel} texto={`${nombreDeLibraEdge(marcaPropia)}: ${partesLibraEdge(vivo).join(' · ')}`}>
+        {!marcaPropia && <MarcaProducto producto="libraedge" variante="favicon" className="size-3.5 shrink-0 rounded-sm" />}
         {vivo.rol === 'nodo' && !vivo.en_linea && <WifiOff className="size-3.5 shrink-0" aria-hidden="true" />}
       </Parte>,
     )
@@ -143,13 +147,14 @@ export function BarraDeEstado({ ruta, useSucursal = sinSucursal, nombre, classNa
   }, [hayDatos])
   useEffect(() => publicarAlto(alto), [alto])
   useEffect(() => () => publicarAlto(0), [])
+  const { propia: marcaPropia } = useMarca()
 
   if (!datos) return null
 
   const nombreVisible = nombre || datos.usuario.nombre
   const sucursal = sucursalDelProducto || datos.usuario.sucursal
   const edge = conexion.esNodo ? { en_linea: !conexion.sinConexion, a_facturar: conexion.aFacturar } : {}
-  const lista = partes(datos, nombreVisible ?? null, sucursal ?? null, edge)
+  const lista = partes(datos, nombreVisible ?? null, sucursal ?? null, edge, marcaPropia)
   const version = datos.version.producto
 
   return (
@@ -180,7 +185,7 @@ export function BarraDeEstado({ ruta, useSucursal = sinSucursal, nombre, classNa
           <div id={idDetalle} role="region" aria-label="Detalle del estado del sistema"
             className="absolute inset-x-0 bottom-full grid max-h-[50vh] gap-3 overflow-y-auto border-t bg-background px-4 py-3 shadow-lg sm:grid-cols-2 lg:grid-cols-4">
             {datos.libraedge && (
-              <Seccion titulo="LibraEdge" nivel={datos.libraedge.nivel} lineas={detalleLibraEdge(
+              <Seccion titulo={nombreDeLibraEdge(marcaPropia)} nivel={datos.libraedge.nivel} lineas={detalleLibraEdge(
                 datos.libraedge.rol === 'nodo' && edge.en_linea !== undefined
                   ? { ...datos.libraedge, en_linea: edge.en_linea, a_facturar: edge.a_facturar ?? datos.libraedge.a_facturar }
                   : datos.libraedge)} />
