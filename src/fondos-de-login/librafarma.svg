@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice">
+  <title>Cápsulas</title>
+  <defs>
+    <radialGradient id="fondo" cx="76%" cy="44%" r="82%">
+      <stop offset="0" stop-color="#d946ef"/>
+      <stop offset=".55" stop-color="#a21caf"/>
+      <stop offset="1" stop-color="#4a044e"/>
+    </radialGradient>
+    <linearGradient id="blanca" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#fae8ff"/>
+    </linearGradient>
+    <linearGradient id="amarilla" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fde68a"/>
+      <stop offset="1" stop-color="#f59e0b"/>
+    </linearGradient>
+    <filter id="sombra" x="-30%" y="-40%" width="160%" height="190%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="20"/>
+      <feOffset dy="26"/>
+      <feComponentTransfer><feFuncA type="linear" slope=".28"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="difusa"><feGaussianBlur stdDeviation="6"/></filter>
+    <!-- Una cápsula de 120 × 52 centrada en el origen, partida en dos mitades; se rota y escala en cada uso. -->
+    <path id="izq" d="M0-26H-34a26 26 0 0 0 0 52H0z"/>
+    <path id="der" d="M0-26H34a26 26 0 0 1 0 52H0z"/>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#fondo)"/>
+
+  <!-- Cápsulas lejanas, chicas y desenfocadas: dan profundidad sin distraer. -->
+  <g fill="#ffffff" opacity=".18" filter="url(#difusa)">
+    <g transform="translate(180 170) rotate(-30) scale(.8)"><use href="#izq"/><use href="#der"/></g>
+    <g transform="translate(420 720) rotate(25) scale(.7)"><use href="#izq"/><use href="#der"/></g>
+    <g transform="translate(760 120) rotate(60) scale(.6)"><use href="#izq"/><use href="#der"/></g>
+    <g transform="translate(1480 160) rotate(-55) scale(.75)"><use href="#izq"/><use href="#der"/></g>
+    <g transform="translate(1500 790) rotate(15) scale(.8)"><use href="#izq"/><use href="#der"/></g>
+    <g transform="translate(90 560) rotate(70) scale(.6)"><use href="#izq"/><use href="#der"/></g>
+  </g>
+
+  <!-- Las cercanas, a la derecha (el formulario del login va a la izquierda): mitad blanca y mitad amarilla, como la marca. -->
+  <g filter="url(#sombra)">
+    <g transform="translate(1180 360) rotate(-35) scale(2.6)">
+      <use href="#izq" fill="url(#blanca)"/><use href="#der" fill="url(#amarilla)"/>
+      <rect x="-48" y="-16" width="30" height="7" rx="3.5" fill="#f5d0fe"/>
+    </g>
+    <g transform="translate(1340 640) rotate(20) scale(1.5)">
+      <use href="#izq" fill="url(#blanca)"/><use href="#der" fill="url(#amarilla)"/>
+    </g>
+    <g transform="translate(980 690) rotate(-70) scale(1.1)">
+      <use href="#izq" fill="url(#blanca)"/><use href="#der" fill="url(#amarilla)"/>
+    </g>
+  </g>
+</svg>

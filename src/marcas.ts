@@ -55,6 +55,7 @@ const TONOS: Record<Marca, { tinta: string; claro: string }> = {
   libracargo: { tinta: '#001d5c', claro: '#93b4f0' },
   libraclub: { tinta: '#022c1c', claro: '#a7f3d0' },
   librainmo: { tinta: '#1a2e05', claro: '#d9f99d' },
+  librafarma: { tinta: '#4a044e', claro: '#f5d0fe' },
   libraedge: { tinta: '#083344', claro: '#a5f3fc' },
   librabot: { tinta: '#4c0519', claro: '#fecdd3' },
 }
@@ -166,6 +167,17 @@ ${repetir([[75, 37], [90, 37], [82.5, 45], [75, 53], [90, 53], [82.5, 61]], ([x,
 <circle cx="34" cy="34" r="10" fill="${AMARILLO}" ${corte(c, 6)}/>
 <path d="M25.5 30a11 11 0 0 0 17 0" fill="none" stroke="${c.tinta}" stroke-width="2" opacity=".35"/>`,
 
+  // La cápsula (2026-10-28, elegida por el humano): «medicamento» sin emblemas de salud protegidos. Las dos piezas de la familia, la mitad
+  // blanca y la amarilla, que la pisa con su corte; la costura en `tinta` y el brillo en `claro`.
+  librafarma: (c) => `
+<rect x="16" y="100" width="88" height="4" rx="2" fill="${BLANCO}" opacity=".3"/>
+<g transform="rotate(-35 60 58)">
+<path d="M60 36H33a22 22 0 0 0 0 44H60z" fill="${BLANCO}"/>
+<rect x="24" y="45" width="26" height="6" rx="3" fill="${c.claro}"/>
+<path d="M60 36h27a22 22 0 0 1 0 44H60z" fill="${AMARILLO}" ${corte(c, 8)}/>
+<rect x="58" y="36" width="4" height="44" fill="${c.tinta}" opacity=".35"/>
+</g>`,
+
   // La casa y la llave (2026-10-27, elegida sobre una muestra): la propiedad y quien la administra. La llave pisa la casa abajo a la derecha.
   librainmo: (c) => `
 <rect x="10" y="100" width="76" height="4" rx="2" fill="${BLANCO}" opacity=".3"/>
@@ -264,6 +276,13 @@ ${repetir([[50, 30], [71, 30], [60.5, 43], [50, 56], [71, 56]], ([x, y]) => `<ci
 <path d="M54 12Q60 7.5 66 12L106 44Q110 47.5 110 53V102a8 8 0 0 1-8 8H18a8 8 0 0 1-8-8V53Q10 47.5 14 44Z" fill="${BLANCO}"/>
 <path d="M46 110V80a6 6 0 0 1 6-6h16a6 6 0 0 1 6 6v30z" fill="${c.tinta}"/>
 <circle cx="60" cy="48" r="9" fill="${AMARILLO}"/>`,
+
+  // La cápsula sola, más gruesa y sin brillo: a 16 px la costura y el reflejo se empastan.
+  librafarma: () => `
+<g transform="rotate(-35 60 60)">
+<path d="M60 32H38a28 28 0 0 0 0 56H60z" fill="${BLANCO}"/>
+<path d="M60 32h22a28 28 0 0 1 0 56H60z" fill="${AMARILLO}"/>
+</g>`,
 
   // La PC del local sola, con la luz prendida: a 16 px el círculo de sincronía y la nube se empastan.
   libraedge: (c) => `

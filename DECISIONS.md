@@ -2387,3 +2387,20 @@ horizontal en ninguno.
 
 **Tests:** `test/Terminos.test.tsx` («sin contrato»: el mensaje, lo que no aparece, la salida, ningún «libra» y que un backend anterior se ve como siempre); sin el cambio fallan tres.
 
+
+## ADR-101 — LibraFarma entra a la identidad de producto: fucsia y una cápsula (sin versión todavía)
+
+**Estado:** aceptada (2026-10-28, elección del humano; sin tag hasta que un consumidor la use). Rescatada el 2026-10-31 de un worktree que nunca se había commiteado.
+
+**Contexto.** LibraFarma (`librafarma-plan` del wiki) es el décimo producto de la familia y no tenía identidad en el kit: sin color, sin ícono de menú, sin marca ni fondo de login.
+
+**Decisión.**
+- **Color:** fucsia `#c026d3` (oscuro `#a21caf`, claro `#fdf4ff`, sobre fondo oscuro `#e879f9`), el único tono que no se parece a ningún producto ni complemento. Contra blanco llega a **4,7:1**, así que el botón usa el color de marca (`colorAccion`).
+- **Ícono de menú:** `Pill` de lucide. Rubro: «Farmacias hospitalarias».
+- **Marca:** una cápsula, «medicamento» sin emblemas de salud protegidos (cruz, serpiente): dos piezas, la mitad blanca y la amarilla que la pisa con su corte. En el favicon va sola, más gruesa y sin costura ni brillo, que a 16 px se empastan.
+- **Fondo de login:** un dibujo (`fondos-de-login/librafarma.svg`, cápsulas sobre el degradé del fucsia), como LibraBot, y no una foto: todavía no hay una elegida. Si se elige, se cambia `imagen` y el encuadre y el velo queda.
+- Los SVG de `marcas/` (los que copian las landings) se regeneran con `npm run marcas`: ahora son 24.
+
+**No resuelve.** `libra_web_kit/identidad.py` (las landings) y la tabla de `identidad-de-producto-diseno` en el wiki son la misma tabla en tres lugares: este cambio sólo toca la del kit. Hasta que se actualicen las otras dos, `LibraFarma` no figura en ellas.
+
+**Tests:** `test/identidad.test.ts` (la tabla del wiki escrita a mano pasa a diez productos y cada uno coincide) y `test/marcas.test.ts` (los archivos de `marcas/` son los esperados y coinciden con `svgDeMarca`).

@@ -14,7 +14,7 @@
 //                        contra blanco (RestoLibra 3,6:1, MedLibra 3,7:1, VentaLibra 3,2:1); en el resto, el `color` de marca.
 // El ítem activo del menú (ADR-036) no tiene campo propio: se deriva de estos (`menuActivoDeProducto`), así no hay una tabla más que mantener.
 import {
-  CalendarCheck, Coffee, HeartPulse, Headset, House, ReceiptText, ScanBarcode, Trophy, Truck,
+  CalendarCheck, Coffee, HeartPulse, Headset, House, Pill, ReceiptText, ScanBarcode, Trophy, Truck,
   type LucideIcon,
 } from 'lucide-react'
 import { hayMarcaPropia } from './marca'
@@ -31,6 +31,7 @@ export type Producto =
   | 'libracargo'
   | 'libraclub'
   | 'librainmo'
+  | 'librafarma'
 
 export type IdentidadDeProducto = {
   /** Cómo se escribe el nombre del producto. */
@@ -144,6 +145,18 @@ export const IDENTIDAD: Record<Producto, IdentidadDeProducto> = {
     colorSobreOscuro: '#a3e635',
     colorAccion: '#4d7c0f',
     icono: House,
+  },
+  // Fucsia, elegido por el humano (2026-10-28): el único tono que no se parece a ningún producto ni complemento. Llega a 4,7:1 contra blanco,
+  // así que el botón usa el color de marca.
+  librafarma: {
+    nombre: 'LibraFarma',
+    rubro: 'Farmacias hospitalarias',
+    color: '#c026d3',
+    colorOscuro: '#a21caf',
+    colorClaro: '#fdf4ff',
+    colorSobreOscuro: '#e879f9',
+    colorAccion: '#c026d3',
+    icono: Pill,
   },
 }
 
