@@ -17,6 +17,7 @@ import librabot from './fondos-de-login/librabot.svg'
 import libracargo from './fondos-de-login/libracargo.jpg'
 import libraclub from './fondos-de-login/libraclub.jpg'
 import librainmo from './fondos-de-login/librainmo.jpg'
+import librafarma from './fondos-de-login/librafarma.svg'
 import libradesk from './fondos-de-login/libradesk.jpg'
 import medlibra from './fondos-de-login/medlibra.jpg'
 import restolibra from './fondos-de-login/restolibra.jpg'
@@ -81,6 +82,12 @@ export const FONDOS_DE_LOGIN: Record<MarcaConFondo, Fondo> = {
   librainmo: {
     imagen: librainmo, encuadre: '60% center', base: '#101a04',
     velo: [brillo('101,163,13', 0.25), veloVertical('rgba(16,26,4,.86)', 'rgba(16,26,4,.70)', 'rgba(16,26,4,.90)')],
+  },
+  // Un dibujo y no una foto (como LibraBot): cápsulas sobre el degradé del fucsia. No hay foto elegida todavía; si el humano pasa una, se cambia
+  // la `imagen` y el encuadre, y el velo queda.
+  librafarma: {
+    imagen: librafarma, encuadre: '70% center', base: '#2a0330',
+    velo: [brillo('192,38,211', 0.22), veloVertical('rgba(42,3,48,.86)', 'rgba(42,3,48,.70)', 'rgba(42,3,48,.90)')],
   },
   // Su hero es un dibujo (burbujas de chat), no una foto: va igual, con su velo.
   librabot: {

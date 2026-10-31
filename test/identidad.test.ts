@@ -3,7 +3,7 @@
 // La tabla de abajo está escrita a mano A PROPÓSITO, copiada de la página `identidad-de-producto-diseno` del wiki: es el guardián de divergencia.
 // `src/identidad.ts`, `libra_web_kit/identidad.py` (las landings) y esa página son la misma tabla en tres lugares; si alguien cambia un color en
 // uno solo, este test falla. Cambiar un valor acá sin cambiarlo en los otros dos es justo lo que NO hay que hacer.
-import { Coffee, CalendarCheck, HeartPulse, Headset, House, ReceiptText, ScanBarcode, Trophy, Truck } from 'lucide-react'
+import { Coffee, CalendarCheck, HeartPulse, Headset, House, Pill, ReceiptText, ScanBarcode, Trophy, Truck } from 'lucide-react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { FONDO_DEL_ITEM_ACTIVO, IDENTIDAD, aplicarIdentidad, cssDeIdentidad, defectosDelProducto, menuActivoDeProducto, type Producto } from '../src/identidad'
 import { COLORES_DE_TEMA, aplicarTema, validarTema } from '../src/tema'
@@ -19,6 +19,7 @@ const TABLA_DEL_WIKI = {
   libracargo: { nombre: 'LibraCargo', rubro: 'Agencias de cargas', color: '#012c83', colorOscuro: '#001d5c', colorClaro: '#eef3fc', colorSobreOscuro: '#7aa2f7', icono: Truck },
   libraclub: { nombre: 'LibraClub', rubro: 'Complejos deportivos', color: '#017b4b', colorOscuro: '#015c38', colorClaro: '#ecfdf5', colorSobreOscuro: '#34d399', icono: Trophy },
   librainmo: { nombre: 'LibraInmo', rubro: 'Inmobiliarias que administran alquileres', color: '#65a30d', colorOscuro: '#4d7c0f', colorClaro: '#f7fee7', colorSobreOscuro: '#a3e635', icono: House },
+  librafarma: { nombre: 'LibraFarma', rubro: 'Farmacias hospitalarias', color: '#c026d3', colorOscuro: '#a21caf', colorClaro: '#fdf4ff', colorSobreOscuro: '#e879f9', icono: Pill },
 } as const satisfies Record<Producto, object>
 
 const PRODUCTOS = Object.keys(TABLA_DEL_WIKI) as Producto[]
@@ -39,9 +40,9 @@ function contraste(a: string, b: string): number {
 }
 
 describe('el registro de identidad', () => {
-  it('tiene exactamente los nueve productos', () => {
+  it('tiene exactamente los diez productos', () => {
     expect(Object.keys(IDENTIDAD).sort()).toEqual([...PRODUCTOS].sort())
-    expect(PRODUCTOS).toHaveLength(9)
+    expect(PRODUCTOS).toHaveLength(10)
   })
 
   it.each(PRODUCTOS)('🔴 %s coincide con la tabla del wiki', (p) => {
@@ -266,12 +267,12 @@ describe('defectosDelProducto', () => {
     expect(d.barraLateralFondo).toBe('#1c1e22')
   })
 
-  it('los nueve tienen acento y franja del ítem activo propios; el fondo del ítem es el grafito común (ADR-043)', () => {
+  it('los diez tienen acento y franja del ítem activo propios; el fondo del ítem es el grafito común (ADR-043)', () => {
     const acentos = new Set(PRODUCTOS.map((p) => defectosDelProducto(p).acento))
     const franjas = new Set(PRODUCTOS.map((p) => defectosDelProducto(p).menuActivoBorde))
     const fondos = new Set(PRODUCTOS.map((p) => defectosDelProducto(p).menuActivoFondo))
-    expect(acentos.size).toBe(9)
-    expect(franjas.size).toBe(9)
+    expect(acentos.size).toBe(10)
+    expect(franjas.size).toBe(10)
     expect(fondos).toEqual(new Set([FONDO_DEL_ITEM_ACTIVO]))
   })
 })
