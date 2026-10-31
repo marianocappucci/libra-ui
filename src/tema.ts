@@ -277,11 +277,34 @@ export function validarTema(crudo: unknown): ResultadoDeTema {
 // El acento de la MARCA de la instancia (`marca.ts`, ADR-098): el color por defecto de los botones y enlaces cuando el revendedor eligió uno.
 // Es un defecto, no una orden: un `acento` explícito del tema le gana. Vive acá, y no en `marca.ts`, porque `aplicarTema` es el único que
 // escribe esas variables y no puede haber dos escritores.
+
+/** Cuánto se puede alejar el acento de la marca de lo que eligió el revendedor para hacerlo legible (proporción de la mezcla con blanco o
+ *  negro). Pasado esto ya no es «su» color y se descarta: un casi blanco no se vuelve un gris. */
+const AJUSTE_MAXIMO_DEL_ACENTO = 0.3
+
+/** El acento de la marca listo para aplicar: el color tal cual si pasa `validarTema`; si no (el mismo color tiene que verse en claro y en
+ *  oscuro, y el texto del botón tiene que leerse), el tono MÁS PARECIDO que sí pasa, mezclándolo de a poco con blanco o con negro. Si
+ *  ni así (más de `AJUSTE_MAXIMO_DEL_ACENTO`), `undefined`: el botón queda con el color del producto, como antes. Sin esto, un azul oscuro
+ *  perfectamente razonable se descartaba sin aviso y los botones salían con el naranja de otro producto (ADR-102). */
+export function acentoLegibleDeMarca(hex: string): string | undefined {
+  const base = normalizarHex(hex)
+  if (!base) return undefined
+  const pasa = (c: string) => validarTema({ acento: c }).tema.acento
+  if (pasa(base)) return base
+  for (let t = 0.01; t <= AJUSTE_MAXIMO_DEL_ACENTO + 1e-9; t += 0.01) {
+    for (const hacia of ['#ffffff', '#000000']) {
+      const c = mezclar(base, hacia, t)
+      if (pasa(c)) return c
+    }
+  }
+  return undefined
+}
 let acentoDeMarca: string | undefined
 let ultimoTema: Tema = {}
 
 /** Fija (o saca, con `undefined`) el acento por defecto de la marca y vuelve a aplicar el último tema. Si el color no pasa el contraste
- *  (`validarTema`), no se aplica: la marca no puede dejar un botón ilegible. */
+ *  (`validarTema`) se usa el tono legible más parecido (`acentoLegibleDeMarca`); si no hay uno razonable, no se aplica: la marca no puede
+ *  dejar un botón ilegible. */
 export function fijarAcentoDeMarca(hex: string | undefined, elemento?: HTMLElement): void {
   if (hex === acentoDeMarca) return
   acentoDeMarca = hex
@@ -293,7 +316,8 @@ export function fijarAcentoDeMarca(hex: string | undefined, elemento?: HTMLEleme
 export function aplicarTema(tema: Tema, elemento: HTMLElement = document.documentElement): void {
   ultimoTema = tema
   const { tema: propio } = validarTema(tema)
-  const deMarca: Tema = acentoDeMarca && !propio.acento ? validarTema({ acento: acentoDeMarca }).tema : {}
+  const legible = acentoDeMarca && !propio.acento ? acentoLegibleDeMarca(acentoDeMarca) : undefined
+  const deMarca: Tema = legible ? { acento: legible } : {}
   // La franja del ítem activo del menú es, por defecto, el color del PRODUCTO (`aplicarIdentidad`): con marca propia tiene que ser el de la
   // marca, o el menú sigue diciendo «VentaLibra» en naranja (ADR-099). Se aclara hasta leerse sobre el grafito de la barra; el fondo del ítem
   // es el mismo grafito de siempre. Un `menuActivoBorde` explícito del tema le gana.

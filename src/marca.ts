@@ -10,6 +10,7 @@
 //   2. **El documento:** el `<title>`, el favicon, el `apple-touch-icon` y el `theme-color`. Lo que había se fotografía la primera vez y se
 //      restaura si la marca cambia o se borra, así que no importa en qué orden arranque el producto (`aplicarIdentidad` ya está avisada).
 //   3. **El acento:** el color de la marca es el acento por defecto (`fijarAcentoDeMarca`); un `acento` explícito del tema le gana.
+//      Si el color no se lee en claro y en oscuro, se usa el tono legible más parecido (`acentoLegibleDeMarca`, ADR-102).
 //
 // ## Cómo se usa (en `main.tsx`, antes de montar React)
 //

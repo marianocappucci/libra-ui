@@ -271,10 +271,18 @@ describe('el acento', () => {
     await waitFor(() => expect(primario()).toBe(''))
   })
 
-  it('un color sin contraste suficiente no se aplica: la marca no deja un botón ilegible', async () => {
+  it('un color sin contraste suficiente que no se puede corregir sin cambiarlo del todo no se aplica: la marca no deja un botón ilegible', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json({ ...MARCA, color: '#fdfdfd' })))
     await cargarMarca()
     expect(primario()).toBe('')
+  })
+
+  it('un azul oscuro que se perdía en modo oscuro se aplica aclarado en vez de descartarse (los botones no vuelven al color del producto)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json({ ...MARCA, color: '#1f5e8c' })))
+    await cargarMarca()
+    expect(primario()).toMatch(/^#[0-9a-f]{6}$/)
+    expect(primario()).not.toBe('#1f5e8c')
+    expect(document.documentElement.style.getPropertyValue('--primary-foreground')).not.toBe('')
   })
 })
 
