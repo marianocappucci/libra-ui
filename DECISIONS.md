@@ -2404,3 +2404,24 @@ horizontal en ninguno.
 **No resuelve.** `libra_web_kit/identidad.py` (las landings) y la tabla de `identidad-de-producto-diseno` en el wiki son la misma tabla en tres lugares: este cambio sólo toca la del kit. Hasta que se actualicen las otras dos, `LibraFarma` no figura en ellas.
 
 **Tests:** `test/identidad.test.ts` (la tabla del wiki escrita a mano pasa a diez productos y cada uno coincide) y `test/marcas.test.ts` (los archivos de `marcas/` son los esperados y coinciden con `svgDeMarca`).
+
+
+## ADR-102 — El acento de la marca se corrige al tono legible más parecido, en vez de descartarse (0.188.0)
+
+**Estado:** aceptada (2026-10-31). Hallado en la prueba del nodo de LibraEdge con marca blanca (`libraedge-marca-blanca-instalador-diseno`): el botón «Ingresar» seguía en el naranja de VentaLibra aunque la marca tenía `#1f5e8c`.
+
+**Contexto.** `fijarAcentoDeMarca` (ADR-098) hace del color de la marca el acento por defecto (`--primary`: botones, enlaces, anillo de foco), pero lo pasaba por `validarTema`, que exige que **el mismo color** se distinga del fondo en claro **y** en oscuro (contraste 3 contra `#ffffff` y `#0a0a0a`) y que el texto del botón se lea (4,5). `#1f5e8c` da 6,9 contra blanco y 2,9 contra el fondo oscuro: se descartaba **sin aviso** y los botones volvían al color del **producto**, o sea que un revendedor con un azul razonable veía los botones de otro producto, justo lo que la marca blanca no tiene que mostrar. Descartar el color es la misma decisión de ADR-098 («la marca no puede dejar un botón ilegible»); el problema era el castigo.
+
+**Decisión.** `acentoLegibleDeMarca(hex)` (exportada de `tema.ts`):
+- si el color pasa `validarTema`, queda **tal cual**;
+- si no, se prueba mezclarlo de a 1 % con blanco y con negro y se usa el **primer** tono que pasa (el de menor cambio);
+- el cambio tiene un **tope del 30 %** (`AJUSTE_MAXIMO_DEL_ACENTO`): más allá ya no es «su» color y se descarta como antes (un casi blanco no pasa a ser un gris). Un negro de marca pasa a un gris oscuro.
+
+`aplicarTema` usa esa función para el acento de la marca. El `acento` explícito del tema sigue ganando y no se toca: se valida como siempre. La franja del menú (`ajustarContraste`, ADR-099) no cambia.
+
+**Descartado.** Aflojar el contraste mínimo (la regla es de legibilidad, no de gusto); aplicar el color tal cual y sólo arreglar el botón (el acento se usa en enlaces y en el anillo de foco); tener un acento distinto para claro y oscuro (el tema vale igual en los dos modos, ADR-012).
+
+**No resuelve.** Que la pantalla «Marca» del backoffice sólo valida el formato hexadecimal y su vista previa muestra el color elegido aunque el kit lo haya corregido (o, pasado el tope, descartado). Un aviso ahí queda aparte. Un color casi blanco sigue cayendo al del producto.
+
+**Tests:** `test/tema.test.ts` (`acentoLegibleDeMarca`: tal cual, el azul oscuro y el que no deja leer el texto se corrigen sin cambiar de tono, el casi blanco se descarta, un negro pasa a gris, lo que no es color) y `test/marca.test.tsx` (con `#1f5e8c` el `--primary` se aplica aclarado; sin el cambio falla).
+

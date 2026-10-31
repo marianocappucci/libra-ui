@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
-  CLAVES_DE_TEMA, CLAVE_DE_CACHE_DEL_TEMA, COLORES_DE_TEMA, ajustarContraste, aplicarTema, cargarTema, contraste, luminancia, normalizarHex, textoSobre, validarTema,
+  CLAVES_DE_TEMA, CLAVE_DE_CACHE_DEL_TEMA, COLORES_DE_TEMA, acentoLegibleDeMarca, ajustarContraste, aplicarTema, cargarTema, contraste, luminancia, normalizarHex, textoSobre, validarTema,
 } from '../src/tema'
 
 describe('colores', () => {
@@ -285,5 +285,50 @@ describe('tema.css: el lugar de la barra de scroll (ADR-027)', () => {
     const { resolve } = await import('node:path')
     const css = readFileSync(resolve(process.cwd(), 'src/tema.css'), 'utf8')
     expect(css).toMatch(/html\s*\{\s*scrollbar-gutter:\s*stable;\s*\}/)
+  })
+})
+
+// El acento de la marca (ADR-102): el color del revendedor se acerca al tono legible más parecido en vez de descartarse.
+describe('acentoLegibleDeMarca', () => {
+  const distancia = (a: string, b: string) =>
+    Math.max(...[1, 3, 5].map((i) => Math.abs(parseInt(a.slice(i, i + 2), 16) - parseInt(b.slice(i, i + 2), 16))))
+
+  it('un color que ya se lee queda tal cual', () => {
+    expect(acentoLegibleDeMarca('#b8540a')).toBe('#b8540a')
+    expect(acentoLegibleDeMarca('#0F766E')).toBe('#0f766e')
+  })
+
+  it('un azul oscuro que no se distingue del fondo en modo oscuro se aclara un poco, sin perder el tono', () => {
+    const base = '#1f5e8c' // contraste 2,9 contra #0a0a0a: validarTema lo rechaza
+    expect(validarTema({ acento: base }).errores.acento).toMatch(/no se distingue del fondo/)
+    const legible = acentoLegibleDeMarca(base)!
+    expect(legible).toBeDefined()
+    expect(validarTema({ acento: legible }).errores).toEqual({})
+    expect(legible).not.toBe(base)
+    expect(distancia(base, legible)).toBeLessThanOrEqual(40) // es «su» azul, apenas más claro
+    expect(luminancia(legible)).toBeGreaterThan(luminancia(base))
+  })
+
+  it('un color al que no se le lee el texto del botón también se corrige', () => {
+    const base = '#2f7fb8' // el mejor texto llega a 4,3 y el mínimo es 4,5
+    expect(validarTema({ acento: base }).errores.acento).toMatch(/ningún texto se lee/)
+    const legible = acentoLegibleDeMarca(base)!
+    expect(legible).toBeDefined()
+    expect(validarTema({ acento: legible }).errores).toEqual({})
+    expect(distancia(base, legible)).toBeLessThanOrEqual(40)
+  })
+
+  it('lo que habría que cambiar demasiado para leerse se descarta: un casi blanco no pasa a ser un gris', () => {
+    expect(acentoLegibleDeMarca('#fdfdfd')).toBeUndefined()
+  })
+
+  it('un negro de marca pasa a un gris oscuro que se lee en claro y en oscuro', () => {
+    const legible = acentoLegibleDeMarca('#171717')!
+    expect(legible).toBeDefined()
+    expect(validarTema({ acento: legible }).errores).toEqual({})
+  })
+
+  it('lo que no es un color no es nada', () => {
+    for (const malo of ['', 'azul', '#12', 'rgb(1,2,3)']) expect(acentoLegibleDeMarca(malo)).toBeUndefined()
   })
 })
